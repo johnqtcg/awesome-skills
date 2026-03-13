@@ -1,0 +1,26 @@
+{
+  "id": "007_legacy_code_characterization",
+  "description": "Legacy code modification: add tax calculation to untested CalcTotal function",
+  "change_size": "M",
+  "change_type": "bugfix",
+  "files_changed": 2,
+  "loc_changed": 40,
+  "code_snippet": "// Legacy: no tests exist, function calculates total without tax\nfunc CalcTotal(items []Item) int {\n\ttotal := 0\n\tfor _, item := range items {\n\t\ttotal += item.Price * item.Qty\n\t}\n\treturn total\n}",
+  "expected_tdd_phases": {
+    "red": "Step 1: characterization tests for current behavior. Step 2: new failing test for tax feature",
+    "green": "Add tax parameter and calculation",
+    "refactor": "Extract subtotal calculation"
+  },
+  "expected_test_count_range": [5, 10],
+  "expected_killer_hypothesis": "adding tax breaks existing callers that expect no-tax total",
+  "expected_characterization_tests": true,
+  "expected_boundary_items": ["empty items", "single item", "zero tax rate", "100% tax rate", "existing behavior pinned"],
+  "skill_rules_that_must_fire": [
+    "Red evidence exists",
+    "Characterization test",
+    "Legacy code",
+    "Killer case present",
+    "Defect hypothesis list"
+  ],
+  "scorecard_must_pass": ["C1", "C2", "S1", "S2"]
+}

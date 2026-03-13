@@ -1,0 +1,9 @@
+{
+  "scenario": "Developer comparing framework performance",
+  "required_keywords": [
+    "TechEmpower",
+    "benchmark",
+    "after:",
+    "regex:vs.*benchmark"
+  ]
+}

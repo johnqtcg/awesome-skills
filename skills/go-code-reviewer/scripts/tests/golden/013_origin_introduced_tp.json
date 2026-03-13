@@ -1,0 +1,15 @@
+{
+  "id": "013",
+  "title": "Finding in diff hunk classified as introduced",
+  "expected_finding": true,
+  "severity": "High",
+  "category": "concurrency",
+  "reference": "go-concurrency-patterns.md",
+  "origin": "introduced",
+  "code": "// In diff hunk (new code in PR):\nvar cache = make(map[string][]byte)\n\nfunc HandleRequest(w http.ResponseWriter, r *http.Request) {\n\tcache[r.URL.Path] = []byte(\"cached\")\n}",
+  "coverage_rules": [
+    "Race conditions on shared state",
+    "introduced"
+  ],
+  "gate": "Change Origin Classification Gate"
+}

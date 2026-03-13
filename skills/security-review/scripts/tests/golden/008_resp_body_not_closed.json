@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-008",
+  "title": "HTTP response body not closed — connection leak",
+  "expected_finding": true,
+  "severity": "P2",
+  "category": "resource_lifecycle",
+  "code": "func fetchData(url string) ([]byte, error) {\n    resp, err := http.Get(url)\n    if err != nil {\n        return nil, err\n    }\n    if resp.StatusCode != 200 {\n        return nil, fmt.Errorf(\"status %d\", resp.StatusCode)\n        // resp.Body never closed on non-200\n    }\n    defer resp.Body.Close()\n    return io.ReadAll(resp.Body)\n}",
+  "finding_pattern": "response body not closed",
+  "coverage_rules": [
+    "http.Response.Body",
+    "Resource is closed/released on both success and error paths"
+  ],
+  "reference": "references/go-secure-coding.md"
+}

@@ -1,0 +1,12 @@
+{
+  "name": "CI integration with GitHub Actions",
+  "description": "Team wants to run integration tests in CI with service containers",
+  "required_keywords": [
+    "actions/checkout",
+    "re:actions/setup-go",
+    "services:",
+    "re:docker.compose",
+    "integration-test",
+    "-tags=integration"
+  ]
+}

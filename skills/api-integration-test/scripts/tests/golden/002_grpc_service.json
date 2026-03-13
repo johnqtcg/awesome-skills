@@ -1,0 +1,12 @@
+{
+  "name": "gRPC service integration test",
+  "description": "User has a gRPC GetResource endpoint and wants to test success + not-found paths",
+  "required_keywords": [
+    "//go:build integration",
+    "grpc",
+    "status.FromError",
+    "re:codes\\.(NotFound|OK)",
+    "context.WithTimeout",
+    "require.NoError"
+  ]
+}

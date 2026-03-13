@@ -1,0 +1,30 @@
+{
+  "id": "002_single_module_library",
+  "description": "Go library project supporting multiple Go versions — skill should use matrix strategy and skip Docker jobs",
+  "scenario_type": "single_module_library",
+  "context": {
+    "go_mod_count": 1,
+    "has_makefile": true,
+    "makefile_targets": ["ci"],
+    "has_dockerfile": false,
+    "has_golangci_lint_config": true,
+    "test_types": ["unit"],
+    "supported_go_versions": ["1.22", "1.23"],
+    "existing_workflows": []
+  },
+  "expected_gates": ["Repository Shape Gate", "Local Parity Gate", "Security and Permissions Gate"],
+  "expected_output_fields": ["repository shape classification", "job list", "execution path for each job", "trigger configuration", "permissions", "tool versions"],
+  "expected_shape": "single-module library",
+  "expected_parity_level": "full",
+  "expected_jobs": ["ci"],
+  "skill_rules_that_must_fire": [
+    "Repository Shape Gate",
+    "Local Parity Gate",
+    "single-module library",
+    "matrix",
+    "go-version-file: go.mod",
+    "cache: true",
+    "coverage threshold",
+    "permissions"
+  ]
+}

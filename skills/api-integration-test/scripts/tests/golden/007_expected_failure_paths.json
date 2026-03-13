@@ -1,0 +1,10 @@
+{
+  "name": "Expected failure path testing",
+  "description": "Tests should cover expected error responses, not just happy paths",
+  "required_keywords": [
+    "re:StatusNotFound|NotFound|not.found",
+    "re:StatusBadRequest|BadRequest|bad.request",
+    "failure path",
+    "require.Error"
+  ]
+}

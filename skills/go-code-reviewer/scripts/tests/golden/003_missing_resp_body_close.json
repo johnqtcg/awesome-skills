@@ -1,0 +1,13 @@
+{
+  "id": "003",
+  "title": "Missing resp.Body.Close on HTTP client call",
+  "expected_finding": true,
+  "severity": "High",
+  "category": "api",
+  "code": "func fetchData(url string) ([]byte, error) {\n    resp, err := http.Get(url)\n    if err != nil {\n        return nil, err\n    }\n    return io.ReadAll(resp.Body)\n}",
+  "finding_pattern": "resp.Body.Close",
+  "coverage_rules": [
+    "require `resp.Body.Close()` on all paths"
+  ],
+  "reference": "references/go-api-http-checklist.md"
+}

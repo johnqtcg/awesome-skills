@@ -1,0 +1,10 @@
+{
+  "scenario": "User searching for war casualty data",
+  "required_keywords": [
+    "Scope Lock",
+    "claim tier",
+    "As of DATE",
+    "adversary claim",
+    "regex:official.*statement"
+  ]
+}

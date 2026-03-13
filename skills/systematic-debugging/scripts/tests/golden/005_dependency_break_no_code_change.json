@@ -1,0 +1,22 @@
+{
+  "id": "005",
+  "title": "Third-party dependency changed without local code changes",
+  "scenario_type": "dependency_break",
+  "severity": "P1",
+  "bug_type": "dependency",
+  "skill_rules_that_must_fire": [
+    "Third-party dependency change",
+    "Check changelogs and version diffs",
+    "Check Recent Changes",
+    "Hypothesis log"
+  ],
+  "expected_references": [
+    "bug-type-strategies.md",
+    "output-contract-template.md"
+  ],
+  "expected_output_fields": [
+    "Recent changes inspected",
+    "Hypothesis Log",
+    "Residual Risk and Follow-ups"
+  ]
+}

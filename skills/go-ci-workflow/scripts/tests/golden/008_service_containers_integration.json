@@ -1,0 +1,28 @@
+{
+  "id": "008_service_containers_integration",
+  "description": "Go service with MySQL and Redis integration tests — skill should use GitHub Actions service containers and dedicated integration test job",
+  "scenario_type": "service_containers",
+  "context": {
+    "go_mod_count": 1,
+    "has_makefile": true,
+    "makefile_targets": ["ci", "ci-api-integration"],
+    "has_dockerfile": true,
+    "has_golangci_lint_config": true,
+    "test_types": ["unit", "integration"],
+    "integration_dependencies": ["mysql", "redis"],
+    "test_dirs": ["tests/integration"],
+    "existing_workflows": []
+  },
+  "expected_gates": ["Repository Shape Gate", "Local Parity Gate", "Security and Permissions Gate"],
+  "expected_output_fields": ["repository shape classification", "job list", "execution path for each job", "trigger configuration", "permissions"],
+  "expected_jobs": ["ci", "api-integration", "docker-build"],
+  "skill_rules_that_must_fire": [
+    "Repository Shape Gate",
+    "Local Parity Gate",
+    "service container",
+    "integration",
+    "ci-api-integration",
+    "permissions",
+    "concurrency"
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "007_http_handler",
+  "description": "HTTP handler with auth middleware and JSON body — skill should mandate status code, body, and header assertions with httptest",
+  "code_snippet": "func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request)",
+  "expect_test_generation": true,
+  "target_type": "HTTP handler",
+  "expected_techniques": ["Mutation-Resistant Assertions", "Dependency Error Propagation"],
+  "expected_boundary_items": ["invalid format/type", "error from each critical dependency", "nil input"],
+  "expected_killer_hypothesis": "handler returns 200 with empty body on validation error instead of 400",
+  "skill_rules_that_must_exist": [
+    "HTTP handler",
+    "httptest.NewRequest",
+    "httptest.NewRecorder",
+    "status code",
+    "response body",
+    "killer case"
+  ]
+}

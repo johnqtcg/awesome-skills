@@ -1,0 +1,23 @@
+{
+  "id": "011",
+  "title": "Works locally but fails in CI because of timezone and locale drift",
+  "scenario_type": "environment_drift_timezone_locale",
+  "severity": "P1",
+  "bug_type": "environment",
+  "skill_rules_that_must_fire": [
+    "Environment / \"works on my machine\"",
+    "Working vs broken comparison",
+    "Boundary evidence",
+    "Configuration drift"
+  ],
+  "expected_references": [
+    "bug-type-strategies.md",
+    "output-contract-template.md"
+  ],
+  "expected_output_fields": [
+    "Working vs broken comparison",
+    "Boundary evidence",
+    "Root Cause",
+    "Verification"
+  ]
+}

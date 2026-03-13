@@ -1,0 +1,10 @@
+{
+  "scenario": "Evidence chain requirements and confidence levels",
+  "required_keywords": [
+    "Evidence Requirements",
+    "Minimum Evidence Chain",
+    "Target Confidence",
+    "re:(?i)high.*confidence.*2.*independent|independent.*domain.*2",
+    "Numeric Claim Labels"
+  ]
+}

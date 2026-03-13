@@ -1,0 +1,11 @@
+{
+  "id": "015",
+  "title": "Ignoring error on defer Close for read-only file is acceptable",
+  "expected_finding": false,
+  "category": "error-handling",
+  "reference": "go-error-and-quality.md",
+  "code": "func ReadConfig(path string) ([]byte, error) {\n\tf, err := os.Open(path)\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\tdefer f.Close()\n\treturn io.ReadAll(f)\n}",
+  "anti_example_patterns": [
+    "defer f.Close()` ignoring error: acceptable for **read-only** file opens"
+  ]
+}

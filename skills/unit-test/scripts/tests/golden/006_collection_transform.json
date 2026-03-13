@@ -1,0 +1,17 @@
+{
+  "id": "006_collection_transform",
+  "description": "List transform method — skill should mandate mapping completeness and first/middle/last validation",
+  "code_snippet": "func (s *LevelService) ListLevels(ctx context.Context) ([]LevelInfo, error)",
+  "expect_test_generation": true,
+  "target_type": "Service interface",
+  "expected_techniques": ["Collection Mapping Completeness", "Off-by-One Precision"],
+  "expected_boundary_items": ["empty value/collection", "single element", "mapping completeness"],
+  "expected_killer_hypothesis": "transform loop drops last element due to off-by-one",
+  "skill_rules_that_must_exist": [
+    "Collection Mapping Completeness",
+    "first/middle/last",
+    "len + identity",
+    "dropped first/last item",
+    "killer case"
+  ]
+}

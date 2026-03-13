@@ -1,0 +1,22 @@
+{
+  "id": "004",
+  "title": "Multi-component config propagation failure",
+  "scenario_type": "boundary_propagation",
+  "severity": "P1",
+  "bug_type": "config",
+  "skill_rules_that_must_fire": [
+    "Gather Evidence in Multi-Component Systems",
+    "For EACH component boundary",
+    "Boundary evidence",
+    "S2"
+  ],
+  "expected_references": [
+    "bug-type-strategies.md",
+    "output-contract-template.md"
+  ],
+  "expected_output_fields": [
+    "Boundary evidence",
+    "Evidence Collected",
+    "Root Cause"
+  ]
+}

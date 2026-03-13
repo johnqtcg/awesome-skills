@@ -1,0 +1,13 @@
+{
+  "id": "011",
+  "title": "Regexp compiled inside hot loop",
+  "expected_finding": true,
+  "severity": "Medium",
+  "category": "performance",
+  "reference": "go-performance-patterns.md",
+  "code": "func ProcessLines(lines []string) []string {\n\tvar results []string\n\tfor _, line := range lines {\n\t\tre := regexp.MustCompile(`\\d{4}-\\d{2}-\\d{2}`)\n\t\tif re.MatchString(line) {\n\t\t\tresults = append(results, line)\n\t\t}\n\t}\n\treturn results\n}",
+  "coverage_rules": [
+    "regexp.MustCompile",
+    "Unnecessary allocations in hot paths"
+  ]
+}

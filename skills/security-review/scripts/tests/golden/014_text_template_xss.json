@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-014",
+  "title": "text/template for HTML — XSS via unescaped user input",
+  "expected_finding": true,
+  "severity": "P1",
+  "category": "injection",
+  "code": "import \"text/template\"\n\nfunc RenderPage(w http.ResponseWriter, r *http.Request) {\n    tmpl := template.Must(template.New(\"page\").Parse(`<h1>Hello {{.Name}}</h1>`))\n    name := r.URL.Query().Get(\"name\")\n    tmpl.Execute(w, map[string]string{\"Name\": name})\n}",
+  "finding_pattern": "text/template",
+  "coverage_rules": [
+    "`text/template` used for user-facing content",
+    "`html/template`"
+  ],
+  "reference": "references/scenario-checklists.md"
+}

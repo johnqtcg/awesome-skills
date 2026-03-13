@@ -1,0 +1,16 @@
+{
+  "id": "009_middleware",
+  "description": "Auth middleware that blocks unauthenticated requests — skill should test pass-through, block, and error paths",
+  "code_snippet": "func AuthMiddleware(next http.Handler) http.Handler",
+  "expect_test_generation": true,
+  "target_type": "Middleware",
+  "expected_techniques": ["Branch Completeness", "Mutation-Resistant Assertions"],
+  "expected_boundary_items": ["nil input", "invalid format/type", "error from each critical dependency"],
+  "expected_killer_hypothesis": "middleware passes request through without checking auth header when header is empty string",
+  "skill_rules_that_must_exist": [
+    "Middleware",
+    "pass-through / block / error",
+    "killer case",
+    "table-driven"
+  ]
+}

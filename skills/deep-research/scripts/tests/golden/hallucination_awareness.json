@@ -1,0 +1,11 @@
+{
+  "scenario": "Detecting and preventing AI hallucination in research",
+  "required_keywords": [
+    "Fabricated Citation",
+    "Stale Information",
+    "Confidence Inflation",
+    "Phantom Feature",
+    "Cross-Validation Protocol",
+    "re:(?i)never.*fabricat"
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "id": "012",
+  "title": "Small slice without pre-allocation is acceptable",
+  "expected_finding": false,
+  "category": "performance",
+  "reference": "go-performance-patterns.md",
+  "code": "func collectErrors(validations []Validation) []string {\n\tvar errs []string\n\tfor _, v := range validations {\n\t\tif v.Err != nil {\n\t\t\terrs = append(errs, v.Err.Error())\n\t\t}\n\t}\n\treturn errs\n}",
+  "anti_example_patterns": [
+    "when the slice is small (< 16 elements) or size is truly unknown"
+  ]
+}

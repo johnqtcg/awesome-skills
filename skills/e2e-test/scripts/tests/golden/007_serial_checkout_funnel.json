@@ -1,0 +1,33 @@
+{
+  "id": "007_serial_checkout_funnel",
+  "description": "Multi-step checkout funnel requiring serial execution — skill should justify serial mode, use data isolation, avoid shared mutable state anti-pattern",
+  "scenario_type": "new_journey_coverage",
+  "context": {
+    "task": "E2E test for checkout funnel: add item → address → payment → confirmation",
+    "environment": "local",
+    "base_url_available": true,
+    "test_account_available": true,
+    "payment_sandbox": "ready"
+  },
+  "expected_runner": "Playwright",
+  "expected_gates": ["Configuration Gate", "Environment Gate", "Side-Effect Gate", "Execution Integrity Gate"],
+  "expected_code_patterns": [
+    "serial",
+    "getByRole",
+    "expect",
+    "waitForResponse OR waitForURL"
+  ],
+  "expected_anti_patterns_avoided": [
+    "shared mutable data",
+    "unconditional waitForTimeout",
+    "silently serializing entire suite"
+  ],
+  "skill_rules_that_must_fire": [
+    "Configuration Gate",
+    "Side-Effect Gate",
+    "serial vs parallel execution intentionally",
+    "serial",
+    "data isolation",
+    "getByRole"
+  ]
+}

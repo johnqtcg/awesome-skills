@@ -1,0 +1,23 @@
+{
+  "id": "008_version_gate_old_playwright",
+  "description": "Project uses Playwright 1.25 — skill must NOT recommend getByRole/getByLabel (available from 1.27) and adapt selector strategy",
+  "scenario_type": "version_constrained",
+  "context": {
+    "task": "Add E2E test for settings page",
+    "environment": "local",
+    "playwright_version": "1.25",
+    "base_url_available": true,
+    "test_account_available": true
+  },
+  "expected_runner": "Playwright",
+  "expected_gates": ["Configuration Gate", "Environment Gate"],
+  "version_constraints": {
+    "must_not_use": ["getByRole", "getByLabel", "getByTestId", "getByPlaceholder"],
+    "should_use": ["locator", "css selector", "data-testid attribute selector"]
+  },
+  "skill_rules_that_must_fire": [
+    "Version and Platform Gate",
+    "< 1.27",
+    "locator"
+  ]
+}

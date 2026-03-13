@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-010",
+  "title": "Path traversal — filepath.Join without prefix check",
+  "expected_finding": true,
+  "severity": "P1",
+  "category": "injection",
+  "code": "func ServeFile(w http.ResponseWriter, r *http.Request) {\n    filename := r.URL.Query().Get(\"file\")\n    path := filepath.Join(\"/data/uploads\", filename)\n    http.ServeFile(w, r, path)\n}",
+  "finding_pattern": "path traversal",
+  "coverage_rules": [
+    "`filepath.Join(base, userInput)` does NOT prevent `../` traversal",
+    "Path traversal protections"
+  ],
+  "reference": "references/scenario-checklists.md"
+}

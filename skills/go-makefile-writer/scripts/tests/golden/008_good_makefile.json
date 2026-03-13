@@ -1,0 +1,20 @@
+{
+  "id": "GOLDEN-008",
+  "title": "Well-formed Makefile (no defects expected)",
+  "type": "false_positive",
+  "severity": "none",
+  "makefile_snippet": ".DEFAULT_GOAL := help\nGO := go\nBIN_DIR := bin\nVERSION ?= $(shell git describe --tags --always --dirty)\nCOMMIT := $(shell git rev-parse --short HEAD)\nBUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')\nLDFLAGS := -s -w -X main.version=$(VERSION)\n\nbuild-api: ## Build API\n\t@mkdir -p $(BIN_DIR)\n\t$(GO) build -ldflags \"$(LDFLAGS)\" -o $(BIN_DIR)/api ./cmd/api\n\ntest: ## Run tests\n\t$(GO) test -race ./...\n\nhelp: ## Show targets\n\t@awk 'BEGIN {FS = \":.*##\"} /^[a-zA-Z0-9_-]+:.*##/ {printf \"%-20s %s\\n\", $$1, $$2}' $(MAKEFILE_LIST)\n\n.PHONY: build-api test help",
+  "expected_feedback": "no major defects",
+  "anti_example_patterns": [
+    "missing help",
+    "missing -race",
+    "missing -ldflags"
+  ],
+  "coverage_rules": [
+    ".DEFAULT_GOAL := help",
+    "-race",
+    "-ldflags",
+    ".PHONY"
+  ],
+  "reference": "references/makefile-quality-guide.md"
+}

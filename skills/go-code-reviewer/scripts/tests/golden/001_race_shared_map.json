@@ -1,0 +1,14 @@
+{
+  "id": "001",
+  "title": "Race condition on shared package-level map",
+  "expected_finding": true,
+  "severity": "High",
+  "category": "concurrency",
+  "code": "package cache\n\nvar store = map[string]string{}\n\nfunc Set(k, v string) { store[k] = v }\nfunc Get(k string) string { return store[k] }\n// Both called from HTTP handlers (concurrent goroutines)",
+  "finding_pattern": "race condition",
+  "coverage_rules": [
+    "Race conditions on shared state (maps, slices, vars)",
+    "concurrent map write"
+  ],
+  "reference": "references/go-concurrency-patterns.md"
+}

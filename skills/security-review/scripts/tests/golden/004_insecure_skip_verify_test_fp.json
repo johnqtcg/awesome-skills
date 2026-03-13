@@ -1,0 +1,12 @@
+{
+  "id": "GOLDEN-004",
+  "title": "InsecureSkipVerify in test-only code — false positive",
+  "expected_finding": false,
+  "category": "tls",
+  "code": "// file: internal/client/client_test.go\nfunc TestClient_WithSelfSignedCert(t *testing.T) {\n    tlsConfig := &tls.Config{InsecureSkipVerify: true}\n    client := &http.Client{Transport: &http.Transport{TLSClientConfig: tlsConfig}}\n    resp, err := client.Get(testServer.URL)\n    ...\n}",
+  "anti_example_patterns": [
+    "Environment-only theoretical risk without reachable path"
+  ],
+  "suppression_rule": 4,
+  "reference": "references/go-secure-coding.md"
+}

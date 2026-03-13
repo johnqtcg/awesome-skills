@@ -1,0 +1,13 @@
+{
+  "id": "016",
+  "title": "Test checks only error but not return value",
+  "expected_finding": true,
+  "severity": "Medium",
+  "category": "test-quality",
+  "reference": "go-test-quality.md",
+  "code": "func TestGetUser(t *testing.T) {\n\tuser, err := GetUser(\"123\")\n\tif err != nil {\n\t\tt.Fatal(err)\n\t}\n\t// missing: no assertion on user fields\n}",
+  "coverage_rules": [
+    "Assertion completeness (not just \"no error\")",
+    "verify return value fields"
+  ]
+}

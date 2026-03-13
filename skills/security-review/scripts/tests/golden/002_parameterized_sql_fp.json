@@ -1,0 +1,12 @@
+{
+  "id": "GOLDEN-002",
+  "title": "Parameterized SQL — false positive suppression",
+  "expected_finding": false,
+  "category": "injection",
+  "code": "rows, err := db.QueryContext(ctx, \"SELECT id, name FROM users WHERE id = ?\", userID)\nif err != nil { return err }\ndefer rows.Close()",
+  "anti_example_patterns": [
+    "Sink is parameterized/safely encoded by framework guarantees"
+  ],
+  "suppression_rule": 3,
+  "reference": "references/go-secure-coding.md"
+}

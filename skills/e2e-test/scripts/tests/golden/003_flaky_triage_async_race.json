@@ -1,0 +1,29 @@
+{
+  "id": "003_flaky_triage_async_race",
+  "description": "Flaky test from async race condition — skill should require repeat runs, trace analysis, root cause classification, and stability validation",
+  "scenario_type": "flaky_triage",
+  "context": {
+    "task": "Triage flaky checkout test",
+    "test_name": "checkout.spec.ts > complete payment",
+    "failure_frequency": "3/10 runs",
+    "failure_signature": "timeout waiting for 'Order confirmed'",
+    "environment": "CI"
+  },
+  "expected_runner": "Playwright",
+  "expected_gates": ["Execution Integrity Gate", "Stability Gate"],
+  "expected_output_fields": ["Task type", "Runner choice", "Failure under triage", "Executed commands", "Artifacts", "Next actions"],
+  "expected_triage_steps": [
+    "repeat-each",
+    "trace",
+    "classify root cause",
+    "quarantine"
+  ],
+  "expected_root_cause_categories": ["selector instability", "async race", "test-data coupling", "network instability", "environment drift", "application defect"],
+  "skill_rules_that_must_fire": [
+    "Stability Gate",
+    "repeat runs",
+    "trace",
+    "classify root cause",
+    "quarantine only with owner"
+  ]
+}

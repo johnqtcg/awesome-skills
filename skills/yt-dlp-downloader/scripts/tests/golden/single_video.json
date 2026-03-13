@@ -1,0 +1,10 @@
+{
+  "scenario": "Downloading a single public video",
+  "required_keywords": [
+    "Single video",
+    "--no-playlist",
+    "re:bv\\*\\+ba/b|bv\\*\\[",
+    "--merge-output-format",
+    "--download-archive"
+  ]
+}

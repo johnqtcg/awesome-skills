@@ -1,0 +1,11 @@
+{
+  "id": "GOLDEN-010",
+  "title": "gofmt -w instead of go fmt — acceptable variant",
+  "type": "false_positive",
+  "severity": "none",
+  "makefile_snippet": "fmt: ## Format Go source files\n\tgofmt -w $(shell find . -name '*.go' -not -path './vendor/*')",
+  "expected_feedback": "no defect; gofmt -w is an acceptable alternative to go fmt ./... when vendor exclusion is needed",
+  "anti_example_patterns": ["go fmt"],
+  "coverage_rules": ["quality targets"],
+  "reference": "references/makefile-quality-guide.md"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "014",
+  "title": "Pre-existing High finding reported for awareness but not blocking",
+  "expected_finding": true,
+  "severity": "High",
+  "category": "security",
+  "reference": "go-security-patterns.md",
+  "origin": "pre-existing",
+  "code": "// NOT in diff (impact-radius file, unchanged code):\nfunc GetUserByName(db *sql.DB, name string) (*User, error) {\n\tquery := \"SELECT * FROM users WHERE name = '\" + name + \"'\"\n\treturn scanUser(db.QueryRow(query))\n}",
+  "coverage_rules": [
+    "pre-existing",
+    "follow-up issue",
+    "Do NOT block the PR for historical debt"
+  ],
+  "gate": "Change Origin Classification Gate"
+}

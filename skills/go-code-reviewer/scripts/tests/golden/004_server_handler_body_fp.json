@@ -1,0 +1,11 @@
+{
+  "id": "004",
+  "title": "Server handler without r.Body.Close \u2014 false positive",
+  "expected_finding": false,
+  "category": "api",
+  "code": "func handler(w http.ResponseWriter, r *http.Request) {\n    data, err := io.ReadAll(r.Body)\n    if err != nil {\n        http.Error(w, \"bad\", 400)\n        return\n    }\n    w.Write(data)\n}",
+  "suppression_reason": "net/http server manages request body lifecycle",
+  "anti_example_patterns": [
+    "avoid requiring explicit `r.Body.Close()`"
+  ]
+}

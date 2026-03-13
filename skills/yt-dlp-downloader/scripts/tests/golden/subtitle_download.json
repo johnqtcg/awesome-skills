@@ -1,0 +1,10 @@
+{
+  "scenario": "Downloading with embedded subtitles",
+  "required_keywords": [
+    "Subtitles",
+    "--list-subs",
+    "--write-subs",
+    "--embed-subs",
+    "--sub-lang"
+  ]
+}

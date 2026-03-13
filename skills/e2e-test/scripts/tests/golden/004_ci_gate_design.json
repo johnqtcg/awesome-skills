@@ -1,0 +1,30 @@
+{
+  "id": "004_ci_gate_design",
+  "description": "CI gate design for PR blocking — skill should produce CI config with artifact upload, browser install, secret injection, sharding guidance",
+  "scenario_type": "ci_gate_design",
+  "context": {
+    "task": "Set up E2E CI gate for PR merge blocking",
+    "ci_platform": "GitHub Actions",
+    "environment": "CI with webServer",
+    "browsers_needed": ["chromium"],
+    "suite_runtime": "~4 minutes"
+  },
+  "expected_runner": "Playwright",
+  "expected_gates": ["Configuration Gate", "Environment Gate"],
+  "expected_output_fields": ["Task type", "Runner choice", "Environment gate", "Config/dependency status", "Execution status", "Next actions"],
+  "expected_ci_elements": [
+    "playwright install",
+    "Secret injection",
+    "upload-artifact",
+    "retries",
+    "timeout"
+  ],
+  "skill_rules_that_must_fire": [
+    "Configuration Gate",
+    "Environment Gate",
+    "CI Strategy",
+    "Blocking",
+    "artifact",
+    "retries"
+  ]
+}

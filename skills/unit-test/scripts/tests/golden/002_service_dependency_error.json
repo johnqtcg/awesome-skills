@@ -1,0 +1,17 @@
+{
+  "id": "002_service_dependency_error",
+  "description": "Service method calling repository — skill should mandate dependency error injection and propagation checks",
+  "code_snippet": "func (s *OrderService) CreateOrder(ctx context.Context, input OrderInput) (*Order, error)",
+  "expect_test_generation": true,
+  "target_type": "Service interface",
+  "expected_techniques": ["Dependency Error Propagation", "Mutation-Resistant Assertions"],
+  "expected_boundary_items": ["error from each critical dependency", "context cancellation/deadline propagation"],
+  "expected_killer_hypothesis": "dependency error not propagated, returns partial success",
+  "skill_rules_that_must_exist": [
+    "Dependency Error Propagation",
+    "no partial payload",
+    "context.Canceled",
+    "errors.Is",
+    "killer case"
+  ]
+}

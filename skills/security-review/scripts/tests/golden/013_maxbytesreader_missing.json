@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-013",
+  "title": "Missing MaxBytesReader — unbounded request body allows DoS",
+  "expected_finding": true,
+  "severity": "P2",
+  "category": "endpoint",
+  "code": "func CreateHandler(w http.ResponseWriter, r *http.Request) {\n    var req CreateRequest\n    if err := json.NewDecoder(r.Body).Decode(&req); err != nil {\n        http.Error(w, \"bad request\", http.StatusBadRequest)\n        return\n    }\n    // process req...\n}",
+  "finding_pattern": "MaxBytesReader",
+  "coverage_rules": [
+    "`http.Request.Body` not limited",
+    "`http.MaxBytesReader` required"
+  ],
+  "reference": "references/scenario-checklists.md"
+}

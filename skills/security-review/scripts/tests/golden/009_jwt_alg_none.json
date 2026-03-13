@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-009",
+  "title": "JWT validation — no algorithm restriction allows alg=none bypass",
+  "expected_finding": true,
+  "severity": "P1",
+  "category": "session",
+  "code": "func ParseToken(tokenString string) (*jwt.Token, error) {\n    return jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {\n        return mySecret, nil\n    })\n}",
+  "finding_pattern": "alg=none",
+  "coverage_rules": [
+    "JWT validation checks issuer/audience/expiry/alg constraints",
+    "Reject `alg=none` and weak parsing paths"
+  ],
+  "reference": "references/scenario-checklists.md"
+}

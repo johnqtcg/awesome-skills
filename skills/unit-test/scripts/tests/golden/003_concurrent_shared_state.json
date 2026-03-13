@@ -1,0 +1,16 @@
+{
+  "id": "003_concurrent_shared_state",
+  "description": "Handler with goroutine fan-out over shared state — skill should mandate race detection and channel barriers",
+  "code_snippet": "func (h *BatchHandler) ProcessAll(ctx context.Context, ids []string) ([]Result, error)",
+  "expect_test_generation": true,
+  "target_type": "Service interface",
+  "expected_techniques": ["Concurrency & Panic Recovery"],
+  "expected_boundary_items": ["concurrent/race behavior"],
+  "expected_killer_hypothesis": "goroutine error not collected into aggregate error",
+  "skill_rules_that_must_exist": [
+    "go test -race",
+    "channel barrier",
+    "error fan-in",
+    "killer case"
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-011",
+  "title": "Dockerfile running as root — no USER directive",
+  "expected_finding": true,
+  "severity": "P2",
+  "category": "container",
+  "code": "FROM golang:1.22-alpine AS builder\nWORKDIR /app\nCOPY . .\nRUN go build -o /app/server .\n\nFROM alpine:3.19\nCOPY --from=builder /app/server /usr/local/bin/server\nEXPOSE 8080\nCMD [\"server\"]",
+  "finding_pattern": "non-root",
+  "coverage_rules": [
+    "Final stage runs as non-root user",
+    "Multi-stage build: build tools and source not present in final image"
+  ],
+  "reference": "references/scenario-checklists.md"
+}

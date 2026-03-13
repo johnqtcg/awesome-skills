@@ -1,0 +1,13 @@
+{
+  "id": "005",
+  "title": "Recommending slog on Go 1.18 project \u2014 version gate",
+  "expected_finding": false,
+  "category": "version-gate",
+  "go_version": "1.18",
+  "code": "// go.mod: go 1.18\npackage main\n\nimport \"log\"\n\nfunc main() {\n    log.Println(\"hello\")\n}",
+  "suppression_reason": "slog requires Go 1.21+, project targets Go 1.18",
+  "anti_example_patterns": [
+    "when the project's `go.mod` targets Go < 1.21"
+  ],
+  "gate": "Go Version Gate"
+}

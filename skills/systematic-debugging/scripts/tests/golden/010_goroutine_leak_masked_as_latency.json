@@ -1,0 +1,25 @@
+{
+  "id": "010",
+  "title": "Latency spike is actually a goroutine leak, not just a slow request path",
+  "scenario_type": "goroutine_leak_perf_combo",
+  "severity": "P1",
+  "bug_type": "perf",
+  "skill_rules_that_must_fire": [
+    "Memory leak / perf regression",
+    "Profile before hypothesizing",
+    "pprof",
+    "Profiling / tracing evidence",
+    "Residual Risk and Follow-ups"
+  ],
+  "expected_references": [
+    "bug-type-strategies.md",
+    "output-contract-template.md",
+    "debugging-report-scorecard.md"
+  ],
+  "expected_output_fields": [
+    "Profiling / tracing evidence",
+    "Root Cause",
+    "Residual Risk and Follow-ups",
+    "Scorecard"
+  ]
+}

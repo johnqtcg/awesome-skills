@@ -1,0 +1,13 @@
+{
+  "id": "017",
+  "title": "sql.Rows not closed after Query — resource leak",
+  "expected_finding": true,
+  "severity": "High",
+  "category": "database",
+  "reference": "go-database-patterns.md",
+  "code": "func ListUsers(db *sql.DB) ([]User, error) {\n\trows, err := db.Query(\"SELECT id, name FROM users\")\n\tif err != nil {\n\t\treturn nil, err\n\t}\n\t// missing: defer rows.Close()\n\tvar users []User\n\tfor rows.Next() {\n\t\tvar u User\n\t\trows.Scan(&u.ID, &u.Name)\n\t\tusers = append(users, u)\n\t}\n\treturn users, nil\n}",
+  "coverage_rules": [
+    "sql.Rows",
+    "not closed"
+  ]
+}

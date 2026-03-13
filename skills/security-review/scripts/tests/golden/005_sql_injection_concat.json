@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-005",
+  "title": "SQL injection via string concatenation in ORDER BY",
+  "expected_finding": true,
+  "severity": "P1",
+  "category": "injection",
+  "code": "func ListUsers(sortCol string) ([]*User, error) {\n    query := \"SELECT id, name FROM users ORDER BY \" + sortCol\n    rows, err := db.Query(query)\n    if err != nil { return nil, err }\n    defer rows.Close()\n    ...\n}",
+  "finding_pattern": "SQL injection",
+  "coverage_rules": [
+    "SQL must be parameterized",
+    "`ORDER BY`/identifier inputs must use allowlists"
+  ],
+  "reference": "references/scenario-checklists.md"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "GOLDEN-004",
+  "title": "Makefile missing .PHONY declarations",
+  "type": "defect",
+  "severity": "medium",
+  "makefile_snippet": "test:\n\t$(GO) test -race ./...\nclean:\n\trm -rf bin/",
+  "expected_feedback": "non-file targets should be declared .PHONY",
+  "coverage_rules": [
+    ".PHONY"
+  ],
+  "reference": "references/makefile-quality-guide.md"
+}

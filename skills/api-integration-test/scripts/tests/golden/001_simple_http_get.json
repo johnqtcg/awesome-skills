@@ -1,0 +1,13 @@
+{
+  "name": "Simple HTTP GET endpoint integration test",
+  "description": "User has a GET /users/:id internal API and wants a basic integration test",
+  "required_keywords": [
+    "//go:build integration",
+    "INTERNAL_API_INTEGRATION",
+    "context.WithTimeout",
+    "http.StatusOK",
+    "require.NoError",
+    "require.Equal",
+    "t.Skip"
+  ]
+}

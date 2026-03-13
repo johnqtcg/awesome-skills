@@ -1,0 +1,23 @@
+{
+  "id": "003",
+  "title": "Performance regression requires profile-first investigation",
+  "scenario_type": "perf_profile_first",
+  "severity": "P1",
+  "bug_type": "perf",
+  "skill_rules_that_must_fire": [
+    "Profile before hypothesizing",
+    "pprof",
+    "performance fix without profiling",
+    "Evidence Gate",
+    "C3"
+  ],
+  "expected_references": [
+    "bug-type-strategies.md",
+    "bad-good-debugging-reports.md"
+  ],
+  "expected_output_fields": [
+    "Profiling / tracing evidence",
+    "Root Cause",
+    "Scorecard"
+  ]
+}

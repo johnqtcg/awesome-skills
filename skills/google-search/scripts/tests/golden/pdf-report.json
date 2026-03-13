@@ -1,0 +1,9 @@
+{
+  "scenario": "User searching for industry research reports",
+  "required_keywords": [
+    "filetype:pdf",
+    "report",
+    "site:gov",
+    "site:edu"
+  ]
+}

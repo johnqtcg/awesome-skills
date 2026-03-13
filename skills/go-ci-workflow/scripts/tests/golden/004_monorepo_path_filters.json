@@ -1,0 +1,29 @@
+{
+  "id": "004_monorepo_path_filters",
+  "description": "Monorepo with multiple apps/services — skill should model per-app jobs, consider path filters, and handle partial CI ownership",
+  "scenario_type": "monorepo",
+  "context": {
+    "go_mod_count": 1,
+    "app_dirs": ["services/api", "services/worker", "services/gateway"],
+    "has_makefile": true,
+    "makefile_targets": ["ci", "ci-api-integration", "docker-build"],
+    "has_dockerfile": true,
+    "dockerfile_count": 3,
+    "has_golangci_lint_config": true,
+    "test_types": ["unit", "integration"],
+    "existing_workflows": []
+  },
+  "expected_gates": ["Repository Shape Gate", "Local Parity Gate", "Security and Permissions Gate"],
+  "expected_output_fields": ["repository shape classification", "job list", "execution path for each job", "trigger configuration", "permissions"],
+  "expected_shape": "monorepo with multiple apps/packages",
+  "skill_rules_that_must_fire": [
+    "Repository Shape Gate",
+    "monorepo",
+    "Local Parity Gate",
+    "path filter",
+    "multiple apps",
+    "needs:",
+    "concurrency",
+    "permissions"
+  ]
+}

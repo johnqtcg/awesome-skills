@@ -1,0 +1,10 @@
+{
+  "scenario": "Downloading a full playlist",
+  "required_keywords": [
+    "Playlist",
+    "--yes-playlist",
+    "%(playlist_title)",
+    "%(playlist_index)",
+    "--flat-playlist"
+  ]
+}

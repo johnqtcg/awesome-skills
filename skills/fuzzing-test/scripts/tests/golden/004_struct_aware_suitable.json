@@ -1,0 +1,25 @@
+{
+  "id": "004_struct_aware_suitable",
+  "description": "HTTP request processor taking complex struct — suitable with struct-via-[]byte deserialization",
+  "code_snippet": "func ProcessRequest(req Request) (*Response, error)",
+  "applicability_verdict": "suitable",
+  "expected_checks": {
+    "meaningful_input_space": "Pass",
+    "fuzz_compatible_types": "Pass",
+    "clear_oracle": "Pass",
+    "deterministic_local": "Pass",
+    "fast_per_call": "Pass"
+  },
+  "expected_fuzz_mode": "multi-parameter",
+  "expected_template": "Template D",
+  "expected_tier": "Tier 2",
+  "skill_rules_that_must_fire": [
+    "Applicability Gate",
+    "Applicability Verdict",
+    "Template D: Struct-Aware",
+    "json.Unmarshal",
+    "f.Add",
+    "Size guard",
+    "Oracle/invariant"
+  ]
+}

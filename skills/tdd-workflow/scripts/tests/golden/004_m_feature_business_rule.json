@@ -1,0 +1,27 @@
+{
+  "id": "004_m_feature_business_rule",
+  "description": "M-sized feature: add discount calculation with tiered pricing rules to existing service",
+  "change_size": "M",
+  "change_type": "feature",
+  "files_changed": 3,
+  "loc_changed": 85,
+  "code_snippet": "// Tiered discount: 0-100 → 0%, 100-500 → 5%, 500-1000 → 10%, >1000 → 15%\nfunc (s *PricingService) CalcDiscount(ctx context.Context, order *Order) (int64, error)",
+  "expected_tdd_phases": {
+    "red": "Inside-Out: service test first with boundary values at each tier edge",
+    "green": "Implement tiered logic with guard clauses",
+    "refactor": "Extract tier lookup table, simplify conditionals"
+  },
+  "expected_test_count_range": [8, 12],
+  "expected_killer_hypothesis": "boundary amount 500 gets 5% instead of 10% due to < vs <= comparison",
+  "expected_boundary_items": ["amount=0", "amount=99", "amount=100", "amount=499", "amount=500", "amount=999", "amount=1000", "amount=1001", "negative amount"],
+  "skill_rules_that_must_fire": [
+    "Red evidence exists",
+    "Killer case present",
+    "Inside-Out",
+    "M change",
+    "boundary",
+    "Defect hypothesis list",
+    "Table-driven"
+  ],
+  "scorecard_must_pass": ["C1", "C2", "C3", "S1", "S2", "S3", "H3"]
+}

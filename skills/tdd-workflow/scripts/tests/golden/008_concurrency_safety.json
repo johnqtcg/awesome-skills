@@ -1,0 +1,28 @@
+{
+  "id": "008_concurrency_safety",
+  "description": "M-sized feature: add concurrent-safe in-memory cache with TTL expiration",
+  "change_size": "M",
+  "change_type": "feature",
+  "files_changed": 2,
+  "loc_changed": 80,
+  "code_snippet": "type Cache struct {\n\tmu    sync.RWMutex\n\tstore map[string]entry\n}\n\nfunc (c *Cache) Get(key string) (interface{}, bool)\nfunc (c *Cache) Set(key string, val interface{}, ttl time.Duration)\nfunc (c *Cache) Delete(key string)",
+  "expected_tdd_phases": {
+    "red": "Functional tests first (get/set/delete/TTL), then race test with -race flag",
+    "green": "Implement with sync.RWMutex",
+    "refactor": "Extract cleanup goroutine for expired entries"
+  },
+  "expected_test_count_range": [8, 15],
+  "expected_killer_hypothesis": "concurrent Get and Set on same key causes data race or returns stale value",
+  "expected_boundary_items": ["nil value", "zero TTL", "expired entry", "non-existent key", "concurrent read/write"],
+  "expected_concurrency_test": true,
+  "expected_race_flag": true,
+  "skill_rules_that_must_fire": [
+    "Red evidence exists",
+    "Killer case present",
+    "Concurrency Determinism",
+    "go test -race",
+    "M change",
+    "Defect hypothesis list"
+  ],
+  "scorecard_must_pass": ["C1", "C2", "C3", "S1", "S2", "S4", "S5"]
+}

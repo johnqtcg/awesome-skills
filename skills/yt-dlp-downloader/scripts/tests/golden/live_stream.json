@@ -1,0 +1,8 @@
+{
+  "scenario": "Downloading a live stream",
+  "required_keywords": [
+    "Live",
+    "--live-from-start",
+    "re:(?i)youtube.*twitch|twitch.*youtube"
+  ]
+}

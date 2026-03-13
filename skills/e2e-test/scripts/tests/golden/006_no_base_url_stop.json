@@ -1,0 +1,22 @@
+{
+  "id": "006_no_base_url_stop",
+  "description": "No base URL available — skill must stop and report blocker, NOT generate pseudo-runnable code",
+  "scenario_type": "stop_condition",
+  "context": {
+    "task": "Add E2E tests for user dashboard",
+    "environment": "unknown",
+    "base_url_available": false,
+    "test_account_available": false
+  },
+  "expected_runner": "none",
+  "expected_gates": ["Configuration Gate", "Environment Gate"],
+  "expected_execution_status": "Not run in this environment",
+  "expected_output_contains": ["missing", "base URL", "blockers"],
+  "expected_output_not_contains": ["http://localhost", "http://staging"],
+  "skill_rules_that_must_fire": [
+    "Configuration Gate",
+    "do not invent them",
+    "stop and report the exact blockers",
+    "missing"
+  ]
+}

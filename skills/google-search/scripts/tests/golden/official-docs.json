@@ -1,0 +1,9 @@
+{
+  "scenario": "Developer searching for Go standard library docs",
+  "required_keywords": [
+    "site:go.dev",
+    "site:pkg.go.dev",
+    "Official Documentation",
+    "release note"
+  ]
+}

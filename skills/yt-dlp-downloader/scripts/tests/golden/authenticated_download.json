@@ -1,0 +1,9 @@
+{
+  "scenario": "Downloading authenticated/age-gated content",
+  "required_keywords": [
+    "Authenticated",
+    "--cookies-from-browser",
+    "chrome",
+    "re:(?i)age.gated|private|members"
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "id": "007_fork_pr_security",
+  "description": "Open-source repo accepting fork PRs with secret-dependent integration tests — skill must guard secrets, set minimal permissions, and separate trusted from untrusted triggers",
+  "scenario_type": "fork_pr_security",
+  "context": {
+    "go_mod_count": 1,
+    "has_makefile": true,
+    "makefile_targets": ["ci", "ci-api-integration"],
+    "has_dockerfile": false,
+    "accepts_fork_prs": true,
+    "secret_dependent_jobs": ["ci-api-integration"],
+    "secrets_needed": ["API_TOKEN", "DB_PASSWORD"],
+    "test_types": ["unit", "integration"],
+    "existing_workflows": []
+  },
+  "expected_gates": ["Repository Shape Gate", "Local Parity Gate", "Security and Permissions Gate"],
+  "expected_output_fields": ["repository shape classification", "job list", "execution path for each job", "trigger configuration", "permissions and secret assumptions"],
+  "skill_rules_that_must_fire": [
+    "Security and Permissions Gate",
+    "fork PRs",
+    "secrets",
+    "permissions",
+    "contents: read",
+    "pull_request",
+    "guard secret-dependent jobs",
+    "pull_request_target"
+  ]
+}

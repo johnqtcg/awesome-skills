@@ -1,0 +1,25 @@
+{
+  "id": "002_s_bugfix_error_swallowed",
+  "description": "S-sized bug fix: service swallows repo error, returns nil instead of propagating",
+  "change_size": "S",
+  "change_type": "bugfix",
+  "files_changed": 1,
+  "loc_changed": 5,
+  "code_snippet": "func (s *OrderService) GetOrder(ctx context.Context, id string) (*Order, error) {\n\torder, err := s.repo.FindByID(ctx, id)\n\tif err != nil {\n\t\tlog.Error(\"repo error\", err) // BUG: returns nil, nil\n\t\treturn nil, nil\n\t}\n\treturn order, nil\n}",
+  "expected_tdd_phases": {
+    "red": "Write test where repo returns error, assert service returns non-nil error",
+    "green": "Change return nil, nil to return nil, fmt.Errorf(\"get order: %w\", err)",
+    "refactor": "None needed"
+  },
+  "expected_test_count_range": [3, 5],
+  "expected_killer_hypothesis": "caller receives nil error when repo fails, silently loses data",
+  "expected_boundary_items": ["repo returns error", "repo returns nil order with nil error (not found)", "context canceled"],
+  "skill_rules_that_must_fire": [
+    "Red evidence exists",
+    "Killer case present",
+    "Defect hypothesis list",
+    "S change",
+    "error propagation"
+  ],
+  "scorecard_must_pass": ["C1", "C2", "C3", "S1", "S3"]
+}

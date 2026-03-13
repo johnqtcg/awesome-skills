@@ -1,0 +1,19 @@
+coverage:
+  logic_min: 80
+  infra_min: 70
+  package_rules:
+    - package: "internal/domain"
+      min: 85
+      rationale: "core business rules, strict regression guard"
+    - package: "internal/infra/redis"
+      min: 70
+      rationale: "io-heavy adapter, behavior mainly validated by integration tests"
+
+assertion_style: auto # auto|testify|stdlib|go-cmp
+
+race:
+  required: true
+
+commands:
+  test: "go test ./path/to/pkg -race"
+  coverage: "go test ./path/to/pkg -coverprofile=coverage.out -covermode=atomic -race && go tool cover -func=coverage.out"

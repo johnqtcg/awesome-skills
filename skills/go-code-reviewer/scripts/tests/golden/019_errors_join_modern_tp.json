@@ -1,0 +1,13 @@
+{
+  "id": "019",
+  "title": "Manual multi-error concatenation should use errors.Join on Go 1.20+",
+  "expected_finding": true,
+  "severity": "Medium",
+  "category": "modern-go",
+  "reference": "go-modern-practices.md",
+  "go_version": "1.21",
+  "code": "func CloseAll(closers ...io.Closer) error {\n\tvar errMsg string\n\tfor _, c := range closers {\n\t\tif err := c.Close(); err != nil {\n\t\t\terrMsg += err.Error() + \"; \"\n\t\t}\n\t}\n\tif errMsg != \"\" {\n\t\treturn fmt.Errorf(\"close errors: %s\", errMsg)\n\t}\n\treturn nil\n}",
+  "coverage_rules": [
+    "errors.Join"
+  ]
+}

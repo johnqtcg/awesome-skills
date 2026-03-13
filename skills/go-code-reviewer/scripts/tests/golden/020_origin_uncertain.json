@@ -1,0 +1,15 @@
+{
+  "id": "020",
+  "title": "Full-file review without diff context — origin is uncertain",
+  "expected_finding": true,
+  "severity": "Medium",
+  "category": "error-handling",
+  "reference": "go-error-and-quality.md",
+  "origin": "uncertain",
+  "code": "// Full file review (no PR/diff context available)\nfunc ProcessOrder(db *sql.DB, orderID string) error {\n\tresult, _ := db.Exec(\"UPDATE orders SET status = 'done' WHERE id = ?\", orderID)\n\t_ = result\n\treturn nil\n}",
+  "coverage_rules": [
+    "uncertain",
+    "Origin cannot be determined"
+  ],
+  "gate": "Change Origin Classification Gate"
+}

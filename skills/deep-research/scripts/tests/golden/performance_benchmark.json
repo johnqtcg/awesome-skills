@@ -1,0 +1,9 @@
+{
+  "scenario": "Researching performance claims and benchmark data",
+  "required_keywords": [
+    "Performance Benchmark",
+    "methodology",
+    "re:(?i)benchmark.*methodology|methodology.*benchmark",
+    "re:(?i)environment|hardware"
+  ]
+}

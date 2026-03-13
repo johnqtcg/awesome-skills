@@ -1,0 +1,16 @@
+{
+  "id": "008_cli_command",
+  "description": "CLI command runner with flag parsing and exit codes — skill should test by command/subcommand with error paths",
+  "code_snippet": "func (r *Runner) Execute(ctx context.Context, args []string) error",
+  "expect_test_generation": true,
+  "target_type": "CLI command/runner",
+  "expected_techniques": ["Dependency Error Propagation", "Off-by-One Precision"],
+  "expected_boundary_items": ["nil input", "empty value/collection", "invalid format/type"],
+  "expected_killer_hypothesis": "missing required flag silently uses zero value instead of returning error",
+  "skill_rules_that_must_exist": [
+    "CLI command/runner",
+    "command/subcommand",
+    "killer case",
+    "table-driven"
+  ]
+}

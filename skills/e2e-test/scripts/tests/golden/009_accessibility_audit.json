@@ -1,0 +1,29 @@
+{
+  "id": "009_accessibility_audit",
+  "description": "Add accessibility checks to critical pages — skill should generate axe-core Playwright tests with WCAG tags, scoped analysis, and journey-integrated checks",
+  "scenario_type": "new_journey_coverage",
+  "context": {
+    "task": "Add WCAG 2.1 AA accessibility checks to login, signup, and checkout pages",
+    "environment": "local",
+    "base_url_available": true,
+    "axe_core_installed": true,
+    "playwright_version": "1.40"
+  },
+  "expected_runner": "Playwright",
+  "expected_gates": ["Configuration Gate", "Environment Gate", "Execution Integrity Gate"],
+  "expected_code_patterns": [
+    "AxeBuilder",
+    "withTags",
+    "wcag2aa",
+    "analyze",
+    "violations"
+  ],
+  "skill_rules_that_must_fire": [
+    "Configuration Gate",
+    "Accessibility Testing",
+    "axe-core",
+    "AxeBuilder",
+    "wcag2a",
+    "violations"
+  ]
+}

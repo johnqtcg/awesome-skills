@@ -1,0 +1,15 @@
+{
+  "id": "GOLDEN-006",
+  "title": "math/rand for display shuffle — false positive",
+  "expected_finding": false,
+  "category": "randomness",
+  "code": "import \"math/rand\"\n\nfunc ShuffleProducts(products []Product) {\n    rand.Shuffle(len(products), func(i, j int) {\n        products[i], products[j] = products[j], products[i]\n    })\n}",
+  "anti_example_patterns": [
+    "Input is not attacker-controlled at trust boundary"
+  ],
+  "suppression_rule": 2,
+  "coverage_rules": [
+    "Randomness safety"
+  ],
+  "reference": "references/go-secure-coding.md"
+}

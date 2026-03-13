@@ -1,0 +1,11 @@
+{
+  "id": "GOLDEN-011",
+  "title": "No Docker targets in project without Dockerfile — acceptable",
+  "type": "false_positive",
+  "severity": "none",
+  "makefile_snippet": ".DEFAULT_GOAL := help\n\nbuild-api: ## Build API binary\n\t@mkdir -p bin\n\tgo build -ldflags \"$(LDFLAGS)\" -o bin/api ./cmd/api\n\ntest: ## Run tests\n\tgo test -race ./...\n\n.PHONY: help build-api test",
+  "expected_feedback": "no defect; docker-build/docker-push targets are only needed when Dockerfile is present",
+  "anti_example_patterns": ["docker"],
+  "coverage_rules": ["container targets"],
+  "reference": "SKILL.md"
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Production environment safety gate",
+  "description": "Tests must refuse to run against production by default",
+  "required_keywords": [
+    "INTEGRATION_ALLOW_PROD",
+    "re:prod.*production",
+    "t.Skip",
+    "refuse prod by default"
+  ]
+}

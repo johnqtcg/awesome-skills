@@ -1,0 +1,9 @@
+{
+  "scenario": "Go developer debugging a runtime error",
+  "required_keywords": [
+    "exact error message",
+    "site:stackoverflow.com",
+    "site:github.com",
+    "regex:fatal error.*concurrent"
+  ]
+}

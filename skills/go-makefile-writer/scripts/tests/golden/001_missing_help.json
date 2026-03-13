@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-001",
+  "title": "Makefile missing help target",
+  "type": "defect",
+  "severity": "high",
+  "makefile_snippet": "build:\n\tgo build ./cmd/api\ntest:\n\tgo test ./...",
+  "expected_feedback": "missing help target with self-documenting comments",
+  "coverage_rules": [
+    "help",
+    ".DEFAULT_GOAL := help",
+    "self-documenting"
+  ],
+  "reference": "references/makefile-quality-guide.md"
+}

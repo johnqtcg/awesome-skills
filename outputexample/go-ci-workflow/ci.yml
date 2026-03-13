@@ -1,0 +1,118 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '0 3 * * *'
+
+jobs:
+  ci:
+    name: Format · Test · Lint · Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install golangci-lint v2
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2
+
+      - name: Install goimports-reviser
+        run: go install github.com/incu6us/goimports-reviser/v3@v3.9.0
+
+      - name: Show golangci-lint version
+        run: golangci-lint version
+
+      - name: Run CI gate (format check + test + lint + build)
+        run: make ci COVER_MIN=80
+
+  docker-build:
+    name: Docker Image Build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build web image (default APP=issue2mdweb)
+        run: make docker-build
+
+      - name: Build CLI image (APP=issue2md)
+        run: docker build -f Dockerfile --build-arg APP=issue2md -t issue2md:cli-ci .
+
+  api-integration:
+    name: API Integration
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run API integration tests
+        run: make ci-api-integration
+
+  e2e-web:
+    name: Web E2E Journey
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'schedule'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run web E2E tests
+        run: make ci-e2e-web
+
+  govulncheck:
+    name: Dependency Vulnerability Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+  fieldalignment:
+    name: Struct Field Alignment Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Install fieldalignment
+        run: go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@v0.42.0
+
+      - name: Run fieldalignment
+        run: $(go env GOPATH)/bin/fieldalignment ./...

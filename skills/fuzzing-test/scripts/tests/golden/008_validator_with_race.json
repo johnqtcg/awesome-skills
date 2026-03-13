@@ -1,0 +1,24 @@
+{
+  "id": "008_validator_with_race",
+  "description": "Input validator that uses internal goroutine — suitable with -race flag recommendation",
+  "code_snippet": "func ValidateAndNormalize(input string) (string, error)",
+  "applicability_verdict": "suitable",
+  "expected_checks": {
+    "meaningful_input_space": "Pass",
+    "fuzz_compatible_types": "Pass",
+    "clear_oracle": "Pass",
+    "deterministic_local": "Pass",
+    "fast_per_call": "Pass"
+  },
+  "expected_fuzz_mode": "parser robustness",
+  "expected_template": "Template A",
+  "expected_tier": "Tier 2",
+  "advanced_features": ["race detection", "go test -race"],
+  "skill_rules_that_must_fire": [
+    "Applicability Gate",
+    "Applicability Verdict",
+    "Race Detection + Fuzz",
+    "Oracle/invariant",
+    "f.Add"
+  ]
+}

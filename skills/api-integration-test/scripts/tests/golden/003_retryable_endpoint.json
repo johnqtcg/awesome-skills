@@ -1,0 +1,12 @@
+{
+  "name": "Retryable endpoint with transient failures",
+  "description": "Endpoint returns 503 intermittently, test needs bounded retry with backoff",
+  "required_keywords": [
+    "maxRetries",
+    "backoff",
+    "ctx.Done()",
+    "isTransient",
+    "re:50[234]",
+    "context.WithTimeout"
+  ]
+}

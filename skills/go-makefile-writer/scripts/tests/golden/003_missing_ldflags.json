@@ -1,0 +1,15 @@
+{
+  "id": "GOLDEN-003",
+  "title": "Build target without version injection",
+  "type": "defect",
+  "severity": "medium",
+  "makefile_snippet": "build-api:\n\tgo build -o bin/api ./cmd/api",
+  "expected_feedback": "build targets should use -ldflags for version injection",
+  "coverage_rules": [
+    "-ldflags",
+    "VERSION",
+    "COMMIT",
+    "BUILD_TIME"
+  ],
+  "reference": "references/makefile-quality-guide.md"
+}

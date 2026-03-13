@@ -1,0 +1,22 @@
+{
+  "id": "007",
+  "title": "Production outage requires mitigation before full RCA",
+  "scenario_type": "p0_mitigation",
+  "severity": "P0",
+  "bug_type": "other",
+  "skill_rules_that_must_fire": [
+    "P0 Protocol: Mitigate First, Investigate Second",
+    "The mitigation is NOT the fix",
+    "Mitigation status",
+    "Scorecard"
+  ],
+  "expected_references": [
+    "output-contract-template.md",
+    "debugging-report-scorecard.md"
+  ],
+  "expected_output_fields": [
+    "Mitigation status",
+    "Triage",
+    "Scorecard"
+  ]
+}

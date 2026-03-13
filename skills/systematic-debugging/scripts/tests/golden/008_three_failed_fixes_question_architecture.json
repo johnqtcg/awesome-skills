@@ -1,0 +1,22 @@
+{
+  "id": "008",
+  "title": "Three failed fixes should trigger architecture questioning",
+  "scenario_type": "architecture_question",
+  "severity": "P1",
+  "bug_type": "other",
+  "skill_rules_that_must_fire": [
+    "After 3 rejected hypotheses",
+    "If 3+ Fixes Failed: Question Architecture",
+    "S6",
+    "Residual Risk and Follow-ups"
+  ],
+  "expected_references": [
+    "debugging-report-scorecard.md",
+    "output-contract-template.md"
+  ],
+  "expected_output_fields": [
+    "Hypothesis Log",
+    "Residual Risk and Follow-ups",
+    "Escalation needed"
+  ]
+}

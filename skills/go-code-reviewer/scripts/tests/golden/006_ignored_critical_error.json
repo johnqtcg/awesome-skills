@@ -1,0 +1,13 @@
+{
+  "id": "006",
+  "title": "Ignored error on database close",
+  "expected_finding": true,
+  "severity": "High",
+  "category": "error-handling",
+  "code": "func cleanup(db *sql.DB) {\n    db.Close()\n    os.Remove(tmpFile)\n}",
+  "finding_pattern": "Ignored error",
+  "coverage_rules": [
+    "Ignored errors (`_` discard on error-returning calls)"
+  ],
+  "reference": "references/go-error-and-quality.md"
+}

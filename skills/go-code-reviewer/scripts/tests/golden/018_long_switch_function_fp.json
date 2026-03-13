@@ -1,0 +1,11 @@
+{
+  "id": "018",
+  "title": "Long table-driven switch function is acceptable",
+  "expected_finding": false,
+  "category": "code-quality",
+  "reference": "go-error-and-quality.md",
+  "code": "func HandleCommand(cmd string) error {\n\tswitch cmd {\n\tcase \"create\":\n\t\treturn handleCreate()\n\tcase \"update\":\n\t\treturn handleUpdate()\n\tcase \"delete\":\n\t\treturn handleDelete()\n\tcase \"list\":\n\t\treturn handleList()\n\tcase \"get\":\n\t\treturn handleGet()\n\tcase \"export\":\n\t\treturn handleExport()\n\tcase \"import\":\n\t\treturn handleImport()\n\tcase \"sync\":\n\t\treturn handleSync()\n\tcase \"validate\":\n\t\treturn handleValidate()\n\tcase \"migrate\":\n\t\treturn handleMigrate()\n\tcase \"rollback\":\n\t\treturn handleRollback()\n\tcase \"status\":\n\t\treturn handleStatus()\n\tdefault:\n\t\treturn fmt.Errorf(\"unknown command: %s\", cmd)\n\t}\n}",
+  "anti_example_patterns": [
+    "table-driven switch"
+  ]
+}

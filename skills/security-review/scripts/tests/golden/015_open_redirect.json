@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-015",
+  "title": "Open redirect — user-controlled redirect URL without validation",
+  "expected_finding": true,
+  "severity": "P2",
+  "category": "endpoint",
+  "code": "func CallbackHandler(w http.ResponseWriter, r *http.Request) {\n    redirectURL := r.URL.Query().Get(\"redirect\")\n    http.Redirect(w, r, redirectURL, http.StatusFound)\n}",
+  "finding_pattern": "open redirect",
+  "coverage_rules": [
+    "`net/http.Redirect` with user-controlled URL",
+    "Redirect/callback endpoints resist open-redirect abuse"
+  ],
+  "reference": "references/scenario-checklists.md"
+}

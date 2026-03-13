@@ -1,0 +1,10 @@
+{
+  "scenario": "Developer searching for real code examples on GitHub",
+  "required_keywords": [
+    "language:go",
+    "stars:>",
+    "filename:",
+    "path:",
+    "GitHub Code Search"
+  ]
+}

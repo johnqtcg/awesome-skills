@@ -1,0 +1,23 @@
+{
+  "id": "002",
+  "title": "Bad value originates several callers above the crash site",
+  "scenario_type": "deep_stack_trace",
+  "severity": "P1",
+  "bug_type": "logic",
+  "skill_rules_that_must_fire": [
+    "Trace Data Flow",
+    "Fix at source, not at symptom",
+    "root-cause-tracing.md",
+    "C2",
+    "C3"
+  ],
+  "expected_references": [
+    "root-cause-tracing.md",
+    "output-contract-template.md"
+  ],
+  "expected_output_fields": [
+    "Data-flow trace summary",
+    "Root Cause",
+    "Why this is the source (not symptom)"
+  ]
+}

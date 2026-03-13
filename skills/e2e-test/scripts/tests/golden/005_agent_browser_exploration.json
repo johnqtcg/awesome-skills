@@ -1,0 +1,28 @@
+{
+  "id": "005_agent_browser_exploration",
+  "description": "Exploratory session with Agent Browser, then bridge to Playwright — skill must capture commands, selectors, screenshots and convert to code",
+  "scenario_type": "exploration_to_code",
+  "context": {
+    "task": "Explore product catalog flow and convert to Playwright test",
+    "environment": "local",
+    "base_url_available": true,
+    "flow": "browse products → add to cart → view cart"
+  },
+  "expected_runner": "Agent Browser then Playwright",
+  "expected_gates": ["Environment Gate", "Execution Integrity Gate"],
+  "expected_output_fields": ["Task type", "Runner choice", "Environment gate", "Covered journey", "Executed commands", "Artifacts", "Next actions"],
+  "expected_bridge_steps": [
+    "capture the environment and entry URL",
+    "record the exact command sequence",
+    "save milestone screenshots",
+    "note the selectors or semantic targets",
+    "translate the validated flow into Playwright"
+  ],
+  "skill_rules_that_must_fire": [
+    "Agent Browser Bridge",
+    "record the exact command sequence",
+    "milestone screenshots",
+    "translate the validated flow into Playwright assertions and helpers",
+    "getByRole"
+  ]
+}

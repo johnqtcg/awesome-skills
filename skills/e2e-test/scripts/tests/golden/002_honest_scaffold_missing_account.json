@@ -1,0 +1,25 @@
+{
+  "id": "002_honest_scaffold_missing_account",
+  "description": "Missing test account — skill should generate scaffold with test.skip guard and TODO markers, NOT pseudo-runnable code",
+  "scenario_type": "honest_scaffold",
+  "context": {
+    "task": "Add E2E coverage for profile update",
+    "environment": "local",
+    "base_url_available": true,
+    "test_account_available": false,
+    "payment_sandbox": "out of scope"
+  },
+  "expected_runner": "Playwright",
+  "expected_gates": ["Configuration Gate", "Environment Gate"],
+  "expected_output_fields": ["Task type", "Runner choice", "Environment gate", "Config/dependency status", "Execution status", "Next actions"],
+  "expected_execution_status": "Not run in this environment",
+  "expected_code_contains": ["test.skip", "TODO", "E2E_USER"],
+  "expected_code_not_contains": ["fake-user@test.com", "password123"],
+  "skill_rules_that_must_fire": [
+    "Configuration Gate",
+    "do not invent them",
+    "test.skip",
+    "explicit TODOs",
+    "scaffold"
+  ]
+}

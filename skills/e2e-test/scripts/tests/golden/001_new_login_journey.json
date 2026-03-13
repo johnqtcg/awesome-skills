@@ -1,0 +1,30 @@
+{
+  "id": "001_new_login_journey",
+  "description": "New login journey coverage — skill should generate Playwright test with storageState guidance, accessible selectors, and error path",
+  "scenario_type": "new_journey_coverage",
+  "context": {
+    "task": "Add E2E coverage for login flow",
+    "environment": "local",
+    "base_url_available": true,
+    "test_account_available": true,
+    "framework": "Next.js"
+  },
+  "expected_runner": "Playwright",
+  "expected_gates": ["Configuration Gate", "Environment Gate", "Execution Integrity Gate"],
+  "expected_output_fields": ["Task type", "Runner choice", "Environment gate", "Config/dependency status", "Covered journey", "Executed commands", "Execution status", "Artifacts", "Next actions"],
+  "expected_anti_patterns_avoided": [
+    "no waitForTimeout in assertions",
+    "no CSS selector chains",
+    "no hardcoded credentials"
+  ],
+  "expected_scorecard_critical": ["C1", "C2", "C3", "C4"],
+  "skill_rules_that_must_fire": [
+    "Configuration Gate",
+    "Environment Gate",
+    "Execution Integrity Gate",
+    "getByRole",
+    "storageState",
+    "trace",
+    "screenshot"
+  ]
+}

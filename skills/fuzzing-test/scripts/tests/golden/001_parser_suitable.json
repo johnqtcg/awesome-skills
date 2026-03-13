@@ -1,0 +1,26 @@
+{
+  "id": "001_parser_suitable",
+  "description": "Binary protocol decoder — Tier 1, clearly suitable for parser robustness fuzzing",
+  "code_snippet": "func DecodeTLV(data []byte) ([]TLV, error)",
+  "applicability_verdict": "suitable",
+  "expected_checks": {
+    "meaningful_input_space": "Pass",
+    "fuzz_compatible_types": "Pass",
+    "clear_oracle": "Pass",
+    "deterministic_local": "Pass",
+    "fast_per_call": "Pass"
+  },
+  "expected_fuzz_mode": "parser robustness",
+  "expected_template": "Template A",
+  "expected_tier": "Tier 1",
+  "skill_rules_that_must_fire": [
+    "Applicability Gate",
+    "Applicability Verdict",
+    "Target Priority Gate",
+    "Tier 1",
+    "Template A: Parser",
+    "f.Add",
+    "Size guard",
+    "Oracle/invariant"
+  ]
+}

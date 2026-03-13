@@ -1,0 +1,11 @@
+{
+  "id": "005_trivial_getter_antiexample",
+  "description": "Trivial getter with no logic — skill should trigger anti-example, no test generated",
+  "code_snippet": "func (u *User) Name() string { return u.name }",
+  "expect_test_generation": false,
+  "exclusion_reason": "anti_example",
+  "skill_rules_that_must_exist": [
+    "trivial getters/setters with no logic",
+    "DO NOT write these tests"
+  ]
+}

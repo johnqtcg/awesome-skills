@@ -1,0 +1,10 @@
+{
+  "scenario": "Comparing technologies, frameworks, or architectural approaches",
+  "required_keywords": [
+    "Technology Comparison",
+    "benchmark",
+    "re:(?i)independent.*benchmark|benchmark.*independent",
+    "Production experience",
+    "Trade-off"
+  ]
+}

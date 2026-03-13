@@ -1,0 +1,20 @@
+{
+  "id": "006_no_oracle_not_suitable",
+  "description": "Logging function with no return value — NOT suitable, check 3 fails (no testable oracle)",
+  "code_snippet": "func LogRequest(r *http.Request) { log.Printf(\"method=%s path=%s\", r.Method, r.URL.Path) }",
+  "applicability_verdict": "not_suitable",
+  "expected_checks": {
+    "meaningful_input_space": "Fail",
+    "fuzz_compatible_types": "Pass",
+    "clear_oracle": "Fail",
+    "deterministic_local": "Pass",
+    "fast_per_call": "Pass"
+  },
+  "failed_hard_stop": "3",
+  "expected_alternative": "code review + unit test for nil input",
+  "skill_rules_that_must_fire": [
+    "Applicability Gate",
+    "Applicability Verdict: Not suitable for fuzzing",
+    "suggest alternative strategy"
+  ]
+}

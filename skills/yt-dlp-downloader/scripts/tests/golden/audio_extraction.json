@@ -1,0 +1,10 @@
+{
+  "scenario": "Extracting audio as MP3",
+  "required_keywords": [
+    "Audio",
+    "-x",
+    "--audio-format mp3",
+    "--audio-quality 0",
+    "--embed-metadata"
+  ]
+}

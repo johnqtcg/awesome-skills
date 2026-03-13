@@ -1,0 +1,13 @@
+{
+  "id": "GOLDEN-005",
+  "title": "Cross-compilation without CGO_ENABLED=0",
+  "type": "defect",
+  "severity": "high",
+  "makefile_snippet": "build-linux:\n\tGOOS=linux GOARCH=amd64 go build -o bin/api-linux ./cmd/api",
+  "expected_feedback": "cross-compilation should set CGO_ENABLED=0 for static binaries",
+  "coverage_rules": [
+    "CGO_ENABLED=0",
+    "static binaries"
+  ],
+  "reference": "references/makefile-quality-guide.md"
+}

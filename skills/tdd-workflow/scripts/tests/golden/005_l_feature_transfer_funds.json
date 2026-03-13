@@ -1,0 +1,30 @@
+{
+  "id": "005_l_feature_transfer_funds",
+  "description": "L-sized feature: TransferFunds with validation, atomicity, concurrency safety, and multi-layer testing",
+  "change_size": "L",
+  "change_type": "feature",
+  "files_changed": 6,
+  "loc_changed": 200,
+  "code_snippet": "func (s *AccountService) TransferFunds(ctx context.Context, req TransferRequest) error\n\ntype TransferRequest struct {\n\tFromID string\n\tToID   string\n\tAmount int64\n}",
+  "expected_tdd_phases": {
+    "red": "Service tests first (transfer logic, insufficient balance, self-transfer), then handler tests (HTTP contract)",
+    "green": "Implement with transaction boundary in repo, validation in service",
+    "refactor": "Extract validateRequest(), extract applyTransfer(), simplify error paths"
+  },
+  "expected_test_count_range": [10, 20],
+  "expected_killer_hypothesis": "insufficient balance allows negative balance because check happens after debit",
+  "expected_boundary_items": ["zero amount", "negative amount", "self-transfer", "non-existent account", "insufficient balance", "exact balance", "concurrent transfers", "context timeout"],
+  "expected_layers": ["handler", "service"],
+  "expected_concurrency_test": true,
+  "skill_rules_that_must_fire": [
+    "Red evidence exists",
+    "Killer case present",
+    "Risk-path coverage",
+    "L change",
+    "API 3-Layer",
+    "Concurrency Determinism",
+    "Execution Integrity",
+    "Coverage"
+  ],
+  "scorecard_must_pass": ["C1", "C2", "C3", "S1", "S2", "S3", "S4", "S5"]
+}

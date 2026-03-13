@@ -1,0 +1,59 @@
+base: main
+reviewers: "alice,bob"
+labels: ""  # comma-separated GitHub labels to apply (e.g., "bug,priority/high")
+docs_status: yes
+compat_status: compatible
+timeout: 1200  # seconds, per command
+create_pr: false
+dry_run: false
+update_existing_pr: true
+
+check_cmd:
+  - make test
+  - make lint
+  - go test ./...
+
+quality:
+  enabled: true
+
+security_tools:
+  enabled: true
+
+branch_protection:
+  enabled: true
+  require_pr_reviews: true
+  require_status_checks: true
+  required_checks:
+    - unit-test
+    - lint
+
+secret_scan:
+  enabled: true
+  include_extensions:
+    - .go
+    - .yaml
+    - .yml
+    - .json
+    - .env
+    - .toml
+    - .sh
+    - .sql
+  exclude_paths:
+    - "^docs/"
+    - "^vendor/"
+    - "^testdata/"
+  allow_patterns:
+    - "(?i)(dummy|example|placeholder|redacted)"
+
+conflict_scan:
+  enabled: true
+  scan_changed_files_only: true
+  include_extensions:
+    - .go
+    - .py
+    - .yaml
+    - .yml
+    - .json
+    - .md
+  exclude_paths:
+    - "^vendor/"

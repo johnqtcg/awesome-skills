@@ -1,0 +1,23 @@
+{
+  "id": "003_differential_suitable",
+  "description": "Algorithm rewrite with reference implementation — Tier 3, suitable for differential fuzzing",
+  "code_snippet": "func SplitNew(s, sep string) []string\nfunc SplitRef(s, sep string) []string",
+  "applicability_verdict": "suitable",
+  "expected_checks": {
+    "meaningful_input_space": "Pass",
+    "fuzz_compatible_types": "Pass",
+    "clear_oracle": "Pass",
+    "deterministic_local": "Pass",
+    "fast_per_call": "Pass"
+  },
+  "expected_fuzz_mode": "differential",
+  "expected_template": "Template C",
+  "expected_tier": "Tier 3",
+  "skill_rules_that_must_fire": [
+    "Applicability Gate",
+    "Applicability Verdict",
+    "Template C: Differential",
+    "f.Add",
+    "Oracle/invariant"
+  ]
+}

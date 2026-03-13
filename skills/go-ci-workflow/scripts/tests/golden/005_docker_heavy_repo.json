@@ -1,0 +1,29 @@
+{
+  "id": "005_docker_heavy_repo",
+  "description": "Docker-heavy repository with multiple Dockerfiles and build args — skill should model image verification as separate jobs, not coupled into core gate",
+  "scenario_type": "docker_heavy",
+  "context": {
+    "go_mod_count": 1,
+    "has_makefile": true,
+    "makefile_targets": ["ci", "docker-build"],
+    "has_dockerfile": true,
+    "dockerfile_count": 3,
+    "dockerfile_paths": ["Dockerfile", "Dockerfile.worker", "Dockerfile.migrate"],
+    "build_args": ["APP", "VERSION"],
+    "has_golangci_lint_config": true,
+    "test_types": ["unit"],
+    "existing_workflows": []
+  },
+  "expected_gates": ["Repository Shape Gate", "Local Parity Gate", "Security and Permissions Gate"],
+  "expected_output_fields": ["repository shape classification", "job list", "execution path for each job", "trigger configuration", "permissions"],
+  "expected_shape": "Docker-heavy repository",
+  "skill_rules_that_must_fire": [
+    "Repository Shape Gate",
+    "Docker-heavy",
+    "Local Parity Gate",
+    "separate jobs",
+    "docker-build",
+    "permissions",
+    "concurrency"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "Test data lifecycle management",
+  "description": "Tests that create data must have explicit cleanup strategy",
+  "required_keywords": [
+    "t.Cleanup",
+    "idempoten",
+    "cleanup",
+    "lifecycle"
+  ]
+}

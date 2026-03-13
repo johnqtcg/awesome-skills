@@ -1,0 +1,30 @@
+{
+  "id": "003_m_feature_new_endpoint",
+  "description": "M-sized feature: new POST /orders endpoint with validation, service logic, and repo layer",
+  "change_size": "M",
+  "change_type": "feature",
+  "files_changed": 4,
+  "loc_changed": 120,
+  "code_snippet": "// handler.go\nfunc (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request)\n\n// service.go\nfunc (s *OrderService) CreateOrder(ctx context.Context, req CreateOrderRequest) (*Order, error)\n\n// repo.go\nfunc (r *OrderRepo) Save(ctx context.Context, order *Order) error",
+  "expected_tdd_phases": {
+    "red": "Service test first (business contract: validation, idempotency), then handler test (HTTP status codes, body)",
+    "green": "Implement repo → service → handler",
+    "refactor": "Extract validation into separate method"
+  },
+  "expected_test_count_range": [6, 12],
+  "expected_killer_hypothesis": "duplicate CreateOrder with same idempotency key creates two orders",
+  "expected_layers": ["handler", "service", "repo"],
+  "expected_handler_scenarios": ["success/200", "bad_request/400", "service_error/500"],
+  "expected_service_scenarios": ["success", "dependency_error", "validation_error", "duplicate_key"],
+  "skill_rules_that_must_fire": [
+    "Red evidence exists",
+    "Killer case present",
+    "API 3-Layer",
+    "M change",
+    "Handler test",
+    "Service test",
+    "Defect hypothesis list",
+    "Coverage"
+  ],
+  "scorecard_must_pass": ["C1", "C2", "C3", "S1", "S2", "S4"]
+}

@@ -1,0 +1,10 @@
+{
+  "scenario": "Advanced format selection with sorting",
+  "required_keywords": [
+    "Format Selection",
+    "-S",
+    "re:res:1080|vcodec:h264",
+    "yt-dlp -F",
+    "Format Sorting"
+  ]
+}

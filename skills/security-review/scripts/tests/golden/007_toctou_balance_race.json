@@ -1,0 +1,15 @@
+{
+  "id": "GOLDEN-007",
+  "title": "TOCTOU race on account balance — double-spend",
+  "expected_finding": true,
+  "severity": "P1",
+  "category": "concurrency",
+  "code": "func Withdraw(userID string, amount int) error {\n    balance, _ := repo.GetBalance(userID)\n    if balance < amount {\n        return errors.New(\"insufficient funds\")\n    }\n    // Another goroutine can pass the same check before this line executes\n    return repo.DeductBalance(userID, amount)\n}",
+  "finding_pattern": "TOCTOU",
+  "coverage_rules": [
+    "TOCTOU in auth/authz: check-then-act on permission/ownership without holding lock or using atomic operation",
+    "Double-spend / balance race: concurrent requests bypass balance check before deduction commits",
+    "Concurrency safety"
+  ],
+  "reference": "references/scenario-checklists.md"
+}

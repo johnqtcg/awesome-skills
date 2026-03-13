@@ -1,0 +1,25 @@
+{
+  "id": "010_visual_regression",
+  "description": "Add visual regression tests for landing page — skill should use toHaveScreenshot with dynamic content masking and threshold strategy",
+  "scenario_type": "new_journey_coverage",
+  "context": {
+    "task": "Add visual regression tests for homepage and product listing after CSS refactor",
+    "environment": "local",
+    "base_url_available": true,
+    "playwright_version": "1.40"
+  },
+  "expected_runner": "Playwright",
+  "expected_gates": ["Configuration Gate", "Environment Gate"],
+  "expected_code_patterns": [
+    "toHaveScreenshot",
+    "maxDiffPixelRatio",
+    "mask"
+  ],
+  "skill_rules_that_must_fire": [
+    "Configuration Gate",
+    "Visual Regression",
+    "toHaveScreenshot",
+    "maxDiffPixelRatio",
+    "mask"
+  ]
+}

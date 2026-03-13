@@ -1,0 +1,27 @@
+{
+  "id": "006_refactor_extract_method",
+  "description": "Refactoring: extract inline validation into separate method without behavior change",
+  "change_size": "S",
+  "change_type": "refactor",
+  "files_changed": 1,
+  "loc_changed": 25,
+  "code_snippet": "func (s *UserService) Create(ctx context.Context, u User) (*User, error) {\n\t// inline validation — to be extracted\n\tif u.Name == \"\" { return nil, errors.New(\"name required\") }\n\tif u.Email == \"\" { return nil, errors.New(\"email required\") }\n\tif !strings.Contains(u.Email, \"@\") { return nil, errors.New(\"invalid email\") }\n\t// ... business logic\n}",
+  "expected_tdd_phases": {
+    "red": "Characterization: ensure existing tests cover all validation paths BEFORE extracting",
+    "green": "N/A — refactor does not add new behavior",
+    "refactor": "Extract validateUser() method; existing tests must stay green without modification"
+  },
+  "expected_test_count_range": [0, 3],
+  "expected_refactor_rules": [
+    "Tests must pass without modification",
+    "No observable behavior change",
+    "If test needs updating, start new Red cycle"
+  ],
+  "skill_rules_that_must_fire": [
+    "Refactor phase",
+    "Tests must stay green",
+    "No behavior change",
+    "Characterization"
+  ],
+  "scorecard_must_pass": ["C1", "S5", "H1"]
+}

@@ -1,0 +1,10 @@
+{
+  "scenario": "Using SponsorBlock to remove sponsor segments",
+  "required_keywords": [
+    "SponsorBlock",
+    "--sponsorblock-remove",
+    "sponsor",
+    "selfpromo",
+    "--sponsorblock-mark"
+  ]
+}

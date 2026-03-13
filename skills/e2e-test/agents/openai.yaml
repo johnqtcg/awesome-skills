@@ -1,0 +1,4 @@
+interface:
+  display_name: "E2E Best Practice"
+  short_description: "Reliable E2E design, execution, and triage"
+  default_prompt: "Use $e2e-test to design, run, or triage E2E coverage with Playwright-first engineering rules, Agent Browser repro workflows, environment gating, and artifact-backed reporting."

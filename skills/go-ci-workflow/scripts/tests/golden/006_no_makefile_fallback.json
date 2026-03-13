@@ -1,0 +1,30 @@
+{
+  "id": "006_no_makefile_fallback",
+  "description": "Repository with no Makefile and no task runner — skill must use Degraded Output Gate, produce scaffold with inline fallbacks, and recommend follow-up",
+  "scenario_type": "no_makefile",
+  "context": {
+    "go_mod_count": 1,
+    "has_makefile": false,
+    "has_taskfile": false,
+    "has_mage": false,
+    "has_scripts": false,
+    "has_dockerfile": false,
+    "has_golangci_lint_config": false,
+    "test_types": ["unit"],
+    "existing_workflows": []
+  },
+  "expected_gates": ["Repository Shape Gate", "Local Parity Gate", "Degraded Output Gate", "Execution Integrity Gate"],
+  "expected_output_fields": ["repository shape classification", "job list", "execution path for each job", "missing targets", "recommended follow-up work"],
+  "expected_parity_level": "partial",
+  "skill_rules_that_must_fire": [
+    "Repository Shape Gate",
+    "Local Parity Gate",
+    "Degraded Output Gate",
+    "inline fallback",
+    "scaffold",
+    "recommend",
+    "make ci",
+    "go-version-file: go.mod",
+    "permissions"
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "009",
+  "title": "SQL injection via string concatenation",
+  "expected_finding": true,
+  "severity": "High",
+  "category": "security",
+  "reference": "go-security-patterns.md",
+  "code": "func GetUser(db *sql.DB, name string) (*User, error) {\n\tquery := fmt.Sprintf(\"SELECT * FROM users WHERE name = '%s'\", name)\n\trow := db.QueryRow(query)\n\tvar u User\n\terr := row.Scan(&u.ID, &u.Name)\n\treturn &u, err\n}",
+  "coverage_rules": [
+    "SQL/command/path injection",
+    "database/sql"
+  ]
+}

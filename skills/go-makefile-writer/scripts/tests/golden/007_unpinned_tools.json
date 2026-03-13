@@ -1,0 +1,13 @@
+{
+  "id": "GOLDEN-007",
+  "title": "install-tools using @latest without pinned versions",
+  "type": "defect",
+  "severity": "medium",
+  "makefile_snippet": "install-tools:\n\tgo install github.com/golangci/golangci-lint/cmd/golangci-lint@latest",
+  "expected_feedback": "pin tool versions for CI reproducibility",
+  "coverage_rules": [
+    "Pin versions",
+    "reproducib"
+  ],
+  "reference": "references/makefile-quality-guide.md"
+}

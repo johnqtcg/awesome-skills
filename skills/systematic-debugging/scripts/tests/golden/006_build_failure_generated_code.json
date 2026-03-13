@@ -1,0 +1,22 @@
+{
+  "id": "006",
+  "title": "Build failure caused by generated code drift",
+  "scenario_type": "build_failure",
+  "severity": "P2",
+  "bug_type": "build",
+  "skill_rules_that_must_fire": [
+    "Build / compilation error",
+    "Read Error Messages Carefully",
+    "Generated code is incompatible with the pinned CI compiler version",
+    "Verification"
+  ],
+  "expected_references": [
+    "bad-good-debugging-reports.md",
+    "output-contract-template.md"
+  ],
+  "expected_output_fields": [
+    "Observed error/output",
+    "Root Cause",
+    "Validation commands"
+  ]
+}

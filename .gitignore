@@ -1,0 +1,14 @@
+.idea/*
+.vscode/*
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+./Dockerfile
+vendor/
+.scannerwork/*
+runtime/
+.DS_Store
+CLAUDE.md
+.claudeignore
+.claude

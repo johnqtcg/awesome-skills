@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-006",
+  "title": "Target name does not match cmd/ layout",
+  "type": "defect",
+  "severity": "low",
+  "makefile_snippet": "build-sync:\n\t$(GO) build -o bin/sync ./cmd/consumer/sync",
+  "expected_feedback": "target should be build-consumer-sync to match cmd/ path semantics",
+  "coverage_rules": [
+    "Map target names to",
+    "path semantics",
+    "build-<kind>-<name>"
+  ],
+  "reference": "SKILL.md"
+}

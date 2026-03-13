@@ -1,0 +1,17 @@
+{
+  "id": "001_pure_function_boundary",
+  "description": "Pure function with slice index boundary — skill should mandate off-by-one checks and boundary killer case",
+  "code_snippet": "func Batch(items []string, size int) [][]string",
+  "expect_test_generation": true,
+  "target_type": "Package-level functions",
+  "expected_techniques": ["Off-by-One Precision", "Collection Mapping Completeness"],
+  "expected_boundary_items": ["nil input", "empty value/collection", "single element", "size/index boundary"],
+  "expected_killer_hypothesis": "off-by-one in loop bound drops final partial batch",
+  "skill_rules_that_must_exist": [
+    "Off-by-One Precision",
+    "n=0,1,2,3",
+    "killer case",
+    "table-driven",
+    "last element"
+  ]
+}

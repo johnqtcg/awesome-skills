@@ -1,0 +1,24 @@
+{
+  "id": "001",
+  "title": "Flaky async cache warmup race",
+  "scenario_type": "flaky_race",
+  "severity": "P1",
+  "bug_type": "race",
+  "skill_rules_that_must_fire": [
+    "Race condition / flaky test",
+    "go test -race ./...",
+    "condition-based waiting",
+    "Hypothesis log",
+    "C3"
+  ],
+  "expected_references": [
+    "condition-based-waiting.md",
+    "bug-type-strategies.md"
+  ],
+  "expected_output_fields": [
+    "Reproduction",
+    "Evidence Collected",
+    "Verification",
+    "Scorecard"
+  ]
+}

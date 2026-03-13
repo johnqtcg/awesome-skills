@@ -1,0 +1,13 @@
+{
+  "id": "GOLDEN-002",
+  "title": "Test target missing -race flag",
+  "type": "defect",
+  "severity": "high",
+  "makefile_snippet": "test:\n\t$(GO) test ./...",
+  "expected_feedback": "test target should include -race flag",
+  "coverage_rules": [
+    "-race",
+    "race detection"
+  ],
+  "reference": "references/makefile-quality-guide.md"
+}

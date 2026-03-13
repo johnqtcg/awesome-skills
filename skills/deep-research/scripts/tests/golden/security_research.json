@@ -1,0 +1,9 @@
+{
+  "scenario": "Security-related research including CVEs and advisories",
+  "required_keywords": [
+    "Security Research",
+    "CVE",
+    "security advisory",
+    "re:(?i)owasp|official.*security"
+  ]
+}

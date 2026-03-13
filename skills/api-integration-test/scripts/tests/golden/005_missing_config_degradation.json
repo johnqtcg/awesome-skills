@@ -1,0 +1,12 @@
+{
+  "name": "Missing configuration degradation",
+  "description": "When env vars are missing, skill should degrade gracefully",
+  "required_keywords": [
+    "Scaffold",
+    "Blocked",
+    "TODO",
+    "t.Skip",
+    "set INTERNAL_API_INTEGRATION=1 to run",
+    "missing"
+  ]
+}

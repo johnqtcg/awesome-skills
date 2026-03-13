@@ -1,0 +1,20 @@
+{
+  "id": "007_db_dependent_not_suitable",
+  "description": "Database-dependent business logic — NOT suitable, check 4 fails (non-deterministic external state)",
+  "code_snippet": "func CreateOrder(ctx context.Context, db *sql.DB, req OrderRequest) (*Order, error)",
+  "applicability_verdict": "not_suitable",
+  "expected_checks": {
+    "meaningful_input_space": "Pass",
+    "fuzz_compatible_types": "Fail",
+    "clear_oracle": "Pass",
+    "deterministic_local": "Fail",
+    "fast_per_call": "Fail"
+  },
+  "failed_hard_stop": "2",
+  "expected_alternative": "fuzz the pure validation layer; use integration tests for DB logic",
+  "skill_rules_that_must_fire": [
+    "Applicability Gate",
+    "Applicability Verdict: Not suitable for fuzzing",
+    "suggest alternative strategy"
+  ]
+}

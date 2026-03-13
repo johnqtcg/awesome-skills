@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-012",
+  "title": "Concurrent map write — shared map without sync causes fatal crash",
+  "expected_finding": true,
+  "severity": "P1",
+  "category": "concurrency",
+  "code": "var cache = make(map[string]string)\n\nfunc SetCache(key, value string) {\n    cache[key] = value // concurrent writes from multiple goroutines\n}\n\nfunc GetCache(key string) string {\n    return cache[key] // concurrent read during write\n}\n\nfunc HandleRequest(w http.ResponseWriter, r *http.Request) {\n    go SetCache(r.URL.Path, time.Now().String())\n    fmt.Fprint(w, GetCache(r.URL.Path))\n}",
+  "finding_pattern": "concurrent map",
+  "coverage_rules": [
+    "Concurrent map read/write without sync",
+    "Goroutine writing shared config/state read by request handlers without synchronization"
+  ],
+  "reference": "references/scenario-checklists.md"
+}

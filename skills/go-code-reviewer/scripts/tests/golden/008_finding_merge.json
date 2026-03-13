@@ -1,0 +1,15 @@
+{
+  "id": "008",
+  "title": "Same issue at 5+ locations should merge into 1 finding",
+  "expected_finding": true,
+  "expected_merge": true,
+  "severity": "Medium",
+  "category": "error-handling",
+  "code": "func a() error { _, err := fetch(); if err != nil { return err } }\nfunc b() error { _, err := fetch(); if err != nil { return err } }\nfunc c() error { _, err := fetch(); if err != nil { return err } }\nfunc d() error { _, err := fetch(); if err != nil { return err } }\nfunc e() error { _, err := fetch(); if err != nil { return err } }",
+  "finding_pattern": "Missing error wrapping",
+  "merge_rule": "same conceptual issue at >= 3 locations -> ONE finding with location list",
+  "coverage_rules": [
+    "Merge rule",
+    "report ONE finding with a location list"
+  ]
+}

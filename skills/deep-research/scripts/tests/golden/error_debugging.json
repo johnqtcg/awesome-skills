@@ -1,0 +1,10 @@
+{
+  "scenario": "Researching error messages and debugging information",
+  "required_keywords": [
+    "Error Debugging",
+    "error message",
+    "site:github.com",
+    "site:stackoverflow.com",
+    "Root cause"
+  ]
+}

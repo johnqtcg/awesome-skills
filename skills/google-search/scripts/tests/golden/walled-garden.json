@@ -1,0 +1,9 @@
+{
+  "scenario": "User searching for content locked in Chinese platforms",
+  "required_keywords": [
+    "WeChat",
+    "Xiaohongshu",
+    "微信搜一搜",
+    "regex:search.*(within|directly)"
+  ]
+}

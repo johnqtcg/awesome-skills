@@ -1,0 +1,10 @@
+{
+  "scenario": "Developer searching for Chinese production experience",
+  "required_keywords": [
+    "site:zhihu.com",
+    "site:juejin.cn",
+    "踩坑",
+    "生产环境",
+    "regex:最佳实践.*after:"
+  ]
+}

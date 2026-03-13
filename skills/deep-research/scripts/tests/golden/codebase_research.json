@@ -1,0 +1,9 @@
+{
+  "scenario": "Combining internal codebase analysis with external research",
+  "required_keywords": [
+    "Codebase Research",
+    "search-codebase",
+    "ripgrep",
+    "re:(?i)internal.*pattern|pattern.*internal"
+  ]
+}

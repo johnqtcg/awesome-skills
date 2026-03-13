@@ -1,0 +1,11 @@
+{
+  "id": "GOLDEN-009",
+  "title": "Custom help format (not awk-based) — acceptable",
+  "type": "false_positive",
+  "severity": "none",
+  "makefile_snippet": "help:\n\t@echo \"Available targets:\"\n\t@echo \"  build-api    Build the API binary\"\n\t@echo \"  test         Run all tests\"\n\t@echo \"  clean        Remove artifacts\"",
+  "expected_feedback": "no defect; custom help format is acceptable as long as targets are documented",
+  "anti_example_patterns": ["missing help"],
+  "coverage_rules": ["help output self-documenting"],
+  "reference": "references/makefile-quality-guide.md"
+}

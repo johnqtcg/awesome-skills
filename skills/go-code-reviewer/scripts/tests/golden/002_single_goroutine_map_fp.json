@@ -1,0 +1,11 @@
+{
+  "id": "002",
+  "title": "Map in single function scope \u2014 false positive",
+  "expected_finding": false,
+  "category": "concurrency",
+  "code": "func processItems(items []Item) map[string]int {\n    counts := make(map[string]int)\n    for _, item := range items {\n        counts[item.Key]++\n    }\n    return counts\n}",
+  "suppression_reason": "Map created and used within a single function, no concurrent access",
+  "anti_example_patterns": [
+    "when the map is only accessed within a single goroutine"
+  ]
+}

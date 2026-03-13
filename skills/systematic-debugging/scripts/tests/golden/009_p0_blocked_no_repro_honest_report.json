@@ -1,0 +1,23 @@
+{
+  "id": "009",
+  "title": "P0 mitigated but still not reproducible in the investigation environment",
+  "scenario_type": "p0_blocked_honest_report",
+  "severity": "P0",
+  "bug_type": "other",
+  "skill_rules_that_must_fire": [
+    "P0 Protocol: Mitigate First, Investigate Second",
+    "Not run in this environment",
+    "Investigation status",
+    "fix proposed before root cause evidence"
+  ],
+  "expected_references": [
+    "output-contract-template.md",
+    "debugging-report-scorecard.md"
+  ],
+  "expected_output_fields": [
+    "Mitigation status",
+    "Investigation status",
+    "Not run in this environment",
+    "Scorecard"
+  ]
+}

@@ -1,0 +1,26 @@
+{
+  "id": "001_s_bugfix_off_by_one",
+  "description": "S-sized bug fix: off-by-one in pagination causes last item to be dropped",
+  "change_size": "S",
+  "change_type": "bugfix",
+  "files_changed": 1,
+  "loc_changed": 8,
+  "code_snippet": "func Paginate(items []Item, page, pageSize int) []Item {\n\tstart := page * pageSize\n\tend := start + pageSize - 1 // BUG: should be start + pageSize\n\tif end > len(items) {\n\t\tend = len(items)\n\t}\n\treturn items[start:end]\n}",
+  "expected_tdd_phases": {
+    "red": "Write test with boundary input (last page, exact multiple of pageSize) that exposes the off-by-one",
+    "green": "Fix end calculation from start+pageSize-1 to start+pageSize",
+    "refactor": "None needed for S fix"
+  },
+  "expected_test_count_range": [3, 6],
+  "expected_killer_hypothesis": "last item in a page is dropped when items length is exact multiple of pageSize",
+  "expected_boundary_items": ["empty slice", "single item", "exact pageSize boundary", "last page partial"],
+  "skill_rules_that_must_fire": [
+    "Red evidence exists",
+    "Killer case present",
+    "Change-Size Test Budget",
+    "S change",
+    "Defect hypothesis list",
+    "boundary"
+  ],
+  "scorecard_must_pass": ["C1", "C2", "C3", "S1", "S2"]
+}

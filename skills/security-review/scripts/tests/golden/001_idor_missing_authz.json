@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-001",
+  "title": "IDOR — handler reads order by ID without ownership check",
+  "expected_finding": true,
+  "severity": "P1",
+  "category": "auth",
+  "code": "func GetOrder(w http.ResponseWriter, r *http.Request) {\n    orderID := chi.URLParam(r, \"id\")\n    order, err := repo.GetOrder(r.Context(), orderID)\n    if err != nil {\n        http.Error(w, \"not found\", 404)\n        return\n    }\n    json.NewEncoder(w).Encode(order)\n}",
+  "finding_pattern": "IDOR",
+  "coverage_rules": [
+    "No IDOR across tenant/user boundaries",
+    "Authz checks before sensitive operations"
+  ],
+  "reference": "references/scenario-checklists.md"
+}

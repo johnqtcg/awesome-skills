@@ -1,0 +1,27 @@
+{
+  "id": "003_multi_module_repo",
+  "description": "Repository with nested go.mod files — skill should detect multi-module shape and use per-module orchestration or matrix",
+  "scenario_type": "multi_module",
+  "context": {
+    "go_mod_count": 3,
+    "go_mod_paths": ["go.mod", "pkg/client/go.mod", "tools/go.mod"],
+    "has_makefile": true,
+    "makefile_targets": ["ci"],
+    "has_dockerfile": false,
+    "has_golangci_lint_config": true,
+    "test_types": ["unit"],
+    "existing_workflows": []
+  },
+  "expected_gates": ["Repository Shape Gate", "Local Parity Gate", "Security and Permissions Gate"],
+  "expected_output_fields": ["repository shape classification", "job list", "execution path for each job", "trigger configuration", "missing targets"],
+  "expected_shape": "multi-module repository",
+  "expected_parity_level": "full",
+  "skill_rules_that_must_fire": [
+    "Repository Shape Gate",
+    "multi-module",
+    "nested go.mod",
+    "Local Parity Gate",
+    "go-version-file",
+    "permissions"
+  ]
+}
