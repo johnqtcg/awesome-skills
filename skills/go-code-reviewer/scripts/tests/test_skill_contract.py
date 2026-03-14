@@ -67,6 +67,10 @@ class GoCodeReviewerSkillContractTests(unittest.TestCase):
         self.assertIn("### Standard (default balanced review)", self.skill_text)
         self.assertIn("### Strict (release/security gate)", self.skill_text)
 
+    def test_skill_md_stays_within_line_budget(self) -> None:
+        lines = len(self.skill_text.splitlines())
+        self.assertLessEqual(lines, 500, f"SKILL.md too long: {lines} lines")
+
     def test_mode_selection_rules_are_present(self) -> None:
         self.assertIn("Choose `Lite` only when scope is small", self.skill_text)
         self.assertIn("Choose `Strict` when any high-risk signal exists", self.skill_text)

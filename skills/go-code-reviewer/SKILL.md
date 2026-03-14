@@ -3,7 +3,6 @@ name: go-code-reviewer
 description: Review Go code with a defect-first approach using repository policy (constitution.md first, then AGENTS.md fallback). Use for code review, PR review, quality checks, risk analysis, and regression detection.
 allowed-tools: Read, Grep, Glob, Bash
 ---
-
 # Go Code Reviewer
 
 ## Purpose
@@ -22,20 +21,16 @@ Trigger this skill when the user asks for:
 2. `AGENTS.md` (repo workflow/testing/style constraints)
 3. Local package conventions (tests, interfaces, dependency patterns)
 4. Go language/runtime best practices
-
 If `constitution.md` is missing, explicitly state that and continue with `AGENTS.md` + Go best practices.
 
 ## Execution Modes (Lite / Standard / Strict)
 Choose a mode before starting review and state it in the report.
-
 - Default mode: `Standard`
 - Declare the selected mode in a dedicated `Review Mode` section.
-
 Mode selection rules:
 - Choose `Lite` only when scope is small (typically <=3 files), low-risk, and no security/auth/concurrency/public API changes are involved.
 - Choose `Strict` when any high-risk signal exists: security/auth, concurrency/lifecycle, HTTP/API contract changes, persistence/schema changes, exported signature changes, or broad refactors (typically >15 files).
 - Use `Standard` for everything else.
-
 ### Lite (fast triage)
 - Review focus: confirmed defects with high confidence, avoid speculative architecture commentary.
 - Minimum execution:
@@ -63,11 +58,8 @@ Mode selection rules:
 - Finding volume: soft target ≤ 15 findings (severity-tiered; see Workflow step 10).
 
 ## Mandatory Review Gates
-
 ### 1) Execution Integrity Gate
-
 Never claim verification was executed unless it actually ran.
-
 - If `go test` or `go test -race` is not run, you must output:
   - `Not run in this environment`
   - reason
@@ -75,41 +67,29 @@ Never claim verification was executed unless it actually ran.
 - Do not imply pass/fail for commands you did not execute.
 
 ### 2) Baseline Comparison Gate
-
 When prior review context exists (previous PR review comments, prior findings, or known issue list), classify each finding as:
-
 - `new`
 - `regressed`
 - `unchanged`
 - `resolved`
-
 If no baseline is available, state: `Baseline not found`.
 
 ### 3) False-Positive Suppression Gate
-
 Before reporting a finding, check whether the risk is already blocked by:
-
 - upstream guard/middleware/policy
 - non-user-controlled input path
 - framework/runtime safe guarantees
-
 If blocked, do not report as a finding. Put it in a short `Suppressed items` section with rationale.
 
 ### 4) Risk Acceptance and SLA Gate
-
 For unresolved findings, include:
-
 - recommended SLA by severity
 - optional risk acceptance entry when immediate fix is not chosen
-
 Default SLA guidance:
-
 - `High`: fix or strong mitigation in <= 3 business days
 - `Medium`: <= 14 calendar days
 - `Low`: next planned iteration
-
 Risk acceptance entry fields:
-
 - finding ID
 - owner
 - justification
@@ -117,15 +97,11 @@ Risk acceptance entry fields:
 - expiry/review date
 
 ### 5) Go Version Gate
-
 Before recommending version-specific features, check the project's minimum Go version:
-
 - Read `go.mod` for the `go` directive (e.g., `go 1.21`).
 - Do NOT recommend features unavailable at the project's Go version as findings.
 - If `go.mod` is not found or not readable, state `Go version: unknown` and annotate version-specific recommendations with their minimum required version.
-
 Version-gated features (non-exhaustive):
-
 | Feature | Minimum Go |
 |---------|-----------|
 | Generics | 1.18 |
@@ -137,47 +113,35 @@ Version-gated features (non-exhaustive):
 | `iter.Seq`, `unique` package | 1.23 |
 
 ### 6) Generated Code Exclusion Gate
-
 Exclude auto-generated files from review findings:
-
 - Files matching: `*.pb.go`, `*_gen.go`, `wire_gen.go`, `*_string.go`, `*_enumer.go`
 - Files matching generated mock patterns: `mock_*.go` (from mockgen), `*_mock.go`
 - Files containing the standard header: `// Code generated .* DO NOT EDIT`
-
 Rules:
 - If a generated file is in the diff, note it in Execution Status as `Excluded (generated)` with the file name.
 - Review the generator configuration or template only if the user specifically requests it.
 
 ### 7) Reference Loading Gate
-
 When code under review matches trigger patterns (see Appendix), the corresponding reference file **MUST** be loaded before evaluating that category.
-
 - If a trigger pattern fires but the reference was not loaded, pause evaluation and load it.
 - This is mandatory, not advisory. Reviewing concurrency patterns without loading `go-concurrency-patterns.md` will miss nuanced patterns and produce lower-quality findings.
 - Record which references were loaded in the Execution Status section.
 
 ### 8) Change Origin Classification Gate
-
 When reviewing a PR or diff, classify each finding's origin relative to the current change:
-
 - `introduced`: The defective code was added or modified in this PR/diff. The author owns this finding.
 - `pre-existing`: The defect exists in code that was NOT changed in this PR/diff. This is historical technical debt, not the author's fault.
 - `uncertain`: Origin cannot be determined (e.g., full-file review without diff context, or ambiguous refactoring).
-
 Classification method:
-
 - Check whether the finding's location falls within diff hunks (added or modified lines). If yes → `introduced`.
 - If the finding is on an unchanged line within a diff file, or in a file not in the diff (reached via impact-radius expansion) → `pre-existing`.
 - If no diff context is available (e.g., reviewing a file or package directly without a PR) → `uncertain`.
-
 Actionability by origin:
-
 | Origin | Merge-blocking? | Action |
 |--------|----------------|--------|
 | `introduced` | Yes | Must fix or explicitly accept before merge. Counts toward SLA. |
 | `pre-existing` | No (unless High severity with immediate security/data-integrity/crash risk) | Report for awareness. Recommend filing as a follow-up issue with tracking link. Do NOT block the PR for historical debt. |
 | `uncertain` | Treat as `introduced` | Author may reclassify with evidence (e.g., `git blame` showing the line predates the branch). |
-
 This gate exists so that developers are never blocked by legacy issues they did not introduce, while still surfacing important pre-existing risks for visibility. Pre-existing issues that do not make it into Findings (due to severity or volume cap) MUST still appear in `Residual Risk / Testing Gaps` with a one-line summary — no validated issue should be silently dropped.
 
 ## Workflow
@@ -231,7 +195,6 @@ This gate exists so that developers are never blocked by legacy issues they did 
 
 6. Evaluate defect-first.
 Use the checklist below. Skip categories that are not applicable to the change under review. For detailed patterns and code examples, see linked reference files.
-
 **Security (High)** → `references/go-security-patterns.md`
 - SQL/command/path injection in `database/sql`, `os/exec`, `filepath`
 - Hardcoded secrets, insecure TLS (`InsecureSkipVerify`), weak crypto
@@ -245,13 +208,11 @@ Use the checklist below. Skip categories that are not applicable to the change u
 - **HTTP security headers**: missing `X-Content-Type-Options`, `X-Frame-Options`, `Strict-Transport-Security`, `Content-Security-Policy`
 - **Timing attacks**: `==` comparison on secrets/tokens instead of `crypto/subtle.ConstantTimeCompare`
 - **Input validation**: unbounded request body (missing `http.MaxBytesReader`), unchecked integer inputs used for allocation
-
 **Error Handling (High)** → `references/go-error-and-quality.md`
 - Ignored errors (`_` discard on error-returning calls)
 - Missing error wrapping context (`%w`)
 - `panic` used for recoverable errors
 - Direct equality instead of `errors.Is` / `errors.As`
-
 **Concurrency & Lifecycle (High)** → `references/go-concurrency-patterns.md`
 - Goroutine leak (no cancellation path)
 - Race conditions on shared state (maps, slices, vars)
@@ -260,7 +221,6 @@ Use the checklist below. Skip categories that are not applicable to the change u
 - Missing `errgroup` for coordinated goroutine error handling
 - `context.Context` not propagated; `context.Value` abuse
 - `sync.Pool` / `sync.Once` misuse
-
 **Test Quality (High)** → `references/go-test-quality.md`
 - Tests cover changed behavior and failure modes
 - Table-driven test pattern with meaningful subtest names
@@ -268,7 +228,6 @@ Use the checklist below. Skip categories that are not applicable to the change u
 - Assertion completeness (not just "no error")
 - Boundary/edge cases (`nil`, `0`, `1`, empty, max)
 - Mock/stub scope minimized
-
 **API & HTTP (High, when applicable)** → `references/go-api-http-checklist.md`
 - For server handlers, avoid requiring explicit `r.Body.Close()`; focus on bounded reads and error handling.
 - For outbound HTTP clients, require `resp.Body.Close()` on all paths.
@@ -280,7 +239,6 @@ Use the checklist below. Skip categories that are not applicable to the change u
 - **gin/echo/chi**: middleware registration order, route conflict detection, `c.Request.Context()` propagation
 - **gRPC**: interceptor chain order, metadata propagation, deadline propagation, stream lifecycle
 - **wire/fx**: dependency cycle detection, provider signature consistency
-
 **Database & Persistence (High, when applicable)** → `references/go-database-patterns.md`
 - `sql.Rows` not closed (resource leak)
 - Transaction rollback pattern (`defer tx.Rollback()` + commit override)
@@ -289,7 +247,6 @@ Use the checklist below. Skip categories that are not applicable to the change u
 - Missing context propagation (`db.Query` instead of `db.QueryContext`)
 - `sql.ErrNoRows` mishandled as server error
 - Null handling without `sql.Null*` types
-
 **Code Quality (Medium)** → `references/go-error-and-quality.md`
 - Function >50 lines, nesting >4 levels
 - Naked returns in long functions
@@ -299,7 +256,6 @@ Use the checklist below. Skip categories that are not applicable to the change u
 - Nil interface trap (typed nil returned as interface)
 - Inconsistent pointer vs value receivers
 - Shadowed error variables
-
 **Performance (Medium)** → `references/go-performance-patterns.md`
 - String concatenation in loops (use `strings.Builder`)
 - Slice/map without pre-allocation when size known
@@ -311,7 +267,6 @@ Use the checklist below. Skip categories that are not applicable to the change u
 - Missing buffered I/O (`bufio`) for frequent small writes/reads
 - `http.DefaultClient` without timeout or transport tuning
 - `regexp.Compile` in hot path instead of package-level compile-once
-
 **Modern Go & Best Practices (Medium)** → `references/go-modern-practices.md`
 - Generics vs interface choice appropriateness
 - `any` overuse where type constraint is possible
@@ -324,7 +279,6 @@ Use the checklist below. Skip categories that are not applicable to the change u
 - `context.Background()` vs `context.TODO()` usage
 - Package naming (short, lowercase, no underscore)
 - Godoc on exported symbols
-
 **Dependency & Module (Low)**
 - `go.sum` synchronized
 - Stale `replace` directives
@@ -377,40 +331,30 @@ Clarity/readability improvement or non-critical consistency gap.
 - Clearly label inference vs directly observed behavior.
 
 ### Anti-examples (DO NOT report these)
-
 The most common false positives in Go code review. If your finding matches any of these patterns, suppress it.
-
 **Speculative nil/panic:**
 - "This function could panic if nil is passed" — when the caller is internal and always passes non-nil
-
 **Over-cautious error handling:**
 - "Missing error handling on json.Marshal" — when marshaling a known-safe struct with no interface fields
 - "Missing error wrapping with %w" — when the caller already wraps the error; adding another layer would produce redundant context like `"create user: insert user: insert row: ..."`
-
 **False concurrency alarms:**
 - "Potential race condition on this map" — when the map is only accessed within a single goroutine or is created and consumed within a single function scope
 - "Should use errgroup instead of WaitGroup" — when no error propagation is needed and goroutine count is small and fixed
-
 **Premature optimization:**
 - "Should use sync.Pool" — when the object is small and allocated infrequently
 - "Should pre-allocate slice" — when the slice is small (< 16 elements) or size is truly unknown
 - "Struct fields should be reordered for alignment" — when the struct has < 4 fields or savings < 8 bytes
 - "Should use strings.Clone for substring" — when both the substring and parent string are short-lived locals eligible for GC at the same scope
-
 **Version-inappropriate recommendations:**
 - "Should use slog instead of log" — when the project's `go.mod` targets Go < 1.21
 - "Should use atomic.Int64 instead of atomic.AddInt64" — when the project's `go.mod` targets Go < 1.19
-
 **Context over-propagation:**
 - "Missing context propagation" — when the function is synchronous, short-lived, performs no I/O, and has no cancellable work
-
 **Unnecessary abstraction:**
 - "Should use generics here" — when only one concrete type is used throughout the codebase
 - "Exported function missing godoc" — when the symbol is in an `internal/` package not intended for external consumers
-
 **Structural false alarms:**
 - "Function too long (>50 lines)" — when the body is a straightforward table-driven switch, a sequential pipeline with no nesting, or a single select/case block
-
 **Grey-area guidance (use judgment):**
 - `errors.Is` vs `==`: direct `==` against a sentinel from the **same package** is acceptable; cross-package must use `errors.Is`
 - `context.TODO()` vs `context.Background()`: in `main()` or top-level initialization, `context.Background()` is correct; `TODO()` is only appropriate when context propagation is planned but not yet implemented
@@ -418,14 +362,12 @@ The most common false positives in Go code review. If your finding matches any o
 - `defer f.Close()` ignoring error: acceptable for **read-only** file opens; flag only for **write** operations where close flushes buffered data
 
 ## Output Format (Required)
-
 ### Review Mode
 - `Lite|Standard|Strict`
 - mode selection rationale (1-2 lines)
 
 ### Findings
 List findings first, ordered by severity.
-
 #### [High|Medium|Low] Short Title
 - **ID:** `REV-001`
 - **Origin:** `introduced|pre-existing|uncertain`
@@ -439,7 +381,6 @@ List findings first, ordered by severity.
 
 ### Suppressed Items
 Only include items filtered by the suppression gate.
-
 #### [Suppressed] Short Title
 - **Reason:** upstream guard / non-user-controlled input / framework safety
 - **Location:** `path:line`
@@ -469,7 +410,6 @@ Only include blockers that materially affect confidence.
 
 ### Residual Risk / Testing Gaps
 This section captures items that are valuable context but do not belong in Findings:
-
 1. **Verification gaps**: tools or tests that were not run, and the reason.
 2. **Volume-cap overflow**: findings that were evaluated and confirmed but displaced by the severity-tiered volume cap (see Workflow step 10). List each with a one-line summary (`severity | origin | location | short description`) so no validated issue is silently dropped.
 3. **Pre-existing issues (non-High)**: Low/Medium-severity pre-existing defects found in impact-radius files (not in the diff) go here with a one-line summary each. High-severity pre-existing issues may be promoted to Findings with `Origin: pre-existing`.
@@ -480,17 +420,15 @@ This section captures items that are valuable context but do not belong in Findi
 If findings were capped by volume limit, note: `N additional lower-priority issues moved to Residual Risk`.
 
 ### Example Output (End-to-End)
-
-The following is a condensed example showing how Origin, Baseline, and Action interact:
-
+The example below shows the minimum shape. Keep findings short, evidence-backed, and origin-aware.
 ```
 ### Review Mode
 - Standard
-- 6 files changed, includes concurrency and HTTP handler changes
+- 4 files changed, includes concurrency and persistence paths
 
 ### Findings
 
-#### [High] Race Condition on Package-Level Map
+#### [High] Race Condition on Shared Map
 - **ID:** REV-001
 - **Origin:** introduced
 - **Baseline:** new
@@ -501,7 +439,7 @@ The following is a condensed example showing how Origin, Baseline, and Action in
 - **Recommendation:** Replace with `sync.Map` or protect with `sync.RWMutex`
 - **Action:** must-fix
 
-#### [High] SQL Injection via String Concatenation
+#### [High] SQL Injection in Existing Query Builder
 - **ID:** REV-002
 - **Origin:** pre-existing
 - **Baseline:** new
@@ -512,21 +450,9 @@ The following is a condensed example showing how Origin, Baseline, and Action in
 - **Recommendation:** Use parameterized query: `db.QueryContext(ctx, "SELECT * FROM users WHERE name = ?", name)`
 - **Action:** follow-up issue
 
-#### [Medium] Missing Error Wrapping
-- **ID:** REV-003
-- **Origin:** introduced
-- **Baseline:** new
-- **Principle:** N/A
-- **Location:** internal/service/order.go:23, :45, :89
-- **Impact:** Error context lost across 3 call sites; debugging requires log correlation
-- **Evidence:** `return err` without `fmt.Errorf("...: %w", err)`
-- **Recommendation:** Wrap at each return with function/operation context
-- **Action:** must-fix
-
 ### Summary
-2 introduced / 1 pre-existing / 0 uncertain.
-The pre-existing SQL injection (REV-002) is High severity but predates this PR;
-recommend filing as a tracked follow-up issue rather than blocking merge.
+1 introduced / 1 pre-existing / 0 uncertain.
+The pre-existing SQL injection is reported for visibility and follow-up, not as merge debt for the author.
 ```
 
 ## No-Finding Case
@@ -545,23 +471,20 @@ If no issues are found:
 
 ## Skill Maintenance
 Run regression checks for this skill with:
-
 ```bash
 bash "<path-to-skill>/scripts/run_regression.sh"
 ```
 
 ## Appendix: Reference Loading Triggers
-
-**This is a mandatory gate** (see §7 Reference Loading Gate). Load reference files when the code under review matches these trigger patterns.
-
-| Reference | Trigger Keywords / Patterns |
+**This is a mandatory gate** (see §7 Reference Loading Gate). Use the table below as a compact trigger map; detailed patterns live in the reference files themselves.
+| Reference | Representative triggers |
 |---|---|
-| `references/pr-review-quick-checklist.md` | Any PR / diff review |
-| `references/go-security-patterns.md` | `database/sql`, `os/exec`, `filepath`, `tls.Config`, `unsafe`, `crypto/`, hardcoded string literals, `jwt`, `token`, `auth`, `session`, `cookie`, `http.Get(`, `http.Post(`, `url.Parse`, `template.HTML`, `text/template`, `Access-Control`, `rate.Limiter`, `MaxBytesReader`, `subtle.ConstantTimeCompare`, `bcrypt`, `cors`, `Origin`, `csrf`, `multipart`, `FormFile` |
-| `references/go-concurrency-patterns.md` | `go func`, `chan`, `sync.Mutex`, `sync.RWMutex`, `sync.WaitGroup`, `errgroup`, `sync.Pool`, `sync.Once`, `context.`, `signal.Notify`, `time.After`, `time.NewTicker`, `singleflight` |
-| `references/go-error-and-quality.md` | `_ =`, discarded error, `panic(`, `errors.Is`, `errors.As`, naked return, `init()`, `:= err`, receiver methods |
-| `references/go-test-quality.md` | `_test.go` files in diff, `testing.B`, `testing.F`, `httptest`, `testdata/` |
-| `references/go-api-http-checklist.md` | `net/http`, `http.Handler`, `http.Server`, `gin.`, `echo.`, `chi.`, `grpc.`, `google.golang.org/grpc`, `pb.`, `proto.` |
-| `references/go-database-patterns.md` | `database/sql`, `sql.Open`, `sql.DB`, `sql.Tx`, `sql.Rows`, `sql.Row`, `.Query(`, `.QueryRow(`, `.Exec(`, `.Begin(`, `pgx`, `sqlx`, `gorm.`, `ent.` |
-| `references/go-performance-patterns.md` | `append(`, `strings.Builder`, `sync.Pool`, `make(map`, `make([]`, `atomic.`, struct field reordering, `range` over large struct, `bufio.`, `regexp.MustCompile`, `http.DefaultClient`, `json.Marshal`, `json.Unmarshal` |
-| `references/go-modern-practices.md` | generics `[T`, `any`, `comparable`, `slog.`, `atomic.Int`, `context.WithCancelCause`, `context.WithoutCancel`, `errors.Join`, `sync.OnceValue`, `slices.`, `maps.`, `min(`, `max(`, `range n` |
+| `references/pr-review-quick-checklist.md` | Any PR or diff review |
+| `references/go-security-patterns.md` | auth/token flows, hardcoded string literals, SQL/command/path use, outbound fetches, TLS, HTML/template output, upload/body limits |
+| `references/go-concurrency-patterns.md` | `go func`, channels, mutexes, wait groups, `errgroup`, lifecycle or cancellation code |
+| `references/go-error-and-quality.md` | ignored errors, `panic(`, `errors.Is/As`, naked returns, receiver or shadowing issues |
+| `references/go-test-quality.md` | `_test.go`, `httptest`, `testing.B/F`, `testdata/` |
+| `references/go-api-http-checklist.md` | `net/http`, handlers, servers, `gin`/`echo`/`chi`, gRPC, `pb.` or `proto.` |
+| `references/go-database-patterns.md` | `database/sql`, `pgx`, `sqlx`, `gorm`, `ent`, query/tx/rows code |
+| `references/go-performance-patterns.md` | hot loops, builders, preallocation, `sync.Pool`, atomics, regex, client or JSON hot paths |
+| `references/go-modern-practices.md` | generics, `any`, `slog`, typed atomics, modern context helpers, `slices`/`maps` |
