@@ -13,7 +13,7 @@ applicable_versions: repository layout as of 2026-03
 项目是一个围绕 **设计高质量skill、skill分享、评审报告和输出样例** 构建的知识与实践仓库。贡献时，请优先考虑内容质量、结构完整性、可验证性。
 
 Language:
-- English: [CONTRIBUTING.md](/Users/john/awesome-skills/CONTRIBUTING.md)
+- English: [CONTRIBUTING.md](CONTRIBUTING.md)
 - 中文：`CONTRIBUTING.zh-CN.md`
 
 ## 1. 基本原则
@@ -49,10 +49,10 @@ Language:
 
 | 路径 | 作用 |
 | --- | --- |
-| [`bestpractice/`](/Users/john/awesome-skills/bestpractice) | skill 最佳实践文档，中英双语 |
-| [`skills/`](/Users/john/awesome-skills/skills) | 高质量 skill 示例 |
-| [`evaluate/`](/Users/john/awesome-skills/evaluate) | 对 skill 的评审报告，中英双语 |
-| [`outputexample/`](/Users/john/awesome-skills/outputexample) | skill 的真实输出样例 |
+| [`bestpractice/`](bestpractice) | skill 最佳实践文档，中英双语 |
+| [`skills/`](skills) | 高质量 skill 示例 |
+| [`evaluate/`](evaluate) | 对 skill 的评审报告，中英双语 |
+| [`outputexample/`](outputexample) | skill 的真实输出样例 |
 
 ## 4. 推荐的贡献单元
 
@@ -164,11 +164,11 @@ fix(bestpractice): correct broken section links
 仓库治理文档：
 
 - 安全文档：
-  - [SECURITY.zh-CN.md](/Users/john/awesome-skills/SECURITY.zh-CN.md)
-  - [SECURITY.md](/Users/john/awesome-skills/SECURITY.md)
+  - [SECURITY.zh-CN.md](SECURITY.zh-CN.md)
+  - [SECURITY.md](SECURITY.md)
 - 行为准则：
-  - [CODE_OF_CONDUCT.zh-CN.md](/Users/john/awesome-skills/CODE_OF_CONDUCT.zh-CN.md)
-  - [CODE_OF_CONDUCT.md](/Users/john/awesome-skills/CODE_OF_CONDUCT.md)
+  - [CODE_OF_CONDUCT.zh-CN.md](CODE_OF_CONDUCT.zh-CN.md)
+  - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 
 如果你的贡献涉及：
 

@@ -28,10 +28,10 @@ This is not just a collection of `SKILL.md` examples. It is a full closed loop f
 ## Overview
 
 - Project scope: high-quality skill methodology + skill assets + review reports + output examples.
-- Main documentation entry: [bestpractice/README.md](/Users/john/awesome-skills/bestpractice/README.md).
-- Number of skills: `16` (see [skills/](/Users/john/awesome-skills/skills)).
-- Number of review reports: `32`, paired in Chinese and English (see [evaluate/](/Users/john/awesome-skills/evaluate)).
-- Number of output example directories: `10` (see [outputexample/](/Users/john/awesome-skills/outputexample)).
+- Main documentation entry: [bestpractice/README.md](bestpractice/README.md).
+- Number of skills: `16` (see [skills/](skills)).
+- Number of review reports: `32`, paired in Chinese and English (see [evaluate/](evaluate)).
+- Number of output example directories: `10` (see [outputexample/](outputexample)).
 
 The core goal of this repository is not to show how to write prompts. It is to answer three harder questions:
 
@@ -42,67 +42,71 @@ The core goal of this repository is not to show how to write prompts. It is to a
 <a id="en-highlights"></a>
 ## Highlights
 
-### 1. Documentation quality: highly systematic and practical
+### 1. Four-layer closed-loop architecture
 
-The most valuable part of this project is not the high-quality skills under [skills/](/Users/john/awesome-skills/skills), but the full methodology under [bestpractice/](/Users/john/awesome-skills/bestpractice).
-It is highly useful as a reference for structured thinking, abstraction, and engineering execution.
+The repository is organized as a rare end-to-end chain:
 
-### 2. Clear structure and strong layering
+`bestpractice/` → `skills/` → `evaluate/` → `outputexample/`
 
-The best-practice docs follow the same "progressive disclosure" philosophy they recommend for skill design. The content is split into:
+Those four layers are not just grouped content. They form a verifiable knowledge loop:
 
-- fundamentals
-- advanced topics
-- evaluation
-- integration
-- appendices and navigation docs
+- methodology explains how a skill should be designed
+- skill examples show what that methodology looks like in practice
+- review reports test whether the skill is actually good
+- output examples prove what it can produce in real tasks
 
-Readers can jump directly to the part they need based on experience level and goals, instead of reading everything linearly. The structure itself demonstrates how to write long-form docs that work well for both AI agents and human readers.
+That structure makes the project substantially stronger than a typical prompt or skill example project.
 
-### 3. Original and highly distilled design patterns
+### 2. The main deliverable is methodology
 
-This project distills a set of high-value patterns from many real tasks, including:
+The highest-leverage asset here is [bestpractice/](bestpractice), not the raw number of skills under [skills/](skills). The methodology is deliberately language-agnostic and platform-agnostic: mandatory gates, anti-examples, honest degradation, progressive disclosure, output contracts, and quantitative evaluation can be reused far beyond this repository.
 
-- mandatory gates
-- anti-example teaching
-- honest degradation
-- progressive disclosure
-- output contracts
-- quantitative evaluation
+In other words, the project is teaching people how to build professional skills, not just handing out a bag of ready-made prompts.
 
-These patterns target the most common LLM failure modes directly: hallucinations, false positives, context overflow, unstable output, and weak verifiability.
+### 3. Skill quality is measured, not guessed
 
-### 4. Quantitative instead of intuition-based
+[bestpractice/Evaluation.md](bestpractice/Evaluation.md) turns “is this skill good?” into a quantitative question across three dimensions:
 
-[bestpractice/Evaluation.md](/Users/john/awesome-skills/bestpractice/Evaluation.md) is valuable because it turns “is this skill good?” from a subjective feeling into something measurable.
+- trigger accuracy
+- real-task performance
+- token cost-effectiveness
 
-The focus is no longer “this looks good,” but:
+The value of that framework is visible in the paired review reports under [evaluate/](evaluate). Concrete examples include:
 
-- whether the trigger behavior is accurate
-- whether real task performance is better than the no-skill baseline
-- whether the token cost is worth it
+- `go-code-reviewer`: +36 percentage points in subtle-scenario signal-to-noise, with 347x developer-time ROI
+- `unit-test`: +38.4 percentage points in assertion pass rate
+- `google-search`: +74.1 percentage points in assertion pass rate
 
-That is also why [evaluate/](/Users/john/awesome-skills/evaluate) exists: the repository does not just provide skills, it also provides review evidence.
+That is much stronger than saying “these skills seem useful,” because it gives readers traceable numbers, evaluation process, and iteration evidence.
 
-### 5. Strong executability and a real engineering loop
+### 4. The regression system is deterministic and built for engineering maintenance
 
-This project does not stop at `What` and `Why`; it also covers `How`. You can see the full chain directly in the repository:
+This repository does not rely on “use one LLM to judge another LLM” as its primary guardrail. Instead, it uses deterministic regression assets:
 
-- methodology in [bestpractice/](/Users/john/awesome-skills/bestpractice)
-- skill examples in [skills/](/Users/john/awesome-skills/skills)
-- reviews in [evaluate/](/Users/john/awesome-skills/evaluate)
-- outputs in [outputexample/](/Users/john/awesome-skills/outputexample)
+- `132` golden JSON fixtures
+- `29` Python test files
+- contract tests for required gates, outputs, and structure
+- golden-scenario tests for real task coverage
 
-That makes it more than abstract discussion. It is an engineering asset that can be reused, inspected, and iterated over time.
+Those checks run quickly, are versionable, and are easy to diff and rerun. That design choice reflects strong engineering judgment: critical quality constraints should live in deterministic scripts wherever possible, not only in natural-language instructions.
 
-### 6. The real moat is not “using AI,” but turning AI into reliable capability
+### 5. Skills are designed to compose into real workflows
 
-If you master this system, the result is not just “writing better prompts.” It is a rarer and more valuable combined capability:
+The backend-oriented skills do not just work in isolation. They line up into an engineering pipeline:
 
-- turning tacit experience into structured rules
-- constraining unstable AI output into reusable workflows
-- integrating skills into real engineering processes instead of leaving them as demos
-- proving value with reviews and examples instead of talking in abstractions
+`go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`
+
+The repository also includes review reports, workflow examples, and output artifacts that show this is not a paper design. It is a workflow system that can be reused and validated in real engineering practice.
+
+### 6. A view of knowledge: tacit -> explicit -> executable
+
+Underneath the concrete files is a stronger idea: useful engineering knowledge should move through three layers:
+
+- tacit experience in an expert's head
+- explicit rules in documentation
+- executable constraints in a skill, script, or test
+
+That progression is one of the most important ideas in the repo. It reframes skills as a way to turn unstable personal intuition into shared, inspectable, and enforceable capability.
 
 <a id="en-project-structure"></a>
 ## Project Structure
@@ -122,32 +126,32 @@ The four core directories serve these roles:
 
 | Path | Purpose |
 | --- | --- |
-| [bestpractice/](/Users/john/awesome-skills/bestpractice) | Explains how to write high-quality skills, how to evaluate them, and how to integrate them into workflows |
-| [skills/](/Users/john/awesome-skills/skills) | High-quality skill examples shaped by the methodology |
-| [evaluate/](/Users/john/awesome-skills/evaluate) | Formal review reports for skills, including strengths, weaknesses, and improvement points |
-| [outputexample/](/Users/john/awesome-skills/outputexample) | Real outputs from skills, such as PDFs, test code, Makefiles, CI configs, and screenshots |
+| [bestpractice/](bestpractice) | Explains how to write high-quality skills, how to evaluate them, and how to integrate them into workflows |
+| [skills/](skills) | High-quality skill examples shaped by the methodology |
+| [evaluate/](evaluate) | Formal review reports for skills, including strengths, weaknesses, and improvement points |
+| [outputexample/](outputexample) | Real outputs from skills, such as PDFs, test code, Makefiles, CI configs, and screenshots |
 
 <a id="en-reading-path"></a>
 ## Recommended Reading Path
 
 If this is your first time in the project, this order works best:
 
-1. Start with [bestpractice/README.md](/Users/john/awesome-skills/bestpractice/README.md) to build the overall picture
-2. Open a specific skill, for example [skills/google-search/SKILL.md](/Users/john/awesome-skills/skills/google-search/SKILL.md)
-3. Read its review report, for example [evaluate/google-search-skill-eval-report.md](/Users/john/awesome-skills/evaluate/google-search-skill-eval-report.md)
-4. Then look at its real output, for example [outputexample/google-search/中国制造2025目标完成度研究.pdf](/Users/john/awesome-skills/outputexample/google-search/中国制造2025目标完成度研究.pdf)
+1. Start with [bestpractice/README.md](bestpractice/README.md) to build the overall picture
+2. Open a specific skill, for example [skills/google-search/SKILL.md](skills/google-search/SKILL.md)
+3. Read its review report, for example [evaluate/google-search-skill-eval-report.md](evaluate/google-search-skill-eval-report.md)
+4. Then look at its real output, for example [outputexample/google-search/中国制造2025目标完成度研究.pdf](outputexample/google-search/中国制造2025目标完成度研究.pdf)
 
-If you prefer Chinese, start from [bestpractice/README.zh-CN.md](/Users/john/awesome-skills/bestpractice/README.zh-CN.md).
+If you prefer Chinese, start from [bestpractice/README.zh-CN.md](bestpractice/README.zh-CN.md).
 
 <a id="en-bestpractice"></a>
 ## Documentation System
 
-[bestpractice/](/Users/john/awesome-skills/bestpractice) is the methodology entry point for the whole project:
+[bestpractice/](bestpractice) is the methodology entry point for the whole project:
 
-- [Fundamentals.md](/Users/john/awesome-skills/bestpractice/Fundamentals.md)
-- [Advanced.md](/Users/john/awesome-skills/bestpractice/Advanced.md)
-- [Evaluation.md](/Users/john/awesome-skills/bestpractice/Evaluation.md)
-- [Integration.md](/Users/john/awesome-skills/bestpractice/Integration.md)
+- [Fundamentals.md](bestpractice/Fundamentals.md)
+- [Advanced.md](bestpractice/Advanced.md)
+- [Evaluation.md](bestpractice/Evaluation.md)
+- [Integration.md](bestpractice/Integration.md)
 
 These documents mainly answer:
 
@@ -159,7 +163,7 @@ These documents mainly answer:
 <a id="en-skills"></a>
 ## Skill Examples
 
-All high-quality skills in this project live under [skills/](/Users/john/awesome-skills/skills), with each skill centered on its own `SKILL.md`. They are not isolated capabilities. They can be grouped by use case, and the backend-oriented skills can work together as a full quality pipeline.
+All high-quality skills in this project live under [skills/](skills), with each skill centered on its own `SKILL.md`. They are not isolated capabilities. They can be grouped by use case, and the backend-oriented skills can work together as a full quality pipeline.
 
 ### Backend Development: a complete quality pipeline
 
@@ -239,28 +243,28 @@ What makes this repository different from a typical “skills example repo” is
 
 You can read them side by side:
 
-- review reports: [evaluate/](/Users/john/awesome-skills/evaluate)
-- output examples: [outputexample/](/Users/john/awesome-skills/outputexample)
+- review reports: [evaluate/](evaluate)
+- output examples: [outputexample/](outputexample)
 
 Typical examples:
 
 - `google-search`
-  - review: [evaluate/google-search-skill-eval-report.md](/Users/john/awesome-skills/evaluate/google-search-skill-eval-report.md)
-  - output: [outputexample/google-search/中国制造2025目标完成度研究.pdf](/Users/john/awesome-skills/outputexample/google-search/中国制造2025目标完成度研究.pdf)
+  - review: [evaluate/google-search-skill-eval-report.md](evaluate/google-search-skill-eval-report.md)
+  - output: [outputexample/google-search/中国制造2025目标完成度研究.pdf](outputexample/google-search/中国制造2025目标完成度研究.pdf)
 - `unit-test`
-  - review: [evaluate/unit-test-skill-eval-report.md](/Users/john/awesome-skills/evaluate/unit-test-skill-eval-report.md)
-  - output: [outputexample/unit-test/](/Users/john/awesome-skills/outputexample/unit-test)
+  - review: [evaluate/unit-test-skill-eval-report.md](evaluate/unit-test-skill-eval-report.md)
+  - output: [outputexample/unit-test/](outputexample/unit-test)
 - `yt-dlp-downloader`
-  - output screenshots: [outputexample/yt-dlp-downloader/](/Users/john/awesome-skills/outputexample/yt-dlp-downloader)
+  - output screenshots: [outputexample/yt-dlp-downloader/](outputexample/yt-dlp-downloader)
 
 <a id="en-governance"></a>
 ## Governance
 
 If you want to contribute or need repository governance details, start here:
 
-- Contribution guide: [CONTRIBUTING.md](/Users/john/awesome-skills/CONTRIBUTING.md)
-- Security policy: [SECURITY.md](/Users/john/awesome-skills/SECURITY.md)
-- Code of conduct: [CODE_OF_CONDUCT.md](/Users/john/awesome-skills/CODE_OF_CONDUCT.md)
+- Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Security policy: [SECURITY.md](SECURITY.md)
+- Code of conduct: [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
 
 <a id="en-audience"></a>
 ## Who This Is For
@@ -273,4 +277,4 @@ If you want to contribute or need repository governance details, start here:
 <a id="en-license"></a>
 ## License
 
-This project is licensed under MIT. See [LICENSE](/Users/john/awesome-skills/LICENSE).
+This project is licensed under MIT. See [LICENSE](LICENSE).

@@ -14,7 +14,7 @@ This repository is built around **skill methodology, skill assets, review report
 
 Language:
 - English: `CONTRIBUTING.md`
-- Chinese: [CONTRIBUTING.zh-CN.md](/Users/john/awesome-skills/CONTRIBUTING.zh-CN.md)
+- Chinese: [CONTRIBUTING.zh-CN.md](CONTRIBUTING.zh-CN.md)
 
 ## 1. Principles
 
@@ -49,10 +49,10 @@ Please understand the four core directories first:
 
 | Path | Purpose |
 | --- | --- |
-| [bestpractice/](/Users/john/awesome-skills/bestpractice) | Skill best-practice docs, in Chinese and English |
-| [skills/](/Users/john/awesome-skills/skills) | High-quality skill examples |
-| [evaluate/](/Users/john/awesome-skills/evaluate) | Skill review reports, in Chinese and English |
-| [outputexample/](/Users/john/awesome-skills/outputexample) | Real output examples from skills |
+| [bestpractice/](bestpractice) | Skill best-practice docs, in Chinese and English |
+| [skills/](skills) | High-quality skill examples |
+| [evaluate/](evaluate) | Skill review reports, in Chinese and English |
+| [outputexample/](outputexample) | Real output examples from skills |
 
 ## 4. Preferred Contribution Unit
 
@@ -164,11 +164,11 @@ Suggested PR checklist:
 Repository governance documents:
 
 - Security:
-  - [SECURITY.md](/Users/john/awesome-skills/SECURITY.md)
-  - [SECURITY.zh-CN.md](/Users/john/awesome-skills/SECURITY.zh-CN.md)
+  - [SECURITY.md](SECURITY.md)
+  - [SECURITY.zh-CN.md](SECURITY.zh-CN.md)
 - Code of Conduct:
-  - [CODE_OF_CONDUCT.md](/Users/john/awesome-skills/CODE_OF_CONDUCT.md)
-  - [CODE_OF_CONDUCT.zh-CN.md](/Users/john/awesome-skills/CODE_OF_CONDUCT.zh-CN.md)
+  - [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)
+  - [CODE_OF_CONDUCT.zh-CN.md](CODE_OF_CONDUCT.zh-CN.md)
 
 If your contribution involves:
 

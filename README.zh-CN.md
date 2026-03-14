@@ -28,10 +28,10 @@
 ## 项目概览
 
 - 项目定位：高质量 skill 方法论 + skill 资产 + 评审 + 输出样例。
-- 文档入口：[`bestpractice/README.zh-CN.md`](/Users/john/awesome-skills/bestpractice/README.zh-CN.md)。
-- Skill 数量：`16` 个（见 [`skills/`](/Users/john/awesome-skills/skills)）。
-- 评审报告数量：`32` 份，中英双语成对存在（见 [`evaluate/`](/Users/john/awesome-skills/evaluate)）。
-- 输出样例目录：`10` 个（见 [`outputexample/`](/Users/john/awesome-skills/outputexample)）。
+- 文档入口：[`bestpractice/README.zh-CN.md`](bestpractice/README.zh-CN.md)。
+- Skill 数量：`16` 个（见 [`skills/`](skills)）。
+- 评审报告数量：`32` 份，中英双语成对存在（见 [`evaluate/`](evaluate)）。
+- 输出样例目录：`10` 个（见 [`outputexample/`](outputexample)）。
 
 这个仓库的核心目标不是“展示 prompt 怎么写”，而是回答三个更难的问题：
 
@@ -42,26 +42,24 @@
 <a id="cn-highlights"></a>
 ## 项目亮点
 
-### 1. 文档质量评价：极高的系统性与落地价值
+### 1. 四层闭环架构
 
-项目最有价值的部分，不是 `skills/` 里的高质量skill，而是 [`bestpractice/`](/Users/john/awesome-skills/bestpractice) 这套完整的方法论文档。
-它在结构化思维、理论抽象和工程落地上都有很强的参考价值。
+项目最有辨识度的地方，是把内容组织成了一条完整闭环：
 
-### 2. 架构清晰，层次分明
+`bestpractice/` → `skills/` → `evaluate/` → `outputexample/`
 
-最佳实践文档采用了skill设计哲学主张的“渐进式披露”思路，把内容分为：
+这四层不是简单分目录，而是一条可验证的知识链：
 
-- 基础篇
-- 进阶篇
-- 评估篇
-- 集成篇
-- 附录与导航文档
+- 方法论定义 skill 应该如何设计
+- skill 示例展示方法论在真实文件中的形态
+- 评审报告验证 skill 到底好不好
+- 输出样例证明 skill 在真实任务里能产出什么
 
-读者可以按经验水平和目标直接进入需要的部分，而不必从头到尾线性阅读。这个结构本身就在示范“如何写一份对 AI 和人类都友好的长文档”。
+这让项目的定位明显强于普通的“prompt/skill 样例项目”。
 
-### 3. 原创且高度凝练的设计模式
+### 2. 核心交付物是方法论
 
-项目从大量实际任务里抽象出了一组对 LLM 落地非常关键的模式，例如：
+项目最有价值的资产，其实是 [`bestpractice/`](bestpractice)，而不是 [`skills/`](skills) 里有多少个 skill。这里总结出的设计模式是可迁移的通用方法论，例如：
 
 - 强制门禁
 - 反例教学
@@ -70,39 +68,52 @@
 - 输出契约
 - 量化评估
 
-这些模式直接针对当前 LLM 最常见的问题：幻觉、误报、上下文溢出、输出不稳定、不可验证。
+这些模式不依赖某种特定语言或平台。掌握它们的人，可以把同样的方法迁移到别的语言、别的工作流、别的 agent 系统里。也正因为如此，项目是在“教你如何构建专业 skill”，而不是只给一组现成模板。
 
-### 4. 量化驱动，拒绝“凭感觉”
+### 3. skill 质量是可量化的，不是“凭感觉”
 
-[`bestpractice/评估篇.md`](/Users/john/awesome-skills/bestpractice/评估篇.md) 价值在于，它们把“skill 好不好”从主观感觉变成了可评估对象。
+[`bestpractice/评估篇.md`](bestpractice/评估篇.md) 把“skill 好不好”拆成三个可量化维度：
 
-重点不再是“看起来不错”，而是：
+- 触发准确率
+- 真实任务表现
+- Token 成本效益比
 
-- 触发是否准确
-- 实际任务表现是否优于不用 skill 的基线
-- Token 成本是否值得
+这套框架的价值，在 [`evaluate/`](evaluate) 里的正式评审报告中可以直接看到。例如：
 
-这也是 [`evaluate/`](/Users/john/awesome-skills/evaluate) 目录存在的意义：仓库不只给出 skill，还给出评审证据。
+- `go-code-reviewer`：微妙场景信噪比提升 +36 个百分点，开发者时间 ROI 达 347x
+- `unit-test`：Assertion 通过率提升 +38.4 个百分点
+- `google-search`：Assertion 通过率提升 +74.1 个百分点
 
-### 5. 极强地可执行性和工程闭环
+这比“这些 skill 看起来很好用”强得多，因为它给出了可追溯的数字、评估过程和迭代依据。
 
-这个项目不是只讲 `What` 和 `Why`，而是把 `How` 也补齐了。你可以在仓库里直接看到完整链路：
+### 4. 回归测试体系是确定性的，而且真正适合工程化维护
 
-- 方法论在 [`bestpractice/`](/Users/john/awesome-skills/bestpractice)
-- skill 示例在 [`skills/`](/Users/john/awesome-skills/skills)
-- 评审在 [`evaluate/`](/Users/john/awesome-skills/evaluate)
-- 输出结果在 [`outputexample/`](/Users/john/awesome-skills/outputexample)
+这个仓库没有把“让一个 LLM 去评价另一个 LLM”当成主要守护手段，而是优先采用确定性验证：
 
-这意味着它不是抽象讨论，而是一套可以被复用、被检视、被持续迭代的工程化资产。
+- `132` 个 golden JSON 场景
+- `29` 个 Python 测试文件
+- 合约测试守护门禁、输出契约和结构规则
+- 黄金场景测试守护真实任务覆盖
 
-### 6. 能力壁垒不在“会用 AI”，而在“能把 AI 变成可靠能力”
+这些测试快、可版本化、可 diff、可复跑。这个设计决策本身就体现了很强的工程判断力：关键质量约束应该尽量落到确定性脚本里，而不是只停留在自然语言描述中。
 
-系统掌握这套方法，最终获得的不是“会写 prompt”，而是更稀缺的复合型能力：
+### 5. skill 可以编织成完整的工程化质量流水线
 
-- 把隐性经验拆成结构化规则
-- 把不稳定 AI 输出约束成可复用工作流
-- 把 skill 接入真实研发流程，而不是停留在演示
-- 用评审和样例证明价值，而不是只讲概念
+项目里的后端相关 skill 不是互相孤立的，它们可以首尾衔接成一条完整质量管线：
+
+`go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`
+
+而且仓库里有对应的评审报告、工作流示例和输出产物，证明这不是纸面上的“概念链路”，而是可以在真实工程实践中被复用和验证的工作体系。
+
+### 6. "隐性→显性→可执行" 知识论
+
+这个项目真正有长期价值的地方，还不只是 skill 文件本身，而是它表达了一种更强的知识演化路径：
+
+- 大脑中的隐性经验
+- 文档中的显性规则
+- skill / script / test 中可执行、可约束的能力
+
+这条路径把原本不稳定、不可传承的个人经验，转化成了团队可共享、可检查、可持续演进的工程资产。
 
 <a id="cn-project-structure"></a>
 ## 项目结构
@@ -122,32 +133,32 @@
 
 | 路径 | 作用 |
 | --- | --- |
-| [bestpractice/](/Users/john/awesome-skills/bestpractice) | 介绍如何写高质量 skill，如何评估 skill，以及如何把 skill 融入工作流 |
-| [skills/](/Users/john/awesome-skills/skills) | 经过方法论约束后的高质量 skill 示例 |
-| [evaluate/](/Users/john/awesome-skills/evaluate) | 对 skill 的正式评审报告，解释优点、缺点与改进点 |
-| [outputexample/](/Users/john/awesome-skills/outputexample) | skill 在真实任务中的实际输出，如 PDF、测试代码、Makefile、CI 配置、截图等 |
+| [bestpractice/](bestpractice) | 介绍如何写高质量 skill，如何评估 skill，以及如何把 skill 融入工作流 |
+| [skills/](skills) | 经过方法论约束后的高质量 skill 示例 |
+| [evaluate/](evaluate) | 对 skill 的正式评审报告，解释优点、缺点与改进点 |
+| [outputexample/](outputexample) | skill 在真实任务中的实际输出，如 PDF、测试代码、Makefile、CI 配置、截图等 |
 
 <a id="cn-reading-path"></a>
 ## 推荐阅读路径
 
 如果你第一次进入项目，推荐按这个顺序阅读：
 
-1. 从 [`bestpractice/README.zh-CN.md`](/Users/john/awesome-skills/bestpractice/README.zh-CN.md) 建立整体认知
-2. 进入某个具体 skill，例如 [`skills/google-search/SKILL.md`](/Users/john/awesome-skills/skills/google-search/SKILL.md)
-3. 对照它的评审报告，例如 [`evaluate/google-search-skill-eval-report.zh-CN.md`](/Users/john/awesome-skills/evaluate/google-search-skill-eval-report.zh-CN.md)
-4. 再看它的真实输出，例如 [`outputexample/google-search/中国制造2025目标完成度研究.pdf`](/Users/john/awesome-skills/outputexample/google-search/中国制造2025目标完成度研究.pdf)
+1. 从 [`bestpractice/README.zh-CN.md`](bestpractice/README.zh-CN.md) 建立整体认知
+2. 进入某个具体 skill，例如 [`skills/google-search/SKILL.md`](skills/google-search/SKILL.md)
+3. 对照它的评审报告，例如 [`evaluate/google-search-skill-eval-report.zh-CN.md`](evaluate/google-search-skill-eval-report.zh-CN.md)
+4. 再看它的真实输出，例如 [`outputexample/google-search/中国制造2025目标完成度研究.pdf`](outputexample/google-search/中国制造2025目标完成度研究.pdf)
 
-如果你偏向英文阅读，可以从 [`bestpractice/README.md`](/Users/john/awesome-skills/bestpractice/README.md) 开始。
+如果你偏向英文阅读，可以从 [`bestpractice/README.md`](bestpractice/README.md) 开始。
 
 <a id="cn-bestpractice"></a>
 ## 文档体系
 
-[`bestpractice/`](/Users/john/awesome-skills/bestpractice) 是整个项目的方法论入口：
+[`bestpractice/`](bestpractice) 是整个项目的方法论入口：
 
-- [`基础篇.md`](/Users/john/awesome-skills/bestpractice/基础篇.md)
-- [`进阶篇.md`](/Users/john/awesome-skills/bestpractice/进阶篇.md)
-- [`评估篇.md`](/Users/john/awesome-skills/bestpractice/评估篇.md)
-- [`集成篇.md`](/Users/john/awesome-skills/bestpractice/集成篇.md)
+- [`基础篇.md`](bestpractice/基础篇.md)
+- [`进阶篇.md`](bestpractice/进阶篇.md)
+- [`评估篇.md`](bestpractice/评估篇.md)
+- [`集成篇.md`](bestpractice/集成篇.md)
 
 这些文档主要回答：
 
@@ -159,7 +170,7 @@
 <a id="cn-skills"></a>
 ## skill 示例
 
-当前项目收录的高质量 skill 都位于 [`skills/`](/Users/john/awesome-skills/skills) 下，并以各自目录中的 `SKILL.md` 作为主入口。它们不是一组互相孤立的能力，而是可以按工作场景组织成若干类；其中，后端开发相关 skill 可以互相配合，形成一条完整的质量管线。
+当前项目收录的高质量 skill 都位于 [`skills/`](skills) 下，并以各自目录中的 `SKILL.md` 作为主入口。它们不是一组互相孤立的能力，而是可以按工作场景组织成若干类；其中，后端开发相关 skill 可以互相配合，形成一条完整的质量管线。
 
 ### 后端开发：完整质量管线
 
@@ -241,28 +252,28 @@ CI 触发
 
 你可以直接对照阅读：
 
-- 评审报告：[`evaluate/`](/Users/john/awesome-skills/evaluate)
-- 输出样例：[`outputexample/`](/Users/john/awesome-skills/outputexample)
+- 评审报告：[`evaluate/`](evaluate)
+- 输出样例：[`outputexample/`](outputexample)
 
 典型例子：
 
 - `google-search`
-  - 评审：[`evaluate/google-search-skill-eval-report.zh-CN.md`](/Users/john/awesome-skills/evaluate/google-search-skill-eval-report.zh-CN.md)
-  - 输出：[`outputexample/google-search/中国制造2025目标完成度研究.pdf`](/Users/john/awesome-skills/outputexample/google-search/中国制造2025目标完成度研究.pdf)
+  - 评审：[`evaluate/google-search-skill-eval-report.zh-CN.md`](evaluate/google-search-skill-eval-report.zh-CN.md)
+  - 输出：[`outputexample/google-search/中国制造2025目标完成度研究.pdf`](outputexample/google-search/中国制造2025目标完成度研究.pdf)
 - `unit-test`
-  - 评审：[`evaluate/unit-test-skill-eval-report.zh-CN.md`](/Users/john/awesome-skills/evaluate/unit-test-skill-eval-report.zh-CN.md)
-  - 输出：[`outputexample/unit-test/`](/Users/john/awesome-skills/outputexample/unit-test)
+  - 评审：[`evaluate/unit-test-skill-eval-report.zh-CN.md`](evaluate/unit-test-skill-eval-report.zh-CN.md)
+  - 输出：[`outputexample/unit-test/`](outputexample/unit-test)
 - `yt-dlp-downloader`
-  - 输出截图：[`outputexample/yt-dlp-downloader/`](/Users/john/awesome-skills/outputexample/yt-dlp-downloader)
+  - 输出截图：[`outputexample/yt-dlp-downloader/`](outputexample/yt-dlp-downloader)
 
 <a id="cn-governance"></a>
 ## 治理文档
 
 如果你准备参与贡献，或者需要查看仓库治理规则，建议从这里开始：
 
-- 贡献指南：[`CONTRIBUTING.zh-CN.md`](/Users/john/awesome-skills/CONTRIBUTING.zh-CN.md)
-- 安全策略：[`SECURITY.zh-CN.md`](/Users/john/awesome-skills/SECURITY.zh-CN.md)
-- 行为准则：[`CODE_OF_CONDUCT.zh-CN.md`](/Users/john/awesome-skills/CODE_OF_CONDUCT.zh-CN.md)
+- 贡献指南：[`CONTRIBUTING.zh-CN.md`](CONTRIBUTING.zh-CN.md)
+- 安全策略：[`SECURITY.zh-CN.md`](SECURITY.zh-CN.md)
+- 行为准则：[`CODE_OF_CONDUCT.zh-CN.md`](CODE_OF_CONDUCT.zh-CN.md)
 
 
 <a id="cn-audience"></a>
@@ -276,4 +287,4 @@ CI 触发
 <a id="cn-license"></a>
 ## License
 
-本项目使用 MIT License，见 [`LICENSE`](/Users/john/awesome-skills/LICENSE)。
+本项目使用 MIT License，见 [`LICENSE`](LICENSE)。
