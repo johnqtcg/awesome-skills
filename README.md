@@ -250,7 +250,7 @@ Typical examples:
 
 - `google-search`
   - review: [evaluate/google-search-skill-eval-report.md](evaluate/google-search-skill-eval-report.md)
-  - output: [outputexample/google-search/中国制造2025目标完成度研究.pdf](outputexample/google-search/中国制造2025目标完成度研究.pdf)
+  - output: [outputexample/google-search/ai-bubble-or-platform-shift-march-2026.pdf](outputexample/google-search/ai-bubble-or-platform-shift-march-2026.pdf)
 - `unit-test`
   - review: [evaluate/unit-test-skill-eval-report.md](evaluate/unit-test-skill-eval-report.md)
   - output: [outputexample/unit-test/](outputexample/unit-test)
