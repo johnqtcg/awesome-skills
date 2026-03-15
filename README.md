@@ -232,6 +232,7 @@ These skills focus more on getting a task executed than on code quality itself.
 | Skill Name | Purpose | Main strengths / advantages |
 | --- | --- | --- |
 | `yt-dlp-downloader` | Generate and run `yt-dlp` download commands | Probes formats before downloading and supports single videos, playlists, audio extraction, subtitles, and authenticated content |
+| `local-transcript` | Transcribe local audio or video files into `txt` / `pdf` / `docx` outputs | Uses an accelerated local ASR pipeline plus post-processing and proofreading to produce cleaner Chinese transcripts with paragraphing, punctuation normalization, and multi-format export |
 
 <a id="en-evaluate-and-output"></a>
 ## Review Reports and Output Examples
