@@ -540,21 +540,23 @@ Skills close the gap from stage two to stage three by **automating explicit know
 
 ### 9.2 Case Study: How `git-commit` Aligns with the Git Standard
 
-The `git-commit` skill (§8.1) is the most direct proof of this philosophy. The team had already documented a full Git commit standard in [productivetools/git](../../productivetools/git/), especially Chapter 2 "Daily Commands" and Chapter 6 "Workflow and Commit Standards." The skill turns those rules into mandatory gates inside a 7-step workflow:
+The `git-commit` skill (§8.1) is the most direct proof of this philosophy. For example, our team's Git operations guide had already distilled a complete Git commit standard in Chapter 2, "Daily Operation Commands Explained in Detail," and Chapter 6, "Workflow and Commit Standards." The skill turns those commit-related rules into mandatory gates inside a 7-step workflow:
 
-| Git Standard | Source | Skill Alignment |
-|--------------|--------|-----------------|
-| Atomic commit: one commit should do one thing | Chapter 2 §2.3 | ✅ Hard rule + `git add -p` as the default strategy |
-| Describe **why**, not just **what** | Chapter 2 §2.3 | ✅ Body must answer "why it changed" |
-| Follow the team's commit standard | Chapter 2 §2.3 | ✅ Full Conventional Commits rule set |
-| Conventional Commits format | Chapter 6 §2.1 | ✅ `type(scope): subject` exactly aligned |
-| Full type coverage | Chapter 6 §2.2 | ✅ Superset, with extra `build` and `revert` |
-| Subject ≤ 50 characters | Chapter 6 §2.4 | ✅ Aligned with GitHub truncation behavior |
-| Body explains **why** | Chapter 6 §2.5 | ✅ Clear split between what and why |
-| Footer rules | Chapter 6 §2.6 | ✅ Supports `BREAKING CHANGE`, `Closes #`, and `Refs:` |
-| `--amend` safety warning | Chapter 2 §2.2 | ✅ Includes force-push warnings when the commit was already pushed |
+Reference: [`xrdy511623/go-notes`](https://github.com/xrdy511623/go-notes) / `productivetools/git`
 
-All 9 documented rules are covered, from atomicity to footer formatting, from subject length to `--amend` risk warnings. The important change is not that the skill repeats the document. It changes **how the knowledge is executed**: from "please read Chapter 6 §2" to "if the rule is not satisfied, the commit is blocked."
+| Git Standard Topic | Current Documentation Topic | Skill Alignment |
+|--------------------|-----------------------------|-----------------|
+| Atomic commit: one commit should do one thing | Commit granularity and patch staging | ✅ Hard rule + `git add -p` as the default strategy |
+| Describe **why**, not just **what** | Commit message body guidance | ✅ Body must answer "why it changed" |
+| Follow the team's commit standard | Commit message conventions | ✅ Full Conventional Commits rule set |
+| Conventional Commits format | Subject-line format rules | ✅ `type(scope): subject` exactly aligned |
+| Full type coverage | Type conventions and exceptions | ✅ Superset, with extra `build` and `revert` |
+| Subject ≤ 50 characters | Subject length guidance | ✅ Aligned with GitHub truncation behavior |
+| Body explains **why** | Responsibility split for the body | ✅ Clear split between what and why |
+| Footer rules | Footer and issue-linking conventions | ✅ Supports `BREAKING CHANGE`, `Closes #`, and `Refs:` |
+| `--amend` safety warning | History-rewrite and force-push risk | ✅ Includes force-push warnings when the commit was already pushed |
+
+All 9 documented rules are covered, from atomicity to footer formatting, from subject length to `--amend` risk warnings. The important change is not that the skill repeats the document. It changes **how the knowledge is executed**: from "please consult the Git standard" to "if the rule is not satisfied, the commit is blocked."
 
 ### 9.3 The Same Philosophy Across Different Skills
 
