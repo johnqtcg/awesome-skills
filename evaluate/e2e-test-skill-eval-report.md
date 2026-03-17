@@ -1,4 +1,4 @@
-# e2e-best-practise Skill Evaluation Report
+# e2e-test Skill Evaluation Report
 
 > Evaluation framework: [skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator)
 > Evaluation date: 2026-03-11
@@ -10,9 +10,9 @@
 
 ## 1. Evaluation Overview
 
-This evaluation reviews the e2e-best-practise skill along two axes: **actual task performance** and **token cost-effectiveness**. Three scenarios were designed (E2E journey coverage, flaky test triage, CI gate design). Each scenario was run with both with-skill and without-skill configurations, for 3 scenarios × 2 configs = 6 independent subagent runs, scored against 39 assertions.
+This evaluation reviews the e2e-test skill along two axes: **actual task performance** and **token cost-effectiveness**. Three scenarios were designed (E2E journey coverage, flaky test triage, CI gate design). Each scenario was run with both with-skill and without-skill configurations, for 3 scenarios × 2 configs = 6 independent subagent runs, scored against 39 assertions.
 
-**Special challenge**: issue2md is a **pure Go web app** with no Node.js/Playwright/package.json, while e2e-best-practise favors Playwright. This tests the skill’s **environment adaptation and degradation strategy**.
+**Special challenge**: issue2md is a **pure Go web app** with no Node.js/Playwright/package.json, while e2e-test favors Playwright. This tests the skill’s **environment adaptation and degradation strategy**.
 
 | Dimension | With Skill | Without Skill | Delta |
 |-----------|-----------|--------------|-------|
@@ -42,7 +42,7 @@ This evaluation reviews the e2e-best-practise skill along two axes: **actual tas
 
 issue2md’s characteristics make it a **boundary test scenario**:
 
-| issue2md characteristic | e2e-best-practise expectation |
+| issue2md characteristic | e2e-test expectation |
 |-------------------------|------------------------------|
 | No Node.js / package.json | Skill prefers Playwright (Node.js) |
 | No client-side JavaScript | Skill has many DOM selector/wait rules |
@@ -269,7 +269,7 @@ This is where without-skill was closest (+33.3%).
 
 ### 5.4 Comparison with Other Skills
 
-| Metric | e2e-best-practise | thirdparty-api-integ | api-integration-test | go-makefile-writer | git-commit |
+| Metric | e2e-test | thirdparty-api-integration-test | api-integration-test | go-makefile-writer | git-commit |
 |--------|-------------------|---------------------|----------------------|--------------------|------------|
 | SKILL.md tokens | ~2,800 | ~680 | ~1,800 | ~1,960 | ~1,120 |
 | Typical load tokens | ~8,580 | ~2,050 | ~2,850 | ~4,600 | ~1,120 |
@@ -279,7 +279,7 @@ This is where without-skill was closest (+33.3%).
 
 **Analysis**:
 
-- **Highest absolute gain** (+48.7%) — e2e-best-practise assertion delta (19) is the largest in the series
+- **Highest absolute gain** (+48.7%) — e2e-test assertion delta (19) is the largest in the series
 - **SKILL.md cost-effectiveness good** (~57 tok/1%) — similar to git-commit (~51 tok) and api-integration-test (~49 tok)
 - **Typical load cost-effectiveness high** (~176 tok/1%) — reference volume is large (6 files ~11,710 tokens), much of it Playwright-specific
 

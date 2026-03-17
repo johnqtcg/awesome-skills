@@ -1,4 +1,4 @@
-# e2e-best-practise Skill 评审报告
+# e2e-test Skill 评审报告
 
 > 评估框架: [skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator)
 > 评估日期: 2026-03-11
@@ -6,13 +6,13 @@
 
 ---
 
-`e2e-best-practise` 是一个面向关键用户旅程的端到端测试实践 skill，适合用于设计 E2E 覆盖策略、处理 flaky 测试、制定 CI gate，以及把探索性验证沉淀为可维护的自动化测试。它最突出的三个亮点是：优先使用 Agent Browser 做探索与复现、再用 Playwright 或项目原生测试框架沉淀代码，工具路径非常清晰；内置环境门禁、Runner 选择和结果强度控制，能够在不同技术栈下做诚实降级而不是硬套模板；同时提供结构化输出与 machine-readable JSON，便于测试治理、问题分诊和 CI 集成。
+`e2e-test` 是一个面向关键用户旅程的端到端测试实践 skill，适合用于设计 E2E 覆盖策略、处理 flaky 测试、制定 CI gate，以及把探索性验证沉淀为可维护的自动化测试。它最突出的三个亮点是：优先使用 Agent Browser 做探索与复现、再用 Playwright 或项目原生测试框架沉淀代码，工具路径非常清晰；内置环境门禁、Runner 选择和结果强度控制，能够在不同技术栈下做诚实降级而不是硬套模板；同时提供结构化输出与 machine-readable JSON，便于测试治理、问题分诊和 CI 集成。
 
 ## 一、评估概览
 
-本次评估从**实际任务表现**和 **Token 效费比**两个维度对 e2e-best-practise skill 进行全面评审。设计 3 个场景（E2E 旅程覆盖、Flaky 测试分诊、CI Gate 设计），每个场景分别运行 with-skill 和 without-skill 配置，共 3 场景 × 2 配置 = 6 次独立 subagent 运行，对照 39 条 assertion 进行评分。
+本次评估从**实际任务表现**和 **Token 效费比**两个维度对 e2e-test skill 进行全面评审。设计 3 个场景（E2E 旅程覆盖、Flaky 测试分诊、CI Gate 设计），每个场景分别运行 with-skill 和 without-skill 配置，共 3 场景 × 2 配置 = 6 次独立 subagent 运行，对照 39 条 assertion 进行评分。
 
-**特殊挑战**: issue2md 是一个**纯 Go Web 应用**，无 Node.js/Playwright/package.json，而 e2e-best-practise 技能以 Playwright 为首选工具。这测试了 skill 的**环境适应能力和降级策略**。
+**特殊挑战**: issue2md 是一个**纯 Go Web 应用**，无 Node.js/Playwright/package.json，而 e2e-test 技能以 Playwright 为首选工具。这测试了 skill 的**环境适应能力和降级策略**。
 
 | 维度 | With Skill | Without Skill | 差异 |
 |------|-----------|--------------|------|
@@ -42,7 +42,7 @@
 
 issue2md 的特征使其成为一个**边界测试场景**：
 
-| issue2md 特征 | e2e-best-practise 技能的预期 |
+| issue2md 特征 | e2e-test 技能的预期 |
 |--------------|---------------------------|
 | 无 Node.js / package.json | 技能以 Playwright (Node.js) 为首选 |
 | 无客户端 JavaScript | 技能有大量 DOM selector/wait 规则 |
@@ -269,7 +269,7 @@ Without-skill 产出的报告质量不低（尤其 Eval 3 的 CI 策略非常全
 
 ### 5.4 与其他 Skill 效费比对比
 
-| 指标 | e2e-best-practise | thirdparty-api-integ | api-integration-test | go-makefile-writer | git-commit |
+| 指标 | e2e-test | thirdparty-api-integration-test | api-integration-test | go-makefile-writer | git-commit |
 |------|------|------|------|------|------|
 | SKILL.md Token | ~2,800 | ~680 | ~1,800 | ~1,960 | ~1,120 |
 | 典型加载 Token | ~8,580 | ~2,050 | ~2,850 | ~4,600 | ~1,120 |
@@ -279,7 +279,7 @@ Without-skill 产出的报告质量不低（尤其 Eval 3 的 CI 策略非常全
 
 **分析**:
 
-- **绝对提升最高** (+48.7%) — e2e-best-practise 的 assertion 差值（19 条）是全系列最大的
+- **绝对提升最高** (+48.7%) — e2e-test 的 assertion 差值（19 条）是全系列最大的
 - **SKILL.md 效费比良好** (~57 tok/1%) — 与 git-commit (~51 tok) 和 api-integration-test (~49 tok) 相近
 - **典型加载效费比偏高** (~176 tok/1%) — 参考资料体量大（6 文件 ~11,710 tokens），但大部分是 Playwright 专用内容
 

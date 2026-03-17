@@ -252,7 +252,7 @@ This risk analysis is entirely absent from Without-skill and is especially impor
 
 ### 5.4 Comparison with Other Skills’ Cost-Effectiveness
 
-| Metric | tdd-workflow | e2e-best-practise | thirdparty-api-integ | go-makefile-writer | git-commit |
+| Metric | tdd-workflow | e2e-test | thirdparty-api-integration-test | go-makefile-writer | git-commit |
 |--------|--------------|-------------------|----------------------|--------------------|------------|
 | SKILL.md tokens | ~2,400 | ~1,800 | ~680 | ~1,960 | ~1,120 |
 | Typical load tokens | ~3,600 | ~4,600 | ~2,050 | ~4,600 | ~1,120 |
@@ -262,8 +262,8 @@ This risk analysis is entirely absent from Without-skill and is especially impor
 
 **Analysis**:
 
-- **Second-highest absolute gain** (+46.2%) — behind only e2e-best-practise’s +48.7%
-- **Strong typical-load cost-effectiveness** (~78 tok/1%) — third in the series, behind only git-commit (~51) and thirdparty-api-integ (~62)
+- **Second-highest absolute gain** (+46.2%) — behind only e2e-test’s +48.7%
+- **Strong typical-load cost-effectiveness** (~78 tok/1%) — third in the series, behind only git-commit (~51) and thirdparty-api-integration-test (~62)
 - **Good SKILL.md cost-effectiveness** (~52 tok/1%) — comparable to git-commit (~51)
 - **Lean, effective references** — 4 reference files total ~2,800 tokens, each with a clear use case
 

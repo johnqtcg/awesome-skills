@@ -49,7 +49,7 @@ From a systematic review of 10 production-grade, high-quality skills, we can ext
 
 ### 6.1 Mandatory Gate Architecture
 
-Gates are the core quality mechanism in a skill: **if a prerequisite is not satisfied, execution must stop**. The number of gates varies from 4 (`postgresql-best-practise`) to 8 (`create-pr`).
+Gates are the core quality mechanism in a skill: **if a prerequisite is not satisfied, execution must stop**. The number and shape of gates vary by workflow complexity, from lighter skills such as `git-commit` to heavier ones such as `create-pr`.
 
 Common gate types:
 

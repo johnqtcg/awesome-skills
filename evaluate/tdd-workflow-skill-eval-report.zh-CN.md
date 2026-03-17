@@ -252,7 +252,7 @@ With-skill 的 Eval 3 报告列出了 4 个 residual risks：
 
 ### 5.4 与其他 Skill 效费比对比
 
-| 指标 | tdd-workflow | e2e-best-practise | thirdparty-api-integ | go-makefile-writer | git-commit |
+| 指标 | tdd-workflow | e2e-test | thirdparty-api-integration-test | go-makefile-writer | git-commit |
 |------|------|------|------|------|------|
 | SKILL.md Token | ~2,400 | ~1,800 | ~680 | ~1,960 | ~1,120 |
 | 典型加载 Token | ~3,600 | ~4,600 | ~2,050 | ~4,600 | ~1,120 |
@@ -262,8 +262,8 @@ With-skill 的 Eval 3 报告列出了 4 个 residual risks：
 
 **分析**:
 
-- **绝对提升第二高** (+46.2%) — 仅次于 e2e-best-practise 的 +48.7%
-- **典型加载效费比优秀** (~78 tok/1%) — 全系列第三，仅次于 git-commit (~51) 和 thirdparty-api-integ (~62)
+- **绝对提升第二高** (+46.2%) — 仅次于 e2e-test 的 +48.7%
+- **典型加载效费比优秀** (~78 tok/1%) — 全系列第三，仅次于 git-commit (~51) 和 thirdparty-api-integration-test (~62)
 - **SKILL.md 效费比良好** (~52 tok/1%) — 与 git-commit (~51) 接近
 - **参考资料精简高效** — 4 个参考文件总计 ~2,800 tokens，每个文件都有明确的使用场景
 
