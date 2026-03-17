@@ -5,6 +5,8 @@
 > 评估对象: `tech-doc-writer`
 ---
 
+`tech-doc-writer` 是一个面向工程文档写作、审查与改进的 skill，适合处理 runbook、故障排查文档、API 文档以及 RFC/ADR 风格的设计文档。它最突出的三个亮点是：先做文档类型分类和受众分析，让结构与深度对齐读者目标；通过元数据、结论前置、回滚路径和 SPA 标题等质量门禁，提高文档的可维护性与可用性；同时提供 review/improve 模式下的 scorecard、anti-examples 和结构化输出，使文档反馈更具体、可执行，而不是停留在泛泛建议上。
+
 ## 一、评估概览
 
 本次评估从**实际任务表现**和 **Token 效费比**两个维度对 tech-doc-writer skill 进行全面评审。设计 3 个覆盖不同文档类型和执行模式的场景（任务文档写作、故障排查文档写作、文档审查与改进），每个场景分别运行 with-skill 和 without-skill 配置，共 3 场景 × 2 配置 = 6 次独立 subagent 运行，对照 38 条 assertion 进行评分。

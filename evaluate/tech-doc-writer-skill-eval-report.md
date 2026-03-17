@@ -5,6 +5,8 @@
 > Evaluation subject: `tech-doc-writer`
 ---
 
+`tech-doc-writer` is a technical-writing skill for drafting, reviewing, and improving structured engineering documents such as runbooks, troubleshooting guides, API docs, and RFC/ADR-style design docs. Its three main strengths are: document-type classification and audience analysis up front, so structure and depth match the reader’s goal; quality gates for metadata, conclusion-first writing, rollback paths, and SPA titles, which make the output more maintainable and easier to use; and review/improve workflows with scorecards, anti-examples, and structured output, so documentation feedback is concrete rather than vague.
+
 ## 1. Evaluation Overview
 
 This evaluation reviews the tech-doc-writer skill along two dimensions: **actual task performance** and **token cost-effectiveness**. It uses 3 scenarios covering different document types and execution modes (task-document writing, troubleshooting-document writing, and document review/improvement). Each scenario was run with both with-skill and without-skill configurations, for 3 scenarios x 2 configs = 6 independent subagent runs, scored against 38 assertions.

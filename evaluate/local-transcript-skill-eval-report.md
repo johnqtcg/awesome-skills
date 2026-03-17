@@ -6,6 +6,8 @@
 
 ---
 
+`local-transcript` is a local media transcription skill for turning audio and video files into cleaned final transcripts in `txt`, `pdf`, or `docx` form. Its three main strengths are: a practical end-to-end pipeline that combines fast local ASR with LLM proofreading instead of stopping at raw recognition output; Chinese-focused cleanup such as Simplified Chinese conversion, punctuation normalization, paragraphing, and proper-noun consistency; and real deliverables suitable for reuse, rather than intermediate transcripts that still require heavy manual editing.
+
 ## 1. Evaluation Summary
 
 This evaluation reviews the `local-transcript` skill across two dimensions: **real task performance** and **token cost efficiency**. We used one real 30-minute Chinese political commentary video as the test input, ran both **with-skill** (full pipeline) and **without-skill** (bare ASR) configurations in real execution, and scored them automatically with 17 programmatic assertions.
