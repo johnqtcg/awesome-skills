@@ -1,0 +1,16 @@
+{
+  "id": "GOLDEN-004",
+  "title": "User request with unclear audience triggers degradation",
+  "user_request": "Document our caching layer",
+  "expected_mode": "Write",
+  "expected_doc_type": null,
+  "gates_required": ["Gate 2", "Gate 3"],
+  "skill_must_contain": [
+    "STOP and ASK",
+    "Degradation Strategy",
+    "Level 2",
+    "Partial",
+    "assumed"
+  ],
+  "notes": "Ambiguous request — could be concept, task, or reference doc. Gate 2 should trigger STOP and ASK. If audience cannot be inferred, degrade to Level 2."
+}

@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-001",
+  "title": "Write an API deployment runbook",
+  "user_request": "Help me write a deployment runbook for our REST API service",
+  "expected_mode": "Write",
+  "expected_doc_type": "task",
+  "gates_required": [
+    "Gate 1",
+    "Gate 2",
+    "Gate 3"
+  ],
+  "skill_must_contain": [
+    "Task doc",
+    "copy-paste-runnable",
+    "Prerequisites",
+    "Expected output",
+    "Verification",
+    "Rollback",
+    "templates.md"
+  ],
+  "reference_to_load": "templates.md",
+  "notes": "Task doc is the most demanding type — requires all 5 minimum viable sections"
+}

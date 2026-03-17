@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-003",
+  "title": "Write a design doc for a mixed audience (leader + dev + QA)",
+  "user_request": "Write an RFC for migrating to event-driven architecture, readers include VP of Eng and the dev team",
+  "expected_mode": "Write",
+  "expected_doc_type": "design",
+  "gates_required": [
+    "Gate 1",
+    "Gate 2",
+    "Gate 3"
+  ],
+  "skill_must_contain": [
+    "Design doc",
+    "mixed",
+    "funnel",
+    "Alternatives Comparison",
+    "Non-Goals",
+    "STOP and ASK"
+  ],
+  "reference_to_load": "writing-quality-guide.md",
+  "reference_section": "§Funnel Structure",
+  "notes": "Mixed audience triggers funnel structure; design doc requires alternatives comparison"
+}

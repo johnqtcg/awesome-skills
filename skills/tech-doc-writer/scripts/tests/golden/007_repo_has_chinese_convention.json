@@ -1,0 +1,20 @@
+{
+  "id": "GOLDEN-007",
+  "title": "Repo has existing Chinese doc conventions",
+  "user_request": "Write a concept doc about our connection pool",
+  "expected_mode": "Write",
+  "expected_doc_type": "concept",
+  "gates_required": [
+    "Gate 1",
+    "Gate 2",
+    "Gate 3"
+  ],
+  "skill_must_contain": [
+    "Repo Context Scan",
+    "Adapt to what exists",
+    "consistency with the repo trumps",
+    "Chinese",
+    "Concept doc"
+  ],
+  "notes": "Gate 1 repo scan detects Chinese convention — skill must adapt language rather than using defaults"
+}

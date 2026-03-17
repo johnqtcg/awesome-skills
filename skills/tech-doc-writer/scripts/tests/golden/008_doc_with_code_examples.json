@@ -1,0 +1,23 @@
+{
+  "id": "GOLDEN-008",
+  "title": "Document contains code examples requiring quality enforcement",
+  "user_request": "Write a quickstart guide for our Go SDK",
+  "expected_mode": "Write",
+  "expected_doc_type": "task",
+  "gates_required": [
+    "Gate 1",
+    "Gate 2",
+    "Gate 3"
+  ],
+  "skill_must_contain": [
+    "copy-paste-runnable",
+    "self-contained",
+    "expected output",
+    "failure path",
+    "writing-quality-guide.md",
+    "Code Examples"
+  ],
+  "reference_to_load": "writing-quality-guide.md",
+  "reference_section": "§Code Examples",
+  "notes": "Code-heavy doc must load §Code Examples from quality guide. All code must be runnable with error handling."
+}

@@ -1,0 +1,18 @@
+{
+  "id": "GOLDEN-002",
+  "title": "Review an existing troubleshooting document",
+  "user_request": "Review this incident report and tell me what's missing",
+  "expected_mode": "Review",
+  "expected_doc_type": "troubleshooting",
+  "gates_required": ["Gate 2", "Gate 3"],
+  "skill_must_contain": [
+    "Review",
+    "Troubleshooting doc",
+    "Quality Scorecard",
+    "Critical",
+    "before/after",
+    "Evidence over opinion"
+  ],
+  "reference_to_load": "writing-quality-guide.md",
+  "notes": "Review mode must load §Review Patterns and produce severity-grouped findings"
+}

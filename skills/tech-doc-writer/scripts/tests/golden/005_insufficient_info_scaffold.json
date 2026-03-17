@@ -1,0 +1,16 @@
+{
+  "id": "GOLDEN-005",
+  "title": "Insufficient info triggers scaffold degradation (Level 3)",
+  "user_request": "Write documentation for the payment service",
+  "expected_mode": "Write",
+  "expected_doc_type": null,
+  "gates_required": ["Gate 0", "Gate 2", "Gate 3"],
+  "skill_must_contain": [
+    "Degradation Strategy",
+    "Level 3",
+    "Scaffold",
+    "TODO",
+    "Never present Level 2/3 output as if it were Level 1"
+  ],
+  "notes": "Unknown system with unspecified scope — skill must generate skeleton with TODO placeholders, not fabricate content (Gate 0 integrity)"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "GOLDEN-006",
+  "title": "Improve an existing doc with minimal diff",
+  "user_request": "This runbook has some issues, can you fix it?",
+  "expected_mode": "Improve",
+  "expected_doc_type": "task",
+  "gates_required": ["Gate 2", "Gate 3"],
+  "skill_must_contain": [
+    "Improve",
+    "Minimal-diff",
+    "Quality Scorecard",
+    "Critical",
+    "Preserve the author"
+  ],
+  "notes": "Improve mode must change only what the scorecard flags — not rewrite passing sections"
+}

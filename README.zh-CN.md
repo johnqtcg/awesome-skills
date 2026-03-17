@@ -29,9 +29,9 @@
 
 - 项目定位：高质量 skill 方法论 + skill 资产 + 评审 + 输出样例。
 - 文档入口：[`bestpractice/README.zh-CN.md`](bestpractice/README.zh-CN.md)。
-- Skill 数量：`16` 个（见 [`skills/`](skills)）。
-- 评审报告数量：`32` 份，中英双语成对存在（见 [`evaluate/`](evaluate)）。
-- 输出样例目录：`10` 个（见 [`outputexample/`](outputexample)）。
+- Skill 数量：`18` 个（见 [`skills/`](skills)）。
+- 评审报告数量：`36` 份，中英双语成对存在（见 [`evaluate/`](evaluate)）。
+- 输出样例目录：`12` 个（见 [`outputexample/`](outputexample)）。
 
 这个仓库的核心目标不是“展示 prompt 怎么写”，而是回答三个更难的问题：
 
@@ -233,6 +233,14 @@ CI 触发
 | --- | --- | --- |
 | `google-search` | 用 Google 检索做资料搜集、事实验证和来源核查 | 强调查询分类、证据链、交叉核验和可复用搜索串 |
 | `deep-research` | 做带来源支撑的深度研究与分析 | 强制内容抽取、交叉验证和抗幻觉检查，适合研究、比较和趋势分析 |
+
+### 技术文档与写作
+
+这一类 skill 关注把工程知识沉淀成团队可以直接复用、持续维护的技术文档。
+
+| Skill 名称 | 功能用途 | 主要亮点 / 优势 |
+| --- | --- | --- |
+| `tech-doc-writer` | 编写、审查和改进技术文档，如 runbook、故障排查文档、API 文档和 RFC/ADR 风格设计文档 | 强调文档类型分类、受众分析、质量门禁和防陈旧机制，产出更清晰、可维护的技术文档 |
 
 ### 工具执行与任务自动化
 

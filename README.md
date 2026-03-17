@@ -29,9 +29,9 @@ This is not just a collection of `SKILL.md` examples. It is a full closed loop f
 
 - Project scope: high-quality skill methodology + skill assets + review reports + output examples.
 - Main documentation entry: [bestpractice/README.md](bestpractice/README.md).
-- Number of skills: `16` (see [skills/](skills)).
-- Number of review reports: `32`, paired in Chinese and English (see [evaluate/](evaluate)).
-- Number of output example directories: `10` (see [outputexample/](outputexample)).
+- Number of skills: `18` (see [skills/](skills)).
+- Number of review reports: `36`, paired in Chinese and English (see [evaluate/](evaluate)).
+- Number of output example directories: `12` (see [outputexample/](outputexample)).
 
 The core goal of this repository is not to show how to write prompts. It is to answer three harder questions:
 
@@ -224,6 +224,14 @@ These skills are suited for information gathering, fact-checking, comparison, an
 | --- | --- | --- |
 | `google-search` | Use Google-style search for information gathering, fact verification, and source checking | Emphasizes query classification, evidence chains, cross-checking, and reusable search strings |
 | `deep-research` | Produce source-backed deep research and analysis | Enforces content extraction, cross-verification, and anti-hallucination checks for research and comparison work |
+
+### Technical Docs and Writing
+
+These skills focus on turning engineering knowledge into maintainable documents that teams can reuse directly.
+
+| Skill Name | Purpose | Main strengths / advantages |
+| --- | --- | --- |
+| `tech-doc-writer` | Write, review, and improve technical documents such as runbooks, troubleshooting guides, API docs, and RFC/ADR-style design docs | Uses type classification, audience analysis, quality gates, and anti-staleness rules to produce clearer, more maintainable technical documentation |
 
 ### Tool Execution and Task Automation
 
