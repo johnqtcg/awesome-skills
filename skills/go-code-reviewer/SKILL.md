@@ -102,6 +102,7 @@ Before recommending version-specific features, check the project's minimum Go ve
 - Do NOT recommend features unavailable at the project's Go version as findings.
 - If `go.mod` is not found or not readable, state `Go version: unknown` and annotate version-specific recommendations with their minimum required version.
 Version-gated features (non-exhaustive):
+
 | Feature | Minimum Go |
 |---------|-----------|
 | Generics | 1.18 |
@@ -137,6 +138,7 @@ Classification method:
 - If the finding is on an unchanged line within a diff file, or in a file not in the diff (reached via impact-radius expansion) → `pre-existing`.
 - If no diff context is available (e.g., reviewing a file or package directly without a PR) → `uncertain`.
 Actionability by origin:
+
 | Origin | Merge-blocking? | Action |
 |--------|----------------|--------|
 | `introduced` | Yes | Must fix or explicitly accept before merge. Counts toward SLA. |
@@ -477,6 +479,7 @@ bash "<path-to-skill>/scripts/run_regression.sh"
 
 ## Appendix: Reference Loading Triggers
 **This is a mandatory gate** (see §7 Reference Loading Gate). Use the table below as a compact trigger map; detailed patterns live in the reference files themselves.
+
 | Reference | Representative triggers |
 |---|---|
 | `references/pr-review-quick-checklist.md` | Any PR or diff review |

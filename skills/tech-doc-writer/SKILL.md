@@ -190,6 +190,7 @@ A stale doc is worse than no doc. When writing, also establish maintenance:
 **Status lifecycle**: `active` → `needs-update` → `active` (revised) or `deprecated` (with replacement link).
 
 **Periodic review cadence**:
+
 | Frequency | Cycle | Example |
 |-----------|-------|---------|
 | High (release, deploy, incident) | Monthly | Release runbook |

@@ -67,6 +67,7 @@ func TestOrderService_Integration(t *testing.T) {
 **Reason**: Service address and authentication method are unknown.
 
 **Required variables** (not yet determined):
+
 | Variable | Purpose | How to obtain |
 |----------|---------|---------------|
 | `API_BASE_URL` | Service endpoint | Check deployment config or service registry |
