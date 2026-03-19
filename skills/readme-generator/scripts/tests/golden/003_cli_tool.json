@@ -1,0 +1,41 @@
+{
+  "id": "003_cli_tool",
+  "description": "CLI tool with cmd/csvtool, Makefile, end-to-end example required",
+  "repo_signals": {
+    "has_makefile": true,
+    "has_go_mod": true,
+    "go_version": "1.22",
+    "has_env_example": false,
+    "has_github_actions": true,
+    "has_license": true,
+    "license_type": "MIT",
+    "has_cmd_dir": true,
+    "cmd_name": "csvtool",
+    "top_level_dirs": 5,
+    "project_type": "cli",
+    "visibility": "public"
+  },
+  "expected_template": "Template C: CLI Tool",
+  "expected_sections": [
+    "Installation",
+    "Quick Start",
+    "Commands",
+    "Flags",
+    "Common Commands",
+    "Testing",
+    "License"
+  ],
+  "expected_badge_types": ["CI", "Go Version"],
+  "expected_gates": [
+    "Audience and Language Gate",
+    "Project Type Routing",
+    "Command Verifiability Gate"
+  ],
+  "skill_rules_that_must_fire": [
+    "Project Type Routing → CLI",
+    "End-to-End Example Rule → input command + output result",
+    "Badge Strategy → CI + Go Version",
+    "Command priority → Makefile first",
+    "Evidence Mapping Output"
+  ]
+}

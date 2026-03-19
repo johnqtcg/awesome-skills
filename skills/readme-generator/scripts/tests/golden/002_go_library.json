@@ -1,0 +1,40 @@
+{
+  "id": "002_go_library",
+  "description": "Go library with exported pkg, no cmd/, no Makefile — library template",
+  "repo_signals": {
+    "has_makefile": false,
+    "has_go_mod": true,
+    "go_version": "1.21",
+    "has_env_example": false,
+    "has_github_actions": true,
+    "has_license": true,
+    "license_type": "Apache-2.0",
+    "has_cmd_dir": false,
+    "has_exported_pkg": true,
+    "top_level_dirs": 4,
+    "project_type": "library",
+    "visibility": "public"
+  },
+  "expected_template": "Template B: Library",
+  "expected_sections": [
+    "Badges",
+    "Installation",
+    "Quick Usage",
+    "API Overview",
+    "Testing",
+    "License"
+  ],
+  "expected_badge_types": ["CI", "Go Version", "License"],
+  "expected_gates": [
+    "Audience and Language Gate",
+    "Project Type Routing",
+    "Command Verifiability Gate"
+  ],
+  "skill_rules_that_must_fire": [
+    "Project Type Routing → Library",
+    "Badge Strategy → CI + Go Version + License",
+    "Command priority → go test (no Makefile)",
+    "Evidence Mapping Output",
+    "End-to-End Example Rule does not apply (library)"
+  ]
+}

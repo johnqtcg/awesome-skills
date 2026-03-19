@@ -1,0 +1,4 @@
+interface:
+  display_name: "Update Doc"
+  short_description: "Keep repository docs aligned with current code"
+  default_prompt: "Use $update-doc to update README, docs, or codemaps in lightweight mode or full mode with evidence-backed changes and scoped documentation patches."

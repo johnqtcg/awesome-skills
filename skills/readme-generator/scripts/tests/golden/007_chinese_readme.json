@@ -1,0 +1,34 @@
+{
+  "id": "007_chinese_readme",
+  "description": "Chinese-language Go service README — bilingual rules must apply",
+  "repo_signals": {
+    "has_makefile": true,
+    "has_go_mod": true,
+    "go_version": "1.22",
+    "has_env_example": true,
+    "has_github_actions": true,
+    "existing_docs_language": "Chinese",
+    "top_level_dirs": 6,
+    "project_type": "service",
+    "visibility": "public"
+  },
+  "expected_template": "Template A: Service",
+  "expected_language": "Chinese",
+  "chinese_rules": [
+    "Section headings in Chinese",
+    "Keep English for package names, commands, file paths",
+    "No double-language headings",
+    "Commands in English with Chinese comments when non-obvious"
+  ],
+  "expected_gates": [
+    "Audience and Language Gate",
+    "Project Type Routing",
+    "Command Verifiability Gate"
+  ],
+  "skill_rules_that_must_fire": [
+    "Audience and Language Gate → Chinese",
+    "Chinese / Bilingual README Guidelines",
+    "Project Type Routing → Service",
+    "Evidence Mapping Output"
+  ]
+}

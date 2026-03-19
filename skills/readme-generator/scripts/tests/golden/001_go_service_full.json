@@ -1,0 +1,47 @@
+{
+  "id": "001_go_service_full",
+  "description": "Go backend service with Makefile, .env.example, GitHub Actions, LICENSE, CONTRIBUTING.md — full template",
+  "repo_signals": {
+    "has_makefile": true,
+    "has_go_mod": true,
+    "go_version": "1.22",
+    "has_env_example": true,
+    "has_github_actions": true,
+    "has_license": true,
+    "license_type": "MIT",
+    "has_contributing": true,
+    "has_codecov": true,
+    "has_cmd_dir": true,
+    "top_level_dirs": 8,
+    "project_type": "service",
+    "visibility": "public"
+  },
+  "expected_template": "Template A: Service",
+  "expected_sections": [
+    "Badges",
+    "Project overview",
+    "Quick Start",
+    "Project Structure",
+    "Configuration",
+    "Common Commands",
+    "Testing and Quality",
+    "Contributing",
+    "License",
+    "Documentation Maintenance"
+  ],
+  "expected_badge_types": ["CI", "Coverage", "Go Version", "License"],
+  "expected_gates": [
+    "Audience and Language Gate",
+    "Project Type Routing",
+    "Command Verifiability Gate"
+  ],
+  "expected_scorecard_tier": "Critical: 4/4",
+  "skill_rules_that_must_fire": [
+    "Project Type Routing → Service",
+    "Badge Strategy → CI + Coverage + Go Version + License",
+    "Command priority → Makefile first",
+    "Evidence Mapping Output",
+    "Community and Governance Files → LICENSE + CONTRIBUTING.md",
+    "Scorecard (3-Tier)"
+  ]
+}

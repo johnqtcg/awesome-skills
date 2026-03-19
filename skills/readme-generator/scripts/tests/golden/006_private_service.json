@@ -1,0 +1,30 @@
+{
+  "id": "006_private_service",
+  "description": "Private repo Go service — badge fallback must trigger, no external badge URLs",
+  "repo_signals": {
+    "has_makefile": true,
+    "has_go_mod": true,
+    "go_version": "1.22",
+    "has_env_example": true,
+    "has_github_actions": true,
+    "has_license": true,
+    "license_type": "proprietary",
+    "top_level_dirs": 7,
+    "project_type": "service",
+    "visibility": "private"
+  },
+  "expected_template": "Template A: Service",
+  "expected_badge_types": [],
+  "badge_fallback_required": true,
+  "expected_gates": [
+    "Audience and Language Gate",
+    "Project Type Routing",
+    "Command Verifiability Gate"
+  ],
+  "skill_rules_that_must_fire": [
+    "Project Type Routing → Service",
+    "Badge Strategy → private-repo fallback note",
+    "Command priority → Makefile first",
+    "Evidence Mapping Output"
+  ]
+}

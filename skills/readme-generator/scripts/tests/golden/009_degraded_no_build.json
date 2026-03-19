@@ -1,0 +1,33 @@
+{
+  "id": "009_degraded_no_build",
+  "description": "Repo with only markdown files, no build system, no entry point — degraded output",
+  "repo_signals": {
+    "has_makefile": false,
+    "has_go_mod": false,
+    "has_package_json": false,
+    "has_entry_point": false,
+    "top_level_dirs": 3,
+    "total_files": 8,
+    "file_types": ["md", "txt"],
+    "project_type": "unknown",
+    "visibility": "private"
+  },
+  "expected_template": "none — degraded output",
+  "expected_sections": [
+    "Project overview"
+  ],
+  "expected_output_fields": {
+    "degraded": true,
+    "missing_evidence": ["no build system", "no entry point"]
+  },
+  "expected_gates": [
+    "Audience and Language Gate",
+    "Project Type Routing",
+    "Evidence Completeness Gate"
+  ],
+  "skill_rules_that_must_fire": [
+    "Evidence Completeness Gate → degraded",
+    "Output Contract → degraded: true",
+    "Not found in repo for missing items"
+  ]
+}

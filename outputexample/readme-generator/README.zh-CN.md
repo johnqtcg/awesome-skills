@@ -29,9 +29,9 @@
 
 - 项目定位：高质量 skill 方法论 + skill 资产 + 评审 + 输出样例。
 - 文档入口：[`bestpractice/README.zh-CN.md`](bestpractice/README.zh-CN.md)。
-- Skill 数量：`20` 个（见 [`skills/`](skills)）。
-- 评审报告数量：`40` 份，中英双语成对存在（见 [`evaluate/`](evaluate)）。
-- 输出样例目录：`13` 个（见 [`outputexample/`](outputexample)）。
+- Skill 数量：`18` 个（见 [`skills/`](skills)）。
+- 评审报告数量：`36` 份，中英双语成对存在（见 [`evaluate/`](evaluate)）。
+- 输出样例目录：`12` 个（见 [`outputexample/`](outputexample)）。
 
 这个仓库的核心目标不是“展示 prompt 怎么写”，而是回答三个更难的问题：
 
@@ -240,8 +240,6 @@ CI 触发
 
 | Skill 名称 | 功能用途 | 主要亮点 / 优势 |
 | --- | --- | --- |
-| `update-doc` | 让仓库文档与最新代码保持同步 | 强调按作用域更新文档、docs drift 检查、项目类型路由，以及基于证据同步 README 和相关文档 |
-| `readme-generator` | 基于仓库证据生成或重构项目 `README.md` | 强调仓库形态识别、证据驱动的结构组织、可维护 README 模式，以及对 service、library、CLI、monorepo 等项目的适配 |
 | `tech-doc-writer` | 编写、审查和改进技术文档，如 runbook、故障排查文档、API 文档和 RFC/ADR 风格设计文档 | 强调文档类型分类、受众分析、质量门禁和防陈旧机制，产出更清晰、可维护的技术文档 |
 
 ### 工具执行与任务自动化

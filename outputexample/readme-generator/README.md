@@ -29,9 +29,9 @@ This is not just a collection of `SKILL.md` examples. It is a full closed loop f
 
 - Project scope: high-quality skill methodology + skill assets + review reports + output examples.
 - Main documentation entry: [bestpractice/README.md](bestpractice/README.md).
-- Number of skills: `20` (see [skills/](skills)).
-- Number of review reports: `40`, paired in Chinese and English (see [evaluate/](evaluate)).
-- Number of output example directories: `13` (see [outputexample/](outputexample)).
+- Number of skills: `18` (see [skills/](skills)).
+- Number of review reports: `36`, paired in Chinese and English (see [evaluate/](evaluate)).
+- Number of output example directories: `12` (see [outputexample/](outputexample)).
 
 The core goal of this repository is not to show how to write prompts. It is to answer three harder questions:
 
@@ -231,8 +231,6 @@ These skills focus on turning engineering knowledge into maintainable documents 
 
 | Skill Name | Purpose | Main strengths / advantages |
 | --- | --- | --- |
-| `update-doc` | Keep repository documentation aligned with the latest code | Focuses on scoped doc patches, docs-drift checks, project-type routing, and evidence-backed synchronization of README and related docs |
-| `readme-generator` | Generate or refactor project `README.md` files using repository evidence | Emphasizes repository-shape detection, evidence-based structure, maintainable README patterns, and adaptation across service, library, CLI, and monorepo projects |
 | `tech-doc-writer` | Write, review, and improve technical documents such as runbooks, troubleshooting guides, API docs, and RFC/ADR-style design docs | Uses type classification, audience analysis, quality gates, and anti-staleness rules to produce clearer, more maintainable technical documentation |
 
 ### Tool Execution and Task Automation

@@ -1,0 +1,46 @@
+{
+  "id": "005_lightweight_internal",
+  "description": "Tiny internal repo — 3 Go files, no CI, no Makefile, no LICENSE — lightweight mode",
+  "repo_signals": {
+    "has_makefile": false,
+    "has_go_mod": true,
+    "go_version": "1.22",
+    "has_env_example": false,
+    "has_github_actions": false,
+    "has_license": false,
+    "has_cmd_dir": false,
+    "top_level_dirs": 2,
+    "total_files": 5,
+    "project_type": "lightweight",
+    "visibility": "private",
+    "audience": "internal"
+  },
+  "expected_template": "Template E: Lightweight",
+  "expected_sections": [
+    "Project overview",
+    "Quick Start",
+    "Common Commands",
+    "Project Structure",
+    "Testing",
+    "Documentation Maintenance"
+  ],
+  "sections_that_must_be_absent": [
+    "Badges",
+    "Architecture",
+    "Deployment",
+    "API Documentation",
+    "Contributing"
+  ],
+  "expected_badge_types": [],
+  "expected_gates": [
+    "Audience and Language Gate",
+    "Project Type Routing",
+    "Command Verifiability Gate"
+  ],
+  "skill_rules_that_must_fire": [
+    "Lightweight Template Mode triggered",
+    "Badge Strategy → skip (no CI, private repo)",
+    "Command priority → go toolchain (no Makefile)",
+    "Not found in repo for missing items"
+  ]
+}

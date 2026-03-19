@@ -1,0 +1,40 @@
+{
+  "id": "004_monorepo",
+  "description": "Monorepo with apps/ and packages/, go.work, root Makefile, no LICENSE",
+  "repo_signals": {
+    "has_makefile": true,
+    "has_go_mod": false,
+    "has_go_work": true,
+    "has_env_example": false,
+    "has_github_actions": true,
+    "has_license": false,
+    "has_apps_dir": true,
+    "has_packages_dir": true,
+    "top_level_dirs": 6,
+    "project_type": "monorepo",
+    "visibility": "public"
+  },
+  "expected_template": "Template D: Monorepo",
+  "expected_sections": [
+    "Badges",
+    "Repository Overview",
+    "Quick Start",
+    "Shared Commands",
+    "Project Structure",
+    "Adding a New Module",
+    "License"
+  ],
+  "expected_badge_types": ["CI"],
+  "expected_gates": [
+    "Audience and Language Gate",
+    "Project Type Routing",
+    "Command Verifiability Gate"
+  ],
+  "skill_rules_that_must_fire": [
+    "Project Type Routing → Monorepo",
+    "Monorepo Rules → overview table + link to sub-READMEs",
+    "Badge Strategy → CI only",
+    "Community and Governance Files → LICENSE missing note",
+    "Evidence Mapping Output"
+  ]
+}
