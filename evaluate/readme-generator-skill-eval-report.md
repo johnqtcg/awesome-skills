@@ -6,6 +6,8 @@
 
 ---
 
+`readme-generator` is a repository-aware README generation and refactoring skill for producing maintainable, evidence-backed project homepages across services, libraries, CLI tools, and monorepos. Its three main strengths are: project-type routing and template selection, so structure matches the real repository shape instead of generic documentation patterns; evidence mapping, badge detection, and no-fabrication rules, which keep each section grounded in actual files, commands, and configs; and structured output contracts plus maintenance guidance, which make the resulting README easier to review, sustain, and keep aligned with future code changes.
+
 ## 1. Evaluation Overview
 
 This evaluation reviews the `readme-generator` skill along two dimensions: **actual task performance** and **token cost-effectiveness**. It uses 3 progressively more complex README generation / refactoring scenarios: creating a README from scratch for a Go service, creating one for a Go CLI tool, and refactoring a flawed README. Each scenario was run with both with-skill and without-skill configurations, for 3 scenarios x 2 configs = 6 independent subagent runs, scored against 42 assertions.

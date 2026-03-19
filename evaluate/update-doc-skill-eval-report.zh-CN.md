@@ -6,6 +6,8 @@
 
 ---
 
+`update-doc` 是一个在代码变更后同步仓库文档的 skill，适合修补或重建 README、codemap 以及相关工程文档。它的三个主要亮点是：通过项目类型路由和 lightweight/full 两种输出模式，让文档更新范围贴合真实仓库形态和变更规模，避免过度重写；通过 evidence-backed diff、scorecard 和 codemap contract，把文档修改变成可追溯、可审查的更新，而不是临时性补丁；以及通过 CI drift guardrails 和维护指引，降低文档在后续迭代中再次落后于代码的概率。
+
 ## 一、评估概览
 
 本次评估从**实际任务表现**和 **Token 效费比**两个维度对 update-doc skill 进行全面评审。设计 3 个递进复杂度的文档更新场景（CLI 工具轻量 README 修补、Service/Backend 全量 README 更新、Monorepo Codemap 生成+README 重构），每个场景分别运行 with-skill 和 without-skill 配置，共 3 场景 × 2 配置 = 6 次独立 subagent 运行，对照 42 条 assertion 进行评分。

@@ -6,6 +6,8 @@
 
 ---
 
+`readme-generator` 是一个面向仓库结构的 README 生成与重构 skill，用于为 service、library、CLI、monorepo 等项目产出可维护、基于证据的项目首页文档。它的三个主要亮点是：先做项目类型路由和模板选择，让 README 结构贴合真实仓库形态，而不是落入通用化套板；通过 Evidence Mapping、badge 检测和 no-fabrication 规则，把各 section 锚定到真实文件、命令和配置，减少凭空补全；以及提供结构化 Output Contract 和维护说明，让生成结果更易评审、更易长期维护，也更容易随着代码演进持续同步。
+
 ## 一、评估概览
 
 本次评估从**实际任务表现**和 **Token 效费比**两个维度对 readme-generator skill 进行全面评审。设计 3 个递进复杂度的 README 生成/重构场景（Go 服务从零生成、Go CLI 工具生成、问题 README 重构），每个场景分别运行 with-skill 和 without-skill 配置，共 3 场景 × 2 配置 = 6 次独立 subagent 运行，对照 42 条 assertion 进行评分。

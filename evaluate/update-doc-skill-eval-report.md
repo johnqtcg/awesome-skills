@@ -6,6 +6,8 @@
 
 ---
 
+`update-doc` is a documentation-synchronization skill for patching or rebuilding repository docs after code changes, including README files, codemaps, and related engineering documentation. Its three main strengths are: project-type routing plus lightweight/full output modes, which keep updates scoped to the actual repository shape and the size of the change; evidence-backed diffs, scorecards, and codemap contracts, which make documentation updates traceable instead of ad hoc; and CI drift guardrails plus maintenance guidance, which reduce the chance that documentation falls behind the code again after future changes.
+
 ## 1. Evaluation Overview
 
 This evaluation reviews the `update-doc` skill along two dimensions: **actual task performance** and **token cost-effectiveness**. It uses 3 progressively more complex documentation-update scenarios: a lightweight README patch for a CLI tool, a full README update for a backend service, and codemap generation plus README refactoring for a monorepo. Each scenario was run with both with-skill and without-skill configurations, for 3 scenarios x 2 configs = 6 independent subagent runs, scored against 42 assertions.
