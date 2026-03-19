@@ -117,6 +117,8 @@ Auto-select mode based on task signals, then state the selection in output:
 
 If the user explicitly requests a specific mode, use that mode.
 
+**Quick Mode Fast Path**: When signals clearly point to Quick mode (simple factual question, single-answer expected), collapse gates 1–8 into a single-line internal check and skip gate execution log in the output. Do NOT output per-gate logs for Quick mode — go straight to queries and conclusion.
+
 ### 7) Budget Control Gate
 
 Enforce bounded query budgets per mode:
@@ -149,6 +151,33 @@ After passing all gates:
 4. **Write the Answer** — Follow the Output Contract below.
 
 For high-conflict and high-change topics (wars, elections, disasters), read `references/high-conflict-topics.md` for stricter scope-locking and source-tiering.
+
+## Content Access Resilience
+
+`WebFetch` may fail to extract content from sites behind Cloudflare, AWS WAF, or JavaScript-heavy SPAs. When this happens:
+
+### Failure Detection
+
+Recognize blocked responses:
+- HTTP 403 Forbidden or empty body from a known-content page
+- Response contains "Just a moment...", "Checking your browser", "Enable JavaScript"
+- Extracted text is < 30 words from a page that should be content-rich
+
+### Fallback Chain
+
+When `WebFetch` fails, try these in order:
+
+1. **Firecrawl** — If the `firecrawl-scrape` skill is available, use it (handles JS rendering and anti-bot)
+2. **Snippet-only mode** — Use search snippets as evidence, but explicitly label: "Based on search snippet, not full page content"
+3. **Platform-specific** — Tell the user which platform to search directly (e.g., "This StackOverflow page requires browser access")
+
+### Reporting
+
+When degraded to snippet-only, the answer must:
+- Set degradation level to **Partial** (not Full)
+- State which sources could not be fully accessed
+- Lower confidence labels accordingly
+- Provide the direct URL so the user can verify manually
 
 ## Anti-Examples — DO NOT Do These
 
@@ -222,7 +251,7 @@ Every completed use of this skill must include the fields below. Fields are grad
 | 6 | **Source assessment** — credibility, gaps, stale dates, disagreements, confidence justification | MAY | SHOULD | MUST |
 | 7 | **Key numbers** — `value + date + confidence (High/Medium/Low) + source tier (Official/Primary/Third-party/OSINT/Adversary)` | MUST (if numbers exist) | MUST | MUST |
 | 8 | **Reusable queries** — copyable Google queries with precision + expansion variants | MUST (≥2) | MUST (≥3) | MUST (≥5) |
-| 9 | **Gate execution log** — one-line summary per gate (optional, recommended for Standard/Deep) | MAY | SHOULD | SHOULD |
+| 9 | **Gate execution log** — one-line summary per gate (skip for Quick, recommended for Standard/Deep) | SKIP | SHOULD | SHOULD |
 
 ## Load References Selectively
 
@@ -240,6 +269,10 @@ Every completed use of this skill must include the fields below. Fields are grad
 
 > Full worked examples with complete Output Contract fields: read `references/worked-examples.md`.
 
-**Example 1 — Quick mode**: "sync.Pool GC 回收?" → Gates pass → 2 queries (`site:go.dev`) → Full degradation → answer with `High` + `Official` labels + 2 reusable queries.
+### Example 1: Quick mode
 
-**Example 2 — Standard mode**: "MySQL 连接池配置" → Gates pass → 4/5 queries (EN + CN) → Full degradation → formula + pitfalls with `Medium-High` + `Mixed official + practitioner` labels + gate execution log.
+"sync.Pool GC 回收?" → Gates pass → Evidence chain: 1 official source → 2 queries (`site:go.dev`) → Full degradation → answer with `High` + `Official` labels + 2 reusable queries.
+
+### Example 2: Standard mode
+
+"MySQL 连接池配置" → Gates pass → Evidence chain: 1 official + 1 practitioner → 4/5 queries (EN + CN) → Full degradation → formula + pitfalls with `Medium-High` + `Mixed official + practitioner` labels + gate execution log.

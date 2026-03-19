@@ -238,6 +238,31 @@ Every completed research must include these 9 sections (see `references/output-c
 | `validate` | URL format + citation quality checks | `--results`, `--findings`, `--check-live`, `--output` |
 | `report` | Generate markdown report | `--question`, `--results`, `--findings`, `--depth`, `--output` |
 
+## Search Fallback Strategy
+
+The `retrieve` subcommand uses DuckDuckGo Lite with retry logic and anti-bot resilience. When DDG is unavailable or rate-limited, use these fallbacks **in order**:
+
+1. **WebSearch tool** (built-in) — Use Claude Code's native `WebSearch` for the same queries
+2. **Firecrawl search** — If the `firecrawl-search` skill is available, use `firecrawl-search` for broader coverage
+3. **WebFetch + known URLs** — If you know the target domains, fetch them directly with `WebFetch`
+4. **Manual URL list** — Ask the user to provide relevant URLs, then use `fetch-content --url <URL>` to extract content
+
+When degrading to a fallback, report which search method was used in the "Method" section of the report.
+
+## Content Extraction Quality
+
+The `fetch-content` subcommand includes:
+
+- **Content-area detection**: Prioritizes `<main>` and `<article>` elements over full-page text
+- **Noise removal**: Strips `<nav>`, `<footer>`, `<aside>`, `<header>`, `<menu>` elements before extraction
+- **Anti-bot resilience**: Rotates realistic User-Agent strings, retries on 429/503 with exponential backoff, detects Cloudflare/WAF block pages
+- **Quality checks**: Flags pages with low content yield (likely JS-rendered) or WAF blocks in the error field
+
+When `fetch-content` reports errors for critical sources:
+- **WAF/anti-bot blocked**: Try `WebFetch` tool as fallback (it uses a real browser)
+- **Low content yield**: The page likely requires JavaScript — use `WebFetch` or `firecrawl-scrape`
+- **Network errors**: Retry after delay, or skip and document in gaps
+
 ## Bundled Assets
 
 - Script: `scripts/deep_research.py` (854 lines — retrieval, extraction, validation, codebase search, report)

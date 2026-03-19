@@ -8,6 +8,7 @@ import concurrent.futures
 import datetime as dt
 import html
 import json
+import random
 import re
 import shutil
 import subprocess
@@ -76,6 +77,44 @@ DEFAULT_REQUEST_DELAY = 1.0
 CONTENT_FETCH_WORKERS = 4
 CONTENT_MAX_BYTES = 512_000
 CONTENT_MAX_CHARS = 15_000
+
+# ---------------------------------------------------------------------------
+# Anti-bot resilience
+# ---------------------------------------------------------------------------
+
+USER_AGENTS = [
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:125.0) Gecko/20100101 Firefox/125.0",
+]
+
+MAX_RETRIES = 3
+RETRY_BACKOFF_BASE = 1.5
+RETRY_STATUS_CODES = {429, 502, 503, 504}
+
+CLOUDFLARE_MARKERS = [
+    "Checking if the site connection is secure",
+    "cf-browser-verification",
+    "Enable JavaScript and cookies to continue",
+    "Just a moment...",
+    "Attention Required! | Cloudflare",
+    "cf-challenge-running",
+    "ray ID",
+]
+
+# ---------------------------------------------------------------------------
+# Content extraction (enhanced)
+# ---------------------------------------------------------------------------
+
+NOISE_TAGS_RE = re.compile(
+    r"<(nav|footer|aside|header|menu)\b[^>]*>.*?</\1>",
+    re.IGNORECASE | re.DOTALL,
+)
+MAIN_TAG_RE = re.compile(r"<main\b[^>]*>(.*?)</main>", re.IGNORECASE | re.DOTALL)
+ARTICLE_TAG_RE = re.compile(r"<article\b[^>]*>(.*?)</article>", re.IGNORECASE | re.DOTALL)
+MIN_CONTENT_WORDS = 30
 
 
 @dataclass
@@ -166,6 +205,79 @@ def infer_source_type(hostname: str) -> str:
     if "docs." in host or host.startswith("docs."):
         return "official"
     return "website"
+
+
+# ---------------------------------------------------------------------------
+# Anti-bot helpers
+# ---------------------------------------------------------------------------
+
+def _random_ua() -> str:
+    """Pick a random realistic User-Agent string."""
+    return random.choice(USER_AGENTS)
+
+
+def _browser_headers(referer: str = "") -> Dict[str, str]:
+    """Build browser-like HTTP headers to reduce anti-bot blocking."""
+    headers: Dict[str, str] = {
+        "User-Agent": _random_ua(),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "identity",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+    }
+    if referer:
+        headers["Referer"] = referer
+    return headers
+
+
+def _is_blocked_response(body: str) -> bool:
+    """Detect common WAF/anti-bot block pages (Cloudflare, etc.)."""
+    lower = body.lower()
+    return any(marker.lower() in lower for marker in CLOUDFLARE_MARKERS)
+
+
+def _fetch_with_retry(
+    url: str,
+    *,
+    headers: Optional[Dict[str, str]] = None,
+    timeout: float = 15.0,
+    max_retries: int = MAX_RETRIES,
+    max_bytes: int = 0,
+) -> bytes:
+    """Fetch URL with retry, exponential backoff, and block detection."""
+    if headers is None:
+        headers = _browser_headers()
+
+    last_error: Optional[Exception] = None
+    for attempt in range(1, max_retries + 1):
+        if attempt > 1:
+            backoff = RETRY_BACKOFF_BASE ** (attempt - 1) + random.uniform(0, 0.5)
+            time.sleep(backoff)
+
+        req = urllib.request.Request(url, headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                body = resp.read(max_bytes) if max_bytes > 0 else resp.read()
+                text = body.decode("utf-8", errors="ignore")
+                if _is_blocked_response(text) and attempt < max_retries:
+                    last_error = Exception(
+                        f"blocked by WAF/anti-bot (attempt {attempt}/{max_retries})"
+                    )
+                    continue
+                return body
+        except urllib.error.HTTPError as exc:
+            if int(exc.code) in RETRY_STATUS_CODES and attempt < max_retries:
+                last_error = exc
+                continue
+            raise
+        except (urllib.error.URLError, OSError, TimeoutError) as exc:
+            if attempt < max_retries:
+                last_error = exc
+                continue
+            raise
+
+    raise last_error or Exception("max retries exceeded")
 
 
 # ---------------------------------------------------------------------------
@@ -273,16 +385,10 @@ def parse_duckduckgo_lite(html_text: str, query: str, limit: int) -> List[Search
 def fetch_duckduckgo_lite(query: str, limit: int, timeout: float) -> List[SearchResult]:
     encoded = urllib.parse.urlencode({"q": query})
     url = f"https://lite.duckduckgo.com/lite/?{encoded}"
-    req = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": "Mozilla/5.0 (compatible; deep-research/1.0)",
-            "Accept-Language": "en-US,en;q=0.9",
-        },
-    )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
-        body = resp.read().decode("utf-8", errors="ignore")
-    return parse_duckduckgo_lite(body, query, limit)
+    headers = _browser_headers(referer="https://lite.duckduckgo.com/")
+    body = _fetch_with_retry(url, headers=headers, timeout=timeout)
+    html_text = body.decode("utf-8", errors="ignore")
+    return parse_duckduckgo_lite(html_text, query, limit)
 
 
 def dedupe_results(results: Sequence[SearchResult]) -> List[SearchResult]:
@@ -301,8 +407,23 @@ def dedupe_results(results: Sequence[SearchResult]) -> List[SearchResult]:
 # ---------------------------------------------------------------------------
 
 def extract_text_from_html(raw_html: str, max_chars: int = CONTENT_MAX_CHARS) -> str:
-    """Strip scripts/style/tags and return readable text."""
-    text = STRIP_TAGS_RE.sub(" ", raw_html)
+    """Extract readable text with content-area detection and noise removal."""
+    # Step 1: Try to isolate main content area (<main> preferred, then <article>)
+    working_html = raw_html
+    for pattern in (MAIN_TAG_RE, ARTICLE_TAG_RE):
+        match = pattern.search(raw_html)
+        if match:
+            candidate = match.group(1)
+            plain = TAG_RE.sub(" ", candidate)
+            if len(plain.split()) >= MIN_CONTENT_WORDS:
+                working_html = candidate
+                break
+
+    # Step 2: Remove noise elements (nav, footer, aside, header, menu)
+    working_html = NOISE_TAGS_RE.sub(" ", working_html)
+
+    # Step 3: Remove script/style/noscript/head and strip tags
+    text = STRIP_TAGS_RE.sub(" ", working_html)
     text = TAG_RE.sub(" ", text)
     text = html.unescape(text)
     text = WHITESPACE_COLLAPSE_RE.sub(" ", text)
@@ -314,18 +435,12 @@ def extract_text_from_html(raw_html: str, max_chars: int = CONTENT_MAX_CHARS) ->
 
 
 def fetch_page_content(url: str, timeout: float = 15.0, max_bytes: int = CONTENT_MAX_BYTES) -> ContentResult:
-    """Fetch a URL and return extracted text content."""
-    req = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": "Mozilla/5.0 (compatible; deep-research/1.0)",
-            "Accept": "text/html,application/xhtml+xml,text/plain;q=0.9",
-            "Accept-Language": "en-US,en;q=0.9",
-        },
-    )
+    """Fetch a URL and return extracted text content with anti-bot resilience."""
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            raw = resp.read(max_bytes).decode("utf-8", errors="ignore")
+        raw_bytes = _fetch_with_retry(
+            url, headers=_browser_headers(), timeout=timeout, max_bytes=max_bytes,
+        )
+        raw = raw_bytes.decode("utf-8", errors="ignore")
     except Exception as exc:
         return ContentResult(url=url, title="", content="", word_count=0, error=str(exc))
 
@@ -336,7 +451,15 @@ def fetch_page_content(url: str, timeout: float = 15.0, max_bytes: int = CONTENT
 
     text = extract_text_from_html(raw)
     word_count = len(text.split())
-    return ContentResult(url=url, title=title, content=text, word_count=word_count)
+
+    # Quality check: detect likely blocked or JS-only pages
+    error = ""
+    if _is_blocked_response(raw):
+        error = "likely blocked by WAF/anti-bot (Cloudflare or similar)"
+    elif word_count < MIN_CONTENT_WORDS and len(raw) > 1000:
+        error = "low content yield (page may require JavaScript rendering)"
+
+    return ContentResult(url=url, title=title, content=text, word_count=word_count, error=error)
 
 
 def fetch_contents_parallel(
@@ -379,7 +502,7 @@ def validate_url_format(url: str) -> Tuple[bool, str]:
 
 def check_reachability(url: str, timeout: float) -> Tuple[bool, int, str]:
     """HEAD request with automatic GET fallback on 405."""
-    req = urllib.request.Request(url, method="HEAD", headers={"User-Agent": "deep-research/1.0"})
+    req = urllib.request.Request(url, method="HEAD", headers=_browser_headers())
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             status = getattr(resp, "status", 200)
@@ -393,7 +516,7 @@ def check_reachability(url: str, timeout: float) -> Tuple[bool, int, str]:
 
 
 def _check_reachability_get(url: str, timeout: float) -> Tuple[bool, int, str]:
-    req = urllib.request.Request(url, method="GET", headers={"User-Agent": "deep-research/1.0"})
+    req = urllib.request.Request(url, method="GET", headers=_browser_headers())
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             status = getattr(resp, "status", 200)

@@ -21,6 +21,21 @@ NO FIXES WITHOUT ROOT CAUSE INVESTIGATION FIRST
 
 If you haven't completed Phase 1, you cannot propose fixes.
 
+### Diagnostic Instrumentation Exemption
+
+Adding temporary code to collect evidence is **NOT a fix**. The following are explicitly permitted during Phase 1 investigation:
+
+- Print/log statements to trace data flow (`fmt.Println`, `console.log`, `print()`, `logging.debug()`)
+- Temporary breakpoints or debug flags
+- Probe scripts that exercise a specific code path
+- Temporary test harnesses to isolate behavior
+- System commands (`df -h`, `lsof`, `strace`, `tcpdump`) to observe runtime state
+
+**Rules:**
+- Mark all diagnostic code clearly (e.g., `// DEBUG-INVESTIGATION` or `# DIAG`)
+- Remove or revert all diagnostic instrumentation after root cause is identified
+- Diagnostic code must not change program behavior — it only observes
+
 ## When to Use
 
 Use for ANY technical issue:
@@ -92,7 +107,7 @@ Different bug types need different investigation strategies:
 | Logic error / wrong output | Trace data flow backward | Debugger, print statements, `references/root-cause-tracing.md` |
 | Race condition / flaky test | Identify shared mutable state | `-race` flag (Go), thread sanitizer, `references/condition-based-waiting.md` |
 | Memory leak / perf regression | Profile before hypothesizing | pprof (Go), Chrome DevTools, `time`/`perf` |
-| Environment / "works on my machine" | Diff environments systematically | `env`, Docker, dependency versions |
+| Environment / "works on my machine" | Diff environments systematically; run environment health check (Phase 1 step 4) | `df -h`, `free -h`, `lsof`, `dmesg`, `env`, Docker, dependency versions |
 | Third-party dependency change | Check changelogs and version diffs | `git log`, `go mod graph`, `npm ls` |
 | Build / compilation error | Read error message literally | Usually Phase 1 step 1 is sufficient |
 | Configuration error | Validate config propagation layer by layer | Phase 1 step 4 (multi-component evidence) |
@@ -162,7 +177,49 @@ You MUST complete each phase before proceeding to the next.
    - New dependencies, config changes
    - Environmental differences
 
-4. **Gather Evidence in Multi-Component Systems**
+4. **Check Environment Health**
+
+   **WHEN symptoms include: intermittent failures, timeouts, "works on my machine", silent process death, or no obvious code cause:**
+
+   Rule out infrastructure and OS-level issues BEFORE diving into code:
+
+   ```bash
+   # Disk space (full disk → cryptic build failures, DB corruption)
+   df -h
+
+   # Memory pressure / OOM kills (process vanishes, no app-level log)
+   free -h && dmesg | grep -i oom      # Linux
+   top -l 1 | head -20                 # macOS
+
+   # Port conflicts ("address already in use" or silent refusal)
+   lsof -i :<port>
+
+   # Network / DNS (timeouts that look like app hangs)
+   nslookup <hostname>
+   curl -v <endpoint>
+
+   # File descriptor exhaustion ("too many open files" deep in stack)
+   ulimit -a
+   ls /proc/<pid>/fd | wc -l           # Linux
+
+   # Recent system events (OOM kills, segfaults, crashes)
+   dmesg | tail -50                    # Linux
+   log show --last 10m --predicate 'eventMessage contains "killed"'  # macOS
+   ```
+
+   **Common hidden causes:**
+   | Symptom | Likely Infrastructure Cause |
+   |---------|---------------------------|
+   | Build fails with cryptic I/O error | Disk full |
+   | Process vanishes silently | OOM kill by kernel |
+   | Connection refused / bind error | Port conflict |
+   | Requests hang then timeout | DNS failure or network partition |
+   | "Too many open files" deep in stack | File descriptor exhaustion |
+   | Flaky tests on CI only | Resource limits, shared runners, Docker cgroup limits |
+
+   **If environment is unhealthy:** Fix the environment issue first — this is not a code bug.
+
+5. **Gather Evidence in Multi-Component Systems**
 
    **WHEN system has multiple components (CI → build → signing, API → service → database):**
 
@@ -200,7 +257,7 @@ You MUST complete each phase before proceeding to the next.
 
    **This reveals:** Which layer fails (secrets → workflow ✓, workflow → build ✗)
 
-5. **Trace Data Flow**
+6. **Trace Data Flow**
 
    **WHEN error is deep in call stack:**
 
@@ -212,7 +269,7 @@ You MUST complete each phase before proceeding to the next.
    - Keep tracing up until you find the source
    - Fix at source, not at symptom
 
-6. **Use Parallel Investigation for Complex Systems**
+7. **Use Parallel Investigation for Complex Systems**
 
    **WHEN system has 3+ components or investigation is slow:**
 
@@ -224,7 +281,7 @@ You MUST complete each phase before proceeding to the next.
    Parallel Track D: Check external dependencies / third-party status
    ```
 
-   **Why parallel:** Steps 1-5 above are often independent. Checking git history doesn't block reading logs. Running them in parallel cuts Phase 1 time by 50-70%.
+   **Why parallel:** Steps 1-6 above are often independent. Checking git history doesn't block reading logs. Running them in parallel cuts Phase 1 time by 50-70%.
 
    **Use the Agent tool** to spawn sub-agents for each track, then synthesize findings.
 

@@ -83,6 +83,48 @@ Tactics:
 - If Google returns nothing, tell the user which platform to search directly and suggest keywords
 - For technical topics, search both English and Chinese — English for official docs, Chinese for real-world experience reports from domestic teams
 
+## Chinese Domain Quality Filtering
+
+Chinese-language Google results are heavily polluted by SEO content farms that repost, translate, or auto-generate content. Actively filter these to avoid contaminating your evidence.
+
+### Known Low-Quality Domains (Exclude by Default)
+
+Add these `-site:` exclusions when Chinese search results are dominated by reposts:
+
+```
+-site:csdn.net -site:csdnimg.cn
+-site:php.cn
+-site:jb51.net
+-site:w3cschool.cn
+-site:itmag.cn -site:itcoder.net
+-site:codenong.com
+-site:cxybb.com
+-site:haicoder.net
+-site:codeleading.com
+-site:programmerall.com
+-site:shuzhiduo.com
+-site:icode9.com
+```
+
+### Quick Exclusion Template
+
+For technical Chinese searches, start with this base:
+
+```
+"关键词" -site:csdn.net -site:php.cn -site:jb51.net -site:w3cschool.cn (site:zhihu.com OR site:juejin.cn OR site:segmentfault.com)
+```
+
+### Content Farm Recognition Signs
+
+If a source was not pre-excluded, check for these red flags before trusting:
+- Article has no author name or profile
+- Identical or near-identical content found on 3+ other domains
+- Page is riddled with ads, auto-translated text, or keyword-stuffed headers
+- Publication date is missing or obviously faked
+- Code examples contain errors that a real developer would catch
+
+When you find content-farm results, switch to positive `site:` targeting (zhihu.com, juejin.cn, official docs) instead of trying to blacklist every farm
+
 ### Language-switching query pairs
 
 For topics with both global and local dimensions, prepare paired queries:

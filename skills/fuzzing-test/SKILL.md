@@ -97,11 +97,32 @@ Then:
 - round-trip
 - differential
 - multi-parameter
-3. Seed with `f.Add(...)`:
-- valid inputs
-- boundary values
-- malformed/known-bad inputs
-- structurally distinct cases
+3. Seed with `f.Add(...)` — mine real data, do NOT invent fake seeds:
+
+   **Seed mining strategy (run these before writing f.Add calls):**
+   ```
+   a. Grep existing unit tests for real inputs:
+      Grep for function calls to the fuzz target in *_test.go files
+      → extract literal arguments as seeds
+
+   b. Scan testdata/ directories:
+      Glob for testdata/**/* and testdata/fuzz/**/*
+      → use file contents as []byte seeds
+
+   c. Scan fixtures/examples in the repo:
+      Glob for fixtures/, examples/, samples/, *.golden
+      → use as domain-representative seeds
+
+   d. Extract from production-like config/data files:
+      Read any .json, .yaml, .proto, .csv files that match the target's input type
+      → use real payloads, not hallucinated ones
+   ```
+
+   **Seed categories (each f.Add should cover ≥3 of these):**
+   - valid inputs (mined from tests/testdata above)
+   - boundary values (empty, max-length, single-element)
+   - malformed/known-bad inputs (truncated, corrupted headers)
+   - structurally distinct cases (different branches/variants)
 4. Implement `FuzzXxx` in `*_test.go`.
 5. Add harness guards:
 - add a **Size guard**
@@ -241,10 +262,20 @@ func FuzzProcessRequest(f *testing.F) {
 ```
 
 Key points:
-- Use `json.Unmarshal` / `encoding/gob` / protobuf to convert `[]byte` → struct.
 - `t.Skip()` on unmarshal failure to let the fuzzer focus on structurally valid inputs.
 - Seed with multiple structurally distinct valid inputs to help coverage-guided exploration.
 - Bound `len(data)` to avoid spending time on enormous payloads.
+
+**Deserialization strategy (choose by performance need):**
+
+| Method | Speed | When to use |
+|--------|-------|-------------|
+| `json.Unmarshal` | Slow (~10-50 μs/op) | Quick prototyping, human-readable seeds, low-iteration targets |
+| `encoding/gob` | Medium (~2-10 μs/op) | Better throughput when seed readability is not needed |
+| `encoding/binary.Read` | Fast (~0.1-1 μs/op) | Performance-sensitive targets needing max `execs/sec` |
+| `go-fuzz-headers` `GenerateStruct` | Fast + structured | Complex structs with nested fields; see [go-fuzz-headers bridge](#go-fuzz-headers-bridge) below |
+
+For high-iteration fuzzing (targets <1 μs/call), prefer `encoding/binary` or `go-fuzz-headers` over JSON — the deserialization overhead can dominate total execution time and reduce bug-finding yield.
 
 ## Fuzz vs Property-Based Testing
 

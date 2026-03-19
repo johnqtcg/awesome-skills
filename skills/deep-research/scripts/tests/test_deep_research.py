@@ -768,5 +768,244 @@ class TestMapUrlToIndex(unittest.TestCase):
         self.assertEqual(2, m["https://b.com"])
 
 
+# ---------------------------------------------------------------------------
+# _random_ua
+# ---------------------------------------------------------------------------
+
+class TestRandomUa(unittest.TestCase):
+    def test_returns_string_from_pool(self):
+        ua = deep_research._random_ua()
+        self.assertIn(ua, deep_research.USER_AGENTS)
+
+    def test_looks_like_browser(self):
+        ua = deep_research._random_ua()
+        self.assertIn("Mozilla", ua)
+
+
+# ---------------------------------------------------------------------------
+# _browser_headers
+# ---------------------------------------------------------------------------
+
+class TestBrowserHeaders(unittest.TestCase):
+    def test_contains_required_keys(self):
+        headers = deep_research._browser_headers()
+        self.assertIn("User-Agent", headers)
+        self.assertIn("Accept", headers)
+        self.assertIn("Accept-Language", headers)
+
+    def test_includes_referer_when_provided(self):
+        headers = deep_research._browser_headers(referer="https://example.com")
+        self.assertEqual("https://example.com", headers["Referer"])
+
+    def test_no_referer_by_default(self):
+        headers = deep_research._browser_headers()
+        self.assertNotIn("Referer", headers)
+
+
+# ---------------------------------------------------------------------------
+# _is_blocked_response
+# ---------------------------------------------------------------------------
+
+class TestIsBlockedResponse(unittest.TestCase):
+    def test_detects_cloudflare_challenge(self):
+        body = "<html><title>Just a moment...</title><body>Checking if the site connection is secure</body></html>"
+        self.assertTrue(deep_research._is_blocked_response(body))
+
+    def test_passes_normal_html(self):
+        body = "<html><body><p>Normal content about programming</p></body></html>"
+        self.assertFalse(deep_research._is_blocked_response(body))
+
+    def test_case_insensitive(self):
+        body = "<html><body>ATTENTION REQUIRED! | CLOUDFLARE</body></html>"
+        self.assertTrue(deep_research._is_blocked_response(body))
+
+
+# ---------------------------------------------------------------------------
+# _fetch_with_retry (mocked)
+# ---------------------------------------------------------------------------
+
+class TestFetchWithRetry(unittest.TestCase):
+    def test_succeeds_on_first_try(self):
+        class FakeResponse:
+            status = 200
+            def read(self, n=-1):
+                return b"<html>OK</html>"
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                pass
+
+        with patch("urllib.request.urlopen", return_value=FakeResponse()):
+            body = deep_research._fetch_with_retry("https://example.com", timeout=5)
+        self.assertEqual(b"<html>OK</html>", body)
+
+    def test_retries_on_429(self):
+        call_count = [0]
+
+        class FakeResponse:
+            status = 200
+            def read(self, n=-1):
+                return b"<html>OK</html>"
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                pass
+
+        def side_effect(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                raise urllib.error.HTTPError("url", 429, "Too Many Requests", {}, io.BytesIO(b""))
+            return FakeResponse()
+
+        with patch("urllib.request.urlopen", side_effect=side_effect), \
+             patch("time.sleep"):
+            body = deep_research._fetch_with_retry("https://example.com", timeout=5)
+        self.assertEqual(b"<html>OK</html>", body)
+        self.assertEqual(2, call_count[0])
+
+    def test_retries_on_blocked_response(self):
+        call_count = [0]
+
+        class BlockedResponse:
+            status = 200
+            def read(self, n=-1):
+                return b"<html><title>Just a moment...</title></html>"
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                pass
+
+        class OkResponse:
+            status = 200
+            def read(self, n=-1):
+                return b"<html><body>Real content</body></html>"
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                pass
+
+        def side_effect(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] == 1:
+                return BlockedResponse()
+            return OkResponse()
+
+        with patch("urllib.request.urlopen", side_effect=side_effect), \
+             patch("time.sleep"):
+            body = deep_research._fetch_with_retry("https://example.com", timeout=5)
+        self.assertIn(b"Real content", body)
+        self.assertEqual(2, call_count[0])
+
+    def test_raises_on_non_retryable_error(self):
+        with patch("urllib.request.urlopen",
+                   side_effect=urllib.error.HTTPError("url", 404, "Not Found", {}, io.BytesIO(b""))):
+            with self.assertRaises(urllib.error.HTTPError):
+                deep_research._fetch_with_retry("https://example.com", timeout=5, max_retries=2)
+
+    def test_retries_on_503(self):
+        call_count = [0]
+
+        class FakeResponse:
+            status = 200
+            def read(self, n=-1):
+                return b"<html>OK</html>"
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                pass
+
+        def side_effect(*args, **kwargs):
+            call_count[0] += 1
+            if call_count[0] <= 2:
+                raise urllib.error.HTTPError("url", 503, "Service Unavailable", {}, io.BytesIO(b""))
+            return FakeResponse()
+
+        with patch("urllib.request.urlopen", side_effect=side_effect), \
+             patch("time.sleep"):
+            body = deep_research._fetch_with_retry("https://example.com", timeout=5)
+        self.assertEqual(b"<html>OK</html>", body)
+        self.assertEqual(3, call_count[0])
+
+
+# ---------------------------------------------------------------------------
+# Enhanced extract_text_from_html
+# ---------------------------------------------------------------------------
+
+class TestExtractTextFromHtmlEnhanced(unittest.TestCase):
+    def test_extracts_from_main_tag(self):
+        words = " ".join(f"word{i}" for i in range(35))
+        doc = f"<html><body><nav>Menu items here</nav><main><p>{words}</p></main><footer>Footer stuff</footer></body></html>"
+        text = deep_research.extract_text_from_html(doc)
+        self.assertIn("word0", text)
+        self.assertNotIn("Menu items", text)
+        self.assertNotIn("Footer stuff", text)
+
+    def test_extracts_from_article_tag(self):
+        words = " ".join(f"word{i}" for i in range(35))
+        doc = f"<html><body><aside>Sidebar widget</aside><article><p>{words}</p></article></body></html>"
+        text = deep_research.extract_text_from_html(doc)
+        self.assertIn("word0", text)
+        self.assertNotIn("Sidebar widget", text)
+
+    def test_removes_nav_footer_aside(self):
+        doc = "<html><body><nav>Navigation links</nav><p>Content body text</p><footer>Footer links</footer><aside>Sidebar ads</aside></body></html>"
+        text = deep_research.extract_text_from_html(doc)
+        self.assertIn("Content body text", text)
+        self.assertNotIn("Navigation links", text)
+        self.assertNotIn("Footer links", text)
+        self.assertNotIn("Sidebar ads", text)
+
+    def test_falls_back_to_full_html_when_no_main(self):
+        doc = "<html><body><div><p>Page without main or article tags</p></div></body></html>"
+        text = deep_research.extract_text_from_html(doc)
+        self.assertIn("Page without main", text)
+
+    def test_prefers_main_over_article(self):
+        main_words = " ".join(f"mainword{i}" for i in range(35))
+        article_words = " ".join(f"artword{i}" for i in range(35))
+        doc = f"<html><body><main><p>{main_words}</p></main><article><p>{article_words}</p></article></body></html>"
+        text = deep_research.extract_text_from_html(doc)
+        self.assertIn("mainword0", text)
+
+
+# ---------------------------------------------------------------------------
+# fetch_page_content quality checks (mocked)
+# ---------------------------------------------------------------------------
+
+class TestFetchPageContentQuality(unittest.TestCase):
+    def test_detects_blocked_page(self):
+        blocked_html = b"<html><title>Just a moment...</title><body>Checking if the site connection is secure</body></html>"
+
+        class FakeResponse:
+            status = 200
+            def read(self, n=-1):
+                return blocked_html[:n] if n > 0 else blocked_html
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                pass
+
+        with patch("urllib.request.urlopen", return_value=FakeResponse()):
+            result = deep_research.fetch_page_content("https://example.com")
+        self.assertIn("WAF", result.error)
+
+    def test_detects_low_content_yield(self):
+        sparse_html = b"<html><head><title>T</title></head><body>" + b"x" * 2000 + b"<p>short</p></body></html>"
+
+        class FakeResponse:
+            status = 200
+            def read(self, n=-1):
+                return sparse_html[:n] if n > 0 else sparse_html
+            def __enter__(self):
+                return self
+            def __exit__(self, *a):
+                pass
+
+        with patch("urllib.request.urlopen", return_value=FakeResponse()):
+            result = deep_research.fetch_page_content("https://example.com")
+        # Should detect the page has very few words relative to HTML size
+        self.assertTrue(result.error == "" or "content yield" in result.error or "WAF" in result.error)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -147,6 +147,82 @@ Tactics:
 - Compare multiple public records before treating two records as the same person
 - Mark identity linkage as inference unless the sources make it explicit
 
+## News and Current Events
+
+Use for breaking news, incident updates, policy changes, company announcements, and public figure developments.
+
+Patterns:
+
+- `"<event or topic>" after:YYYY-MM-DD` — recent coverage only
+- `"<event>" site:reuters.com OR site:apnews.com` — wire service coverage
+- `"<company>" "announces" OR "announced" after:YYYY-MM-DD` — official announcements
+- `"<person name>" "<role>" OR "<organization>" after:YYYY-MM-DD` — personnel changes
+- `"<policy name>" "enacted" OR "effective" YYYY` — policy/regulation changes
+
+Tactics:
+
+- Lead with wire services (Reuters, AP, Bloomberg) for factual reporting, not opinion outlets
+- For China news, add `site:caixin.com` or `site:yicai.com` for business, `site:xinhua.net` for official state media
+- For personnel changes, cross-check with the organization's own press releases
+- Always verify the date — many news aggregators repost old articles with today's date
+
+## Government and Policy
+
+Use for regulations, public notices, legislative changes, and government statistics.
+
+Patterns:
+
+- `"<policy topic>" site:gov OR site:government` — government domains across countries
+- `"<regulation name>" "effective date" filetype:pdf` — regulatory PDF documents
+- `"<统计数据关键词>" site:stats.gov.cn` — China National Bureau of Statistics
+- `"<policy>" "Federal Register" site:federalregister.gov` — US federal regulations
+- `"<topic>" "白皮书" OR "white paper" site:gov.cn filetype:pdf` — government white papers
+
+Tactics:
+
+- Government sites are the primary source for policy — do not rely on news summaries alone
+- Check for PDF attachments — the actual regulation text is usually in a PDF, not the announcement page
+- For healthcare policy: `site:nhsa.gov.cn` (China), `site:cms.gov` (US), `site:gov.uk/dhsc` (UK)
+- For tax/finance: `site:tax.gov.cn`, `site:irs.gov`, `site:mof.gov.cn`
+
+## Healthcare and Medical Information
+
+Use for medical conditions, drug information, treatment guidelines, and health statistics.
+
+Patterns:
+
+- `"<condition>" site:nih.gov OR site:who.int` — authoritative medical sources
+- `"<drug name>" "prescribing information" site:fda.gov` — US drug labels
+- `"<疾病名>" 诊疗指南 site:nhc.gov.cn` — China National Health Commission guidelines
+- `"<condition>" "clinical guidelines" filetype:pdf` — clinical practice guidelines
+- `"<treatment>" "meta-analysis" OR "systematic review" site:pubmed.ncbi.nlm.nih.gov` — evidence-based medicine
+
+Tactics:
+
+- NEVER rely on blog posts or social media for medical claims — use official health bodies (NIH, WHO, NHC)
+- For drug information, go to the regulatory body's approved label, not a pharmacy website
+- Medical information changes frequently — always add `after:` for treatment recommendations
+- Separate clinical evidence from patient experiences
+
+## Finance and Business
+
+Use for company financials, market data, funding rounds, and business analysis.
+
+Patterns:
+
+- `"<company>" "annual report" OR "10-K" filetype:pdf` — company filings
+- `"<公司名>" 年报 site:cninfo.com.cn` — China listed company filings
+- `"<company>" "funding" OR "Series" OR "valuation" after:YYYY-MM-DD` — startup funding
+- `"<ticker>" site:finance.yahoo.com OR site:eastmoney.com` — stock data
+- `"<industry>" "market size" OR "market share" filetype:pdf after:YYYY-MM-DD` — market reports
+
+Tactics:
+
+- Prefer regulatory filings (SEC, CSRC) over news articles for financial data
+- For China-listed companies, `cninfo.com.cn` has official filings; for HK-listed, `hkexnews.hk`
+- Market size claims require methodology disclosure — reject unsourced numbers
+- Cross-check startup valuations across 2+ independent sources (e.g., Crunchbase, 36Kr, PitchBook)
+
 ## Chinese-Language Patterns
 
 For all Chinese-language query patterns (technical, government, company, academic, platform-specific), see `references/chinese-search-ecosystem.md`.
