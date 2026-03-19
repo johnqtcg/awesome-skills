@@ -1,0 +1,24 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite it as below."
+type: software
+title: awesome-skills
+abstract: "Production-ready Claude Code Skills with quantitative evaluation, golden test fixtures, and end-to-end engineering workflow integration. A curated system for AI skill engineering covering Go, testing, security, CI/CD, research, and documentation."
+authors:
+  - alias: johnqtcg
+repository-code: "https://github.com/johnqtcg/awesome-skills"
+license: MIT
+keywords:
+  - claude-code
+  - anthropic
+  - ai-skills
+  - prompt-engineering
+  - llm
+  - claude
+  - developer-tools
+  - code-review
+  - golang
+  - tdd
+  - software-engineering
+  - ai-assistant
+  - agent
+  - workflow

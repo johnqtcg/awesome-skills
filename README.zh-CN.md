@@ -1,18 +1,22 @@
 # awesome-skills
 
-![License](https://img.shields.io/badge/license-MIT-blue)
+> 面向工程化落地的 **Claude Code Skill** 体系——量化评估 · 黄金测试 · 完整工作流集成
 
-一个围绕高质量 Skill 设计、评审、验证与工作流落地构建的开源项目。
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/johnqtcg/awesome-skills?style=social)](https://github.com/johnqtcg/awesome-skills)
+[![English](https://img.shields.io/badge/Docs-English-blue)](README.md)
 
-它不是单纯的 `SKILL.md` 样例集合，而是把“如何写高质量 skill”这件事拆成了完整闭环：
+一个围绕高质量 **Claude Code Skill** 设计、评审、验证与工作流落地构建的开源项目。
 
-- 方法论文档：解释为什么这样设计
-- skill 示例：展示高质量 skill 应该长什么样
-- 评审报告：说明这些 skill 为什么好，问题在哪里
-- 输出样例：证明这些 skill 在真实任务里能产出什么
+- **20** 个生产级 Claude Code Skills：覆盖 Go、测试、安全、CI/CD、调研、文档
+- **40** 份量化评审报告（中英双语），含可追溯指标
+- **132** 个 golden JSON 场景 + **29** 个 Python 测试文件，确定性回归保障
+- 测试 skills：`unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
+- 交付管线：`go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`
 
 ## 目录
 
+- [快速开始](#cn-quickstart)
 - [项目概览](#cn-overview)
 - [项目亮点](#cn-highlights)
 - [项目结构](#cn-project-structure)
@@ -24,16 +28,26 @@
 - [适合谁](#cn-audience)
 - [License](#cn-license)
 
-<a id="cn-overview"></a>
+<a id="cn-quickstart"></a>
+## 快速开始
+
+1. 浏览下方 [skill 列表](#cn-skills)，找到适合你工作场景的 skill
+2. 将 `skills/<名称>` 目录复制到你的项目中：
+   - 项目级（仅当前项目）：`.claude/skills/<名称>`
+   - 个人级（所有项目）：`~/.claude/skills/<名称>`
+3. 在 Claude Code 中，当任务匹配时 skill 会自动激活
+
+了解 skill 设计方法论：
+
+- 中文：[bestpractice/README.zh-CN.md](bestpractice/README.zh-CN.md)
+- English：[bestpractice/README.md](bestpractice/README.md)
+
+<a id=”cn-overview”></a>
 ## 项目概览
 
-- 项目定位：高质量 skill 方法论 + skill 资产 + 评审 + 输出样例。
-- 文档入口：[`bestpractice/README.zh-CN.md`](bestpractice/README.zh-CN.md)。
-- Skill 数量：`20` 个（见 [`skills/`](skills)）。
-- 评审报告数量：`40` 份，中英双语成对存在（见 [`evaluate/`](evaluate)）。
-- 输出样例目录：`13` 个（见 [`outputexample/`](outputexample)）。
+文档入口：[`bestpractice/README.zh-CN.md`](bestpractice/README.zh-CN.md)。
 
-这个仓库的核心目标不是“展示 prompt 怎么写”，而是回答三个更难的问题：
+这个仓库的核心目标不是”展示 prompt 怎么写”，而是回答三个更难的问题：
 
 1. 高质量 skill 到底应该如何设计？
 2. 写出来之后如何证明它真的有效？
@@ -48,18 +62,17 @@
 
 `bestpractice/` → `skills/` → `evaluate/` → `outputexample/`
 
-这四层不是简单分目录，而是一条可验证的知识链：
+这四层组成了一条可验证的知识链：
 
 - 方法论定义 skill 应该如何设计
 - skill 示例展示方法论在真实文件中的形态
 - 评审报告验证 skill 到底好不好
 - 输出样例证明 skill 在真实任务里能产出什么
 
-这让项目的定位明显强于普通的“prompt/skill 样例项目”。
 
 ### 2. 核心交付物是方法论
 
-项目最有价值的资产，其实是 [`bestpractice/`](bestpractice)，而不是 [`skills/`](skills) 里有多少个 skill。这里总结出的设计模式是可迁移的通用方法论，例如：
+项目最有价值的资产，是 [`bestpractice/`](bestpractice)，而不是 [`skills/`](skills) 里有多少个 skill。这里总结出的设计模式是可迁移的通用方法论，例如：
 
 - 强制门禁
 - 反例教学
@@ -178,6 +191,9 @@
 
 ```text
 编码
+  ↓
+编写 / 修复测试
+  （unit-test · tdd-workflow · api-integration-test · e2e-test · fuzzing-test）
   ↓
 make fmt / make lint（本地质量检查，go-makefile-writer 生成）
   ↓
