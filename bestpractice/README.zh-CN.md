@@ -46,6 +46,7 @@ applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 ---
 
 
+<a id="a"></a>
 ## 附录 A：术语表
 
 | 术语 | 含义 |
@@ -62,6 +63,7 @@ applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 | **反例（Anti-example）** | 在 skill 中明确列出的"不该做/不该报告"的场景，用于抑制 AI 的假阳性倾向 |
 
 
+<a id="b"></a>
 ## 附录 B：维护说明
 
 **更新触发条件**（出现以下情况时需更新本文）：
@@ -77,6 +79,7 @@ applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 ---
 
 
+<a id="cskill"></a>
 ## 附录 C：Skill 质量自查清单
 
 创建或迭代 skill 后，对照以下清单验证质量：
@@ -101,13 +104,14 @@ applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 **使用方式**：14 项中通过 10 项以上为合格；通过 13 项以上为优秀。不达标的项可参照对应章节改进。
 
 
+<a id="d"></a>
 ## 附录 D：延伸阅读
 
-- **The Complete Guide to Building Skills for Claude** — Anthropic 官方 skill 完整指南（PDF），涵盖基础、规划设计、测试迭代、分发共享、模式与故障排查
+- [The Complete Guide to Building Skills for Claude](https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf) — Anthropic 官方 skill 完整指南（PDF），涵盖基础、规划设计、测试迭代、分发共享、模式与故障排查
 - [Agent Skills 开放标准](https://agentskills.io/) — Skill 遵循的跨平台标准
 - [Claude Code Skills 官方文档](https://docs.anthropic.com/en/docs/claude-code/skills) — 官方 skill 使用指南
 - [What Are Skills](https://claude.com/resources/tutorials/what-are-skills) — 官方教程：skill 基础介绍
 - [How Skills Compare to Other Features](https://claude.com/resources/tutorials/how-skills-compare-to-other-claude-code-features) — 官方教程：skill 与其他特性的对比
 - [anthropics/skills](https://github.com/anthropics/skills) — Anthropic 官方 skill 仓库（含可定制的示例 skill）
 - [skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator) — Anthropic 官方 skill 评估框架（evals.json / run_eval.py / run_loop.py / generate_review.py）
-- [go-code-reviewer-skill-eval-report.zh-CN.md](../../evaluate/go-code-reviewer-skill-eval-report.zh-CN.md) — go-code-reviewer skill 三维度评估报告（本文第 10 章案例数据来源）
+- [go-code-reviewer-skill-eval-report.zh-CN.md](../evaluate/go-code-reviewer-skill-eval-report.zh-CN.md) — go-code-reviewer skill 三维度评估报告（本文第 10 章案例数据来源）

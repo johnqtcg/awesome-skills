@@ -49,10 +49,10 @@ Language:
 
 | 路径 | 作用 |
 | --- | --- |
-| [`bestpractice/`](bestpractice) | skill 最佳实践文档，中英双语 |
-| [`skills/`](skills) | 高质量 skill 示例 |
-| [`evaluate/`](evaluate) | 对 skill 的评审报告，中英双语 |
-| [`outputexample/`](outputexample) | skill 的真实输出样例 |
+| [`bestpractice/`](bestpractice/README.zh-CN.md) | skill 最佳实践文档，中英双语 |
+| [`skills/`](skills/index.md) | 高质量 skill 示例 |
+| [`evaluate/`](evaluate/index.md) | 对 skill 的评审报告，中英双语 |
+| [`outputexample/`](outputexample/index.md) | skill 的真实输出样例 |
 
 ## 4. 推荐的贡献单元
 

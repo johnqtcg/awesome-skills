@@ -28,10 +28,10 @@
 ## 项目概览
 
 - 项目定位：高质量 skill 方法论 + skill 资产 + 评审 + 输出样例。
-- 文档入口：[`bestpractice/README.zh-CN.md`](bestpractice/README.zh-CN.md)。
-- Skill 数量：`18` 个（见 [`skills/`](skills)）。
-- 评审报告数量：`36` 份，中英双语成对存在（见 [`evaluate/`](evaluate)）。
-- 输出样例目录：`12` 个（见 [`outputexample/`](outputexample)）。
+- 文档入口：[`bestpractice/README.zh-CN.md`](../../bestpractice/README.zh-CN.md)。
+- Skill 数量：`18` 个（见 [`skills/`](../../skills/index.md)）。
+- 评审报告数量：`36` 份，中英双语成对存在（见 [`evaluate/`](../../evaluate/index.md)）。
+- 输出样例目录：`12` 个（见 [`outputexample/`](../index.md)）。
 
 这个仓库的核心目标不是“展示 prompt 怎么写”，而是回答三个更难的问题：
 
@@ -59,7 +59,7 @@
 
 ### 2. 核心交付物是方法论
 
-项目最有价值的资产，其实是 [`bestpractice/`](bestpractice)，而不是 [`skills/`](skills) 里有多少个 skill。这里总结出的设计模式是可迁移的通用方法论，例如：
+项目最有价值的资产，其实是 [`bestpractice/`](../../bestpractice/README.zh-CN.md)，而不是 [`skills/`](../../skills/index.md) 里有多少个 skill。这里总结出的设计模式是可迁移的通用方法论，例如：
 
 - 强制门禁
 - 反例教学
@@ -72,13 +72,13 @@
 
 ### 3. skill 质量是可量化的，不是“凭感觉”
 
-[`bestpractice/评估篇.md`](bestpractice/评估篇.md) 把“skill 好不好”拆成三个可量化维度：
+[`bestpractice/评估篇.md`](../../bestpractice/评估篇.md) 把“skill 好不好”拆成三个可量化维度：
 
 - 触发准确率
 - 真实任务表现
 - Token 成本效益比
 
-这套框架的价值，在 [`evaluate/`](evaluate) 里的正式评审报告中可以直接看到。例如：
+这套框架的价值，在 [`evaluate/`](../../evaluate/index.md) 里的正式评审报告中可以直接看到。例如：
 
 - `go-code-reviewer`：微妙场景信噪比提升 +36 个百分点，开发者时间 ROI 达 347x
 - `unit-test`：Assertion 通过率提升 +38.4 个百分点
@@ -133,32 +133,32 @@
 
 | 路径 | 作用 |
 | --- | --- |
-| [bestpractice/](bestpractice) | 介绍如何写高质量 skill，如何评估 skill，以及如何把 skill 融入工作流 |
-| [skills/](skills) | 经过方法论约束后的高质量 skill 示例 |
-| [evaluate/](evaluate) | 对 skill 的正式评审报告，解释优点、缺点与改进点 |
-| [outputexample/](outputexample) | skill 在真实任务中的实际输出，如 PDF、测试代码、Makefile、CI 配置、截图等 |
+| [bestpractice/](../../bestpractice/README.zh-CN.md) | 介绍如何写高质量 skill，如何评估 skill，以及如何把 skill 融入工作流 |
+| [skills/](../../skills/index.md) | 经过方法论约束后的高质量 skill 示例 |
+| [evaluate/](../../evaluate/index.md) | 对 skill 的正式评审报告，解释优点、缺点与改进点 |
+| [outputexample/](../index.md) | skill 在真实任务中的实际输出，如 PDF、测试代码、Makefile、CI 配置、截图等 |
 
 <a id="cn-reading-path"></a>
 ## 推荐阅读路径
 
 如果你第一次进入项目，推荐按这个顺序阅读：
 
-1. 从 [`bestpractice/README.zh-CN.md`](bestpractice/README.zh-CN.md) 建立整体认知
-2. 进入某个具体 skill，例如 [`skills/google-search/SKILL.md`](skills/google-search/SKILL.md)
-3. 对照它的评审报告，例如 [`evaluate/google-search-skill-eval-report.zh-CN.md`](evaluate/google-search-skill-eval-report.zh-CN.md)
-4. 再看它的真实输出，例如 [`outputexample/google-search/中国制造2025目标完成度研究.pdf`](outputexample/google-search/中国制造2025目标完成度研究.pdf)
+1. 从 [`bestpractice/README.zh-CN.md`](../../bestpractice/README.zh-CN.md) 建立整体认知
+2. 进入某个具体 skill，例如 [`skills/google-search/SKILL.md`](../../skills/google-search/SKILL.md)
+3. 对照它的评审报告，例如 [`evaluate/google-search-skill-eval-report.zh-CN.md`](../../evaluate/google-search-skill-eval-report.zh-CN.md)
+4. 再看它的真实输出，例如 [`outputexample/google-search/中国制造2025目标完成度研究.pdf`](../google-search/中国制造2025目标完成度研究.pdf)
 
-如果你偏向英文阅读，可以从 [`bestpractice/README.md`](bestpractice/README.md) 开始。
+如果你偏向英文阅读，可以从 [`bestpractice/README.md`](../../bestpractice/README.md) 开始。
 
 <a id="cn-bestpractice"></a>
 ## 文档体系
 
-[`bestpractice/`](bestpractice) 是整个项目的方法论入口：
+[`bestpractice/`](../../bestpractice/README.zh-CN.md) 是整个项目的方法论入口：
 
-- [`基础篇.md`](bestpractice/基础篇.md)
-- [`进阶篇.md`](bestpractice/进阶篇.md)
-- [`评估篇.md`](bestpractice/评估篇.md)
-- [`集成篇.md`](bestpractice/集成篇.md)
+- [`基础篇.md`](../../bestpractice/基础篇.md)
+- [`进阶篇.md`](../../bestpractice/进阶篇.md)
+- [`评估篇.md`](../../bestpractice/评估篇.md)
+- [`集成篇.md`](../../bestpractice/集成篇.md)
 
 这些文档主要回答：
 
@@ -170,7 +170,7 @@
 <a id="cn-skills"></a>
 ## skill 示例
 
-当前项目收录的高质量 skill 都位于 [`skills/`](skills) 下，并以各自目录中的 `SKILL.md` 作为主入口。它们不是一组互相孤立的能力，而是可以按工作场景组织成若干类；其中，后端开发相关 skill 可以互相配合，形成一条完整的质量管线。
+当前项目收录的高质量 skill 都位于 [`skills/`](../../skills/index.md) 下，并以各自目录中的 `SKILL.md` 作为主入口。它们不是一组互相孤立的能力，而是可以按工作场景组织成若干类；其中，后端开发相关 skill 可以互相配合，形成一条完整的质量管线。
 
 ### 后端开发：完整质量管线
 
@@ -261,28 +261,28 @@ CI 触发
 
 你可以直接对照阅读：
 
-- 评审报告：[`evaluate/`](evaluate)
-- 输出样例：[`outputexample/`](outputexample)
+- 评审报告：[`evaluate/`](../../evaluate/index.md)
+- 输出样例：[`outputexample/`](../index.md)
 
 典型例子：
 
 - `google-search`
-  - 评审：[`evaluate/google-search-skill-eval-report.zh-CN.md`](evaluate/google-search-skill-eval-report.zh-CN.md)
-  - 输出：[`outputexample/google-search/中国制造2025目标完成度研究.pdf`](outputexample/google-search/中国制造2025目标完成度研究.pdf)
+  - 评审：[`evaluate/google-search-skill-eval-report.zh-CN.md`](../../evaluate/google-search-skill-eval-report.zh-CN.md)
+  - 输出：[`outputexample/google-search/中国制造2025目标完成度研究.pdf`](../google-search/中国制造2025目标完成度研究.pdf)
 - `unit-test`
-  - 评审：[`evaluate/unit-test-skill-eval-report.zh-CN.md`](evaluate/unit-test-skill-eval-report.zh-CN.md)
-  - 输出：[`outputexample/unit-test/`](outputexample/unit-test)
+  - 评审：[`evaluate/unit-test-skill-eval-report.zh-CN.md`](../../evaluate/unit-test-skill-eval-report.zh-CN.md)
+  - 输出：[`outputexample/unit-test/`](../unit-test/index.md)
 - `yt-dlp-downloader`
-  - 输出截图：[`outputexample/yt-dlp-downloader/`](outputexample/yt-dlp-downloader)
+  - 输出截图：[`outputexample/yt-dlp-downloader/`](../yt-dlp-downloader/index.md)
 
 <a id="cn-governance"></a>
 ## 治理文档
 
 如果你准备参与贡献，或者需要查看仓库治理规则，建议从这里开始：
 
-- 贡献指南：[`CONTRIBUTING.zh-CN.md`](CONTRIBUTING.zh-CN.md)
-- 安全策略：[`SECURITY.zh-CN.md`](SECURITY.zh-CN.md)
-- 行为准则：[`CODE_OF_CONDUCT.zh-CN.md`](CODE_OF_CONDUCT.zh-CN.md)
+- 贡献指南：[`CONTRIBUTING.zh-CN.md`](../../CONTRIBUTING.zh-CN.md)
+- 安全策略：[`SECURITY.zh-CN.md`](../../SECURITY.zh-CN.md)
+- 行为准则：[`CODE_OF_CONDUCT.zh-CN.md`](../../CODE_OF_CONDUCT.zh-CN.md)
 
 
 <a id="cn-audience"></a>
@@ -296,4 +296,4 @@ CI 触发
 <a id="cn-license"></a>
 ## License
 
-本项目使用 MIT License，见 [`LICENSE`](LICENSE)。
+本项目使用 MIT License，见 [`LICENSE`](../../LICENSE)。

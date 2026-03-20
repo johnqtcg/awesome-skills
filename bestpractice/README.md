@@ -99,11 +99,11 @@ After creating or iterating on a skill, use the checklist below to validate its 
 
 ## Appendix D: Further Reading
 
-- **The Complete Guide to Building Skills for Claude** — Anthropic's official skill guide (PDF), covering fundamentals, planning, testing and iteration, distribution, patterns, and troubleshooting
+- [The Complete Guide to Building Skills for Claude](https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf) — Anthropic's official skill guide (PDF), covering fundamentals, planning, testing and iteration, distribution, patterns, and troubleshooting
 - [Agent Skills Open Standard](https://agentskills.io/) — the cross-platform standard skills follow
 - [Claude Code Skills Documentation](https://docs.anthropic.com/en/docs/claude-code/skills) — the official guide to using skills
 - [What Are Skills](https://claude.com/resources/tutorials/what-are-skills) — official tutorial: a basic introduction to skills
 - [How Skills Compare to Other Features](https://claude.com/resources/tutorials/how-skills-compare-to-other-claude-code-features) — official tutorial: skills compared with other features
 - [anthropics/skills](https://github.com/anthropics/skills) — Anthropic's official skill repository with customizable example skills
 - [skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator) — Anthropic's official skill evaluation framework (`evals.json` / `run_eval.py` / `run_loop.py` / `generate_review.py`)
-- [go-code-reviewer-skill-eval-report.zh-CN.md](../../evaluate/go-code-reviewer-skill-eval-report.zh-CN.md) — the three-dimensional evaluation report for the `go-code-reviewer` skill (the data source for the Chapter 10 case study)
+- [go-code-reviewer-skill-eval-report.zh-CN.md](../evaluate/go-code-reviewer-skill-eval-report.zh-CN.md) — the three-dimensional evaluation report for the `go-code-reviewer` skill (the data source for the Chapter 10 case study)

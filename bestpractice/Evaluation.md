@@ -102,7 +102,7 @@ ROI = value of developer time saved / extra token cost
 
 ### 10.5 Representative Case: Evaluating `go-code-reviewer`
 
- The following data comes from a full evaluation of the `go-code-reviewer` skill (see [go-code-reviewer-skill-eval-report.zh-CN.md](../../evaluate/go-code-reviewer-skill-eval-report.zh-CN.md)). It covers 8 scenarios × 2 configurations = 16 independent sub-agent runs.
+ The following data comes from a full evaluation of the `go-code-reviewer` skill (see [go-code-reviewer-skill-eval-report.zh-CN.md](../evaluate/go-code-reviewer-skill-eval-report.zh-CN.md)). It covers 8 scenarios × 2 configurations = 16 independent sub-agent runs.
 
 #### Trigger Accuracy
 

@@ -49,10 +49,10 @@ Please understand the four core directories first:
 
 | Path | Purpose |
 | --- | --- |
-| [bestpractice/](bestpractice) | Skill best-practice docs, in Chinese and English |
-| [skills/](skills) | High-quality skill examples |
-| [evaluate/](evaluate) | Skill review reports, in Chinese and English |
-| [outputexample/](outputexample) | Real output examples from skills |
+| [bestpractice/](bestpractice/README.md) | Skill best-practice docs, in Chinese and English |
+| [skills/](skills/index.md) | High-quality skill examples |
+| [evaluate/](evaluate/index.md) | Skill review reports, in Chinese and English |
+| [outputexample/](outputexample/index.md) | Real output examples from skills |
 
 ## 4. Preferred Contribution Unit
 

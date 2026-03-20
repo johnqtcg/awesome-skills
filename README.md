@@ -59,7 +59,7 @@ That structure makes the project substantially stronger than a typical prompt or
 
 ### 2. The main deliverable is methodology
 
-The highest-leverage asset here is [bestpractice/](bestpractice), not the raw number of skills under [skills/](skills). The methodology is deliberately language-agnostic and platform-agnostic: mandatory gates, anti-examples, honest degradation, progressive disclosure, output contracts, and quantitative evaluation can be reused far beyond this repository.
+The highest-leverage asset here is [bestpractice/](bestpractice/README.md), not the raw number of skills under [skills/](skills/index.md). The methodology is deliberately language-agnostic and platform-agnostic: mandatory gates, anti-examples, honest degradation, progressive disclosure, output contracts, and quantitative evaluation can be reused far beyond this repository.
 
 In other words, the project is teaching people how to build professional skills, not just handing out a bag of ready-made prompts.
 
@@ -71,7 +71,7 @@ In other words, the project is teaching people how to build professional skills,
 - real-task performance
 - token cost-effectiveness
 
-The value of that framework is visible in the paired review reports under [evaluate/](evaluate). Concrete examples include:
+The value of that framework is visible in the paired review reports under [evaluate/](evaluate/index.md). Concrete examples include:
 
 - `go-code-reviewer`: +36 percentage points in subtle-scenario signal-to-noise, with 347x developer-time ROI
 - `unit-test`: +38.4 percentage points in assertion pass rate
@@ -126,10 +126,10 @@ The four core directories serve these roles:
 
 | Path | Purpose |
 | --- | --- |
-| [bestpractice/](bestpractice) | Explains how to write high-quality skills, how to evaluate them, and how to integrate them into workflows |
-| [skills/](skills) | High-quality skill examples shaped by the methodology |
-| [evaluate/](evaluate) | Formal review reports for skills, including strengths, weaknesses, and improvement points |
-| [outputexample/](outputexample) | Real outputs from skills, such as PDFs, test code, Makefiles, CI configs, and screenshots |
+| [bestpractice/](bestpractice/README.md) | Explains how to write high-quality skills, how to evaluate them, and how to integrate them into workflows |
+| [skills/](skills/index.md) | High-quality skill examples shaped by the methodology |
+| [evaluate/](evaluate/index.md) | Formal review reports for skills, including strengths, weaknesses, and improvement points |
+| [outputexample/](outputexample/index.md) | Real outputs from skills, such as PDFs, test code, Makefiles, CI configs, and screenshots |
 
 <a id="en-reading-path"></a>
 ## Recommended Reading Path
@@ -139,14 +139,14 @@ If this is your first time in the project, this order works best:
 1. Start with [bestpractice/README.md](bestpractice/README.md) to build the overall picture
 2. Open a specific skill, for example [skills/google-search/SKILL.md](skills/google-search/SKILL.md)
 3. Read its review report, for example [evaluate/google-search-skill-eval-report.md](evaluate/google-search-skill-eval-report.md)
-4. Then look at its real output, for example [outputexample/google-search/ai-bubble-or-platform-shift-march-2026.pdf](outputexample/google-search/中国制造2025目标完成度研究.pdf)
+4. Then look at its real output, for example [outputexample/google-search/ai-bubble-or-platform-shift-march-2026.pdf](outputexample/google-search/ai-bubble-or-platform-shift-march-2026.pdf)
 
 If you prefer Chinese, start from [bestpractice/README.zh-CN.md](bestpractice/README.zh-CN.md).
 
 <a id="en-bestpractice"></a>
 ## Documentation System
 
-[bestpractice/](bestpractice) is the methodology entry point for the whole project:
+[bestpractice/](bestpractice/README.md) is the methodology entry point for the whole project:
 
 - [Fundamentals.md](bestpractice/Fundamentals.md)
 - [Advanced.md](bestpractice/Advanced.md)
@@ -163,7 +163,7 @@ These documents mainly answer:
 <a id="en-skills"></a>
 ## Skill Examples
 
-All high-quality skills in this project live under [skills/](skills), with each skill centered on its own `SKILL.md`. They are not isolated capabilities. They can be grouped by use case, and the backend-oriented skills can work together as a full quality pipeline.
+All high-quality skills in this project live under [skills/](skills/index.md), with each skill centered on its own `SKILL.md`. They are not isolated capabilities. They can be grouped by use case, and the backend-oriented skills can work together as a full quality pipeline.
 
 ### Backend Development: a complete quality pipeline
 
@@ -257,8 +257,8 @@ What makes this repository different from a typical “skills example repo” is
 
 You can read them side by side:
 
-- review reports: [evaluate/](evaluate)
-- output examples: [outputexample/](outputexample)
+- review reports: [evaluate/](evaluate/index.md)
+- output examples: [outputexample/](outputexample/index.md)
 
 Typical examples:
 
@@ -267,9 +267,9 @@ Typical examples:
   - output: [outputexample/google-search/ai-bubble-or-platform-shift-march-2026.pdf](outputexample/google-search/ai-bubble-or-platform-shift-march-2026.pdf)
 - `unit-test`
   - review: [evaluate/unit-test-skill-eval-report.md](evaluate/unit-test-skill-eval-report.md)
-  - output: [outputexample/unit-test/](outputexample/unit-test)
+  - output: [outputexample/unit-test/](outputexample/unit-test/index.md)
 - `yt-dlp-downloader`
-  - output screenshots: [outputexample/yt-dlp-downloader/](outputexample/yt-dlp-downloader)
+  - output screenshots: [outputexample/yt-dlp-downloader/](outputexample/yt-dlp-downloader/index.md)
 
 <a id="en-governance"></a>
 ## Governance
