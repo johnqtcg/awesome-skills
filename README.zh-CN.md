@@ -9,7 +9,7 @@ hide:
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/johnqtcg/awesome-skills?style=social)](https://github.com/johnqtcg/awesome-skills)
-[![English](https://img.shields.io/badge/Docs-English-blue)](README.md)
+[![English](https://img.shields.io/badge/Docs-English-blue)](index.md)
 
 一个围绕高质量 **Claude Code Skill** 设计、评审、验证与工作流落地构建的开源项目。
 
