@@ -91,7 +91,7 @@ nav:
       - Evaluation: bestpractice/Evaluation.md
       - Integration: bestpractice/Integration.md
 
-  - 方法论 (中文):
+  - 最佳实践（中文）:
       - 概述: bestpractice/README.zh-CN.md
       - 基础篇: bestpractice/基础篇.md
       - 进阶篇: bestpractice/进阶篇.md

@@ -38,10 +38,10 @@ applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 - AI 编程助手定制能力横向对比
 
 **附录**
-- [附录 A：术语表](#附录-a术语表)
-- [附录 B：维护说明](#附录-b维护说明)
-- [附录 C：Skill 质量自查清单](#附录-cskill-质量自查清单)
-- [附录 D：延伸阅读](#附录-d延伸阅读)
+- [附录 A：术语表](#a)
+- [附录 B：维护说明](#b)
+- [附录 C：Skill 质量自查清单](#cskill)
+- [附录 D：延伸阅读](#d)
 
 ---
 
