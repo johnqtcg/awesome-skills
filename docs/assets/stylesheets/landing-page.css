@@ -1,0 +1,9 @@
+body.landing-page .md-sidebar--secondary {
+  display: none;
+}
+
+@media screen and (min-width: 76.25em) {
+  body.landing-page .md-content {
+    margin-right: 0;
+  }
+}

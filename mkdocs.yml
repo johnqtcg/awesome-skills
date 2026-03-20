@@ -73,7 +73,10 @@ extra:
       link: https://github.com/johnqtcg/awesome-skills
   generator: false
 
-extra_css: []
+extra_css:
+  - assets/stylesheets/landing-page.css
+extra_javascript:
+  - assets/javascripts/landing-page.js
 
 copyright: Copyright &copy; 2026 johnqtcg — MIT License
 

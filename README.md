@@ -1,8 +1,3 @@
----
-hide:
-  - toc
----
-
 # awesome-skills: Production-Ready Claude Code Skills
 
 > Production-ready **Claude Code Skills** with quantitative evaluation, golden test fixtures, and end-to-end engineering workflow integration.
