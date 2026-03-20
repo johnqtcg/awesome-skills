@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # awesome-skills: Production-Ready Claude Code Skills
 
 > Production-ready **Claude Code Skills** with quantitative evaluation, golden test fixtures, and end-to-end engineering workflow integration.
@@ -13,20 +18,6 @@ A curated system for **AI skill engineering** — not just a prompt collection. 
 - **132** golden test fixtures + **29** Python test files for deterministic regression
 - Testing skills: `unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
 - Delivery pipeline: `go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`
-
-## Table of Contents
-
-- [Quick Start](#en-quickstart)
-- [Overview](#en-overview)
-- [Highlights](#en-highlights)
-- [Project Structure](#en-project-structure)
-- [Recommended Reading Path](#en-reading-path)
-- [Documentation System](#en-bestpractice)
-- [Skill Examples](#en-skills)
-- [Review Reports and Output Examples](#en-evaluate-and-output)
-- [Governance](#en-governance)
-- [Who This Is For](#en-audience)
-- [License](#en-license)
 
 <a id="en-quickstart"></a>
 ## Quick Start

@@ -1,3 +1,8 @@
+---
+hide:
+  - toc
+---
+
 # awesome-skills
 
 > 面向工程化落地的 **Claude Code Skill** 体系——量化评估 · 黄金测试 · 完整工作流集成
@@ -13,20 +18,6 @@
 - **132** 个 golden JSON 场景 + **29** 个 Python 测试文件，确定性回归保障
 - 测试 skills：`unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
 - 交付管线：`go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`
-
-## 目录
-
-- [快速开始](#cn-quickstart)
-- [项目概览](#cn-overview)
-- [项目亮点](#cn-highlights)
-- [项目结构](#cn-project-structure)
-- [推荐阅读路径](#cn-reading-path)
-- [文档体系](#cn-bestpractice)
-- [skill 示例](#cn-skills)
-- [评审与输出样例](#cn-evaluate-and-output)
-- [治理文档](#cn-governance)
-- [适合谁](#cn-audience)
-- [License](#cn-license)
 
 <a id="cn-quickstart"></a>
 ## 快速开始
