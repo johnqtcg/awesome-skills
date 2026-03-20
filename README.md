@@ -1,4 +1,4 @@
-# awesome-skills
+# awesome-skills: Production-Ready Claude Code Skills
 
 > Production-ready **Claude Code Skills** with quantitative evaluation, golden test fixtures, and end-to-end engineering workflow integration.
 
@@ -153,7 +153,7 @@ If this is your first time in the project, this order works best:
 1. Start with [bestpractice/README.md](bestpractice/README.md) to build the overall picture
 2. Open a specific skill, for example [skills/google-search/SKILL.md](skills/google-search/SKILL.md)
 3. Read its review report, for example [evaluate/google-search-skill-eval-report.md](evaluate/google-search-skill-eval-report.md)
-4. Then look at its real output, for example [outputexample/google-search/中国制造2025目标完成度研究.pdf](outputexample/google-search/中国制造2025目标完成度研究.pdf)
+4. Then look at its real output, for example [outputexample/google-search/ai-bubble-or-platform-shift-march-2026.pdf](outputexample/google-search/中国制造2025目标完成度研究.pdf)
 
 If you prefer Chinese, start from [bestpractice/README.zh-CN.md](bestpractice/README.zh-CN.md).
 
