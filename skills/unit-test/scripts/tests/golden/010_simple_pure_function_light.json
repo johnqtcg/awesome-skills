@@ -1,0 +1,14 @@
+{
+  "id": "010_simple_pure_function_light",
+  "description": "Trivial pure function — skill should select Light mode, skip hypothesis and killer case",
+  "code_snippet": "func Add(a, b int) int { return a + b }",
+  "expect_test_generation": true,
+  "target_type": "Package-level functions",
+  "expected_mode": "Light",
+  "expected_techniques": ["Mutation-Resistant Assertions"],
+  "skill_rules_that_must_exist": [
+    "Light",
+    "table-driven",
+    "3-6"
+  ]
+}

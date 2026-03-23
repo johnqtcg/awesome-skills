@@ -22,10 +22,10 @@ Create and refine Go tests for this repository with table-driven cases and expli
 - Do NOT test constructors (`NewXxx`) or private helpers unless explicitly requested **OR** they contain non-trivial logic (validation/defaulting/option-merging) that can break runtime invariants.
 - For service-layer code with interfaces, focus on methods declared in the interface. For pure functions/handlers, focus on exported functions/endpoints.
 - Run with race detector: `go test -race ./...`.
-- **Killer Case hard constraint**: each test target (interface method / exported function / handler endpoint) must include at least 1 "killer case" (fault-injection or boundary-kill case) that is expected to fail on a known bad mutation/path.
+- **Killer Case hard constraint (Standard + Strict)**: each test target (interface method / exported function / handler endpoint) must include at least 1 "killer case" (fault-injection or boundary-kill case) that is expected to fail on a known bad mutation/path.
 - In the report, for each killer case, explicitly state: **"if this assertion is removed, the known bug can escape detection."**
 
-### Killer Case — Definition
+### Killer Case — Definition (Standard + Strict Modes)
 
 A **killer case** is a test case designed to catch a specific, named defect. It has four mandatory components:
 
@@ -55,7 +55,7 @@ See `references/killer-case-patterns.md` for 6 concrete Go templates.
 - Coverage gate: **>= 80%** by default **for logic-heavy packages** (pure/domain/transform code).
 - For integration-heavy/IO-heavy packages (infra, clients, wiring, DB adapters):
   - Coverage may be lower (typical **60–80%**) **only with explicit rationale**.
-  - Even when coverage is lower, **Failure Hypothesis coverage, Boundary Checklist discipline, and Killer Case discipline remain mandatory**.
+  - Even when coverage is lower, **Boundary Checklist discipline remains mandatory** (full checklist in Standard + Strict; Light Boundary Check in Light mode). Failure Hypothesis and Killer Case discipline apply in Standard + Strict modes only.
 - Never inflate coverage by adding low-signal tests with weak assertions.
 
 #### Multi-Package Coverage
@@ -118,8 +118,78 @@ Config keys:
 - `race.required`: whether `-race` execution is mandatory in this repo (`true|false`)
 - `commands.test`: custom test command template
 - `commands.coverage`: custom coverage command template
+- `mode`: `auto|light|standard|strict` — set the minimum mode floor (default `auto`). Auto-selection still runs; if it detects a higher mode than the configured floor, the higher mode wins. For example, `mode: light` allows Light for simple targets but still auto-promotes to Standard/Strict when triggers fire. `mode: strict` forces Strict for all targets.
 
 If config is missing, use this skill's defaults and state: `Repository unit-test config not found; using skill defaults`.
+
+## Execution Modes (Light / Standard / Strict)
+
+Select mode **before** writing tests. Declare the selected mode and rationale at the start of output.
+
+### Mode Selection
+
+| Criterion | Light | Standard | Strict |
+|-----------|-------|----------|--------|
+| Target count | ≤ 3 simple targets | 1-8 targets | > 8 targets |
+| Concurrency | None (no `go func`, channels, `sync.*`) | Any | Shared mutable state, error fan-in |
+| Dependencies | ≤ 1 failing dependency | Multiple | Complex error chains |
+| Branching | ≤ 3 branches per function | Any | Complex state machines |
+| Security | Not security-sensitive | Any | Auth, crypto, input sanitization |
+| Context usage | Pass-through only | Any | Cancellation/deadline logic |
+| Collection transforms | No slice/map transforms (scalar I/O only) | Any | — |
+| Invariant patterns | None (trivial arithmetic commutativity like `Add(a,b)` does not count) | Non-trivial PBT trigger detected (roundtrip, idempotency, preservation, domain-level commutativity, parse validity) | — (use Standard) |
+
+- **Light**: ALL Light criteria must be met. For simple pure functions with scalar I/O, utilities, type conversions. NOT for collection/slice/map transforms (these need the full boundary checklist to catch off-by-one and dropped-element bugs).
+- **Standard**: Default. Use when any Light criterion is violated but no Strict trigger fires.
+- **Strict**: ANY Strict criterion triggers this mode. For concurrent, security-sensitive, or high-risk code.
+
+When in doubt, choose Standard.
+
+### Mode Requirements
+
+| Feature | Light | Standard | Strict |
+|---------|-------|----------|--------|
+| Table-driven tests | Required | Required | Required |
+| Mutation-resistant assertions | Required | Required | Required |
+| Race detection (`-race`) | Required | Required | Required |
+| Coverage gate (80%) | Required | Required | Required |
+| Reporting Integrity | Required | Required | Required |
+| Case budget per target | **3-6** | **5-12** | **8-15+** |
+| Failure Hypothesis List | Skip | Required | Required |
+| Killer Case per target | Skip | Required (1) | Required (1+) |
+| Removal Risk Statement | Skip | Required | Required |
+| Boundary Checklist | **Light (5 items)** | Full (12 items) | Full (12 items) |
+| Scorecard | **Light (7 checks)** | Full (13 checks) | Full (13 checks) |
+| Property-based test guidance | N/A | Recommend if applicable | Required when pattern matches |
+| JSON Summary | Skip | Required | Required |
+
+### Light Boundary Check (5 items)
+
+Mark each `Covered` or `N/A`:
+
+1. `nil`/zero-value input (if parameter type allows)
+2. Empty collection / zero-length input
+3. Single element / boundary size (n=1)
+4. Error from dependency (if any)
+5. Invalid/malformed input (if format constraints exist)
+
+### Light Scorecard (7 checks)
+
+| # | Tier | Check |
+|---|------|-------|
+| L1 | Hygiene | File naming and location correct |
+| L2 | Hygiene | Table-driven style used |
+| L3 | **Critical** | Assertions are mutation-resistant (business fields, not existence-only) |
+| L4 | Hygiene | Happy path covered |
+| L5 | Standard | Critical dependency error paths covered (or N/A) |
+| L6 | Standard | `-race` execution result reported (or N/A with rationale) |
+| L7 | **Critical** | Coverage meets gate (logic >= 80%) |
+
+**N/A handling**: Items marked N/A with explicit rationale count as PASS for tier and total calculations (same rule as the full scorecard).
+
+PASS when: both Critical (L3, L7) PASS (or N/A with explicit rationale), Standard >= 1/2, Hygiene >= 2/3, total >= 6/7.
+
+State `Light mode: standard scorecard not applicable` in output.
 
 ## Target Type Adaptation
 
@@ -137,7 +207,7 @@ Adapt test organization based on the target code type:
 
 **Pure function tests**: direct table-driven, no mock needed. Focus on input boundaries and output correctness.
 
-## Defect-First Workflow (Mandatory)
+## Defect-First Workflow (Standard + Strict Modes)
 
 Before writing cases, produce a short **Failure Hypothesis List** from the target code:
 
@@ -157,17 +227,22 @@ If this mapping is missing, do not proceed to large test generation.
 
 Avoid generating huge suites with weak assertions.
 
-For each test target, use this default budget first:
+| Mode | Cases per target | Notes |
+|------|-----------------|-------|
+| Light | 3-6 | Happy path + key error/edge paths |
+| Standard | 5-12 | Full budget below + killer case |
+| Strict | 8-15+ | Extended budget + property-based tests when applicable |
+
+Standard/Strict default budget per target:
 
 - 1 happy path
 - 1 terminal/last-element boundary path
 - 1 empty or single-element path
 - 1 dependency error propagation path per critical dependency
 - 1 invariant/path-completeness path
-- 1 killer case (mandatory)
+- 1 killer case (mandatory, Standard + Strict)
 
-Typical high-signal range: **5-12 cases per target**.
-Only exceed it when new cases cover distinct logic paths.
+Only exceed the budget when new cases cover distinct logic paths.
 
 ## Bug-Finding Techniques → `references/bug-finding-techniques.md`
 
@@ -183,7 +258,46 @@ Only exceed it when new cases cover distinct logic paths.
 
 For detailed patterns and Go code examples, load the reference file.
 
-## Fixed Boundary Checklist (Per Test Target)
+## Property-Based Testing (Standard: optional | Strict: required when applicable)
+
+Property-based testing finds bugs that hand-picked boundary cases miss by verifying invariants over randomized input.
+
+### When to Recommend
+
+| Pattern | Invariant | Example |
+|---------|-----------|---------|
+| Roundtrip | `decode(encode(x)) == x` | marshal/unmarshal, serialize/deserialize |
+| Idempotency | `f(f(x)) == f(x)` | normalization, canonicalization |
+| Preservation | `len(output) == len(input)` | transforms that must not drop/duplicate items |
+| Commutativity | `f(a,b) == f(b,a)` | set operations, merge functions |
+| Parse validity | valid input → no panic | parsers, validators |
+
+### Quick Example (`testing/quick`)
+
+```go
+func TestRoundtrip(t *testing.T) {
+    f := func(input string) bool {
+        decoded, err := Decode(Encode(input))
+        return err == nil && decoded == input
+    }
+    if err := quick.Check(f, nil); err != nil {
+        t.Error(err)
+    }
+}
+```
+
+For complex domain types, use hand-rolled generators with deterministic seeds. See `references/property-based-testing.md`.
+
+**Relationship to table-driven tests**: Property-based tests verify invariants over wide input space; table-driven tests verify exact expected values at specific boundaries. Use both when target has both invariants AND boundary risks.
+
+### Mode Applicability
+- **Light**: Not applicable. If an invariant pattern is detected, auto-promote to Standard (see Mode Selection table).
+- **Standard**: Note in report if property-based testing would add value; do not require.
+- **Strict**: Required recommendation when target matches any trigger pattern above; include at least one property test or justify why none apply.
+
+## Fixed Boundary Checklist (Standard + Strict — Per Test Target)
+
+For Light mode, use the Light Boundary Check (5 items) in Execution Modes.
 
 Mark each item as `Covered` or `N/A (reason)`:
 
@@ -218,14 +332,16 @@ When the task is fixing failing tests or adding tests to existing code, use thes
 2. Identify root cause: test bug vs implementation bug
 3. Fix the actual bug side (do NOT weaken assertions just to make tests pass)
 4. Run `go test -run TestXxx -v -race` to verify the fix
-5. Skip full 13-check scorecard and use incremental scorecard only.
+5. Skip full scorecard and use incremental scorecard only (see Auto Scorecard applicability for mode-aware rules).
 
 ### Add tests for existing code:
 1. Read target code, identify untested paths
-2. Build targeted Failure Hypothesis List (only for uncovered paths)
+2. **(Standard + Strict only)** Build targeted Failure Hypothesis List (only for uncovered paths)
 3. Design cases for gaps only (do not rewrite existing tests)
 4. Run coverage diff: compare before/after
-5. Simplified Scorecard: only verify items 5, 7, 8, 11 for new cases.
+5. Simplified Scorecard (mode-aware):
+   - **Standard/Strict targets**: only verify items 5, 7, 8, 11 for new cases.
+   - **Light targets**: only verify items L3, L5, L7 for new cases.
 
 ### Coverage recovery:
 1. Run `go test -coverprofile=before.out`
@@ -235,12 +351,13 @@ When the task is fixing failing tests or adding tests to existing code, use thes
 
 ## Workflow
 
+0. **Assess target code complexity and select execution mode** (Light/Standard/Strict). Declare mode and rationale.
 1. Check `go.mod` for Go version; note version-dependent test pattern adaptations (see Go Version Gate).
 2. Exclude generated code files from test scope (see Generated Code Exclusion).
 3. Read target code and identify test targets (interface methods, exported functions, handler endpoints).
-4. Build Failure Hypothesis List (loops, mapping, branch, concurrency, context/time).
-5. For each target, define 1 mandatory killer case and bind it to one hypothesis.
-6. Design minimal high-signal cases (5-12/target baseline).
+4. **(Standard + Strict only)** Build Failure Hypothesis List (loops, mapping, branch, concurrency, context/time).
+5. **(Standard + Strict only)** For each target, define 1 mandatory killer case and bind it to one hypothesis.
+6. Design minimal high-signal cases (Light: 3-6, Standard: 5-12, Strict: 8-15+ per target).
 7. Implement tests with strong field-level assertions.
 8. Run focused tests:
   - `go test ./path/to/pkg -run TestXxx -v -race`
@@ -250,7 +367,7 @@ When the task is fixing failing tests or adding tests to existing code, use thes
   - `go test ./path/to/pkg -coverprofile=coverage.out -covermode=atomic -race`
   - `go tool cover -func=coverage.out`
 11. If coverage < required gate OR key hypotheses untested, add targeted cases only.
-12. Verify killer case integrity in report (required assertion present + removal risk statement).
+12. **(Standard + Strict only)** Verify killer case integrity in report (required assertion present + removal risk statement).
 
 ### Reporting Integrity (Mandatory)
 
@@ -271,8 +388,10 @@ Each item has a weight tier that determines its impact on the final verdict:
 
 Applicability:
 
-- Full scorecard is mandatory for full test generation workflows.
-- For incremental mode, use simplified scorecard only (items 5, 7, 8, 11), and explicitly state `Incremental mode: full scorecard skipped`.
+- **Light mode**: Use Light Scorecard (7 checks); state `Light mode: standard scorecard not applicable`.
+- **Standard/Strict mode**: Full 13-check scorecard mandatory.
+- **Incremental mode (Standard/Strict targets)**: Simplified scorecard (items 5, 7, 8, 11); state `Incremental mode: full scorecard skipped`.
+- **Incremental mode (Light targets)**: Use Light Scorecard (items L3, L5, L7 only); PASS when all 3 items are PASS or N/A with rationale; state `Incremental + Light mode: minimal scorecard`.
 
 1. **[Hygiene]** File naming and location are correct.
 2. **[Hygiene]** Top-level test naming follows the Target Type Adaptation table.
@@ -301,6 +420,7 @@ Otherwise: FAIL, with missing items and next targeted test additions.
 
 Include:
 
+- Execution mode (Light/Standard/Strict) with selection rationale
 - Targets tested + case counts
 - Go version (from `go.mod`) and version-dependent adaptations applied
 - Generated files excluded from scope (list, or "none")
@@ -315,14 +435,16 @@ Include:
 - Scorecard and final PASS/FAIL
 - Remaining untested risks (if any)
 
+**Light mode output reduction**: Skip Failure Hypothesis List, Killer Case list, and JSON Summary. Report only: mode + rationale, targets + case counts, Light Boundary Check, coverage/race results, Light Scorecard, remaining risks.
+
 For list/transform logic, include explicit statement:
 
 - whether first/middle/last items were validated
 - whether output cardinality and identity completeness were validated
 
-### Machine-Readable Summary (JSON)
+### Machine-Readable Summary (JSON) — Standard + Strict Only
 
-Also output a compact JSON block for CI/pipeline ingestion:
+Also output a compact JSON block for CI/pipeline ingestion (skip for Light mode):
 
 ```json
 {

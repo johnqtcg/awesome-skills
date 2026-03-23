@@ -1,0 +1,15 @@
+{
+  "id": "011_roundtrip_property_standard",
+  "description": "Encode/Decode pair — should trigger property-based testing recommendation",
+  "code_snippet": "func Encode(s string) string { ... }\nfunc Decode(s string) (string, error) { ... }",
+  "expect_test_generation": true,
+  "target_type": "Package-level functions",
+  "expected_mode": "Standard",
+  "expected_techniques": ["property-based testing", "Roundtrip"],
+  "skill_rules_that_must_exist": [
+    "property-based",
+    "testing/quick",
+    "roundtrip",
+    "decode(encode(x))"
+  ]
+}

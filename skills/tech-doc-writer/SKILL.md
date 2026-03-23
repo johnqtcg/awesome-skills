@@ -98,9 +98,10 @@ Critical failures block delivery. Record scorecard results in output.
 |-------|-----------|----------|
 | **Level 1: Full** | Audience, type, and repo context all clear | Complete document + all gates pass |
 | **Level 2: Partial** | Type clear but audience uncertain | Write with broadest reasonable audience; mark `<!-- AUDIENCE: assumed ... -->` at top; note in output |
-| **Level 3: Scaffold** | Insufficient info to write content (e.g., unknown system, unspecified scope) | Generate skeleton with section headings + `<!-- TODO: ... -->` placeholders; ask user to fill gaps |
+| **Level 2.5: Active Retrieval** | Content gaps exist but codebase may contain answers | Before degrading to Level 3, attempt at least one round of targeted search (Grep for key terms, Glob for related files, Read for config/code). Fill gaps with retrieved evidence. If retrieval succeeds → proceed at Level 1 or 2. If retrieval fails → degrade to Level 3 |
+| **Level 3: Scaffold** | Insufficient info **after** active retrieval attempt | Generate skeleton with section headings + `<!-- TODO: ... -->` placeholders; list what was searched and not found; ask user to fill gaps |
 
-Never present Level 2/3 output as if it were Level 1.
+Never present Level 2/3 output as if it were Level 1. **When a relevant codebase or doc corpus exists, always attempt Level 2.5 retrieval before degrading to Level 3.** If no meaningful corpus is available (e.g., greenfield project, standalone document with no repo context), skip Level 2.5 retrieval and classify based on the information the user has provided — if audience, type, and scope are clear, proceed at Level 1 or 2 directly.
 
 ## Workflow
 
@@ -135,6 +136,7 @@ Apply these rules while writing:
 **Visual expression**:
 - Use diagrams when: 3+ components interact, state transitions, sequential interactions.
 - Prefer Mermaid (GitHub/GitLab native) or ASCII art (diffable).
+- **Mermaid complexity limit**: Keep diagrams ≤ 15 nodes. If logic requires more, split into multiple sub-diagrams with cross-references. Overly complex Mermaid frequently fails to render.
 - Every diagram: title + legend + naming consistent with prose.
 
 **Title — SPA Principle**:
@@ -222,7 +224,7 @@ Every invocation must end with this structured block. Use the exact field names.
 ```
 ── tech-doc-writer output ──
 mode:           Write | Review | Improve
-degradation:    Level 1 (Full) | Level 2 (Partial) | Level 3 (Scaffold)
+degradation:    Level 1 (Full) | Level 2 (Partial) | Level 2.5 (Retrieval-Assisted) | Level 3 (Scaffold)
 doc_type:       concept | task | reference | troubleshooting | design
 audience:       <role> / <goal> / <prior knowledge>
 scorecard:      Critical: <n>/<total> | Standard: <n>/<total> | Hygiene: <n>/<total>
@@ -249,6 +251,10 @@ assumptions:    [assumed reader has VPN access based on repo context]
 
 - Follow the language of the existing document or user's request.
 - Chinese documents: Chinese prose, English for code/commands/technical terms.
+- **Pangu spacing (盘古之白)**: In CJK-Latin mixed text, always insert exactly one space between CJK characters and Latin letters/numbers. Examples:
+  - BAD: `使用Redis集群部署3个节点`
+  - GOOD: `使用 Redis 集群部署 3 个节点`
+  - Exception: no space needed inside inline code backticks, URLs, or file paths.
 - Maintain consistent terminology within a document — add a glossary section if needed.
 
 ## Self-Validation

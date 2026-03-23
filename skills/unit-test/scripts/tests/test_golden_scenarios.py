@@ -93,12 +93,25 @@ class GoldenScenarioRuleCoverageTests(unittest.TestCase):
         self.assertEqual(f["target_type"], "Middleware")
         self._assert_rules_covered(f)
 
+    def test_010_simple_pure_function_light(self):
+        f = _load_fixture("010_simple_pure_function_light.json")
+        self.assertTrue(f["expect_test_generation"])
+        self.assertEqual(f["expected_mode"], "Light")
+        self.assertIn("Package-level functions", self.skill_text)
+        self._assert_rules_covered(f)
+
+    def test_011_roundtrip_property_standard(self):
+        f = _load_fixture("011_roundtrip_property_standard.json")
+        self.assertTrue(f["expect_test_generation"])
+        self.assertEqual(f["expected_mode"], "Standard")
+        self._assert_rules_covered(f)
+
     # --- Aggregate tests ---
 
     def test_all_fixtures_loaded(self):
         fixtures = sorted(GOLDEN_DIR.glob("*.json"))
         self.assertGreaterEqual(
-            len(fixtures), 9, "Expected at least 9 golden fixtures"
+            len(fixtures), 11, "Expected at least 11 golden fixtures"
         )
 
     def test_all_fixture_rules_covered(self):

@@ -25,10 +25,14 @@ class UnitTestSkillContractTests(unittest.TestCase):
     def test_scorecard_boundary_for_incremental_mode(self) -> None:
         skill = SKILL_MD.read_text()
         self.assertIn(
-            "Full scorecard is mandatory for full test generation workflows.", skill
+            "Full 13-check scorecard mandatory.", skill
         )
-        self.assertIn("For incremental mode, use simplified scorecard only", skill)
+        self.assertIn("Incremental mode", skill)
         self.assertIn("Incremental mode: full scorecard skipped", skill)
+
+    def test_scorecard_boundary_for_light_mode(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("Light mode: standard scorecard not applicable", skill)
 
     def test_repo_config_section_and_example_exist(self) -> None:
         skill = SKILL_MD.read_text()
@@ -65,7 +69,7 @@ class UnitTestSkillContractTests(unittest.TestCase):
 
     def test_defect_first_workflow_five_risk_categories(self) -> None:
         skill = SKILL_MD.read_text()
-        self.assertIn("Defect-First Workflow (Mandatory)", skill)
+        self.assertIn("Defect-First Workflow (Standard + Strict Modes)", skill)
         self.assertIn("Loop/index risks", skill)
         self.assertIn("Collection transform risks", skill)
         self.assertIn("Branching risks", skill)
@@ -180,7 +184,9 @@ class UnitTestSkillContractTests(unittest.TestCase):
     def test_high_signal_test_budget_range(self) -> None:
         skill = SKILL_MD.read_text()
         self.assertIn("High-Signal Test Budget", skill)
-        self.assertIn("5-12 cases per target", skill)
+        self.assertIn("3-6", skill)
+        self.assertIn("5-12", skill)
+        self.assertIn("8-15+", skill)
 
     # --- New: Test Structure ---
 
@@ -258,12 +264,265 @@ class UnitTestSkillContractTests(unittest.TestCase):
         self.assertIn('"scorecard"', skill)
         self.assertIn('"coverage"', skill)
 
+    def test_json_summary_gated_to_standard_strict(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("Standard + Strict Only", skill)
+        self.assertIn("skip for Light mode", skill)
+
     # --- New: Anti-examples count updated ---
 
     def test_anti_examples_expanded_count(self) -> None:
         skill = SKILL_MD.read_text()
         self.assertIn("snapshot/golden files", skill)
         self.assertIn("implementation details instead of behavior", skill)
+
+    # --- New: Execution Modes ---
+
+    def test_execution_modes_section_exists(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("Execution Modes (Light / Standard / Strict)", skill)
+        self.assertIn("Light", skill)
+        self.assertIn("Standard", skill)
+        self.assertIn("Strict", skill)
+
+    def test_mode_selection_table_exists(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("Mode Selection", skill)
+        self.assertIn("Target count", skill)
+        self.assertIn("Concurrency", skill)
+        self.assertIn("When in doubt, choose Standard", skill)
+
+    def test_light_scorecard_exists(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("Light Scorecard (7 checks)", skill)
+        for i in range(1, 8):
+            self.assertIn(f"L{i}", skill)
+
+    def test_light_scorecard_critical_items(self) -> None:
+        skill = SKILL_MD.read_text()
+        light_start = skill.index("Light Scorecard (7 checks)")
+        light_section = skill[light_start : light_start + 1000]
+        # L3 and L7 must be Critical
+        self.assertIn("L3", light_section)
+        self.assertIn("L7", light_section)
+        critical_count = light_section.count("**Critical**")
+        self.assertEqual(critical_count, 2, "Light scorecard must have exactly 2 Critical items")
+
+    def test_light_boundary_check_exists(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("Light Boundary Check (5 items)", skill)
+        check_start = skill.index("Light Boundary Check (5 items)")
+        check_section = skill[check_start : check_start + 500]
+        for i in range(1, 6):
+            self.assertRegex(
+                check_section,
+                rf"\b{i}\.\s+",
+                f"Light boundary check item {i} not found",
+            )
+
+    def test_mode_declaration_required(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("Declare the selected mode and rationale", skill)
+
+    def test_mode_requirements_table_exists(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("Mode Requirements", skill)
+        self.assertIn("Case budget per target", skill)
+        self.assertIn("Failure Hypothesis List", skill)
+
+    def test_mode_aware_killer_case(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("Killer Case hard constraint (Standard + Strict)", skill)
+        self.assertIn("Killer Case — Definition (Standard + Strict Modes)", skill)
+
+    def test_mode_aware_defect_workflow(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("Defect-First Workflow (Standard + Strict Modes)", skill)
+
+    def test_mode_aware_case_budget(self) -> None:
+        skill = SKILL_MD.read_text()
+        budget_start = skill.index("High-Signal Test Budget")
+        budget_section = skill[budget_start : budget_start + 500]
+        self.assertIn("3-6", budget_section)
+        self.assertIn("5-12", budget_section)
+        self.assertIn("8-15+", budget_section)
+
+    def test_workflow_step_zero_mode_selection(self) -> None:
+        skill = SKILL_MD.read_text()
+        workflow_start = skill.index("## Workflow")
+        workflow_section = skill[workflow_start : workflow_start + 500]
+        self.assertIn("select execution mode", workflow_section)
+
+    # --- New: Property-Based Testing ---
+
+    def test_property_based_testing_section_exists(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("Property-Based Testing", skill)
+        self.assertIn("Roundtrip", skill)
+        self.assertIn("Idempotency", skill)
+        self.assertIn("Preservation", skill)
+
+    def test_property_based_testing_quick_reference(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("testing/quick", skill)
+        self.assertIn("quick.Check", skill)
+
+    def test_property_based_testing_mode_applicability(self) -> None:
+        skill = SKILL_MD.read_text()
+        pbt_start = skill.index("Property-Based Testing")
+        pbt_section = skill[pbt_start : pbt_start + 2000]
+        self.assertIn("Light", pbt_section)
+        self.assertIn("Standard", pbt_section)
+        self.assertIn("Strict", pbt_section)
+
+    def test_property_based_testing_reference_exists(self) -> None:
+        ref = REFERENCE_DIR / "property-based-testing.md"
+        self.assertTrue(ref.exists(), "property-based-testing.md reference must exist")
+
+    # --- New: Output includes mode ---
+
+    def test_output_expectations_include_mode(self) -> None:
+        skill = SKILL_MD.read_text()
+        output_start = skill.index("## Output Expectations")
+        output_section = skill[output_start:]
+        self.assertIn("Execution mode (Light/Standard/Strict)", output_section)
+
+    def test_light_mode_output_reduction(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("Light mode output reduction", skill)
+
+    # --- New: Config mode key ---
+
+    def test_config_mode_key_documented(self) -> None:
+        skill = SKILL_MD.read_text()
+        config_start = skill.index("Repository Config (Optional)")
+        config_section = skill[config_start : config_start + 1500]
+        self.assertIn("`mode`", config_section)
+        self.assertIn("auto|light|standard|strict", config_section)
+
+    def test_config_mode_is_floor_not_override(self) -> None:
+        skill = SKILL_MD.read_text()
+        config_start = skill.index("Repository Config (Optional)")
+        config_section = skill[config_start : config_start + 1500]
+        self.assertIn("minimum mode floor", config_section)
+        self.assertIn("higher mode wins", config_section)
+
+    def test_config_example_has_mode_key(self) -> None:
+        cfg = CONFIG_EXAMPLE.read_text()
+        self.assertIn("mode: auto", cfg)
+
+    def test_config_example_comment_matches_floor_semantics(self) -> None:
+        """Config YAML comment must say 'minimum mode floor', not 'override'."""
+        cfg = CONFIG_EXAMPLE.read_text()
+        self.assertIn("minimum mode floor", cfg)
+        self.assertNotIn("Override auto-selection", cfg)
+
+    # --- New: Workflow step 6 mode-aware budget ---
+
+    def test_workflow_step_six_mode_aware_budget(self) -> None:
+        skill = SKILL_MD.read_text()
+        workflow_start = skill.index("## Workflow")
+        workflow_section = skill[workflow_start : workflow_start + 1000]
+        self.assertIn("Light: 3-6", workflow_section)
+        self.assertIn("Standard: 5-12", workflow_section)
+        self.assertIn("Strict: 8-15+", workflow_section)
+
+    # --- Fix: Strict target-count trigger ---
+
+    def test_strict_target_count_is_not_universal(self) -> None:
+        skill = SKILL_MD.read_text()
+        mode_start = skill.index("Mode Selection")
+        mode_section = skill[mode_start : mode_start + 500]
+        self.assertNotIn("Any count", mode_section)
+        self.assertIn("> 8 targets", mode_section)
+
+    # --- Fix: Invariant pattern triggers mode promotion ---
+
+    def test_invariant_pattern_in_mode_selection(self) -> None:
+        skill = SKILL_MD.read_text()
+        mode_start = skill.index("Mode Selection")
+        mode_section = skill[mode_start : mode_start + 1000]
+        self.assertIn("Invariant patterns", mode_section)
+        self.assertIn("roundtrip", mode_section.lower())
+        self.assertIn("commutativity", mode_section.lower())
+        self.assertIn("parse validity", mode_section.lower())
+
+    def test_light_mode_auto_promotes_on_invariant(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("auto-promote to Standard", skill)
+
+    # --- Fix: Workflow step 12 gated to Standard + Strict ---
+
+    def test_workflow_step_twelve_gated(self) -> None:
+        skill = SKILL_MD.read_text()
+        workflow_start = skill.index("## Workflow")
+        workflow_section = skill[workflow_start : workflow_start + 1500]
+        # Find step 12 and verify it has mode gate
+        step12_idx = workflow_section.index("Verify killer case integrity")
+        step12_context = workflow_section[step12_idx - 40 : step12_idx + 50]
+        self.assertIn("Standard + Strict only", step12_context)
+
+    # --- Fix: Trivial commutativity excluded from mode promotion ---
+
+    def test_trivial_commutativity_excluded(self) -> None:
+        skill = SKILL_MD.read_text()
+        mode_start = skill.index("Mode Selection")
+        mode_section = skill[mode_start : mode_start + 800]
+        self.assertIn("trivial arithmetic commutativity", mode_section.lower())
+        self.assertIn("does not count", mode_section.lower())
+
+    # --- Fix: Light scorecard N/A handling ---
+
+    def test_light_scorecard_na_handling(self) -> None:
+        skill = SKILL_MD.read_text()
+        light_start = skill.index("Light Scorecard (7 checks)")
+        light_section = skill[light_start : light_start + 800]
+        self.assertIn("N/A handling", light_section)
+        self.assertIn("count as PASS", light_section)
+
+    # --- Fix: Incremental mode is mode-aware ---
+
+    def test_incremental_mode_is_mode_aware(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("Incremental mode (Standard/Strict targets)", skill)
+        self.assertIn("Incremental mode (Light targets)", skill)
+        self.assertIn("Incremental + Light mode: minimal scorecard", skill)
+
+    def test_incremental_add_tests_flow_is_mode_aware(self) -> None:
+        """The 'Add tests for existing code' incremental flow must gate
+        Failure Hypothesis List and use mode-aware scorecard items."""
+        skill = SKILL_MD.read_text()
+        inc_start = skill.index("### Add tests for existing code:")
+        inc_section = skill[inc_start : inc_start + 600]
+        # Failure Hypothesis List gated to Standard + Strict
+        self.assertIn("(Standard + Strict only)", inc_section)
+        self.assertIn("Failure Hypothesis List", inc_section)
+        # Scorecard is mode-aware
+        self.assertIn("Standard/Strict targets", inc_section)
+        self.assertIn("Light targets", inc_section)
+        self.assertIn("L3, L5, L7", inc_section)
+
+    # --- Fix: No unreachable force-Light path in PBT ---
+
+    def test_no_force_light_config_path_in_pbt(self) -> None:
+        skill = SKILL_MD.read_text()
+        pbt_start = skill.index("Property-Based Testing")
+        pbt_section = skill[pbt_start : pbt_start + 2000]
+        self.assertNotIn("forces Light mode via config", pbt_section)
+        self.assertNotIn("explicitly forces Light", pbt_section)
+
+    # --- Fix: Collection transforms excluded from Light mode ---
+
+    def test_collection_transforms_excluded_from_light(self) -> None:
+        skill = SKILL_MD.read_text()
+        mode_start = skill.index("Mode Selection")
+        mode_section = skill[mode_start : mode_start + 1000]
+        self.assertIn("Collection transforms", mode_section)
+        self.assertIn("scalar I/O only", mode_section)
+
+    def test_light_description_excludes_collection_transforms(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("NOT for collection/slice/map transforms", skill)
 
 
 if __name__ == "__main__":

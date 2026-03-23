@@ -1,3 +1,8 @@
+# mode: auto | light | standard | strict
+# Set the minimum mode floor (default: auto). Auto-selection still runs;
+# if it detects a higher mode than the configured floor, the higher mode wins.
+mode: auto
+
 coverage:
   logic_min: 80
   infra_min: 70

@@ -218,6 +218,15 @@ Every diagram must have:
 2. **Legend** for non-obvious symbols, colors, or line styles.
 3. **Consistent naming** with prose — if the text says "Order Service", the diagram must not say "OrderSvc".
 
+### Diagram Complexity Control
+
+- **Node limit**: ≤ 15 nodes per Mermaid diagram. Beyond this, rendering failures increase and readability drops.
+- **Split strategy**: If the full picture exceeds 15 nodes, decompose into:
+  1. A high-level overview diagram (5–8 nodes, system boundaries only)
+  2. Detail sub-diagrams per subsystem (≤ 15 nodes each)
+  3. Cross-reference between diagrams: "See §Detail: Payment Flow below"
+- **Test rendering**: After writing a Mermaid block, mentally count nodes. If > 15, split before delivering.
+
 ### Mermaid Example
 
 ```mermaid
