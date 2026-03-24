@@ -9,7 +9,6 @@ vendor/
 .scannerwork/*
 runtime/
 .DS_Store
-CLAUDE.md
 .claudeignore
 .claude
 site/
