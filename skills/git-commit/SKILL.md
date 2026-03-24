@@ -35,14 +35,18 @@ test -f .git/MERGE_HEAD -o -f .git/CHERRY_PICK_HEAD -o -f .git/REVERT_HEAD  # mu
 
 2. Staging:
 - If the user specifies exact files, stage those only (`git add <paths>`).
-- If the user gives a general instruction (e.g. "commit my changes", "commit this work"), apply this protocol:
-  1. Run `git status --short` and classify all changes into **tracked-modified** (M/D) and **untracked** (??) files.
-  2. **Tracked-modified files**: stage them all — these are clearly part of the user's in-progress work.
-  3. **Untracked files**: evaluate each against the context of the current task:
-     - Files that are clearly task-related (e.g. new source files the user just created, new test files): stage them.
-     - Files that are ambiguous or unrelated (e.g. editor configs, build artifacts, unrelated scratch files): **list them to the user in a single confirmation prompt** — "I also found these untracked files: … Should I include them?"
-     - Files that match `.gitignore` patterns will already be excluded by git; no action needed.
-  4. If in doubt, prefer asking once with a complete list over asking file-by-file.
+- If the user gives a general instruction (e.g. "commit my changes", "commit this work"):
+  1. Run `git status --short` and read the full list of modified (M), deleted (D), and untracked (??) files.
+  2. **Group by logical change**: review the file list and the diffs (`git diff` for unstaged, `git diff --cached` for already-staged). Partition all changes into groups where each group represents one coherent logical change. Consider directory proximity, shared purpose (e.g. source + its test), and the nature of the diff.
+  3. **Single logical change** — all changes clearly belong to one intent: stage them all (tracked and untracked task-related files alike).
+  4. **Multiple logical changes detected** — present the groups to the user and ask which group to commit now:
+     > "I see these changes form separate concerns:
+     > - Group A (feat): `src/auth.go`, `src/auth_test.go` — new JWT support
+     > - Group B (chore): `go.mod`, `go.sum` — dependency update
+     > - Group C: `README.md` — doc fix
+     > Which group should I commit? Or commit all together?"
+  5. **Untracked files**: evaluate each against the current task context. Stage files clearly task-related (new source/test files created in this session). For ambiguous files (editor configs, scratch files, unrelated additions), include them in the group listing above so the user can decide.
+  6. If in doubt, prefer asking once with a complete grouped list over guessing.
 - Verify after staging: `git status --short` and `git diff --cached`.
 - If nothing is staged, stop and report.
 
@@ -65,12 +69,41 @@ git diff --cached --name-only | $SEARCHER "$SENSITIVE_FILES"
 SECRET_PATTERNS='(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|DSA|PGP|PRIVATE) KEY-----|ghp_[A-Za-z0-9]{36}|gho_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{82}|xox[baprs]-[A-Za-z0-9\-]+|hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+|AIza[0-9A-Za-z\-_]{35}|sk_live_[0-9a-zA-Z]{24,}|rk_live_[0-9a-zA-Z]{24,}|sk-[A-Za-z0-9]{20,}|SG\.[A-Za-z0-9\-_]{22}\.[A-Za-z0-9\-_]{43}|mongodb(\+srv)?://[^\s]+@|postgres(ql)?://[^\s]*:[^\s]*@|mysql://[^\s]*:[^\s]*@|password\s*=|secret\s*=|token\s*=|api[_-]?key\s*=)'
 git diff --cached | $SEARCHER "$SECRET_PATTERNS"
 ```
-- If either matches, stop and ask user for explicit resolution before commit.
+- **Triage matches before blocking** — not every match is a real secret. Apply these filters **in order** to each match; the first filter that hits decides the disposition:
+
+  **Filter 1 — Project allowlist** (highest priority):
+  If `.commit-secret-allowlist` exists in the repo root, read it (one glob per line, e.g. `**/testdata/**`, `docs/examples/**`). If the matched file path matches any glob, **auto-dismiss**.
+
+  **Filter 2 — Test/fixture path**:
+  Auto-dismiss if the file path from the diff header (`diff --git a/<path> b/<path>`) matches this pattern:
+  ```
+  /(test|tests|__tests__|spec|mock|mocks|fixture|fixtures|example|examples|testdata|snapshot|snapshots)/
+  ```
+  Also auto-dismiss if the filename itself ends with `_test.go`, `.test.ts`, `.test.js`, `.spec.ts`, `.spec.js`, `_test.py`, or `Test.java`.
+
+  **Filter 3 — Documentation code block**:
+  Auto-dismiss if **all** of the following are true:
+  - The file extension is `.md`, `.rst`, `.adoc`, or `.mdx`.
+  - The matched line in the diff falls between a code fence open (`` ``` `` or `.. code-block::`) and its corresponding close. To determine this: scan the diff hunk from its `@@` header downward, tracking fence open/close state; if the matched line is inside a fence, dismiss it.
+
+  **Filter 4 — Comment line**:
+  Auto-dismiss if the matched line (after stripping the diff `+` prefix and leading whitespace) starts with a language comment marker: `//`, `#`, `--`, `/*`, `*`, `"""`, `'''`, `%`, `;;`, `REM `.
+
+  **Everything else → Review** (block and show context):
+  For each surviving match, display: file path, line number, the matched line, and 2 lines of surrounding context from the diff. Ask the user to confirm or dismiss each.
+- If any match survives triage, stop and ask the user for explicit resolution before commit.
 - Note: these patterns cover AWS, GitHub, Slack, Google, Stripe, OpenAI, SendGrid, and common DB connection strings. For project-specific tokens not covered here, add custom patterns to a `.secret-patterns` file or pre-commit hook.
 
 4. Quality gate (recommended):
 
-Auto-detect the project ecosystem from marker files in the repo root, then run the matching checks. If multiple markers exist (e.g. a monorepo with both `go.mod` and `package.json`), run the gate that matches the **staged files' language**.
+Auto-detect the project ecosystem from marker files in the repo root, then run the matching checks.
+
+**Ecosystem detection algorithm** (deterministic, in order):
+1. Collect file extensions from staged files: `git diff --cached --name-only | sed 's/.*\.//' | sort | uniq -c | sort -rn`.
+2. Map extensions to ecosystems: `.go` → Go, `.js`/`.ts`/`.jsx`/`.tsx` → Node.js/TS, `.py` → Python, `.java`/`.kt`/`.kts` → Java/Kotlin, `.rs` → Rust.
+3. Pick the ecosystem with the **most staged files**. On a tie, prefer the ecosystem whose marker file is closest to the repo root.
+4. If staged files span multiple ecosystems with no clear majority (e.g. 3 `.go` + 3 `.ts`), run the gate for **each** ecosystem that has staged files, scoped to its own files only.
+5. If no staged file maps to a known ecosystem, fall through to the Fallback section below.
 
 **Go** (marker: `go.mod`):
 - `go vet ./...`
@@ -88,20 +121,61 @@ Auto-detect the project ecosystem from marker files in the repo root, then run t
 - Detect the package manager: `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, otherwise npm.
 - Lint (if available): check `package.json` for a `lint` script → `<pm> run lint`.
 - Type check (if TypeScript): look for `tsconfig.json` → `<pm> run tsc --noEmit` or a `typecheck` script.
-- Tests: check for a `test` script → `<pm> test`. If no test script exists, skip and note it.
+- Tests — choose scope based on project size:
+  - **Small repos**: `<pm> test`
+  - **Large repos / monorepos**: run only tests related to staged files. Most JS test runners support path-based filtering:
+    ```bash
+    # Collect directories of changed JS/TS files
+    CHANGED_DIRS=$(git diff --cached --name-only -- '*.js' '*.ts' '*.jsx' '*.tsx' | while read -r f; do dirname "$f"; done | sort -u)
+    # Jest: pass changed dirs as positional args (matches test files by path)
+    <pm> test -- $CHANGED_DIRS
+    # Vitest: same pattern
+    <pm> exec vitest run $CHANGED_DIRS
+    ```
+    If the project uses a workspace monorepo (lerna, nx, turborepo), prefer the workspace-aware command: `npx nx affected --target=test`, `npx turbo run test --filter=...[HEAD~1]`, or `npx lerna run test --since=HEAD~1`.
+  - If no test script exists in `package.json`, skip and note it.
 
 **Python** (marker: `pyproject.toml` or `setup.py` or `setup.cfg`):
 - Lint: prefer `ruff check .` if `ruff` is available; fall back to `flake8` if installed.
 - Type check: run `mypy` or `pyright` if either is in dev dependencies or installed.
-- Tests: `pytest` (preferred) or `python -m unittest discover`. If `pyproject.toml` has a `[tool.pytest]` or `[tool.tox]` section, follow that config.
+- Tests — choose scope based on project size:
+  - **Small repos**: `pytest`
+  - **Large repos**: run only tests related to staged files:
+    ```bash
+    # Collect changed .py file paths
+    CHANGED_PY=$(git diff --cached --name-only -- '*.py')
+    # pytest: pass changed files directly — it discovers matching test files
+    pytest $CHANGED_PY
+    # Or use pytest-testmon if installed (tracks which tests cover which source lines)
+    pytest --testmon
+    ```
+  - If `pyproject.toml` has `[tool.pytest]` or `[tool.tox]` section, follow that config.
 
 **Java / Kotlin** (marker: `pom.xml` or `build.gradle` / `build.gradle.kts`):
-- Maven: `mvn test -q`
-- Gradle: `./gradlew test`
+- Maven — choose scope:
+  - **Full**: `mvn test -q`
+  - **Scoped**: identify changed modules from staged file paths, then: `mvn test -pl <module1>,<module2> -q`
+    ```bash
+    # Extract Maven module names from staged paths (first directory component under repo root)
+    CHANGED_MODULES=$(git diff --cached --name-only -- '*.java' '*.kt' '*.kts' | while read -r f; do echo "$f" | cut -d'/' -f1; done | sort -u | paste -sd,)
+    if [ -n "$CHANGED_MODULES" ]; then mvn test -pl "$CHANGED_MODULES" -q; fi
+    ```
+- Gradle — choose scope:
+  - **Full**: `./gradlew test`
+  - **Scoped**: `./gradlew :<module>:test` for each changed module.
 
 **Rust** (marker: `Cargo.toml`):
 - `cargo clippy -- -D warnings`
-- `cargo test`
+- Tests — choose scope:
+  - **Single-crate repos**: `cargo test`
+  - **Workspace repos**: test only affected crates:
+    ```bash
+    # Extract crate directories from staged .rs files
+    CHANGED_CRATES=$(git diff --cached --name-only -- '*.rs' | while read -r f; do
+      d="$f"; while [ "$d" != "." ]; do d=$(dirname "$d"); [ -f "$d/Cargo.toml" ] && echo "$d" && break; done
+    done | sort -u)
+    for crate in $CHANGED_CRATES; do cargo test --manifest-path "$crate/Cargo.toml"; done
+    ```
 
 **Fallback** (no recognized marker):
 - Check for `Makefile` with a `test` or `check` target → `make test` / `make check`.
@@ -113,10 +187,20 @@ Auto-detect the project ecosystem from marker files in the repo root, then run t
 - If a check fails, stop and report the errors — do not proceed to commit.
 
 5. Compose commit message (English, Angular style):
-- **Before writing the message**, run `git log --oneline -20` and extract the scopes and types actually used in this project. Use only scopes that already appear in the log (or omit scope if none fits). Do not invent new scopes.
-- Format: `<type>(<scope>): <subject>`, optionally followed by body and footer separated by blank lines.
+
+**Scope & type discovery** (run before writing the message):
+```bash
+# Extract type(scope) pairs from recent history
+git log --oneline -30 | grep -oE '^[0-9a-f]+ [a-z]+\([a-z0-9_-]+\):' | sed 's/^[0-9a-f]* //' | sort | uniq -c | sort -rn
+```
+- Parse the output into a frequency-ranked list of `type(scope)` pairs.
+- **Well-established conventions** (>= 3 distinct commits use the same scope): use these scopes as the canonical set. Pick the scope that best matches the staged files' directory or module.
+- **Sparse or inconsistent history** (< 3 commits per scope, or no conventional commits at all): **omit scope entirely** — do not guess or invent. Use bare `<type>: <subject>` format.
+- **Mixed history** (some scopes well-established, others one-off): only reuse scopes that appear >= 3 times; treat the rest as noise.
+
+**Message format**: `<type>(<scope>): <subject>`, optionally followed by body and footer separated by blank lines.
 - **Subject line**: imperative mood, **<= 50 chars total** (see Hard Rules), no trailing period. Focus on *what* changed at a glance.
-- **Scope**: optional, lowercase. Must come from the project's existing conventions discovered above; omit scope when multiple areas are touched or no existing scope fits.
+- **Scope**: optional, lowercase. Must come from the canonical set discovered above; omit when multiple areas are touched, no established scope fits, or history is too sparse.
 - **Body** (recommended for non-trivial changes): explain **why** the change is needed — the diff already shows *what*. Wrap at **72 characters**.
 - **Footer** (optional): `BREAKING CHANGE: <details>`, `Closes #<issue>`, `Refs: <URL or ticket>`.
 
