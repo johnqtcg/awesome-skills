@@ -3,6 +3,7 @@
 import json
 import os
 import glob
+import re
 import unittest
 
 SKILL_DIR = os.path.join(os.path.dirname(__file__), '..', '..')
@@ -28,6 +29,18 @@ def _load_fixtures():
         with open(path, 'r', encoding='utf-8') as f:
             fixtures.append(json.load(f))
     return fixtures
+
+
+def _normalize(text):
+    """Normalize docs/rules for robust concept matching.
+
+    Strips lightweight Markdown formatting and collapses whitespace so
+    contract checks do not fail on case-only or backtick-only drift.
+    """
+    text = text.lower()
+    text = re.sub(r"[`*_#]+", " ", text)
+    text = re.sub(r"\s+", " ", text)
+    return text.strip()
 
 
 class TestFixtureIntegrity(unittest.TestCase):
@@ -73,14 +86,14 @@ class TestRuleCoverage(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.all_docs = _load_all_docs()
+        cls.all_docs = _normalize(_load_all_docs())
         cls.fixtures = _load_fixtures()
 
     def test_all_rules_covered(self):
         for fix in self.fixtures:
             for rule in fix['coverage_rules']:
                 self.assertIn(
-                    rule, self.all_docs,
+                    _normalize(rule), self.all_docs,
                     f'{fix["id"]} ({fix["title"]}): '
                     f'coverage rule "{rule}" not found in skill docs'
                 )

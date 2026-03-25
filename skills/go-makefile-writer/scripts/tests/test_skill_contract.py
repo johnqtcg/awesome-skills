@@ -38,9 +38,10 @@ class TestSkillMdStructure(unittest.TestCase):
         self.assertIn('## Output Contract', self.text)
 
     def test_output_contract_items(self):
+        output_contract = self.text.lower()
         for item in ['changed files', 'new/updated targets', 'deprecated/aliased targets',
                       'assumptions or missing tools', 'validation commands executed']:
-            self.assertIn(item, self.text, f'Output contract missing: {item}')
+            self.assertIn(item, output_contract, f'Output contract missing: {item}')
 
     def test_references_quality_guide(self):
         self.assertIn('makefile-quality-guide.md', self.text)
