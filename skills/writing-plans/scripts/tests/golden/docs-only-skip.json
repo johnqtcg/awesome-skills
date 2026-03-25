@@ -1,0 +1,15 @@
+{
+  "scenario": "Docs-only change — correct SKIP decision",
+  "mode": "SKIP",
+  "expected_result": "PASS",
+  "expected_sections": [],
+  "must_contain_patterns": [
+    "SKIP|skip|doesn't need a formal plan|proceed.*directly"
+  ],
+  "must_not_contain_patterns": [
+    "### Task \\d+:.*Write failing test",
+    "Mode:\\s*Standard",
+    "Mode:\\s*Deep"
+  ],
+  "plan_text": "Applicability Gate: docs-only change, no logic → SKIP formal plan.\nProceeding directly: update docs/api/endpoints.md, verify links, commit."
+}

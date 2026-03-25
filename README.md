@@ -8,9 +8,9 @@
 
 A curated system for **AI skill engineering** — not just a prompt collection. Built for Claude Code and applicable to any AI coding assistant, this project covers the full loop from skill design to quantitative evaluation to real software engineering workflow integration.
 
-- **20** production-ready Claude Code skills: Go, testing, security, CI/CD, research, docs
-- **40** paired evaluation reports (EN + ZH) with quantitative metrics
-- **132** golden test fixtures + **29** Python test files for deterministic regression
+- **21** production-ready Claude Code skills: Go, testing, security, CI/CD, research, docs, planning
+- **42** paired evaluation reports (EN + ZH) with quantitative metrics
+- **169** golden test fixtures + **40** Python test files for deterministic regression
 - Testing skills: `unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
 - Delivery pipeline: `go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`
 
@@ -234,6 +234,7 @@ These skills focus on turning engineering knowledge into maintainable documents 
 
 | Skill Name | Purpose | Main strengths / advantages |
 | --- | --- | --- |
+| `writing-plans` | Create evidence-backed implementation plans for multi-step work | Adds mode-aware planning, verified path labels, dependency graphs, and a mandatory post-writing review loop so plans are executable instead of aspirational |
 | `update-doc` | Keep repository documentation aligned with the latest code | Focuses on scoped doc patches, docs-drift checks, project-type routing, and evidence-backed synchronization of README and related docs |
 | `readme-generator` | Generate or refactor project `README.md` files using repository evidence | Emphasizes repository-shape detection, evidence-based structure, maintainable README patterns, and adaptation across service, library, CLI, and monorepo projects |
 | `tech-doc-writer` | Write, review, and improve technical documents such as runbooks, troubleshooting guides, API docs, and RFC/ADR-style design docs | Uses type classification, audience analysis, quality gates, and anti-staleness rules to produce clearer, more maintainable technical documentation |

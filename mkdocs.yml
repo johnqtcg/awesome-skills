@@ -118,6 +118,7 @@ nav:
       - thirdparty-api-integration-test: skills/thirdparty-api-integration-test/SKILL.md
       - unit-test: skills/unit-test/SKILL.md
       - update-doc: skills/update-doc/SKILL.md
+      - writing-plans: skills/writing-plans/SKILL.md
       - yt-dlp-downloader: skills/yt-dlp-downloader/SKILL.md
 
   - Evaluation Reports:
@@ -141,6 +142,7 @@ nav:
           - thirdparty-api-integration-test: evaluate/thirdparty-api-integration-test-skill-eval-report.md
           - unit-test: evaluate/unit-test-skill-eval-report.md
           - update-doc: evaluate/update-doc-skill-eval-report.md
+          - writing-plans: evaluate/writing-plans-skill-eval-report.md
           - yt-dlp-downloader: evaluate/yt-dlp-downloader-skill-eval-report.md
       - 中文:
           - api-integration-test: evaluate/api-integration-test-skill-eval-report.zh-CN.md
@@ -162,6 +164,7 @@ nav:
           - thirdparty-api-integration-test: evaluate/thirdparty-api-integration-test-skill-eval-report.zh-CN.md
           - unit-test: evaluate/unit-test-skill-eval-report.zh-CN.md
           - update-doc: evaluate/update-doc-skill-eval-report.zh-CN.md
+          - writing-plans: evaluate/writing-plans-skill-eval-report.zh-CN.md
           - yt-dlp-downloader: evaluate/yt-dlp-downloader-skill-eval-report.zh-CN.md
 
   - Governance:

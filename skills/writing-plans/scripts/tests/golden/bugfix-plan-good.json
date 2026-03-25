@@ -1,0 +1,15 @@
+{
+  "scenario": "Single-file bugfix — correct Lite mode plan",
+  "mode": "Lite",
+  "expected_result": "PASS",
+  "expected_sections": [],
+  "must_contain_patterns": [
+    "Mode:.*Lite",
+    "Run:|go test|pytest|npm test",
+    "\\[Existing"
+  ],
+  "must_not_contain_patterns": [
+    "### Task \\d+:.*\\n### Task \\d+:.*\\n### Task \\d+:.*\\n### Task \\d+:"
+  ],
+  "plan_text": "**Mode:** Lite\n\n- [ ] Write test: nil config input → expect ErrMissingConfig, not panic\n  Run: `go test ./pkg/config/... -run TestLoadConfig_Nil -v`\n- [ ] Fix: add nil guard in `LoadConfig` [Existing: `pkg/config/loader.go`]\n- [ ] Run: `go test ./pkg/config/... -v` — all pass\n- [ ] Commit: `fix(config): guard nil config to prevent panic`"
+}

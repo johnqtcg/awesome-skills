@@ -1,0 +1,16 @@
+{
+  "scenario": "Feature plan with partial discovery — mixed Existing/Inferred labels",
+  "mode": "Standard",
+  "expected_result": "PASS",
+  "expected_sections": ["Header", "Tasks"],
+  "must_contain_patterns": [
+    "Mode:.*Standard",
+    "\\[Existing\\]",
+    "\\[Inferred\\]",
+    "Run:"
+  ],
+  "must_not_contain_patterns": [
+    "\\[Speculative\\]"
+  ],
+  "plan_text": "# Add Rate Limiting Middleware Implementation Plan\n\n**Goal:** Add per-IP rate limiting to public API endpoints\n**Mode:** Standard\n**Architecture:** Redis-backed sliding window rate limiter as chi middleware\n**Tech Stack:** Go 1.22, chi router, Redis\n**Repo Discovery:** Go project with chi, Redis already used for caching (detected in go.mod). Test convention: table-driven tests with testify.\n\n---\n\n### Task 1: Add rate limiter middleware\n**Files:**\n- Create: `internal/api/middleware/ratelimit.go` [New]\n- Create: `internal/api/middleware/ratelimit_test.go` [New]\n- Modify: `internal/api/router.go` [Existing] — register middleware\n- Modify: `internal/cache/redis.go` [Inferred] — may need to expose Redis client\n\nNote: `internal/cache/redis.go` path inferred from project convention (detected `internal/cache/` directory with Redis usage). Verify during implementation.\n\n- [ ] Step 1: [test-assertion] Test: 10 requests in 1s from same IP → first 5 pass, next 5 get 429\n- [ ] Step 2: Run: `go test ./internal/api/middleware/... -run TestRateLimiter -v`\n- [ ] Step 3: Implement sliding window counter using Redis INCR + EXPIRE\n- [ ] Step 4: Run tests, verify pass\n- [ ] Step 5: Commit: `feat(api): add Redis-backed rate limiting middleware`\n\n---\n\nPlan saved to `docs/plans/2026-03-25-rate-limiting.md`. Execution options:\n\n1. **Subagent-Driven (this session)** — fresh subagent per task, review between tasks\n2. **Parallel Session** — open new session, batch execution with checkpoints\n\nWhich approach?"
+}

@@ -1,0 +1,15 @@
+{
+  "scenario": "API breaking change — Standard mode with compatibility analysis",
+  "mode": "Standard",
+  "expected_result": "PASS",
+  "expected_sections": ["Header", "Tasks", "Execution Handoff"],
+  "must_contain_patterns": [
+    "Mode:.*Standard",
+    "[Bb]ackward [Cc]ompatib|[Cc]ompatibility|breaking",
+    "\\[Existing\\]|\\[New\\]",
+    "Run:",
+    "\\[test-assertion\\]|\\[interface\\]"
+  ],
+  "must_not_contain_patterns": [],
+  "plan_text": "# Add Pagination to List Orders API Implementation Plan\n\n**Goal:** Add cursor-based pagination to GET /api/orders endpoint\n**Mode:** Standard\n**Architecture:** Add optional cursor/limit params, wrap response in pagination envelope\n**Tech Stack:** Go 1.22, chi router, sqlc\n**Repo Discovery:** Go project, chi router, table-driven tests with testify\n\n**Backward Compatibility:**\n  Existing clients send no pagination params → default to limit=20, no cursor.\n  Response adds `meta` field alongside existing `data` — no breaking change for\n  clients that ignore unknown fields. Clients using strict parsing will see the new\n  `meta` field; document in changelog.\n\n---\n\n### Task 1: Add pagination parameters and response envelope\n**Files:**\n- Modify: `internal/api/handlers/orders.go` [Existing] — add pagination parsing\n- Modify: `internal/api/handlers/orders_test.go` [Existing] — add pagination tests\n- Modify: `internal/orders/repository.go` [Existing] — add LIMIT/cursor to query\n\n- [ ] Step 1: [test-assertion] Test: GET /api/orders (no params) → returns first 20 items + meta.has_more\n- [ ] Step 2: [test-assertion] Test: GET /api/orders?limit=5 → returns 5 items\n- [ ] Step 3: [test-assertion] Test: GET /api/orders?cursor=abc&limit=5 → returns next 5 after cursor\n- [ ] Step 4: [test-assertion] Test: GET /api/orders?limit=0 → returns 400 error\n- [ ] Step 5: Run: `go test ./internal/api/handlers/... -run TestListOrders -v`\n- [ ] Step 6: Implement pagination in handler and repository\n- [ ] Step 7: Run full test suite: `go test ./... -v`\n- [ ] Step 8: Commit: `feat(api): add cursor pagination to list orders endpoint`\n\n---\n\nPlan saved to `docs/plans/2026-03-25-orders-pagination.md`. Execution options:\n\n1. **Subagent-Driven (this session)** — fresh subagent per task, review between tasks\n2. **Parallel Session** — open new session, batch execution with checkpoints\n\nWhich approach?"
+}

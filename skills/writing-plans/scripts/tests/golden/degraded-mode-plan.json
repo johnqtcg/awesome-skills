@@ -1,0 +1,15 @@
+{
+  "scenario": "Feature plan in degraded mode — no repo access",
+  "mode": "Standard",
+  "expected_result": "PASS",
+  "degraded": true,
+  "expected_sections": ["Header", "Tasks"],
+  "must_contain_patterns": [
+    "[Dd]egraded",
+    "\\[Speculative\\]"
+  ],
+  "must_not_contain_patterns": [
+    "\\[Existing\\]"
+  ],
+  "plan_text": "# Add Caching Layer Implementation Plan\n\n**Goal:** Add Redis caching for frequently accessed queries\n**Mode:** Standard\n**Degraded mode** — repo structure not verified\n\n**Discovery commands to run first:**\n- `ls -1 .` — verify project structure\n- `cat go.mod` — verify Go version and dependencies\n- `grep -r 'redis' . --include='*.go' -l` — check existing Redis usage\n\n---\n\n### Task 1: Add cache interface\n**Files:**\n- Create: `internal/cache/cache.go` [Speculative]\n- Create: `internal/cache/cache_test.go` [Speculative]\n\n- [ ] Step 1: Verify project structure matches assumptions\n- [ ] Step 2: [test-assertion] Test cache.Get returns cached value\n- [ ] Step 3: Run: `go test ./internal/cache/... -v`\n- [ ] Step 4: Implement cache interface\n- [ ] Step 5: Commit: `feat(cache): add cache interface`"
+}

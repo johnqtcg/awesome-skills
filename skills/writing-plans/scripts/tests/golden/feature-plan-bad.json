@@ -1,0 +1,13 @@
+{
+  "scenario": "Multi-file feature — over-decomposed with fabricated paths",
+  "mode": "Standard",
+  "expected_result": "FAIL",
+  "expected_failures": ["B2", "B5"],
+  "failure_reasons": [
+    "File paths lack [Existing]/[New] labels",
+    "Contains complete implementation code"
+  ],
+  "must_contain_patterns": [],
+  "must_not_contain_patterns": [],
+  "plan_text": "# Add User Email Verification\n\n### Task 1: Read the codebase\n### Task 2: Understand the auth module\n### Task 3: Design the token schema\n### Task 4: Write the token model at src/models/token.go:1-45\n\n```go\npackage models\n\nimport (\n    \"crypto/rand\"\n    \"encoding/hex\"\n    \"time\"\n)\n\ntype VerificationToken struct {\n    ID        int64\n    UserID    int64\n    Token     string\n    ExpiresAt time.Time\n    CreatedAt time.Time\n}\n\nfunc NewVerificationToken(userID int64) *VerificationToken {\n    b := make([]byte, 32)\n    rand.Read(b)\n    return &VerificationToken{\n        UserID:    userID,\n        Token:     hex.EncodeToString(b),\n        ExpiresAt: time.Now().Add(24 * time.Hour),\n        CreatedAt: time.Now(),\n    }\n}\n```\n\n### Task 5: Write one test\n### Task 6: Run the test\n### Task 7: Write another test"
+}

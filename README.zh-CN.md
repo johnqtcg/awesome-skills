@@ -8,9 +8,9 @@
 
 一个围绕高质量 **Claude Code Skill** 设计、评审、验证与工作流落地构建的开源项目。
 
-- **20** 个生产级 Claude Code Skills：覆盖 Go、测试、安全、CI/CD、调研、文档
-- **40** 份量化评审报告（中英双语），含可追溯指标
-- **132** 个 golden JSON 场景 + **29** 个 Python 测试文件，确定性回归保障
+- **21** 个生产级 Claude Code Skills：覆盖 Go、测试、安全、CI/CD、调研、文档、规划
+- **42** 份量化评审报告（中英双语），含可追溯指标
+- **169** 个 golden JSON 场景 + **40** 个 Python 测试文件，确定性回归保障
 - 测试 skills：`unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
 - 交付管线：`go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`
 
@@ -242,6 +242,7 @@ CI 触发
 
 | Skill 名称 | 功能用途 | 主要亮点 / 优势 |
 | --- | --- | --- |
+| `writing-plans` | 为多步骤任务生成基于证据的实现计划 | 强调 mode-aware planning、已验证路径标签、依赖图和强制性的计划后审查，让计划真正可执行而不是停留在描述层 |
 | `update-doc` | 让仓库文档与最新代码保持同步 | 强调按作用域更新文档、docs drift 检查、项目类型路由，以及基于证据同步 README 和相关文档 |
 | `readme-generator` | 基于仓库证据生成或重构项目 `README.md` | 强调仓库形态识别、证据驱动的结构组织、可维护 README 模式，以及对 service、library、CLI、monorepo 等项目的适配 |
 | `tech-doc-writer` | 编写、审查和改进技术文档，如 runbook、故障排查文档、API 文档和 RFC/ADR 风格设计文档 | 强调文档类型分类、受众分析、质量门禁和防陈旧机制，产出更清晰、可维护的技术文档 |

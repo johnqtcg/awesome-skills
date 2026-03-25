@@ -1,0 +1,18 @@
+{
+  "scenario": "Multi-file feature implementation — correct Standard mode plan",
+  "mode": "Standard",
+  "expected_result": "PASS",
+  "expected_sections": ["Header", "Tasks", "Execution Handoff"],
+  "must_contain_patterns": [
+    "\\[Existing\\]|\\[New\\]",
+    "Run:|\\[command\\]",
+    "Mode:.*Standard",
+    "\\[interface\\]|\\[test-assertion\\]"
+  ],
+  "must_not_contain_patterns": [
+    "def \\w+\\([^)]*\\):\\s*\\n\\s{4,}",
+    "function \\w+\\([^)]*\\)\\s*\\{[\\s\\S]{50,}\\}",
+    "func \\w+\\([^)]*\\)\\s*\\{[\\s\\S]{50,}\\}"
+  ],
+  "plan_text": "# Add User Email Verification Implementation Plan\n\n**Goal:** Add email verification flow for new user signups\n**Mode:** Standard\n**Architecture:** Add verification token model, email sending service call, and verification endpoint\n**Tech Stack:** Go 1.22, testify, chi router\n**Repo Discovery:** Go project, tests use testify, CI runs `make test`\n\n---\n\n### Task 1: Add verification token model\n**Files:**\n- Create: `internal/auth/verification_token.go` [New]\n- Create: `internal/auth/verification_token_test.go` [New]\n- Modify: `internal/auth/service.go` [Existing] — add SendVerification method\n\n- [ ] Step 1: Write failing test\n  [test-assertion] assert token is created with 24h expiry, linked to user ID\n- [ ] Step 2: Run: `go test ./internal/auth/... -run TestVerificationToken -v`\n- [ ] Step 3: Implement token model and generation\n- [ ] Step 4: Run test, verify pass\n- [ ] Step 5: Commit: `feat(auth): add verification token model`\n\n### Task 2: Add verification endpoint\n**Files:**\n- Create: `internal/api/verify_handler.go` [New]\n- Create: `internal/api/verify_handler_test.go` [New]\n- Modify: `internal/api/router.go` [Existing] — register /verify route\n\n- [ ] Step 1: [test-assertion] POST /verify with valid token → 200, user.verified = true\n- [ ] Step 2: Run: `go test ./internal/api/... -run TestVerifyHandler -v`\n- [ ] Step 3: Implement handler\n- [ ] Step 4: Run test, verify pass\n- [ ] Step 5: Commit: `feat(api): add email verification endpoint`\n\n---\n\nPlan saved to `docs/plans/2026-03-25-email-verification.md`. Execution options:\n\n1. **Subagent-Driven (this session)** — fresh subagent per task, review between tasks\n2. **Parallel Session** — open new session, batch execution with checkpoints\n\nWhich approach?"
+}
