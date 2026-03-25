@@ -38,15 +38,16 @@ If any check fails, stop and tell the user what to resolve.
 **User specifies exact files**: stage those only (`git add <paths>`).
 
 **User gives a general instruction** (e.g. "commit my changes"):
-1. Run `git status --short`. Classify into tracked-modified (M/D) and untracked (??) files.
-2. Read the diffs and partition all changes into groups by logical intent. Signals: directory proximity, shared purpose (source + its test), diff theme. If a single file contains changes for two logical intents, use `git add -p` to stage only the relevant hunks.
-3. **Single logical change**: stage everything (tracked + task-related untracked).
-4. **Multiple logical changes**: present groups and ask which to commit:
+1. Run `git status --short`. Classify tracked and untracked files.
+2. Count total changed paths (i.e. number of lines in `git status --short`). **If > 8 files, always list the full file set and ask the user to confirm** before any staging — do not auto-stage. This is a hard safety net regardless of how clear the intent seems.
+3. If <= 8 files, read the diffs and partition all changes into groups by logical intent. Signals: directory proximity, shared purpose (source + its test), diff theme. If a single file contains changes for two logical intents, use `git add -p` to stage only the relevant hunks.
+4. **Single logical change**: stage everything (tracked + task-related untracked).
+5. **Multiple logical changes**: present groups and ask which to commit:
    > "These changes form separate concerns:
    > - Group A (feat): `src/auth.go`, `src/auth_test.go` — JWT support
    > - Group B (chore): `go.mod`, `go.sum` — dep update
    > Which group should I commit? Or all together?"
-5. **Untracked files**: stage if clearly task-related; list ambiguous ones in the group prompt.
+6. **Untracked files**: stage if clearly task-related; list ambiguous ones in the group prompt.
 
 **Pre-quality-gate stash**: if there are unstaged changes after staging, stash them before running the quality gate so they don't interfere with test results:
 ```bash
@@ -56,6 +57,8 @@ git stash pop  # restore after quality gate, whether it passed or failed
 ```
 
 Verify after staging: `git diff --cached --stat`. If nothing staged, stop and report.
+
+**Submodule awareness**: run `git diff --cached --submodule=short` to check for submodule pointer changes. If present, confirm with the user that the submodule update is intentional — accidental submodule pointer commits are a common source of breakage.
 
 ### 3. Secret/sensitive-content gate (must pass)
 
@@ -168,6 +171,12 @@ use an invalidated token. Add mutex to serialize refresh calls.
 
 Closes #245
 ```
+
+## Edge Cases
+
+- **Empty commit** (`--allow-empty`): only if the user explicitly requests it (e.g. to trigger CI). Never create an empty commit by default. When allowed, note it in the post-commit report.
+- **Squash merge residual files**: if `.git/SQUASH_MSG` exists, the user is likely committing a squash merge. Warn them to review the staged files carefully.
+- **Submodule pointer changes**: handled post-staging — always confirm with the user.
 
 ## Failure Handling
 
