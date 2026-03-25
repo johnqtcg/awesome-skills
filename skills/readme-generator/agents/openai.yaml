@@ -1,4 +1,0 @@
-interface:
-  display_name: "README Generator"
-  short_description: "Generate or refactor repository READMEs from code evidence"
-  default_prompt: "Use $readme-generator to generate or refactor a repository README with evidence-backed sections, project-type routing, and maintainable structure."
