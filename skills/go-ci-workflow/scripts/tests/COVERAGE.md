@@ -24,14 +24,14 @@
 | test_skill_references_discover_script | discover_ci_needs.sh referenced |
 | test_skill_cross_references_go_makefile_writer | $go-makefile-writer cross-reference |
 
-### workflow-quality-guide.md (16 sections)
+### workflow-quality-guide.md (15 sections)
 
 | Test | Validates |
 |------|-----------|
 | test_wqg_has_toc | Table of Contents present |
-| test_wqg_has_all_16_sections | All 16 section headings exist |
+| test_wqg_has_all_15_sections | All 15 section headings exist, including combined Robustness + Anti-Pattern section |
 | test_wqg_core_gate_delegates_to_make | make ci COVER_MIN=80 + delegation pattern |
-| test_wqg_anti_patterns_has_bad_good_pairs | >= 5 BAD/GOOD pairs, counts match |
+| test_wqg_robustness_and_anti_patterns_have_substantive_rules | Robustness rules + anti-pattern list contains key operational safeguards |
 | test_wqg_tool_version_currency_note | Version currency warning present |
 | test_wqg_mentions_monorepo | monorepo coverage |
 
@@ -49,15 +49,15 @@
 | test_gap_service_containers_has_common_images_table | 5 databases (PG/MySQL/Redis/Kafka/MongoDB) |
 | test_gap_timeout_table_exists | Timeout recommendations (15/20/30 min) |
 
-### golden-examples.md (4 examples)
+### Golden example references (2 inline + 2 specialized files)
 
 | Test | Validates |
 |------|-----------|
 | test_ge_has_toc | Table of Contents present |
-| test_ge_has_all_4_examples | All 4 example headings exist |
-| test_ge_each_has_complete_workflow_and_output_summary | 4 Complete Workflow + 4 Output Summary sections |
+| test_ge_has_all_examples_across_split_references | 2 inline examples + references to monorepo/service-container example files + specialized example titles |
+| test_ge_each_has_complete_workflow_and_output_summary | 4 Complete Workflow + 4 Output Summary sections across split golden-example docs |
 | test_ge_fallback_has_inline_markers | INLINE FALLBACK markers + PARTIAL parity label |
-| test_ge_service_container_example_has_services_block | services: + mysql: + redis: in YAML |
+| test_ge_service_container_example_has_services_block | services: + mysql: + redis: in service-container example YAML |
 
 ### repository-shapes.md (6 shapes)
 
@@ -89,7 +89,7 @@
 | test_discover_script_has_8_categories | All 8 TSV categories present |
 | test_discover_script_handles_shapes | go.mod detection + shape classification |
 
-**Contract test count: 44**
+**Contract test count: 43**
 
 ## Golden Fixture Tests (test_golden_scenarios.py)
 
@@ -118,7 +118,7 @@
 | Execution paths (make target/repo task/inline fallback) | 3 | 3 | 100% |
 | Parity levels (full/partial/scaffold) | 3 | 3 | 100% |
 | Output contract fields (9) | 9 | 9 | 100% |
-| WQG sections (16) | 16 | 16 | 100% |
+| WQG sections (15) | 15 | 15 | 100% |
 | Advanced pattern sections (9) | 9 | 9 | 100% |
 | Golden examples (4) | 4 | 4 | 100% |
 | PR checklist sections (10) | 10 | 10 | 100% |
@@ -126,16 +126,16 @@
 | Discover script categories (8) | 8 | 8 | 100% |
 | Golden fixtures: scenario types (8) | 8 | 8 | 100% |
 
-**Total tests: 61** (44 contract + 17 golden)
+**Total tests: 60** (43 contract + 17 golden)
 
 ## Comparison with Benchmark Skill
 
 | Metric | go-code-reviewer | go-ci-workflow |
 |--------|-----------------|----------------|
-| Contract tests | 33 | 44 |
+| Contract tests | 33 | 43 |
 | Golden fixtures | 8 | 8 |
 | Golden tests | 10 | 17 |
-| Total tests | 43 | 61 |
+| Total tests | 43 | 60 |
 
 ## Known Gaps (Future)
 

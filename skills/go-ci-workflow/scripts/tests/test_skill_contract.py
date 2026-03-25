@@ -11,6 +11,8 @@ REPO_SHAPES = SKILL_DIR / "references" / "repository-shapes.md"
 ADVANCED = SKILL_DIR / "references" / "github-actions-advanced-patterns.md"
 FALLBACK = SKILL_DIR / "references" / "fallback-and-scaffolding.md"
 GOLDEN_EXAMPLES = SKILL_DIR / "references" / "golden-examples.md"
+GOLDEN_MONOREPO = SKILL_DIR / "references" / "golden-example-monorepo.md"
+GOLDEN_SERVICE_CONTAINERS = SKILL_DIR / "references" / "golden-example-service-containers.md"
 DISCOVER_SCRIPT = SKILL_DIR / "scripts" / "discover_ci_needs.sh"
 
 
@@ -31,6 +33,13 @@ class GoCIWorkflowSkillContractTests(unittest.TestCase):
         cls.gap_text = ADVANCED.read_text()
         cls.fb_text = FALLBACK.read_text()
         cls.ge_text = GOLDEN_EXAMPLES.read_text()
+        cls.ge_monorepo_text = GOLDEN_MONOREPO.read_text()
+        cls.ge_service_containers_text = GOLDEN_SERVICE_CONTAINERS.read_text()
+
+    @staticmethod
+    def count_heading(text: str, title: str) -> int:
+        pattern = r"^#{2,3}\s+" + re.escape(title) + r"\s*$"
+        return len(re.findall(pattern, text, re.MULTILINE))
 
     # ------------------------------------------------------------------
     # Frontmatter
@@ -129,18 +138,20 @@ class GoCIWorkflowSkillContractTests(unittest.TestCase):
     def test_all_references_and_scripts_exist(self) -> None:
         for path in (
             WORKFLOW_GUIDE, PR_CHECKLIST, REPO_SHAPES,
-            ADVANCED, FALLBACK, GOLDEN_EXAMPLES, DISCOVER_SCRIPT,
+            ADVANCED, FALLBACK, GOLDEN_EXAMPLES,
+            GOLDEN_MONOREPO, GOLDEN_SERVICE_CONTAINERS,
+            DISCOVER_SCRIPT,
         ):
             self.assertTrue(path.exists(), f"missing {path.name}")
 
     # ------------------------------------------------------------------
-    # workflow-quality-guide.md (16 sections)
+    # workflow-quality-guide.md (15 sections)
     # ------------------------------------------------------------------
 
     def test_wqg_has_toc(self) -> None:
         self.assertIn("## Table of Contents", self.wqg_text)
 
-    def test_wqg_has_all_16_sections(self) -> None:
+    def test_wqg_has_all_15_sections(self) -> None:
         for section in (
             "## 1. Job Set",
             "## 2. Trigger Strategy",
@@ -155,9 +166,8 @@ class GoCIWorkflowSkillContractTests(unittest.TestCase):
             "## 11. Tool Installation",
             "## 12. Secret Management",
             "## 13. Matrix Strategy",
-            "## 14. Robustness Rules",
-            "## 15. Anti-Patterns",
-            "## 16. Validation Checklist",
+            "## 14. Robustness and Anti-Pattern Rules",
+            "## 15. Validation Checklist",
         ):
             self.assertIn(section, self.wqg_text, f"missing section: {section}")
 
@@ -165,11 +175,18 @@ class GoCIWorkflowSkillContractTests(unittest.TestCase):
         self.assertIn("make ci COVER_MIN=80", self.wqg_text)
         self.assertIn("Delegate to `make ci`", self.wqg_text)
 
-    def test_wqg_anti_patterns_has_bad_good_pairs(self) -> None:
-        bad_count = self.wqg_text.count("### BAD")
-        good_count = self.wqg_text.count("### GOOD")
-        self.assertGreaterEqual(bad_count, 5, f"expected >=5 BAD examples, got {bad_count}")
-        self.assertEqual(bad_count, good_count, "BAD and GOOD counts should match")
+    def test_wqg_robustness_and_anti_patterns_have_substantive_rules(self) -> None:
+        self.assertIn("Robustness:", self.wqg_text)
+        self.assertIn("Anti-patterns to avoid:", self.wqg_text)
+        for rule in (
+            "timeout-minutes",
+            "continue-on-error: true",
+            "Inline `go test`, `go build` commands instead of `make` targets.",
+            "Tool installation with `@latest` in CI.",
+            "Missing `concurrency` control",
+            "CI behavior that cannot be reproduced locally.",
+        ):
+            self.assertIn(rule, self.wqg_text)
 
     def test_wqg_tool_version_currency_note(self) -> None:
         self.assertIn(
@@ -236,24 +253,35 @@ class GoCIWorkflowSkillContractTests(unittest.TestCase):
         self.assertIn("30 min", self.gap_text)
 
     # ------------------------------------------------------------------
-    # golden-examples.md (4 examples)
+    # golden examples (2 inline + 2 specialized reference files)
     # ------------------------------------------------------------------
 
     def test_ge_has_toc(self) -> None:
         self.assertIn("## Table of Contents", self.ge_text)
 
-    def test_ge_has_all_4_examples(self) -> None:
+    def test_ge_has_all_examples_across_split_references(self) -> None:
         for heading in (
             "## 1) Standard Service Repository",
-            "## 2) Monorepo With Multiple Modules",
-            "## 3) No Makefile Fallback",
-            "## 4) Service With Integration Tests and Service Containers",
+            "## 2) No Makefile Fallback",
         ):
             self.assertIn(heading, self.ge_text, f"missing example: {heading}")
+        self.assertIn("golden-example-monorepo.md", self.ge_text)
+        self.assertIn("golden-example-service-containers.md", self.ge_text)
+        self.assertIn("Golden Example — Monorepo With Multiple Modules", self.ge_monorepo_text)
+        self.assertIn(
+            "Golden Example — Service With Integration Tests and Service Containers",
+            self.ge_service_containers_text,
+        )
 
     def test_ge_each_has_complete_workflow_and_output_summary(self) -> None:
-        workflow_count = self.ge_text.count("### Complete Workflow")
-        summary_count = self.ge_text.count("### Output Summary")
+        workflow_count = sum(
+            self.count_heading(text, "Complete Workflow")
+            for text in (self.ge_text, self.ge_monorepo_text, self.ge_service_containers_text)
+        )
+        summary_count = sum(
+            self.count_heading(text, "Output Summary")
+            for text in (self.ge_text, self.ge_monorepo_text, self.ge_service_containers_text)
+        )
         self.assertEqual(workflow_count, 4, f"expected 4 Complete Workflow sections, got {workflow_count}")
         self.assertEqual(summary_count, 4, f"expected 4 Output Summary sections, got {summary_count}")
 
@@ -262,9 +290,9 @@ class GoCIWorkflowSkillContractTests(unittest.TestCase):
         self.assertIn("Local parity: PARTIAL", self.ge_text)
 
     def test_ge_service_container_example_has_services_block(self) -> None:
-        self.assertIn("services:", self.ge_text)
-        self.assertIn("mysql:", self.ge_text)
-        self.assertIn("redis:", self.ge_text)
+        self.assertIn("services:", self.ge_service_containers_text)
+        self.assertIn("mysql:", self.ge_service_containers_text)
+        self.assertIn("redis:", self.ge_service_containers_text)
 
     # ------------------------------------------------------------------
     # repository-shapes.md (6 shapes)
