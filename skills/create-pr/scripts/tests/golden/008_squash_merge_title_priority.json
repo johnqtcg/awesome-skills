@@ -1,0 +1,16 @@
+{
+  "id": "008",
+  "description": "Squash-and-merge repositories depend on the PR title as the final commit message on main.",
+  "scenario_type": "merge_strategy",
+  "expected_confidence": "confirmed",
+  "expected_pr_mode": "ready",
+  "skill_rules_that_must_fire": [
+    "PR title must follow Conventional Commits format",
+    "PR title = final commit message",
+    "default to treating the PR title as if it were a squash commit message"
+  ],
+  "reference_files": [
+    "SKILL.md",
+    "references/merge-strategy-guide.md"
+  ]
+}

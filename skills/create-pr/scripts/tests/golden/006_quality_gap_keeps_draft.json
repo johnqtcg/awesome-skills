@@ -1,0 +1,17 @@
+{
+  "id": "006",
+  "description": "If a mandatory quality gate cannot run, the PR should stay draft with an uncovered risk entry.",
+  "scenario_type": "quality_gap",
+  "expected_confidence": "likely",
+  "expected_pr_mode": "draft",
+  "skill_rules_that_must_fire": [
+    "Fail closed: if a mandatory gate cannot run, keep the PR as `draft` and record the gap.",
+    "If a command is unavailable, mark uncovered risk.",
+    "Keep `draft` when:",
+    "important evidence is missing"
+  ],
+  "reference_files": [
+    "SKILL.md",
+    "references/create-pr-checklists.md"
+  ]
+}

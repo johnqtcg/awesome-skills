@@ -1,0 +1,15 @@
+{
+  "id": "001",
+  "description": "Small routine PR with all mandatory gates executed and no unresolved risk should be ready.",
+  "scenario_type": "ready_flow",
+  "expected_confidence": "confirmed",
+  "expected_pr_mode": "ready",
+  "skill_rules_that_must_fire": [
+    "confirmed: all mandatory gates executed and passed, no unresolved high-risk item.",
+    "Do not mark a PR `ready` with `suspected` confidence.",
+    "Mark `ready` only when all mandatory gates pass or are suppressed with low residual risk."
+  ],
+  "reference_files": [
+    "SKILL.md"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "007",
+  "description": "The bundled script should update an existing PR for the current branch instead of creating a duplicate.",
+  "scenario_type": "existing_pr_update",
+  "expected_confidence": "confirmed",
+  "expected_pr_mode": "ready",
+  "skill_rules_that_must_fire": [
+    "If the current branch already has an open PR to `main`, the script updates title/body instead of creating a duplicate PR.",
+    "One-click: run gates, generate body, then create-or-update PR to main",
+    "Confirm PR points to `base=main` and `head=<feature branch>`."
+  ],
+  "reference_files": [
+    "references/bundled-script-guide.md",
+    "SKILL.md"
+  ]
+}

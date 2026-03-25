@@ -1,0 +1,15 @@
+{
+  "id": "005",
+  "description": "Large PRs must trigger split warnings before publication.",
+  "scenario_type": "oversized",
+  "expected_confidence": "confirmed",
+  "expected_pr_mode": "ready",
+  "skill_rules_that_must_fire": [
+    "Target 200–400 changed lines per PR.",
+    "401–800 lines: warn the user that review quality may suffer; suggest splitting if feasible.",
+    "> 800 lines: strong warning; recommend splitting into smaller PRs unless the change is inherently atomic"
+  ],
+  "reference_files": [
+    "SKILL.md"
+  ]
+}

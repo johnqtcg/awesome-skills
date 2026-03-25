@@ -42,7 +42,9 @@
 
 ## Skill Maintenance Checklist
 
-- [ ] `python3 -m unittest discover -s scripts/tests -p \"test_*.py\" -v` passes
+- [ ] `bash skills/create-pr/scripts/run_regression.sh` passes
+- [ ] Contract tests cover gate ordering, readiness confidence, output contract, and reference links
+- [ ] Golden scenarios cover ready/draft decisions, suppressions, blockers, and PR update rules
 - [ ] Branch-protection tests cover both protected and unprotected branches
 - [ ] Secret/conflict heuristic tests cover false-positive and true-positive cases
 - [ ] `python3 scripts/create_pr.py --help` works after changes

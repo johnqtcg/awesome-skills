@@ -271,6 +271,51 @@ index 111..222 100644
             self.assertEqual(create_pr.PASS, result.status)
             self.assertIn("updated", result.evidence)
 
+    def test_determine_confidence_maps_gate_statuses(self):
+        confirmed = create_pr.determine_confidence(
+            [create_pr.GateResult("Gate A", create_pr.PASS, "ok")]
+        )
+        likely = create_pr.determine_confidence(
+            [create_pr.GateResult("Gate A", create_pr.SUPPRESSED, "gap")]
+        )
+        suspected = create_pr.determine_confidence(
+            [create_pr.GateResult("Gate A", create_pr.FAIL, "bad")]
+        )
+
+        self.assertEqual("confirmed", confirmed)
+        self.assertEqual("likely", likely)
+        self.assertEqual("suspected", suspected)
+
+    def test_build_body_includes_changed_files_and_uncovered_risk(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            settings = create_pr.resolve_settings(self.make_args(), repo, "feature/x")
+            ctx = create_pr.Context(
+                repo=repo,
+                base="main",
+                branch="feature/x",
+                changed_files=[Path("cmd/app/main.go"), Path("README.md")],
+                test_results=[create_pr.CommandResult("go test ./...", 0, "ok", "")],
+                high_risk_areas=["public_api"],
+            )
+            create_pr.add_uncovered(
+                ctx,
+                "branch protection",
+                "API unavailable",
+                "required checks may be unknown",
+                "verify settings manually",
+                "repo admin",
+            )
+            gates = [create_pr.GateResult("Gate A", create_pr.SUPPRESSED, "branch protection unavailable")]
+
+            body = create_pr.build_body(settings, ctx, gates, confidence="likely")
+
+            self.assertIn("cmd/app/main.go", body)
+            self.assertIn("README.md", body)
+            self.assertIn("public_api", body)
+            self.assertIn("Area: branch protection", body)
+            self.assertIn("go test ./...", body)
+
 
 if __name__ == "__main__":
     unittest.main()

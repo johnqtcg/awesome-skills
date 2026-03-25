@@ -1,0 +1,16 @@
+{
+  "id": "003",
+  "description": "A branch behind origin/main must block PR creation until the user rebases or merges manually.",
+  "scenario_type": "sync_blocker",
+  "expected_confidence": "suspected",
+  "expected_pr_mode": "draft",
+  "skill_rules_that_must_fire": [
+    "If behind, report as blocker — the user must rebase or merge manually.",
+    "Do NOT auto-rebase; an unattended rebase can leave the tree in a conflicted state.",
+    "Blocker conditions:",
+    "Branch is behind `origin/main`"
+  ],
+  "reference_files": [
+    "SKILL.md"
+  ]
+}

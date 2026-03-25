@@ -44,8 +44,8 @@ python "<path-to-skill>/scripts/create_pr.py" \
   --security-tools \
   --create-pr
 
-# Run script tests (for skill maintenance)
-python3 -m unittest discover -s "<path-to-skill>/scripts/tests" -p "test_*.py" -v
+# Run the full skill regression suite (contract + golden + script tests)
+bash "<path-to-skill>/scripts/run_regression.sh"
 ```
 
 ## Exit Codes
