@@ -160,7 +160,7 @@ Not all knowledge should be packaged as a skill. In the following cases, another
 
 ### 3.2 Build Your First Skill: Iterate First, Extract Later
 
-Use "check Go code formatting" as an example to show the full path from a normal conversation to a reusable skill.
+Use "check Go code formatting" as an example to show the full path from a normal conversation to a reusable skill. The process has two stages: first, manual iteration to produce a working draft; then, hardening with skill-creator to bring it to production quality.
 
 **Step 1: Solve the same task repeatedly in normal chat**
 
@@ -216,7 +216,32 @@ description: >
 
 Every rule in this `SKILL.md` comes from the real corrections in Step 1. "Do not touch vendor" becomes a boundary rule. "Prefer goimports" becomes a tool-selection rule. "Verify after fixing" becomes Step 4 in the workflow.
 
-**Step 3: Use it and keep iterating**
+**Step 3: Harden with skill-creator**
+
+A manually written SKILL.md works, but it has blind spots:
+
+- The description may not trigger for all valid phrasings (e.g., a user says "check go formatting" instead of "format code")
+- Two or three rounds of conversation corrections cover only a limited set of edge cases
+- There is no objective data showing whether the skill actually improves AI output
+
+Anthropic's official [skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator) automates the hardest parts of this process — the parts that manual creation most easily skips:
+
+1. **Interview-driven gap analysis** — systematically asks about trigger scenarios, expected output format, edge cases, and test cases, reducing omissions caused by limited experience
+2. **Automatic eval generation and execution** — creates test scenarios and runs with-skill vs without-skill comparisons in parallel, replacing guesswork with data
+3. **Description optimization loop** — generates 20 should-trigger and should-not-trigger queries, then runs an optimization loop with train/test split. This is the hardest part to do manually and has the biggest impact on whether the skill actually gets used
+4. **Visual eval viewer** — a browser-based UI for reviewing outputs and benchmark comparisons, closing the feedback loop
+
+Continuing with the fmt-check example, invoke it directly in Claude Code:
+
+```
+> Use skill-creator to evaluate and improve the fmt-check skill
+```
+
+skill-creator might discover that the description misses the common phrasing "check go formatting" (causing trigger failures), that multi-module monorepos are an unhandled edge case, and that "format my Python code" incorrectly triggers this skill. These issues are very hard to catch through manual creation alone.
+
+> For the full three-dimensional evaluation methodology (trigger accuracy, task performance, token cost-effectiveness) and real case studies, see Chapter 10.
+
+**Step 4: Use it and keep iterating**
 
 In Claude Code, you can now:
 - Type `/fmt-check` to invoke it directly
@@ -225,8 +250,14 @@ In Claude Code, you can now:
 After using it a few times, you may discover new improvements:
 - Need support for `goimports-reviser` → add it to the Rules section
 - Need the same workflow in CI → move the skill from `~/.claude/skills/` to the project's `.claude/skills/` and commit it to Git
+- After significant changes, re-run skill-creator evaluation to verify the changes did not introduce regressions
 
-This is the core creation path for a skill: **iterate in conversation → extract into a skill → keep improving through real use**. The full lifecycle also includes **quantitative evaluation** (Chapter 10) and **workflow integration** (Chapter 12): **build → evaluate → improve → integrate → monitor**. The later chapters cover best practices for each step.
+**When is manual creation enough?**
+
+- Personal use, simple workflow, low stakes — Steps 1-2 are sufficient
+- Shared with a team, broad trigger surface, complex edge cases — run it through skill-creator. Even if you choose to create manually, at minimum do two things: run a quick eval with 2-3 test cases (exposes hidden issues) and run one round of description optimization (small effort, high impact). An under-triggering skill is a dead skill
+
+This is the core creation path for a skill: **iterate in conversation → extract into a skill → harden with skill-creator → keep improving through real use**. The full lifecycle also includes **quantitative evaluation** (Chapter 10) and **workflow integration** (Chapter 12): **build → evaluate → improve → integrate → monitor**. The later chapters cover best practices for each step.
 
 ### 3.3 Distribution Channels: From Local to API
 
