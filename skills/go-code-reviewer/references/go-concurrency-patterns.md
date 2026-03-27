@@ -307,6 +307,48 @@ Red flags:
 - Goroutine count proportional to input size rather than a fixed pool
 - No back-pressure mechanism when producers outpace consumers
 
+## Goroutine Panic Recovery
+
+```go
+// BAD: panic inside goroutine crashes the entire process
+go func(u *UserKey) {
+    defer wg.Done()
+    user, err := redis.GetGuest(ctx, u.Id) // any panic here = process dead
+    if err != nil {
+        return
+    }
+    resultCh <- user
+}(u)
+
+// GOOD: every goroutine has its own recover guard
+go func(u *UserKey) {
+    defer wg.Done()
+    defer func() {
+        if r := recover(); r != nil {
+            log.ErrorContextf(ctx, "panic in getBatchUser goroutine: %v\n%s",
+                r, debug.Stack())
+        }
+    }()
+    user, err := redis.GetGuest(ctx, u.Id)
+    if err != nil {
+        return
+    }
+    resultCh <- user
+}(u)
+```
+
+Key rules:
+- Go panics do **not** cross goroutine boundaries. The parent goroutine cannot catch a child goroutine's panic.
+- An unrecovered panic in any goroutine — including library code it calls — terminates the whole process immediately.
+- `recover()` is only effective inside a `defer` function. `defer recover()` alone does nothing useful; it must be `defer func() { recover() }()`.
+- Place the recover defer **before** any other defers to ensure it runs even if another defer panics.
+- Always log the stack trace (`debug.Stack()`) alongside the recovered value for diagnosis.
+
+Red flags:
+- `go func()` body with no `defer func() { recover() }()` when calling external libraries, type assertions, or map access that could panic
+- `defer wg.Done()` as the only defer — if the goroutine body panics, `wg.Done()` runs but the panic still propagates and kills the process
+- `defer recover()` without wrapping in `func()` — this form does not suppress the panic
+
 ## Graceful Shutdown
 
 ```go

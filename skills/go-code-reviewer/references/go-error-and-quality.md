@@ -42,6 +42,7 @@ if err != nil {
 ```
 
 Guidelines:
+- **Inspect every `return err` path**: for each function under review, trace all `return ..., err` statements and verify each has a descriptive `fmt.Errorf("operationName: %w", err)` wrapper. Raw returns lose call-site context and may expose internal DB/system error details (table names, column names, SQL syntax) to callers, creating both debugging and security issues.
 - Wrap at every abstraction boundary
 - Error message: lowercase, no trailing punctuation, describe what failed
 - Include key identifiers (user ID, file path) in wrap message
@@ -92,6 +93,34 @@ if errors.As(err, &pathErr) { ... }
 ---
 
 ## Code Quality
+
+### Pointer Slice Nil Guard
+
+```go
+// BAD: dereferencing pointer slice element without nil check
+func getBatchUser(ctx context.Context, userKeys []*UserKey) ([]*User, error) {
+    for i, u := range userKeys {
+        user, err := redis.GetGuest(ctx, u.Id) // panic if u is nil
+        // ...
+    }
+}
+
+// GOOD: nil guard before field access
+func getBatchUser(ctx context.Context, userKeys []*UserKey) ([]*User, error) {
+    for i, u := range userKeys {
+        if u == nil {
+            continue
+        }
+        user, err := redis.GetGuest(ctx, u.Id)
+        // ...
+    }
+}
+```
+
+When a parameter or variable is `[]*T` (pointer slice), each element may be nil. Accessing fields or calling methods on a nil element causes a nil pointer dereference panic. This applies to:
+- Function parameters of type `[]*T` — the caller controls the content
+- Slices populated by external sources (DB scan, JSON unmarshal, API response)
+- Slices built via `append` where some entries may have been set to nil
 
 ### Function Length and Nesting
 

@@ -347,6 +347,70 @@ Key points:
 
 ---
 
+## Count-First Guard (Skip Find When Total Is Zero)
+
+When a function performs both a `Count` and a `Find` query, consider executing `Count` first and returning early if the result is zero. This eliminates the more expensive `Find` query for the common case of empty result sets.
+
+```go
+// BAD: always executes both Count and Find regardless of data
+func ListLayout(ctx context.Context, uid, corpID int64, page, pageSize int) ([]*Layout, int64, error) {
+    var total int64
+    var list []*Layout
+
+    if err := db.WithContext(ctx).Model(&Layout{}).
+        Where("uid = ? AND corp_id = ?", uid, corpID).
+        Count(&total).Error; err != nil {
+        return nil, 0, fmt.Errorf("ListLayout count: %w", err)
+    }
+    if err := db.WithContext(ctx).Model(&Layout{}).
+        Where("uid = ? AND corp_id = ?", uid, corpID).
+        Order("updated_at desc").Limit(pageSize).Offset((page-1)*pageSize).
+        Find(&list).Error; err != nil {
+        return nil, 0, fmt.Errorf("ListLayout find: %w", err)
+    }
+    return list, total, nil
+}
+
+// GOOD: count-first guard skips Find when total is 0
+func ListLayout(ctx context.Context, uid, corpID int64, page, pageSize int) ([]*Layout, int64, error) {
+    var total int64
+
+    if err := db.WithContext(ctx).Model(&Layout{}).
+        Where("uid = ? AND corp_id = ?", uid, corpID).
+        Count(&total).Error; err != nil {
+        return nil, 0, fmt.Errorf("ListLayout count: %w", err)
+    }
+    if total == 0 {
+        return []*Layout{}, 0, nil // skip Find entirely
+    }
+
+    list := make([]*Layout, 0, pageSize)
+    if err := db.WithContext(ctx).Model(&Layout{}).
+        Where("uid = ? AND corp_id = ?", uid, corpID).
+        Order("updated_at desc").Limit(pageSize).Offset((page-1)*pageSize).
+        Find(&list).Error; err != nil {
+        return nil, 0, fmt.Errorf("ListLayout find: %w", err)
+    }
+    return list, total, nil
+}
+```
+
+When this optimization is worth applying:
+- **High-frequency endpoint**: the function is called often (e.g., a page that every user visits).
+- **Common empty case**: a significant fraction of users/entities have zero records for this query (e.g., most users have never created a Layout).
+- **Cost asymmetry**: `Count` is a lightweight aggregate; `Find` scans and transfers rows.
+
+When NOT to apply:
+- The empty-result rate is very low (< 5%) — the extra `Count` round-trip adds latency without saving the `Find`.
+- The `Count` and `Find` share the same transaction boundary and consistency is required — use a transaction wrapping both, not a guard pattern.
+
+Key points:
+- Return an empty non-nil slice (`[]*T{}` or `make([]*T, 0)`) rather than `nil` when skipping `Find`, so JSON marshaling produces `[]` instead of `null`.
+- Pre-allocate the result slice with `make([]*Layout, 0, pageSize)` to avoid repeated reallocations during ORM scan.
+- The guard only works if `Count` runs first; reversing the order defeats the optimization.
+
+---
+
 ## See Also
 
 - [go-error-and-quality.md](go-error-and-quality.md) — error wrapping, sentinel errors, and `errors.Is`/`errors.As` patterns
