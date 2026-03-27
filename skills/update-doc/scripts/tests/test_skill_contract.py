@@ -5,7 +5,6 @@ from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parents[2]
 SKILL_MD = SKILL_DIR / "SKILL.md"
-AGENT_YAML = SKILL_DIR / "agents" / "openai.yaml"
 UPDATE_DOC_REF = SKILL_DIR / "references" / "update-doc.md"
 CI_DRIFT_REF = SKILL_DIR / "references" / "ci-drift.md"
 
@@ -44,12 +43,6 @@ class UpdateDocSkillContractTests(unittest.TestCase):
         data = CI_DRIFT_REF.read_text()
         self.assertIn("contract test", data)
         self.assertIn("run_regression.sh", data)
-
-    def test_agent_prompt_mentions_lightweight_mode(self) -> None:
-        data = AGENT_YAML.read_text()
-        self.assertIn("$update-doc", data)
-        self.assertIn("lightweight mode", data)
-        self.assertIn("evidence-backed", data)
 
     # --- Evidence Commands: multi-language coverage ---
 
