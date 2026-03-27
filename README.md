@@ -68,7 +68,7 @@ Those five layers are not just grouped content. They form a traceable knowledge 
 
 That structure makes the project substantially stronger than a typical prompt or skill example project, because readers can move from general principles to design logic to execution artifact to measured outcomes.
 
-### 2. `rationale/` explains how each skill is designed
+### 2. rationale - clarifies each skill's design
 
 Each skill has design docs in English and Chinese, such as [rationale/google-search/design.md](rationale/google-search/design.md) and [rationale/google-search/design.zh-CN.md](rationale/google-search/design.zh-CN.md). They explain:
 
@@ -79,13 +79,13 @@ Each skill has design docs in English and Chinese, such as [rationale/google-sea
 
 That turns the project into more than a set of copyable examples. It also becomes a body of design logic that readers can study, question, and reuse.
 
-### 3. The main deliverable is methodology, not just artifacts
+### 3. General methodology drives skill design
 
 The highest-leverage assets here are [bestpractice/](bestpractice/README.md) and [rationale/](rationale/index.md), not the raw number of skills under [skills/](skills/index.md). The methodology is deliberately language-agnostic and platform-agnostic: mandatory gates, anti-examples, honest degradation, progressive disclosure, output contracts, and quantitative evaluation can be reused far beyond this project.
 
 In other words, the project is teaching people how to build professional skills, not just handing out a bag of ready-made prompts.
 
-### 4. Skill quality is measured, not guessed
+### 4. A quantitative evaluation framework
 
 [bestpractice/Evaluation.md](bestpractice/Evaluation.md) turns “is this skill good?” into a quantitative question across three dimensions:
 
@@ -101,7 +101,7 @@ The value of that framework is visible in the paired review reports under [evalu
 
 That is much stronger than saying “these skills seem useful,” because it gives readers traceable numbers, evaluation process, and iteration evidence.
 
-### 5. The regression system is deterministic and built for engineering maintenance
+### 5. A regression system built for engineering maintenance
 
 This project does not rely on “use one LLM to judge another LLM” as its primary guardrail. Instead, it uses deterministic regression assets:
 

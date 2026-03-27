@@ -66,7 +66,7 @@
 - 评审报告验证 skill 到底好不好
 - 输出样例证明 skill 在真实任务里能产出什么
 
-### 2. `rationale/` 把每个 skill 的设计思路讲清楚
+### 2. rationale - 理清 skill 设计思路
 
 每个 skill 都配有设计说明文档，例如 [`rationale/google-search/design.md`](rationale/google-search/design.md) 和 [`rationale/google-search/design.zh-CN.md`](rationale/google-search/design.zh-CN.md)。这些文档主要用来说明：
 
@@ -77,7 +77,7 @@
 
 这让项目不只是提供一组可直接使用的示例，也提供了一套可以被研究、质疑和复用的设计逻辑。
 
-### 3. 核心交付物是方法论，而不只是最终产物
+### 3. 通用方法论驱动 skill 设计
 
 项目最有价值的资产，是 [`bestpractice/`](bestpractice/README.zh-CN.md) 和 [`rationale/`](rationale/index.zh-CN.md)，而不只是 [`skills/`](skills/index.md) 里有多少个 skill。这里总结出的设计模式是可迁移的通用方法论，例如：
 
@@ -90,7 +90,7 @@
 
 这些模式不依赖某种特定语言或平台。掌握它们的人，可以把同样的方法迁移到别的语言、别的工作流、别的 agent 系统里。也正因为如此，项目是在“教你如何构建专业 skill”，而不是只给一组现成模板。
 
-### 4. skill 质量是可量化的，不是“凭感觉”
+### 4. 提供可量化的评估框架
 
 [`bestpractice/评估篇.md`](bestpractice/评估篇.md) 把“skill 好不好”拆成三个可量化维度：
 
@@ -106,7 +106,7 @@
 
 这比“这些 skill 看起来很好用”强得多，因为它给出了可追溯的数字、评估过程和迭代依据。
 
-### 5. 回归测试体系是确定性的，而且真正适合工程化维护
+### 5. 适合工程化维护的回归测试体系
 
 这个项目没有把“让一个 LLM 去评价另一个 LLM”当成主要守护手段，而是优先采用确定性验证：
 
