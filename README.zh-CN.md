@@ -42,10 +42,10 @@
 - 方法论：[`bestpractice/README.zh-CN.md`](bestpractice/README.zh-CN.md)
 - skill 级设计说明：[`rationale/index.zh-CN.md`](rationale/index.zh-CN.md)
 
-这个仓库的核心目标不是“展示 prompt 怎么写”，而是回答四个更难的问题：
+这个项目的核心目标不是“展示 prompt 怎么写”，而是回答四个更难的问题：
 
 1. 高质量 skill 到底应该如何设计？
-2. 这些设计原则落到某个具体 skill 上时，会如何转化为结构、门禁与权衡取舍？
+2. 这些设计原则落实到某个具体 skill 上时，会怎样体现为它的结构、门禁与取舍？
 3. 写出来之后如何证明它真的有效？
 4. 如何把它融入日常开发与团队工作流，而不是停留在演示层？
 
@@ -61,23 +61,21 @@
 这五层组成了一条可验证的知识链：
 
 - 方法论定义 skill 应该如何设计
-- 设计说明解释这些原则如何落成某个具体 skill
+- 设计说明解释这些原则是如何在某个具体 skill 里贯彻的
 - skill 示例展示最终可执行产物的样子
 - 评审报告验证 skill 到底好不好
 - 输出样例证明 skill 在真实任务里能产出什么
 
-### 2. `rationale/` 让设计意图变得可检查
+### 2. `rationale/` 把每个 skill 的设计思路讲清楚
 
-很多 skill 仓库会直接给出最终 `SKILL.md`，但不会解释背后的设计推导。这个项目现在把这层能力单独沉淀在 [`rationale/`](rationale/index.zh-CN.md) 里。
+每个 skill 都配有设计说明文档，例如 [`rationale/google-search/design.md`](rationale/google-search/design.md) 和 [`rationale/google-search/design.zh-CN.md`](rationale/google-search/design.zh-CN.md)。这些文档主要用来说明：
 
-每个 skill 都有成对的设计说明文档，例如 [`rationale/google-search/design.md`](rationale/google-search/design.md) 和 [`rationale/google-search/design.zh-CN.md`](rationale/google-search/design.zh-CN.md)。它们会解释：
+- 这个 skill 具体要解决什么问题
+- 为什么它的流程、门禁、结构和输出格式会这样设计
+- 常见替代方案为什么不够理想
+- 这个设计最值得关注的亮点是什么
 
-- 这个 skill 具体在解决什么问题
-- 为什么它的流程、门禁、结构和输出契约要这样设计
-- 它在规避哪些常见但较弱的替代方案或失败模式
-- 最终设计的主要亮点是什么
-
-这让仓库从“可以直接复制的示例”进一步变成“可以研究、质疑、复用设计逻辑的样例库”。
+这让项目不只是提供一组可直接使用的示例，也提供了一套可以被研究、质疑和复用的设计逻辑。
 
 ### 3. 核心交付物是方法论，而不只是最终产物
 
@@ -110,7 +108,7 @@
 
 ### 5. 回归测试体系是确定性的，而且真正适合工程化维护
 
-这个仓库没有把“让一个 LLM 去评价另一个 LLM”当成主要守护手段，而是优先采用确定性验证：
+这个项目没有把“让一个 LLM 去评价另一个 LLM”当成主要守护手段，而是优先采用确定性验证：
 
 - `132` 个 golden JSON 场景
 - `29` 个 Python 测试文件
@@ -125,7 +123,7 @@
 
 `go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`
 
-而且仓库里有对应的评审报告、工作流示例和输出产物，证明这不是纸面上的“概念链路”，而是可以在真实工程实践中被复用和验证的工作体系。
+而且项目里有对应的评审报告、工作流示例和输出产物，证明这不是纸面上的“概念链路”，而是可以在真实工程实践中被复用和验证的工作体系。
 
 ### 7. "隐性→显性→可执行" 知识论
 
@@ -193,16 +191,16 @@
 - 如何把 skill 融入开发流程，而不是停留在单次对话里
 
 <a id="cn-rationale"></a>
-## 设计说明
+## skill 设计说明
 
-[`rationale/`](rationale/index.zh-CN.md) 是整个项目里“skill 级解释层”的入口，它负责把 [`bestpractice/`](bestpractice/README.zh-CN.md) 里的通用原则，和 [`skills/`](skills/index.md) 里的具体实现连接起来。
+[`rationale/`](rationale/index.zh-CN.md) 汇总了每个 skill 的设计说明，把 [`bestpractice/`](bestpractice/README.zh-CN.md) 里的通用原则和 [`skills/`](skills/index.md) 里的具体实现串联了起来。
 
-每份设计说明都会围绕一个 skill，重点解释：
+每份设计说明都会围绕一个 skill，重点讲清楚：
 
-- 这个 skill 到底在解决什么具体问题
-- 为什么它的门禁、结构、references 和输出格式长成现在这样
-- 常见替代方案为什么做不好
-- 最终设计的主要亮点是什么
+- 这个 skill 具体要解决什么问题
+- 为什么它的门禁、结构、参考资料和输出格式会这样设计
+- 常见替代方案为什么不够理想
+- 这个设计最值得关注的亮点是什么
 
 代表性示例：
 
@@ -246,10 +244,10 @@ CI 触发
 
 | Skill 名称 | 所处阶段 | 功能用途 | 主要亮点 / 优势 |
 | --- | --- | --- | --- |
-| `go-makefile-writer` | 本地工程入口 | 为 Go 仓库设计或重构根 Makefile | 标准化 `fmt/test/lint/build/run` 入口，让本地命令和 CI 门禁对齐 |
-| `git-commit` | 提交前门禁 | 安全创建 Git 提交 | 提交前检查仓库状态、潜在敏感信息和冲突，并生成规范化 commit message |
+| `go-makefile-writer` | 本地工程入口 | 为 Go 项目设计或重构根 Makefile | 标准化 `fmt/test/lint/build/run` 入口，让本地命令和 CI 门禁对齐 |
+| `git-commit` | 提交前门禁 | 安全创建 Git 提交 | 提交前检查项目状态、潜在敏感信息和冲突，并生成规范化 commit message |
 | `create-pr` | 提交后到评审前 | 为 GitHub 主分支创建高质量 PR | 强调预检、质量门禁和结构化 PR 内容，降低 reviewer 理解成本 |
-| `go-ci-workflow` | CI 编排 | 创建或重构 Go 仓库的 GitHub Actions CI | 强调 Make 驱动、本地与 CI 一致、缓存与 job 设计、门禁分层 |
+| `go-ci-workflow` | CI 编排 | 创建或重构 Go 项目的 GitHub Actions CI | 强调 Make 驱动、本地与 CI 一致、缓存与 job 设计、门禁分层 |
 | `go-code-reviewer` | 自动审查 | 对 Go 代码做缺陷优先评审 | 聚焦真实 bug、回归和风险，不把代码审查退化成风格检查 |
 | `security-review` | 安全审查 | 对代码变更做 exploitability-first 安全评审 | 以“是否可利用”为优先级，覆盖认证、输入、依赖、并发和容器风险 |
 
@@ -287,8 +285,8 @@ CI 触发
 | Skill 名称 | 功能用途 | 主要亮点 / 优势 |
 | --- | --- | --- |
 | `writing-plans` | 为多步骤任务生成基于证据的实现计划 | 强调 mode-aware planning、已验证路径标签、依赖图和强制性的计划后审查，让计划真正可执行而不是停留在描述层 |
-| `update-doc` | 让仓库文档与最新代码保持同步 | 强调按作用域更新文档、docs drift 检查、项目类型路由，以及基于证据同步 README 和相关文档 |
-| `readme-generator` | 基于仓库证据生成或重构项目 `README.md` | 强调仓库形态识别、证据驱动的结构组织、可维护 README 模式，以及对 service、library、CLI、monorepo 等项目的适配 |
+| `update-doc` | 让项目文档与最新代码保持同步 | 强调按作用域更新文档、docs drift 检查、项目类型路由，以及基于证据同步 README 和相关文档 |
+| `readme-generator` | 基于项目证据生成或重构项目 `README.md` | 强调项目形态识别、证据驱动的结构组织、可维护 README 模式，以及对 service、library、CLI、monorepo 等项目的适配 |
 | `tech-doc-writer` | 编写、审查和改进技术文档，如 runbook、故障排查文档、API 文档和 RFC/ADR 风格设计文档 | 强调文档类型分类、受众分析、质量门禁和防陈旧机制，产出更清晰、可维护的技术文档 |
 
 ### 工具执行与任务自动化
@@ -303,7 +301,7 @@ CI 触发
 <a id="cn-evaluate-and-output"></a>
 ## 评审与输出样例
 
-这个仓库和普通“skills 示例仓库”最大的区别，是它不仅展示 skill，还展示：
+这个项目和普通“skills 示例项目”最大的区别，是它不仅展示 skill，还展示：
 
 1. 这个 skill 为什么要这样设计
 2. 这个 skill 为什么好
@@ -332,7 +330,7 @@ CI 触发
 <a id="cn-governance"></a>
 ## 治理文档
 
-如果你准备参与贡献，或者需要查看仓库治理规则，建议从这里开始：
+如果你准备参与贡献，或者需要查看项目治理规则，建议从这里开始：
 
 - 贡献指南：[`CONTRIBUTING.zh-CN.md`](CONTRIBUTING.zh-CN.md)
 - 安全策略：[`SECURITY.zh-CN.md`](SECURITY.zh-CN.md)

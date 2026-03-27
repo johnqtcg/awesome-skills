@@ -42,10 +42,10 @@ Main documentation entry points:
 - methodology: [bestpractice/README.md](bestpractice/README.md)
 - skill-specific design explanation: [rationale/index.md](rationale/index.md)
 
-The core goal of this repository is not to show how to write prompts. It is to answer four harder questions:
+The core goal of this project is not to show how to write prompts. It is to answer four harder questions:
 
 1. How should a high-quality skill be designed?
-2. How do those design principles turn into the structure, gates, and tradeoffs of a concrete skill?
+2. How do those design principles show up in the structure, gates, and tradeoffs of a specific skill?
 3. How do you prove that it actually works?
 4. How do you integrate it into daily engineering workflows instead of leaving it as a demo?
 
@@ -54,36 +54,34 @@ The core goal of this repository is not to show how to write prompts. It is to a
 
 ### 1. Five-layer traceable architecture
 
-The repository is organized as a rare end-to-end chain:
+The project is organized as a rare end-to-end chain:
 
 `bestpractice/` → `rationale/` → `skills/` → `evaluate/` → `outputexample/`
 
 Those five layers are not just grouped content. They form a traceable knowledge loop:
 
 - methodology explains how a skill should be designed
-- rationale explains how those principles become a concrete skill design
+- rationale explains how those principles are carried through in a specific skill
 - skill examples show the actual executable artifact
 - review reports test whether the skill is actually good
 - output examples prove what it can produce in real tasks
 
 That structure makes the project substantially stronger than a typical prompt or skill example project, because readers can move from general principles to design logic to execution artifact to measured outcomes.
 
-### 2. `rationale/` makes design intent inspectable
+### 2. `rationale/` explains how each skill is designed
 
-A common weakness of skill repositories is that they show the final `SKILL.md` but not the reasoning behind it. This project now adds a dedicated explanation layer under [rationale/](rationale/index.md).
+Each skill has design docs in English and Chinese, such as [rationale/google-search/design.md](rationale/google-search/design.md) and [rationale/google-search/design.zh-CN.md](rationale/google-search/design.zh-CN.md). They explain:
 
-Each skill has paired design-rationale docs, such as [rationale/google-search/design.md](rationale/google-search/design.md) and [rationale/google-search/design.zh-CN.md](rationale/google-search/design.zh-CN.md). They explain:
+- what problem the skill is meant to solve
+- why its workflow, gates, structure, and output format are designed that way
+- why common alternatives fall short
+- what makes the final design worth paying attention to
 
-- what problem the skill is trying to solve
-- why the workflow, gates, structure, and output contract are designed that way
-- which weaker alternatives or common failure modes the design is avoiding
-- what the main strengths of the final design are
-
-That turns the repository from “examples you can copy” into “examples whose design logic you can study, critique, and reuse.”
+That turns the project into more than a set of copyable examples. It also becomes a body of design logic that readers can study, question, and reuse.
 
 ### 3. The main deliverable is methodology, not just artifacts
 
-The highest-leverage assets here are [bestpractice/](bestpractice/README.md) and [rationale/](rationale/index.md), not the raw number of skills under [skills/](skills/index.md). The methodology is deliberately language-agnostic and platform-agnostic: mandatory gates, anti-examples, honest degradation, progressive disclosure, output contracts, and quantitative evaluation can be reused far beyond this repository.
+The highest-leverage assets here are [bestpractice/](bestpractice/README.md) and [rationale/](rationale/index.md), not the raw number of skills under [skills/](skills/index.md). The methodology is deliberately language-agnostic and platform-agnostic: mandatory gates, anti-examples, honest degradation, progressive disclosure, output contracts, and quantitative evaluation can be reused far beyond this project.
 
 In other words, the project is teaching people how to build professional skills, not just handing out a bag of ready-made prompts.
 
@@ -105,7 +103,7 @@ That is much stronger than saying “these skills seem useful,” because it giv
 
 ### 5. The regression system is deterministic and built for engineering maintenance
 
-This repository does not rely on “use one LLM to judge another LLM” as its primary guardrail. Instead, it uses deterministic regression assets:
+This project does not rely on “use one LLM to judge another LLM” as its primary guardrail. Instead, it uses deterministic regression assets:
 
 - `132` golden JSON fixtures
 - `29` Python test files
@@ -120,7 +118,7 @@ The backend-oriented skills do not just work in isolation. They line up into an 
 
 `go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`
 
-The repository also includes review reports, workflow examples, and output artifacts that show this is not a paper design. It is a workflow system that can be reused and validated in real engineering practice.
+The project also includes review reports, workflow examples, and output artifacts that show this is not a paper design. It is a workflow system that can be reused and validated in real engineering practice.
 
 ### 7. A view of knowledge: tacit -> explicit -> executable
 
@@ -130,7 +128,7 @@ Underneath the concrete files is a stronger idea: useful engineering knowledge s
 - explicit rules in documentation
 - executable constraints in a skill, script, or test
 
-That progression is one of the most important ideas in the repo. It reframes skills as a way to turn unstable personal intuition into shared, inspectable, and enforceable capability.
+That progression is one of the most important ideas in the project. It reframes skills as a way to turn unstable personal intuition into shared, inspectable, and enforceable capability.
 
 <a id="en-project-structure"></a>
 ## Project Structure
@@ -188,16 +186,16 @@ These documents mainly answer:
 - how to integrate skills into engineering workflows instead of leaving them inside a single chat
 
 <a id="en-rationale"></a>
-## Design Rationale
+## Skill Design Docs
 
-[rationale/](rationale/index.md) is the skill-specific explanation layer for the project. It connects the general rules from [bestpractice/](bestpractice/README.md) to the actual implementation under [skills/](skills/index.md).
+[rationale/](rationale/index.md) is where the project explains the design of each skill. It ties the general principles in [bestpractice/](bestpractice/README.md) to the concrete implementations under [skills/](skills/index.md).
 
-Each rationale document focuses on one skill and explains:
+Each design doc focuses on one skill and explains:
 
 - the concrete problem the skill is trying to solve
-- why the skill's gates, structure, references, and output format look the way they do
-- what common alternatives fail to do well
-- what the main design strengths are
+- why its gates, structure, references, and output format are designed the way they are
+- why common alternatives tend not to work as well
+- what the main strengths of the design are
 
 Representative examples:
 
@@ -241,8 +239,8 @@ The key skills in that pipeline are:
 
 | Skill Name | Stage | Purpose | Main strengths / advantages |
 | --- | --- | --- | --- |
-| `go-makefile-writer` | Local engineering entrypoint | Design or refactor a root Makefile for Go repositories | Standardizes `fmt/test/lint/build/run` entrypoints and keeps local commands aligned with CI gates |
-| `git-commit` | Pre-commit gate | Safely create Git commits | Checks repo state, potential secrets, and conflicts before commit, then generates a standardized commit message |
+| `go-makefile-writer` | Local engineering entrypoint | Design or refactor a root Makefile for Go projects | Standardizes `fmt/test/lint/build/run` entrypoints and keeps local commands aligned with CI gates |
+| `git-commit` | Pre-commit gate | Safely create Git commits | Checks the current Git state, potential secrets, and conflicts before commit, then generates a standardized commit message |
 | `create-pr` | Post-push, pre-review | Create a high-quality PR to GitHub main | Emphasizes preflight checks, quality gates, and structured PR content to reduce reviewer overhead |
 | `go-ci-workflow` | CI orchestration | Create or refactor GitHub Actions CI for Go repos | Emphasizes Make-driven CI, local/CI consistency, caching, job design, and layered gates |
 | `go-code-reviewer` | Automated review | Review Go code with a defect-first mindset | Focuses on real bugs, regressions, and risk instead of reducing review to style comments |
@@ -280,8 +278,8 @@ These skills focus on turning engineering knowledge into maintainable documents 
 | Skill Name | Purpose | Main strengths / advantages |
 | --- | --- | --- |
 | `writing-plans` | Create evidence-backed implementation plans for multi-step work | Adds mode-aware planning, verified path labels, dependency graphs, and a mandatory post-writing review loop so plans are executable instead of aspirational |
-| `update-doc` | Keep repository documentation aligned with the latest code | Focuses on scoped doc patches, docs-drift checks, project-type routing, and evidence-backed synchronization of README and related docs |
-| `readme-generator` | Generate or refactor project `README.md` files using repository evidence | Emphasizes repository-shape detection, evidence-based structure, maintainable README patterns, and adaptation across service, library, CLI, and monorepo projects |
+| `update-doc` | Keep project documentation aligned with the latest code | Focuses on scoped doc patches, docs-drift checks, project-type routing, and evidence-backed synchronization of README and related docs |
+| `readme-generator` | Generate or refactor project `README.md` files using project evidence | Emphasizes project-shape detection, evidence-based structure, maintainable README patterns, and adaptation across service, library, CLI, and monorepo projects |
 | `tech-doc-writer` | Write, review, and improve technical documents such as runbooks, troubleshooting guides, API docs, and RFC/ADR-style design docs | Uses type classification, audience analysis, quality gates, and anti-staleness rules to produce clearer, more maintainable technical documentation |
 
 ### Tool Execution and Task Automation
@@ -296,7 +294,7 @@ These skills focus more on getting a task executed than on code quality itself.
 <a id="en-evaluate-and-output"></a>
 ## Review Reports and Output Examples
 
-What makes this repository different from a typical “skills example repo” is that it does not just show the skills. It also shows:
+What makes this project different from a typical “skills example project” is that it does not just show the skills. It also shows:
 
 1. why a skill was designed that way
 2. why a given skill is good
@@ -325,7 +323,7 @@ Typical examples:
 <a id="en-governance"></a>
 ## Governance
 
-If you want to contribute or need repository governance details, start here:
+If you want to contribute or need project governance details, start here:
 
 - Contribution guide: [CONTRIBUTING.md](CONTRIBUTING.md)
 - Security policy: [SECURITY.md](SECURITY.md)
