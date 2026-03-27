@@ -181,81 +181,29 @@ You MUST complete each phase before proceeding to the next.
 
    **WHEN symptoms include: intermittent failures, timeouts, "works on my machine", silent process death, or no obvious code cause:**
 
-   Rule out infrastructure and OS-level issues BEFORE diving into code:
+   Rule out infrastructure and OS-level issues BEFORE diving into code.
+   Minimum checklist:
+   - disk space: `df -h`
+   - memory / OOM: `free -h && dmesg | grep -i oom` (Linux) or `top -l 1 | head -20` (macOS)
+   - port conflicts: `lsof -i :<port>`
+   - network / DNS: `nslookup <hostname>` and `curl -v <endpoint>`
+   - file descriptors: `ulimit -a`
+   - recent system events: `dmesg | tail -50` or `log show --last 10m`
 
-   ```bash
-   # Disk space (full disk → cryptic build failures, DB corruption)
-   df -h
-
-   # Memory pressure / OOM kills (process vanishes, no app-level log)
-   free -h && dmesg | grep -i oom      # Linux
-   top -l 1 | head -20                 # macOS
-
-   # Port conflicts ("address already in use" or silent refusal)
-   lsof -i :<port>
-
-   # Network / DNS (timeouts that look like app hangs)
-   nslookup <hostname>
-   curl -v <endpoint>
-
-   # File descriptor exhaustion ("too many open files" deep in stack)
-   ulimit -a
-   ls /proc/<pid>/fd | wc -l           # Linux
-
-   # Recent system events (OOM kills, segfaults, crashes)
-   dmesg | tail -50                    # Linux
-   log show --last 10m --predicate 'eventMessage contains "killed"'  # macOS
-   ```
-
-   **Common hidden causes:**
-   | Symptom | Likely Infrastructure Cause |
-   |---------|---------------------------|
-   | Build fails with cryptic I/O error | Disk full |
-   | Process vanishes silently | OOM kill by kernel |
-   | Connection refused / bind error | Port conflict |
-   | Requests hang then timeout | DNS failure or network partition |
-   | "Too many open files" deep in stack | File descriptor exhaustion |
-   | Flaky tests on CI only | Resource limits, shared runners, Docker cgroup limits |
-
-   **If environment is unhealthy:** Fix the environment issue first — this is not a code bug.
+   If environment is unhealthy, fix that first. A broken machine is not a code bug.
 
 5. **Gather Evidence in Multi-Component Systems**
 
    **WHEN system has multiple components (CI → build → signing, API → service → database):**
 
-   **BEFORE proposing fixes, add diagnostic instrumentation:**
-   ```
+   Before proposing fixes, instrument each boundary.
    For EACH component boundary:
-     - Log what data enters component
-     - Log what data exits component
-     - Verify environment/config propagation
-     - Check state at each layer
+   - log what enters the component
+   - log what exits the component
+   - verify config / environment propagation
+   - confirm state at each layer
 
-   Run once to gather evidence showing WHERE it breaks
-   THEN analyze evidence to identify failing component
-   THEN investigate that specific component
-   ```
-
-   **Example (multi-layer system):**
-   ```bash
-   # Layer 1: Workflow
-   echo "=== Secrets available in workflow: ==="
-   echo "IDENTITY: ${IDENTITY:+SET}${IDENTITY:-UNSET}"
-
-   # Layer 2: Build script
-   echo "=== Env vars in build script: ==="
-   env | grep IDENTITY || echo "IDENTITY not in environment"
-
-   # Layer 3: Signing script
-   echo "=== Keychain state: ==="
-   security list-keychains
-   security find-identity -v
-
-   # Layer 4: Actual signing
-   codesign --sign "$IDENTITY" --verbose=4 "$APP"
-   ```
-
-   **This reveals:** Which layer fails (secrets → workflow ✓, workflow → build ✗)
+   Run once, identify the exact failing boundary, then narrow the investigation to that layer.
 
 6. **Trace Data Flow**
 
@@ -273,17 +221,13 @@ You MUST complete each phase before proceeding to the next.
 
    **WHEN system has 3+ components or investigation is slow:**
 
-   Launch independent investigation lines simultaneously:
-   ```
-   Parallel Track A: Analyze logs and error messages
-   Parallel Track B: Review recent git changes / deploys
-   Parallel Track C: Compare working vs broken environments
-   Parallel Track D: Check external dependencies / third-party status
-   ```
+   Launch independent tracks in parallel when possible:
+   - logs / error messages
+   - recent git changes / deploys
+   - working vs broken environment diff
+   - external dependency / third-party status
 
-   **Why parallel:** Steps 1-6 above are often independent. Checking git history doesn't block reading logs. Running them in parallel cuts Phase 1 time by 50-70%.
-
-   **Use the Agent tool** to spawn sub-agents for each track, then synthesize findings.
+   Use the Agent tool for parallel tracks, then synthesize the results before choosing a fix.
 
 ### Phase 2: Pattern Analysis
 
