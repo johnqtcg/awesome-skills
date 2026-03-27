@@ -117,6 +117,30 @@ Detect and reference these files when present:
 
 If `LICENSE` is missing, add a note: `License: Not found in repo — consider adding a LICENSE file.`
 
+## Key Evidence Targets
+
+Always scan these high-signal files before drafting or refactoring:
+
+- Entrypoints: `main.go`, `cmd/*`, executable scripts, `package.json`
+- Build/test hubs: `Makefile`, `go.mod`, `pyproject.toml`, `package.json`
+- CI and release: `.github/workflows/*`
+- Runtime/config: `.env.example`, `config/*`, `application.yml`, `docker-compose.yml`
+- Governance: `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`
+- Existing docs: `README*.md`, `docs/*`
+
+If any of these are absent, record `Not found in repo` instead of filling the gap with assumptions.
+
+## Command Priority
+
+When multiple command sources exist, apply Command Priority in this order:
+
+1. `Makefile` target when it exists and is clearly maintained
+2. Language-native manifest (`go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml`)
+3. CI workflow commands when they confirm the maintained path
+4. Direct tool invocation only when no stronger source exists
+
+If sources conflict, load `references/command-priority.md` and resolve the conflict before drafting commands.
+
 ## Structure Policy
 
 Use required + optional sections, not one rigid template.
@@ -189,6 +213,29 @@ Lightweight required sections:
 
 In lightweight mode, skip optional heavy sections unless explicitly requested.
 
+## Chinese / Bilingual README Guidelines
+
+Apply this section when the repository or user request indicates Chinese or bilingual output.
+
+- Keep English for package names, command names, file paths, environment variables, and precise technical identifiers.
+- Translate headings and explanatory prose to match the target audience language.
+- Do not use double-language headings like `## Quick Start / 快速开始`.
+- In bilingual mode, use Chinese as the primary prose and keep English technical terms inline.
+- Prefer exact Chinese headings such as `## 快速开始`, `## 项目结构`, and `## 常用命令`.
+
+Example heading style:
+
+````markdown
+## 快速开始
+
+先安装依赖，再运行服务：
+
+```bash
+make install-tools
+make run-api
+```
+````
+
 ## README Navigation Rule
 
 For long READMEs, navigation is part of usability.
@@ -206,6 +253,17 @@ Exclude from ToC by default (keep in document body for those who scroll):
 - Any section that is not a direct action step for the primary audience
 
 **ToC label / heading consistency rule**: the display text of every ToC entry must exactly match the `##` heading it links to. If you shorten a ToC label for readability, you must rename the section heading to match. Mismatches disorient readers who click a link and land on a differently-titled section.
+
+## Monorepo Rules
+
+When the detected project type is monorepo:
+
+- Use a repository overview table instead of a deep tree dump.
+- Link to submodule READMEs instead of duplicating every module's internal details.
+- Document shared root commands only; module-specific commands belong in each module README.
+- If `LICENSE` is missing, say `Not found in repo` at the root rather than guessing package-level license inheritance.
+
+Load `references/monorepo-rules.md` before drafting or calibrating a monorepo README.
 
 ## End-to-End Example Rule
 
@@ -226,43 +284,174 @@ schema-gen generate --format json --output ./schemas ./internal/models
 
 Never write a fabricated JSON/YAML body as if it were real output when no evidence exists for the exact shape.
 
-## Anti-Example: Internal Process Labels (Most Critical)
+## Anti-Examples (BAD / GOOD Markdown Pairs)
 
-The most common and harmful anti-pattern: internal workflow language leaking into the README body.
+Use these patterns to suppress the most common README failures.
 
 BAD:
 
-```markdown
+````markdown
 ## Testing — Status: Not verified in this environment
 
 | Command | Verified |
 |---------|----------|
 | `make test` | ⚠️ Not verified |
 | `make lint` | ✅ Verified |
+````
+
+GOOD:
+
+````markdown
+## Testing
+
+```bash
+make test
+make lint
+```
+````
+
+Topic: process labels.
+
+BAD:
+
+```markdown
+## Maintainer workflow
+
+Install pre-commit hooks, set up internal dashboards, then scroll down for what the project does.
 ```
 
 GOOD:
 
+````markdown
+## Overview
+
+Explain the product value first. Move maintainer workflow to a later section or contributor guide.
+````
+
+Topic: Maintainer workflow before value proposition.
+
+BAD:
+
 ```markdown
-## Testing
+![Coverage](https://codecov.io/gh/example/project/badge.svg)
+![Downloads](https://img.shields.io/npm/dm/example)
+```
+
+GOOD:
+
+````markdown
+![CI](https://github.com/example/project/actions/workflows/ci.yml/badge.svg)
+![License](https://img.shields.io/badge/license-MIT-blue)
+````
+
+Topic: badge fabrication.
+
+BAD:
+
+```markdown
+## Configuration
+
+`DB_HOST=localhost`
+`REDIS_URL=redis://localhost:6379`
+`JWT_SECRET=changeme`
+```
+
+GOOD:
+
+````markdown
+## Configuration
+
+Configuration source: `.env.example`
+Unknown variables: `Not found in repo`
+````
+
+Topic: configuration guessing.
+
+BAD:
+
+```markdown
+## Project Structure
+
+Huge monorepo tree with every nested file for every app and package.
+```
+
+GOOD:
+
+````markdown
+## Repository Overview
+
+| Module | Path | Description |
+|--------|------|-------------|
+| API | `apps/api/` | Public HTTP service |
+| Worker | `apps/worker/` | Background jobs |
+````
+
+Topic: monorepo tree dump.
+
+BAD:
+
+```markdown
+## Quick Start / 快速开始
+
+### Installation / 安装
+```
+
+GOOD:
+
+````markdown
+## 快速开始
+
+### 安装
+````
+
+Topic: Double-language headings.
+
+BAD:
+
+````markdown
+## Usage
+
+Output:
+
+```json
+{"status":"ok"}
+```
+````
+
+GOOD:
+
+````markdown
+## Usage
 
 ```bash
-make test           # run all tests
-make lint           # run linter
-```
+curl -s localhost:8080/health
 ```
 
-This applies to **all** process-state language — not just verification tables. Phrases like "Commands are derived from the Makefile and have not been executed" or "not verified in this environment" are equally prohibited in README body. They belong only in the Output Contract (assistant response).
+Response:
 
-> Additional anti-examples (fabricated badges, guessed config, monorepo tree dumps, double-language headings, output without input) are in `references/anti-examples.md` — load when refactoring an existing README.
+```json
+{"status":"ok"}
+```
+````
+
+Topic: Output snippet without input command.
+
+This applies to all process-state language — not just verification tables. Additional low-frequency anti-patterns live in `references/anti-examples.md`.
 
 ## Generation Workflow
 
-1. **Discover** — Run `scripts/discover_readme_needs.sh` if available, or manually scan evidence targets: entrypoints (`main.go`, `cmd/*`), business layers (`internal/`, `pkg/`, `src/`), config (`config/`, `.env.example`), command hubs (`Makefile`, `package.json`), quality gates (lint/test/coverage), CI (`.github/workflows/*`), existing docs (`docs/`, `README*.md`).
-2. **Route** — Detect project type → select template (A–E). Identify dependencies, config strategy, and badge signals.
-3. **Draft** — Extract commands (priority: Makefile → language-native → fallback). Build sections per template. Add structure with one-line purpose per directory. Include badges (mandatory — see Badge Strategy). Add maintenance triggers.
-4. **Polish** — Readability pass: no duplication, scannable headings, no internal-process wording. Apply Navigation Rule: add TOC when needed, calibrate size to project complexity (7–10 entries for simple projects), exclude contributor-only sections, and verify every ToC label matches its `##` heading exactly.
-5. **Verify** — Produce Evidence Mapping + Output Contract + Scorecard in assistant response.
+1. **Detect audience** — decide whether the README is for end users, contributors, operators, or mixed readers.
+2. **Detect language** — choose English, Chinese, or bilingual output before drafting.
+3. **Discover repository facts** — run `scripts/discover_readme_needs.sh` if available.
+4. **Collect key evidence targets** — read `main.go`, `Makefile`, `go.mod`, `.github/workflows`, config files, and existing README/docs.
+5. **Route project type** — choose Template A/B/C/D/E based on repo structure.
+6. **Choose command source** — apply Command Priority and resolve command conflicts before copying commands.
+7. **Select supporting references** — load template, checklist, golden example, bilingual guidance, or monorepo rules only when needed.
+8. **Draft sections** — build the README from evidence, keeping homepage-first reader flow.
+9. **Calibrate structure** — add or trim ToC, badges, end-to-end examples, and optional sections based on project complexity.
+10. **Polish language** — remove internal process wording, duplicated headings, guessed configuration, and filler prose.
+11. **Verify evidence mapping** — ensure each non-trivial section maps back to repo files.
+12. **Return output contract** — include the evidence mapping, scorecard, degraded flag, and omitted sections in the assistant response.
 
 ## Output Style
 
@@ -392,7 +581,7 @@ bash "<path-to-skill>/scripts/run_regression.sh"
 - `references/golden-<type>.md` (service / library / cli / monorepo / lightweight)
   Load **only the file matching the detected project type** when calibrating output quality. See `references/golden-examples.md` for the index.
 - `references/command-priority.md`
-  Load **only when multiple command sources conflict** (e.g., Makefile + package.json + CI scripts all define overlapping commands).
+  Load **only when command conflicts appear** (e.g., Makefile + package.json + CI scripts all define overlapping commands).
 - `references/checklist.md`
   Load **only in refactor mode** (updating an existing README) during final review phase.
 - `references/anti-examples.md`

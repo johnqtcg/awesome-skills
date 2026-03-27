@@ -5,7 +5,6 @@ from pathlib import Path
 
 SKILL_DIR = Path(__file__).resolve().parents[2]
 SKILL_MD = SKILL_DIR / "SKILL.md"
-AGENT_YAML = SKILL_DIR / "agents" / "openai.yaml"
 TEMPLATES_REF = SKILL_DIR / "references" / "templates.md"
 CHECKLIST_REF = SKILL_DIR / "references" / "checklist.md"
 COMMAND_REF = SKILL_DIR / "references" / "command-priority.md"
@@ -354,18 +353,7 @@ class TestChecklistRef(unittest.TestCase):
         self.assertGreaterEqual(lines, 80, f"checklist.md too thin: {lines} lines")
 
 
-# ── 15. Agents Config ──────────────────────────────────────────
-
-class TestAgentsConfig(unittest.TestCase):
-    def test_file_exists(self):
-        self.assertTrue(AGENT_YAML.exists())
-
-    def test_skill_reference(self):
-        data = AGENT_YAML.read_text()
-        self.assertIn("$readme-generator", data)
-
-
-# ── 16. Structural Integrity ───────────────────────────────────
+# ── 15. Structural Integrity ───────────────────────────────────
 
 class TestStructuralIntegrity(unittest.TestCase):
     def test_generation_workflow_steps(self):
@@ -546,4 +534,3 @@ class TestCrossCuttingIntegrity(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

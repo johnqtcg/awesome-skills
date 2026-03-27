@@ -76,6 +76,6 @@
 ## Known Gaps
 
 1. No integration test for running discover script against a real repo and validating TSV output
-2. No test for agents/openai.yaml prompt completeness (only checks skill reference exists)
+2. No optional prompt-sidecar coverage beyond the core skill contract tests
 3. Templates depth test uses line count, not structural validation of each template
 4. Golden fixture 009 tests degradation concept but not actual degraded README generation
