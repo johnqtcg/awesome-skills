@@ -23,17 +23,26 @@ import subprocess
 import sys
 import time
 import unicodedata
+import zipfile
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from docx import Document
-from opencc import OpenCC
 from reportlab.lib.pagesizes import LETTER
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+
+try:
+    from docx import Document as DocxDocument
+except ImportError:
+    DocxDocument = None
+
+try:
+    from opencc import OpenCC as OpenCCConverter
+except ImportError:
+    OpenCCConverter = None
 
 
 PDF_CJK_FONT_CANDIDATES = [
@@ -97,6 +106,50 @@ FASTER_WHISPER_MODE_PRESETS: dict[str, dict[str, object]] = {
         "no_speech_threshold": 0.65,
     },
 }
+
+
+class _NoOpOpenCC:
+    def convert(self, text: str) -> str:
+        return text
+
+
+def build_opencc_converter() -> object:
+    if OpenCCConverter is None:
+        return _NoOpOpenCC()
+    return OpenCCConverter("t2s")
+
+
+def save_minimal_docx(paragraphs: list[str], output_path: Path) -> None:
+    document_xml = [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">',
+        "<w:body>",
+    ]
+    for paragraph in paragraphs:
+        text = escape(paragraph)
+        document_xml.append(f"<w:p><w:r><w:t xml:space=\"preserve\">{text}</w:t></w:r></w:p>")
+    document_xml.extend(["<w:sectPr/>", "</w:body>", "</w:document>"])
+
+    with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED) as docx_zip:
+        docx_zip.writestr(
+            "[Content_Types].xml",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>
+""",
+        )
+        docx_zip.writestr(
+            "_rels/.rels",
+            """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>
+""",
+        )
+        docx_zip.writestr("word/document.xml", "\n".join(document_xml))
 
 ZH_REPLACEMENTS = {
     # ASR systematic errors: token spacing / casing
@@ -1007,7 +1060,7 @@ def clean_transcript(
         replacements.update(extra_replacements)
 
     if language == "zh":
-        joined_text = OpenCC("t2s").convert(joined_text)
+        joined_text = build_opencc_converter().convert(joined_text)
         joined_text = apply_replacements(joined_text, replacements)
         joined_text = normalize_zh_punctuation(joined_text)
 
@@ -1094,7 +1147,11 @@ def write_pdf_output(final_text: str, output_path: Path, input_path: Path, langu
 
 
 def write_docx_output(final_text: str, output_path: Path, input_path: Path, language: str) -> None:
-    document = Document()
+    if DocxDocument is None:
+        save_minimal_docx(split_paragraphs(final_text), output_path)
+        return
+
+    document = DocxDocument()
     for paragraph in split_paragraphs(final_text):
         document.add_paragraph(paragraph)
     document.save(output_path)
