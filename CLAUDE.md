@@ -12,14 +12,14 @@ bestpractice/  →  skills/  →  evaluate/  →  outputexample/
 ```
 
 - **`bestpractice/`** — skill design methodology docs (`Fundamentals.md`, `Advanced.md`, `Evaluation.md`, `Integration.md`), bilingual (EN + ZH)
-- **`skills/`** — 20 production-ready Claude Code skills, each centered on a `SKILL.md` with optional `scripts/`, `references/`, and `agents/` subdirs
+- **`skills/`** — 21 production-ready Claude Code skills, each centered on a `SKILL.md` with optional `scripts/`, `references/`, and `agents/` subdirs
 - **`evaluate/`** — formal review reports paired EN/ZH (`<skill-name>-skill-eval-report.md` / `.zh-CN.md`)
 - **`outputexample/`** — real task outputs (PDFs, test code, CI configs, screenshots)
 - **`docs/`** — MkDocs Material site source; served at GitHub Pages
 
 ## Skill Structure Convention
 
-Each skill under `skills/<name>/` follows this layout:
+Regression-enabled skills under `skills/<name>/` follow this layout:
 
 ```
 SKILL.md                    # frontmatter (name, description) + skill body
