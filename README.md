@@ -1,14 +1,15 @@
 # awesome-skills: Production-Ready Claude Code Skills
 
-> Production-ready **Claude Code Skills** with quantitative evaluation, golden test fixtures, and end-to-end engineering workflow integration.
+> Production-ready **Claude Code Skills** with design rationale, quantitative evaluation, golden test fixtures, and end-to-end engineering workflow integration.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/johnqtcg/awesome-skills?style=social)](https://github.com/johnqtcg/awesome-skills)
 [![中文](https://img.shields.io/badge/文档-中文版-blue)](index-zh.md)
 
-A curated system for **AI skill engineering** — not just a prompt collection. Built for Claude Code and applicable to any AI coding assistant, this project covers the full loop from skill design to quantitative evaluation to real software engineering workflow integration.
+A curated system for **AI skill engineering** — not just a prompt collection. Built for Claude Code and applicable to any AI coding assistant, this project covers the full loop from reusable skill methodology to skill-specific design rationale to quantitative evaluation and real software engineering workflow integration.
 
 - **21** production-ready Claude Code skills: Go, testing, security, CI/CD, research, docs, planning
+- **42** paired design rationale docs (EN + ZH), one explanation track for each skill
 - **42** paired evaluation reports (EN + ZH) with quantitative metrics
 - **169** golden test fixtures + **40** Python test files for deterministic regression
 - Testing skills: `unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
@@ -28,42 +29,65 @@ To understand the skill design methodology:
 - English: [bestpractice/README.md](bestpractice/README.md)
 - Chinese: [bestpractice/README.zh-CN.md](bestpractice/README.zh-CN.md)
 
+To understand why a specific skill is designed the way it is:
+
+- English: [rationale/index.md](rationale/index.md)
+- Chinese: [rationale/index.zh-CN.md](rationale/index.zh-CN.md)
+
 <a id="en-overview"></a>
 ## Overview
 
-Main documentation entry: [bestpractice/README.md](bestpractice/README.md).
+Main documentation entry points:
 
-The core goal of this repository is not to show how to write prompts. It is to answer three harder questions:
+- methodology: [bestpractice/README.md](bestpractice/README.md)
+- skill-specific design explanation: [rationale/index.md](rationale/index.md)
+
+The core goal of this repository is not to show how to write prompts. It is to answer four harder questions:
 
 1. How should a high-quality skill be designed?
-2. How do you prove that it actually works?
-3. How do you integrate it into daily engineering workflows instead of leaving it as a demo?
+2. How do those design principles turn into the structure, gates, and tradeoffs of a concrete skill?
+3. How do you prove that it actually works?
+4. How do you integrate it into daily engineering workflows instead of leaving it as a demo?
 
 <a id="en-highlights"></a>
 ## Highlights
 
-### 1. Four-layer closed-loop architecture
+### 1. Five-layer traceable architecture
 
 The repository is organized as a rare end-to-end chain:
 
-`bestpractice/` → `skills/` → `evaluate/` → `outputexample/`
+`bestpractice/` → `rationale/` → `skills/` → `evaluate/` → `outputexample/`
 
-Those four layers are not just grouped content. They form a verifiable knowledge loop:
+Those five layers are not just grouped content. They form a traceable knowledge loop:
 
 - methodology explains how a skill should be designed
-- skill examples show what that methodology looks like in practice
+- rationale explains how those principles become a concrete skill design
+- skill examples show the actual executable artifact
 - review reports test whether the skill is actually good
 - output examples prove what it can produce in real tasks
 
-That structure makes the project substantially stronger than a typical prompt or skill example project.
+That structure makes the project substantially stronger than a typical prompt or skill example project, because readers can move from general principles to design logic to execution artifact to measured outcomes.
 
-### 2. The main deliverable is methodology
+### 2. `rationale/` makes design intent inspectable
 
-The highest-leverage asset here is [bestpractice/](bestpractice/README.md), not the raw number of skills under [skills/](skills/index.md). The methodology is deliberately language-agnostic and platform-agnostic: mandatory gates, anti-examples, honest degradation, progressive disclosure, output contracts, and quantitative evaluation can be reused far beyond this repository.
+A common weakness of skill repositories is that they show the final `SKILL.md` but not the reasoning behind it. This project now adds a dedicated explanation layer under [rationale/](rationale/index.md).
+
+Each skill has paired design-rationale docs, such as [rationale/google-search/design.md](rationale/google-search/design.md) and [rationale/google-search/design.zh-CN.md](rationale/google-search/design.zh-CN.md). They explain:
+
+- what problem the skill is trying to solve
+- why the workflow, gates, structure, and output contract are designed that way
+- which weaker alternatives or common failure modes the design is avoiding
+- what the main strengths of the final design are
+
+That turns the repository from “examples you can copy” into “examples whose design logic you can study, critique, and reuse.”
+
+### 3. The main deliverable is methodology, not just artifacts
+
+The highest-leverage assets here are [bestpractice/](bestpractice/README.md) and [rationale/](rationale/index.md), not the raw number of skills under [skills/](skills/index.md). The methodology is deliberately language-agnostic and platform-agnostic: mandatory gates, anti-examples, honest degradation, progressive disclosure, output contracts, and quantitative evaluation can be reused far beyond this repository.
 
 In other words, the project is teaching people how to build professional skills, not just handing out a bag of ready-made prompts.
 
-### 3. Skill quality is measured, not guessed
+### 4. Skill quality is measured, not guessed
 
 [bestpractice/Evaluation.md](bestpractice/Evaluation.md) turns “is this skill good?” into a quantitative question across three dimensions:
 
@@ -79,7 +103,7 @@ The value of that framework is visible in the paired review reports under [evalu
 
 That is much stronger than saying “these skills seem useful,” because it gives readers traceable numbers, evaluation process, and iteration evidence.
 
-### 4. The regression system is deterministic and built for engineering maintenance
+### 5. The regression system is deterministic and built for engineering maintenance
 
 This repository does not rely on “use one LLM to judge another LLM” as its primary guardrail. Instead, it uses deterministic regression assets:
 
@@ -90,7 +114,7 @@ This repository does not rely on “use one LLM to judge another LLM” as its p
 
 Those checks run quickly, are versionable, and are easy to diff and rerun. That design choice reflects strong engineering judgment: critical quality constraints should live in deterministic scripts wherever possible, not only in natural-language instructions.
 
-### 5. Skills are designed to compose into real workflows
+### 6. Skills are designed to compose into real workflows
 
 The backend-oriented skills do not just work in isolation. They line up into an engineering pipeline:
 
@@ -98,7 +122,7 @@ The backend-oriented skills do not just work in isolation. They line up into an 
 
 The repository also includes review reports, workflow examples, and output artifacts that show this is not a paper design. It is a workflow system that can be reused and validated in real engineering practice.
 
-### 6. A view of knowledge: tacit -> explicit -> executable
+### 7. A view of knowledge: tacit -> explicit -> executable
 
 Underneath the concrete files is a stronger idea: useful engineering knowledge should move through three layers:
 
@@ -114,6 +138,7 @@ That progression is one of the most important ideas in the repo. It reframes ski
 ```text
 .
 ├── bestpractice/        # Skill best-practice docs, in Chinese and English
+├── rationale/           # Skill-specific design rationale, in Chinese and English
 ├── skills/              # High-quality skill examples written with those best practices
 ├── evaluate/            # Skill review reports, in Chinese and English
 ├── outputexample/       # Real output examples
@@ -122,11 +147,12 @@ That progression is one of the most important ideas in the repo. It reframes ski
 └── LICENSE
 ```
 
-The four core directories serve these roles:
+The five core directories serve these roles:
 
 | Path | Purpose |
 | --- | --- |
 | [bestpractice/](bestpractice/README.md) | Explains how to write high-quality skills, how to evaluate them, and how to integrate them into workflows |
+| [rationale/](rationale/index.md) | Explains each skill's design process, design logic, tradeoffs, and the specific problems the final design is solving |
 | [skills/](skills/index.md) | High-quality skill examples shaped by the methodology |
 | [evaluate/](evaluate/index.md) | Formal review reports for skills, including strengths, weaknesses, and improvement points |
 | [outputexample/](outputexample/index.md) | Real outputs from skills, such as PDFs, test code, Makefiles, CI configs, and screenshots |
@@ -137,9 +163,10 @@ The four core directories serve these roles:
 If this is your first time in the project, this order works best:
 
 1. Start with [bestpractice/README.md](bestpractice/README.md) to build the overall picture
-2. Open a specific skill, for example [skills/google-search/SKILL.md](skills/google-search/SKILL.md)
-3. Read its review report, for example [evaluate/google-search-skill-eval-report.md](evaluate/google-search-skill-eval-report.md)
-4. Then look at its real output, for example [outputexample/google-search/ai-bubble-or-platform-shift-march-2026.pdf](outputexample/google-search/ai-bubble-or-platform-shift-march-2026.pdf)
+2. Read the design rationale for a specific skill, for example [rationale/google-search/design.md](rationale/google-search/design.md)
+3. Open the skill itself, for example [skills/google-search/SKILL.md](skills/google-search/SKILL.md)
+4. Read its review report, for example [evaluate/google-search-skill-eval-report.md](evaluate/google-search-skill-eval-report.md)
+5. Then look at its real output, for example [outputexample/google-search/ai-bubble-or-platform-shift-march-2026.pdf](outputexample/google-search/ai-bubble-or-platform-shift-march-2026.pdf)
 
 If you prefer Chinese, start from [bestpractice/README.zh-CN.md](bestpractice/README.zh-CN.md).
 
@@ -160,10 +187,28 @@ These documents mainly answer:
 - how to evaluate the real value of a skill quantitatively
 - how to integrate skills into engineering workflows instead of leaving them inside a single chat
 
+<a id="en-rationale"></a>
+## Design Rationale
+
+[rationale/](rationale/index.md) is the skill-specific explanation layer for the project. It connects the general rules from [bestpractice/](bestpractice/README.md) to the actual implementation under [skills/](skills/index.md).
+
+Each rationale document focuses on one skill and explains:
+
+- the concrete problem the skill is trying to solve
+- why the skill's gates, structure, references, and output format look the way they do
+- what common alternatives fail to do well
+- what the main design strengths are
+
+Representative examples:
+
+- [rationale/google-search/design.md](rationale/google-search/design.md)
+- [rationale/update-doc/design.md](rationale/update-doc/design.md)
+- [rationale/go-code-reviewer/design.md](rationale/go-code-reviewer/design.md)
+
 <a id="en-skills"></a>
 ## Skill Examples
 
-All high-quality skills in this project live under [skills/](skills/index.md), with each skill centered on its own `SKILL.md`. They are not isolated capabilities. They can be grouped by use case, and the backend-oriented skills can work together as a full quality pipeline.
+All high-quality skills in this project live under [skills/](skills/index.md), with each skill centered on its own `SKILL.md`. For the design explanation behind any specific skill, read the paired rationale doc under `rationale/<name>/`. The skills are not isolated capabilities. They can be grouped by use case, and the backend-oriented skills can work together as a full quality pipeline.
 
 ### Backend Development: a complete quality pipeline
 
@@ -253,23 +298,28 @@ These skills focus more on getting a task executed than on code quality itself.
 
 What makes this repository different from a typical “skills example repo” is that it does not just show the skills. It also shows:
 
-1. why a given skill is good
-2. what it actually produced in real tasks
+1. why a skill was designed that way
+2. why a given skill is good
+3. what it actually produced in real tasks
 
 You can read them side by side:
 
+- design rationale: [rationale/](rationale/index.md)
 - review reports: [evaluate/](evaluate/index.md)
 - output examples: [outputexample/](outputexample/index.md)
 
 Typical examples:
 
 - `google-search`
+  - rationale: [rationale/google-search/design.md](rationale/google-search/design.md)
   - review: [evaluate/google-search-skill-eval-report.md](evaluate/google-search-skill-eval-report.md)
   - output: [outputexample/google-search/ai-bubble-or-platform-shift-march-2026.pdf](outputexample/google-search/ai-bubble-or-platform-shift-march-2026.pdf)
 - `unit-test`
+  - rationale: [rationale/unit-test/design.md](rationale/unit-test/design.md)
   - review: [evaluate/unit-test-skill-eval-report.md](evaluate/unit-test-skill-eval-report.md)
   - output: [outputexample/unit-test/](outputexample/unit-test/index.md)
 - `yt-dlp-downloader`
+  - rationale: [rationale/yt-dlp-downloader/design.md](rationale/yt-dlp-downloader/design.md)
   - output screenshots: [outputexample/yt-dlp-downloader/](outputexample/yt-dlp-downloader/index.md)
 
 <a id="en-governance"></a>
@@ -286,7 +336,7 @@ If you want to contribute or need repository governance details, start here:
 
 - people who want to systematically learn how to write high-quality skills
 - people who want to turn Claude Code / Agent capabilities into reusable assets
-- people who want to study the full loop of methodology + skill + review + output example
+- people who want to study the full loop of methodology + rationale + skill + review + output example
 - people who want to integrate AI capability into real engineering workflows rather than stop at prompt demos
 
 <a id="en-license"></a>

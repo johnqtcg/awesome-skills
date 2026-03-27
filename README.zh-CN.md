@@ -1,14 +1,15 @@
 # awesome-skills
 
-> 面向工程化落地的 **Claude Code Skill** 体系——量化评估 · 黄金测试 · 完整工作流集成
+> 面向工程化落地的 **Claude Code Skill** 体系——设计说明 · 量化评估 · 黄金测试 · 完整工作流集成
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Stars](https://img.shields.io/github/stars/johnqtcg/awesome-skills?style=social)](https://github.com/johnqtcg/awesome-skills)
 [![English](https://img.shields.io/badge/Docs-English-blue)](index.md)
 
-一个围绕高质量 **Claude Code Skill** 设计、评审、验证与工作流落地构建的开源项目。
+一个围绕高质量 **Claude Code Skill** 方法论、设计说明、评审、验证与工作流落地构建的开源项目。
 
 - **21** 个生产级 Claude Code Skills：覆盖 Go、测试、安全、CI/CD、调研、文档、规划
+- **42** 份设计说明文档（中英双语），每个 skill 都有对应的说明链路
 - **42** 份量化评审报告（中英双语），含可追溯指标
 - **169** 个 golden JSON 场景 + **40** 个 Python 测试文件，确定性回归保障
 - 测试 skills：`unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
@@ -28,37 +29,59 @@
 - 中文：[bestpractice/README.zh-CN.md](bestpractice/README.zh-CN.md)
 - English：[bestpractice/README.md](bestpractice/README.md)
 
-<a id=”cn-overview”></a>
+了解某个具体 skill 为什么这样设计：
+
+- 中文：[rationale/index.zh-CN.md](rationale/index.zh-CN.md)
+- English：[rationale/index.md](rationale/index.md)
+
+<a id="cn-overview"></a>
 ## 项目概览
 
-文档入口：[`bestpractice/README.zh-CN.md`](bestpractice/README.zh-CN.md)。
+文档入口包括：
 
-这个仓库的核心目标不是”展示 prompt 怎么写”，而是回答三个更难的问题：
+- 方法论：[`bestpractice/README.zh-CN.md`](bestpractice/README.zh-CN.md)
+- skill 级设计说明：[`rationale/index.zh-CN.md`](rationale/index.zh-CN.md)
+
+这个仓库的核心目标不是“展示 prompt 怎么写”，而是回答四个更难的问题：
 
 1. 高质量 skill 到底应该如何设计？
-2. 写出来之后如何证明它真的有效？
-3. 如何把它融入日常开发与团队工作流，而不是停留在演示层？
+2. 这些设计原则落到某个具体 skill 上时，会如何转化为结构、门禁与权衡取舍？
+3. 写出来之后如何证明它真的有效？
+4. 如何把它融入日常开发与团队工作流，而不是停留在演示层？
 
 <a id="cn-highlights"></a>
 ## 项目亮点
 
-### 1. 四层闭环架构
+### 1. 五层可追溯架构
 
-项目最有辨识度的地方，是把内容组织成了一条完整闭环：
+项目最有辨识度的地方，是把内容组织成了一条完整且可追溯的链路：
 
-`bestpractice/` → `skills/` → `evaluate/` → `outputexample/`
+`bestpractice/` → `rationale/` → `skills/` → `evaluate/` → `outputexample/`
 
-这四层组成了一条可验证的知识链：
+这五层组成了一条可验证的知识链：
 
 - 方法论定义 skill 应该如何设计
-- skill 示例展示方法论在真实文件中的形态
+- 设计说明解释这些原则如何落成某个具体 skill
+- skill 示例展示最终可执行产物的样子
 - 评审报告验证 skill 到底好不好
 - 输出样例证明 skill 在真实任务里能产出什么
 
+### 2. `rationale/` 让设计意图变得可检查
 
-### 2. 核心交付物是方法论
+很多 skill 仓库会直接给出最终 `SKILL.md`，但不会解释背后的设计推导。这个项目现在把这层能力单独沉淀在 [`rationale/`](rationale/index.zh-CN.md) 里。
 
-项目最有价值的资产，是 [`bestpractice/`](bestpractice/README.zh-CN.md)，而不是 [`skills/`](skills/index.md) 里有多少个 skill。这里总结出的设计模式是可迁移的通用方法论，例如：
+每个 skill 都有成对的设计说明文档，例如 [`rationale/google-search/design.md`](rationale/google-search/design.md) 和 [`rationale/google-search/design.zh-CN.md`](rationale/google-search/design.zh-CN.md)。它们会解释：
+
+- 这个 skill 具体在解决什么问题
+- 为什么它的流程、门禁、结构和输出契约要这样设计
+- 它在规避哪些常见但较弱的替代方案或失败模式
+- 最终设计的主要亮点是什么
+
+这让仓库从“可以直接复制的示例”进一步变成“可以研究、质疑、复用设计逻辑的样例库”。
+
+### 3. 核心交付物是方法论，而不只是最终产物
+
+项目最有价值的资产，是 [`bestpractice/`](bestpractice/README.zh-CN.md) 和 [`rationale/`](rationale/index.zh-CN.md)，而不只是 [`skills/`](skills/index.md) 里有多少个 skill。这里总结出的设计模式是可迁移的通用方法论，例如：
 
 - 强制门禁
 - 反例教学
@@ -69,7 +92,7 @@
 
 这些模式不依赖某种特定语言或平台。掌握它们的人，可以把同样的方法迁移到别的语言、别的工作流、别的 agent 系统里。也正因为如此，项目是在“教你如何构建专业 skill”，而不是只给一组现成模板。
 
-### 3. skill 质量是可量化的，不是“凭感觉”
+### 4. skill 质量是可量化的，不是“凭感觉”
 
 [`bestpractice/评估篇.md`](bestpractice/评估篇.md) 把“skill 好不好”拆成三个可量化维度：
 
@@ -85,7 +108,7 @@
 
 这比“这些 skill 看起来很好用”强得多，因为它给出了可追溯的数字、评估过程和迭代依据。
 
-### 4. 回归测试体系是确定性的，而且真正适合工程化维护
+### 5. 回归测试体系是确定性的，而且真正适合工程化维护
 
 这个仓库没有把“让一个 LLM 去评价另一个 LLM”当成主要守护手段，而是优先采用确定性验证：
 
@@ -96,7 +119,7 @@
 
 这些测试快、可版本化、可 diff、可复跑。这个设计决策本身就体现了很强的工程判断力：关键质量约束应该尽量落到确定性脚本里，而不是只停留在自然语言描述中。
 
-### 5. skill 可以编织成完整的工程化质量流水线
+### 6. skill 可以编织成完整的工程化质量流水线
 
 项目里的后端相关 skill 不是互相孤立的，它们可以首尾衔接成一条完整质量管线：
 
@@ -104,7 +127,7 @@
 
 而且仓库里有对应的评审报告、工作流示例和输出产物，证明这不是纸面上的“概念链路”，而是可以在真实工程实践中被复用和验证的工作体系。
 
-### 6. "隐性→显性→可执行" 知识论
+### 7. "隐性→显性→可执行" 知识论
 
 这个项目真正有长期价值的地方，还不只是 skill 文件本身，而是它表达了一种更强的知识演化路径：
 
@@ -120,6 +143,7 @@
 ```text
 .
 ├── bestpractice/        # Skill 最佳实践文档，中英双语
+├── rationale/           # 每个 skill 的设计说明，中英双语
 ├── skills/              # 按最佳实践编写的高质量 skill 示例
 ├── evaluate/            # skill 评审报告，中英双语
 ├── outputexample/       # 真实输出样例
@@ -128,11 +152,12 @@
 └── LICENSE
 ```
 
-四个核心目录的职责如下：
+五个核心目录的职责如下：
 
 | 路径 | 作用 |
 | --- | --- |
 | [bestpractice/](bestpractice/README.zh-CN.md) | 介绍如何写高质量 skill，如何评估 skill，以及如何把 skill 融入工作流 |
+| [rationale/](rationale/index.zh-CN.md) | 结合具体 skill 解释其设计过程、设计逻辑、权衡取舍，以及它到底在解决什么问题 |
 | [skills/](skills/index.md) | 经过方法论约束后的高质量 skill 示例 |
 | [evaluate/](evaluate/index.md) | 对 skill 的正式评审报告，解释优点、缺点与改进点 |
 | [outputexample/](outputexample/index.md) | skill 在真实任务中的实际输出，如 PDF、测试代码、Makefile、CI 配置、截图等 |
@@ -143,9 +168,10 @@
 如果你第一次进入项目，推荐按这个顺序阅读：
 
 1. 从 [`bestpractice/README.zh-CN.md`](bestpractice/README.zh-CN.md) 建立整体认知
-2. 进入某个具体 skill，例如 [`skills/google-search/SKILL.md`](skills/google-search/SKILL.md)
-3. 对照它的评审报告，例如 [`evaluate/google-search-skill-eval-report.zh-CN.md`](evaluate/google-search-skill-eval-report.zh-CN.md)
-4. 再看它的真实输出，例如 [`outputexample/google-search/中国制造2025目标完成度研究.pdf`](outputexample/google-search/中国制造2025目标完成度研究.pdf)
+2. 阅读某个 skill 的设计说明，例如 [`rationale/google-search/design.zh-CN.md`](rationale/google-search/design.zh-CN.md)
+3. 再进入这个 skill 本身，例如 [`skills/google-search/SKILL.md`](skills/google-search/SKILL.md)
+4. 对照它的评审报告，例如 [`evaluate/google-search-skill-eval-report.zh-CN.md`](evaluate/google-search-skill-eval-report.zh-CN.md)
+5. 再看它的真实输出，例如 [`outputexample/google-search/中国制造2025目标完成度研究.pdf`](outputexample/google-search/中国制造2025目标完成度研究.pdf)
 
 如果你偏向英文阅读，可以从 [`bestpractice/README.md`](bestpractice/README.md) 开始。
 
@@ -166,10 +192,28 @@
 - 如何用量化方法评估 skill 的真实价值
 - 如何把 skill 融入开发流程，而不是停留在单次对话里
 
+<a id="cn-rationale"></a>
+## 设计说明
+
+[`rationale/`](rationale/index.zh-CN.md) 是整个项目里“skill 级解释层”的入口，它负责把 [`bestpractice/`](bestpractice/README.zh-CN.md) 里的通用原则，和 [`skills/`](skills/index.md) 里的具体实现连接起来。
+
+每份设计说明都会围绕一个 skill，重点解释：
+
+- 这个 skill 到底在解决什么具体问题
+- 为什么它的门禁、结构、references 和输出格式长成现在这样
+- 常见替代方案为什么做不好
+- 最终设计的主要亮点是什么
+
+代表性示例：
+
+- [`rationale/google-search/design.zh-CN.md`](rationale/google-search/design.zh-CN.md)
+- [`rationale/update-doc/design.zh-CN.md`](rationale/update-doc/design.zh-CN.md)
+- [`rationale/go-code-reviewer/design.zh-CN.md`](rationale/go-code-reviewer/design.zh-CN.md)
+
 <a id="cn-skills"></a>
 ## skill 示例
 
-当前项目收录的高质量 skill 都位于 [`skills/`](skills/index.md) 下，并以各自目录中的 `SKILL.md` 作为主入口。它们不是一组互相孤立的能力，而是可以按工作场景组织成若干类；其中，后端开发相关 skill 可以互相配合，形成一条完整的质量管线。
+当前项目收录的高质量 skill 都位于 [`skills/`](skills/index.md) 下，并以各自目录中的 `SKILL.md` 作为主入口。若想理解某个 skill 为什么这样设计，可以对照阅读 `rationale/<name>/` 下的设计说明。它们不是一组互相孤立的能力，而是可以按工作场景组织成若干类；其中，后端开发相关 skill 可以互相配合，形成一条完整的质量管线。
 
 ### 后端开发：完整质量管线
 
@@ -261,23 +305,28 @@ CI 触发
 
 这个仓库和普通“skills 示例仓库”最大的区别，是它不仅展示 skill，还展示：
 
-1. 这个 skill 为什么好
-2. 它在真实任务中产出了什么
+1. 这个 skill 为什么要这样设计
+2. 这个 skill 为什么好
+3. 它在真实任务中产出了什么
 
 你可以直接对照阅读：
 
+- 设计说明：[`rationale/`](rationale/index.zh-CN.md)
 - 评审报告：[`evaluate/`](evaluate/index.md)
 - 输出样例：[`outputexample/`](outputexample/index.md)
 
 典型例子：
 
 - `google-search`
+  - 设计说明：[`rationale/google-search/design.zh-CN.md`](rationale/google-search/design.zh-CN.md)
   - 评审：[`evaluate/google-search-skill-eval-report.zh-CN.md`](evaluate/google-search-skill-eval-report.zh-CN.md)
   - 输出：[`outputexample/google-search/中国制造2025目标完成度研究.pdf`](outputexample/google-search/中国制造2025目标完成度研究.pdf)
 - `unit-test`
+  - 设计说明：[`rationale/unit-test/design.zh-CN.md`](rationale/unit-test/design.zh-CN.md)
   - 评审：[`evaluate/unit-test-skill-eval-report.zh-CN.md`](evaluate/unit-test-skill-eval-report.zh-CN.md)
   - 输出：[`outputexample/unit-test/`](outputexample/unit-test/index.md)
 - `yt-dlp-downloader`
+  - 设计说明：[`rationale/yt-dlp-downloader/design.zh-CN.md`](rationale/yt-dlp-downloader/design.zh-CN.md)
   - 输出截图：[`outputexample/yt-dlp-downloader/`](outputexample/yt-dlp-downloader/index.md)
 
 <a id="cn-governance"></a>
@@ -295,7 +344,7 @@ CI 触发
 
 - 想系统学习如何写高质量 skill 的人
 - 想把 Claude Code / Agent 能力沉淀为可复用资产的人
-- 想看“方法论 + skill + 评审 + 输出样例”完整闭环的人
+- 想看“方法论 + 设计说明 + skill + 评审 + 输出样例”完整闭环的人
 - 想把 AI 能力接入真实研发流程，而不是停留在 prompt 演示层的人
 
 <a id="cn-license"></a>

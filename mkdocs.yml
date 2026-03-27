@@ -1,8 +1,9 @@
 site_name: awesome-skills
 site_url: https://johnqtcg.github.io/awesome-skills/
 site_description: >-
-  Production-ready Claude Code Skills with quantitative evaluation,
-  golden test fixtures, and end-to-end engineering workflow integration.
+  Production-ready Claude Code Skills with design rationale,
+  quantitative evaluation, golden test fixtures, and end-to-end
+  engineering workflow integration.
 site_author: johnqtcg
 repo_url: https://github.com/johnqtcg/awesome-skills
 repo_name: johnqtcg/awesome-skills
@@ -97,6 +98,54 @@ nav:
       - 进阶篇: bestpractice/进阶篇.md
       - 评估篇: bestpractice/评估篇.md
       - 集成篇: bestpractice/集成篇.md
+
+  - Rationale:
+      - Overview: rationale/index.md
+      - api-integration-test: rationale/api-integration-test/design.md
+      - create-pr: rationale/create-pr/design.md
+      - deep-research: rationale/deep-research/design.md
+      - e2e-test: rationale/e2e-test/design.md
+      - fuzzing-test: rationale/fuzzing-test/design.md
+      - git-commit: rationale/git-commit/design.md
+      - go-ci-workflow: rationale/go-ci-workflow/design.md
+      - go-code-reviewer: rationale/go-code-reviewer/design.md
+      - go-makefile-writer: rationale/go-makefile-writer/design.md
+      - google-search: rationale/google-search/design.md
+      - local-transcript: rationale/local-transcript/design.md
+      - readme-generator: rationale/readme-generator/design.md
+      - security-review: rationale/security-review/design.md
+      - systematic-debugging: rationale/systematic-debugging/design.md
+      - tdd-workflow: rationale/tdd-workflow/design.md
+      - tech-doc-writer: rationale/tech-doc-writer/design.md
+      - thirdparty-api-integration-test: rationale/thirdparty-api-integration-test/design.md
+      - unit-test: rationale/unit-test/design.md
+      - update-doc: rationale/update-doc/design.md
+      - writing-plans: rationale/writing-plans/design.md
+      - yt-dlp-downloader: rationale/yt-dlp-downloader/design.md
+
+  - 设计说明:
+      - 概述: rationale/index.zh-CN.md
+      - api-integration-test: rationale/api-integration-test/design.zh-CN.md
+      - create-pr: rationale/create-pr/design.zh-CN.md
+      - deep-research: rationale/deep-research/design.zh-CN.md
+      - e2e-test: rationale/e2e-test/design.zh-CN.md
+      - fuzzing-test: rationale/fuzzing-test/design.zh-CN.md
+      - git-commit: rationale/git-commit/design.zh-CN.md
+      - go-ci-workflow: rationale/go-ci-workflow/design.zh-CN.md
+      - go-code-reviewer: rationale/go-code-reviewer/design.zh-CN.md
+      - go-makefile-writer: rationale/go-makefile-writer/design.zh-CN.md
+      - google-search: rationale/google-search/design.zh-CN.md
+      - local-transcript: rationale/local-transcript/design.zh-CN.md
+      - readme-generator: rationale/readme-generator/design.zh-CN.md
+      - security-review: rationale/security-review/design.zh-CN.md
+      - systematic-debugging: rationale/systematic-debugging/design.zh-CN.md
+      - tdd-workflow: rationale/tdd-workflow/design.zh-CN.md
+      - tech-doc-writer: rationale/tech-doc-writer/design.zh-CN.md
+      - thirdparty-api-integration-test: rationale/thirdparty-api-integration-test/design.zh-CN.md
+      - unit-test: rationale/unit-test/design.zh-CN.md
+      - update-doc: rationale/update-doc/design.zh-CN.md
+      - writing-plans: rationale/writing-plans/design.zh-CN.md
+      - yt-dlp-downloader: rationale/yt-dlp-downloader/design.zh-CN.md
 
   - Skills:
       - api-integration-test: skills/api-integration-test/SKILL.md
