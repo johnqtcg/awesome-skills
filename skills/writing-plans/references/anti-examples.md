@@ -90,3 +90,16 @@ GOOD: Check CLAUDE.md for plan_dir → check if docs/plans/ exists → fallback 
 ```
 
 Why: Projects have different conventions. Hardcoded paths create files in unexpected locations.
+
+## 10. Planning Against Vague Requirements
+
+```
+BAD:  User says "optimize the auth module" → plan immediately written with 8 tasks
+      covering token caching, connection pooling, query optimization, and session cleanup
+
+GOOD: "Before planning, I'd like to clarify: are you targeting latency reduction,
+      memory usage, or code maintainability? And which part of auth — token validation,
+      session management, or the OAuth flow?"
+```
+
+Why: Plans built on assumptions get rewritten. A 2-minute clarification prevents a 20-minute replan.

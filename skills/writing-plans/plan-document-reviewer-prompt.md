@@ -32,6 +32,7 @@ Agent tool (general-purpose):
     | B3 | No TODO/TBD/placeholder unfilled | Search for "TODO", "TBD", "FIXME", "..." | |
     | B4 | Every task has ≥1 runnable verification command | Look for `Run:` or code block with [command] per task | |
     | B5 | No complete implementation code in Standard/Deep plans | Code blocks should be [interface] or [test-assertion], not full functions | |
+    | B6 | Requirements clarity gate ran — plan goal is specific and scope is bounded, or assumptions marked [Assumption] | Read the Goal sentence. Is it concrete? Check for [Assumption] markers. | |
 
     ## Non-Blocking Items (flag but don't reject)
 
@@ -65,7 +66,7 @@ Agent tool (general-purpose):
     **Non-Blocking Notes:**
     - [N#]: [observation] — [suggestion]
 
-    **Scorecard:** C: _/4 | S: _/6 | H: _/4
+    **Scorecard:** C: _/5 | S: _/6 | H: _/4
     **Overall:** PASS | FAIL
 ```
 

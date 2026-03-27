@@ -86,6 +86,7 @@ class TestFrontmatter:
 
 class TestRequiredSections:
     REQUIRED_HEADINGS = [
+        ("Requirements Clarity", r"#+\s.*[Rr]equirements\s*[Cc]larity"),
         ("Applicability Gate", r"#+\s.*[Aa]pplicability\s*[Gg]ate"),
         ("Execution Modes", r"#+\s.*[Ee]xecution\s*[Mm]odes"),
         ("Repo Discovery", r"#+\s.*[Rr]epo\s*[Dd]iscovery"),
@@ -126,8 +127,8 @@ class TestScorecard:
 
     def test_critical_items_exist(self, skill_content):
         critical_items = re.findall(r"\|\s*C\d\s*\|", skill_content)
-        assert len(critical_items) >= 4, (
-            f"scorecard must have ≥4 Critical items, found {len(critical_items)}"
+        assert len(critical_items) >= 5, (
+            f"scorecard must have ≥5 Critical items, found {len(critical_items)}"
         )
 
     def test_standard_items_exist(self, skill_content):
@@ -201,6 +202,7 @@ class TestReferenceFiles:
         "reviewer-checklist.md",
         "plan-update-protocol.md",
         "golden-scenarios.md",
+        "requirements-clarity-gate.md",
     ]
 
     @pytest.mark.parametrize("filename", REQUIRED_REFS)
@@ -244,21 +246,21 @@ class TestAntiExamplesContent:
     def content(self):
         return _read(os.path.join(REFS_DIR, "anti-examples.md"))
 
-    def test_has_at_least_9_numbered_examples(self, content):
+    def test_has_at_least_10_numbered_examples(self, content):
         numbered = re.findall(r"^## \d+\.", content, re.MULTILINE)
-        assert len(numbered) >= 9, (
-            f"anti-examples.md must have ≥9 numbered examples, found {len(numbered)}"
+        assert len(numbered) >= 10, (
+            f"anti-examples.md must have ≥10 numbered examples, found {len(numbered)}"
         )
 
     def test_every_example_has_bad_and_good(self, content):
         bads = len(re.findall(r"BAD:", content))
         goods = len(re.findall(r"GOOD:", content))
-        assert bads >= 9, f"anti-examples.md must have ≥9 BAD patterns, found {bads}"
-        assert goods >= 9, f"anti-examples.md must have ≥9 GOOD patterns, found {goods}"
+        assert bads >= 10, f"anti-examples.md must have ≥10 BAD patterns, found {bads}"
+        assert goods >= 10, f"anti-examples.md must have ≥10 GOOD patterns, found {goods}"
 
     def test_every_example_has_why(self, content):
         whys = len(re.findall(r"^Why:", content, re.MULTILINE))
-        assert whys >= 9, (
+        assert whys >= 10, (
             f"anti-examples.md must explain why for each example, found {whys} 'Why:' lines"
         )
 
@@ -270,10 +272,10 @@ class TestReviewerChecklistContent:
     def content(self):
         return _read(os.path.join(REFS_DIR, "reviewer-checklist.md"))
 
-    def test_has_at_least_5_blocking_items(self, content):
+    def test_has_at_least_6_blocking_items(self, content):
         blocking = re.findall(r"\|\s*B\d\s*\|", content)
-        assert len(blocking) >= 5, (
-            f"reviewer-checklist.md must have ≥5 blocking items, found {len(blocking)}"
+        assert len(blocking) >= 6, (
+            f"reviewer-checklist.md must have ≥6 blocking items, found {len(blocking)}"
         )
 
     def test_has_at_least_5_nonblocking_items(self, content):
@@ -371,6 +373,36 @@ class TestRepoDiscoveryContent:
         )
 
 
+class TestRequirementsClarityGateContent:
+    """Verify requirements-clarity-gate.md has dimensions, depth table, examples, and anti-patterns."""
+
+    @pytest.fixture(scope="class")
+    def content(self):
+        return _read(os.path.join(REFS_DIR, "requirements-clarity-gate.md"))
+
+    def test_has_clarity_dimensions(self, content):
+        for dim in ["D1", "D2", "D3", "D4", "D5"]:
+            assert re.search(dim, content), (
+                f"requirements-clarity-gate.md must define clarity dimension {dim}"
+            )
+
+    def test_has_mode_appropriate_depth(self, content):
+        assert re.search(r"[Mm]ode.*[Aa]ppropriate\s*[Dd]epth", content), (
+            "requirements-clarity-gate.md must have mode-appropriate depth section"
+        )
+
+    def test_has_clarification_examples(self, content):
+        examples = re.findall(r"### Example \d", content)
+        assert len(examples) >= 4, (
+            f"requirements-clarity-gate.md must have ≥4 clarification examples, found {len(examples)}"
+        )
+
+    def test_has_anti_patterns(self, content):
+        assert re.search(r"[Aa]nti.?[Pp]atterns", content), (
+            "requirements-clarity-gate.md must have anti-patterns section"
+        )
+
+
 class TestPlanUpdateProtocolContent:
     """Verify plan-update-protocol.md has deviation classification and escalation."""
 
@@ -442,7 +474,7 @@ class TestReviewerPromptContract:
         return _read(REVIEWER_PROMPT)
 
     def test_has_all_blocking_items(self, content):
-        for b in ["B1", "B2", "B3", "B4", "B5"]:
+        for b in ["B1", "B2", "B3", "B4", "B5", "B6"]:
             assert re.search(rf"\b{b}\b", content), (
                 f"reviewer prompt must reference blocking item {b}"
             )
@@ -490,7 +522,7 @@ class TestTerminologyConsistency:
     ALL_FOUR_LABELS = ["Existing", "New", "Inferred", "Speculative"]
 
     DOCS_THAT_MUST_LIST_ALL_LABELS = [
-        ("SKILL.md Gate 2", SKILL_MD, r"Gate 2.*?(?=## )", re.DOTALL),
+        ("SKILL.md Gate 3 Repo Discovery", SKILL_MD, r"Gate 3.*?(?=## )", re.DOTALL),
         ("SKILL.md Scorecard C2", SKILL_MD, r"C2\s*\|[^|]+\|", 0),
         ("repo-discovery-protocol.md Path Verification",
          os.path.join(REFS_DIR, "repo-discovery-protocol.md"),

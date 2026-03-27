@@ -10,11 +10,38 @@ description: >
 
 # Writing Plans
 
-Write implementation plans that a developer with zero codebase context can follow. Plans must be evidence-backed (paths verified), mode-appropriate (not over-engineered), and executable (every step has a verification command).
+Write implementation plans that a developer with zero codebase context can follow. Plans must be evidence-backed (paths verified), mode-appropriate (not over-engineered), and executable (every step has a verification command). Before planning, verify that the user's requirements are clear enough to plan against.
 
 **Announce at start:** "I'm using the writing-plans skill to create the implementation plan."
 
-## Gate 1: Applicability Gate
+## Gate 1: Requirements Clarity Gate
+
+Before classifying complexity, verify the request is plannable. A vague request produces a plan built on assumptions.
+
+**Fast pass-through**: If the request names specific files, describes concrete behavior changes, and has clear scope boundaries, proceed directly to Gate 2. Do not ask clarifying questions for obviously clear requests.
+
+**STOP and ASK** if any of these apply:
+
+| Trigger | What's Missing | Example |
+|---|---|---|
+| Vague action verb with no measurable outcome | Success criteria | "optimize the auth module" |
+| No scope boundary stated | What's in/out of scope | "refactor the codebase" |
+| Ambiguous target when multiple exist | Which component | "update the API" (when 5 APIs exist) |
+| Change type unclear (behavior vs performance vs structure) | Intent | "improve error handling" |
+| Backward compatibility unstated for public interface changes | Constraint | "change the response format" |
+
+**Clarification protocol:**
+1. State what you understood (to confirm or correct)
+2. Ask only about WHAT the user wants, not HOW to implement it
+3. Group related questions — max 3-5 questions per round
+4. Maximum 2 clarification rounds. If still unclear after round 2, state remaining assumptions explicitly and proceed
+5. For each assumption you make, mark it as `[Assumption]` in the plan header
+
+**Exit condition:** Requirements are "clear enough" when you can write a one-sentence Goal and a scope boundary (what changes, what does NOT change) without inventing information the user did not provide.
+
+Load `references/requirements-clarity-gate.md` for the full dimension checklist, mode-appropriate depth rules, and clarification examples.
+
+## Gate 2: Applicability Gate
 
 Before writing any plan, classify the task:
 
@@ -51,7 +78,7 @@ Load `references/applicability-gate.md` for edge cases and language-specific sig
 - **Mandatory Reviewer Loop (up to 3 rounds)** — always runs after self-check, not conditional on self-check result
 - Subagent-driven execution recommended
 
-## Gate 2: Repo Discovery Gate
+## Gate 3: Repo Discovery Gate
 
 Before writing ANY file path into the plan:
 
@@ -68,7 +95,7 @@ Load `references/repo-discovery-protocol.md` for the full discovery checklist.
 
 If repo is not accessible: see Degraded Mode below.
 
-## Gate 3: Scope & Risk Gate
+## Gate 4: Scope & Risk Gate
 
 | Change Size | Risk | Action |
 |---|---|---|
@@ -161,6 +188,7 @@ Load `references/anti-examples.md` for the full list. Key suppressions:
 7. **Framework assumption**: "use Jest" when project actually uses Vitest
 8. **Missing rollback**: database migration without undo steps
 9. **Hardcoded paths**: fixed save location ignoring project conventions
+10. **Planning against vague requirements**: writing a plan without clarifying ambiguous instructions first
 
 ## Plan Update Protocol
 
@@ -182,7 +210,7 @@ If repo is not accessible or discovery cannot run:
 3. Do not write line-number references
 4. Include "Discovery commands to run first" section in the plan
 5. Reduce code blocks to `[speculative]` interface sketches only
-6. Skip Gate 3 (cannot classify risk without evidence)
+6. Skip Gate 4 (cannot classify risk without evidence)
 
 ## Post-Writing Workflow
 
@@ -206,6 +234,7 @@ Self-evaluate for structural correctness. Fix any Critical failures before movin
 | C2 | Every file path labeled `[Existing]`/`[New]`/`[Inferred]`/`[Speculative]` |
 | C3 | No complete implementation code in Standard/Deep mode |
 | C4 | Every task has ≥1 runnable verification command |
+| C5 | Requirements clarity confirmed (or assumptions explicitly marked `[Assumption]`) |
 
 **Standard (≥4/6 must pass)**
 
@@ -254,6 +283,7 @@ Proceed only after both gates pass. Offer the user execution options per the Exe
 
 | Scenario | Load |
 |---|---|
+| Unsure whether requirements are clear enough | `references/requirements-clarity-gate.md` |
 | Unsure whether to write a plan | `references/applicability-gate.md` |
 | Starting a plan (always) | `references/repo-discovery-protocol.md` |
 | Choosing plan shape | `references/plan-templates/<scenario>.md` |

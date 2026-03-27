@@ -18,6 +18,7 @@ The checklist has three sections:
 | B3 | No TODO/TBD/placeholder unfilled | Search for "TODO", "TBD", "FIXME", "..." |
 | B4 | Every task has ≥1 runnable verification command | Look for `Run:` or code block with `[command]` per task |
 | B5 | No complete implementation code in Standard/Deep plans | Code blocks should be labeled `[interface]` or `[test-assertion]`, not full functions |
+| B6 | Requirements clarity gate ran — plan goal is specific and scope is bounded, or assumptions are explicitly marked `[Assumption]` | Read the Goal sentence. Is it concrete and actionable? Check for `[Assumption]` markers if scope was ambiguous. |
 
 ---
 
@@ -65,6 +66,6 @@ These checks require reading the plan as a skeptic who has NOT seen the codebase
 **Non-Blocking Notes:**
 - [N# or SB#]: [observation] — [suggestion]
 
-**Scorecard:** B: _/5 | N: _/7 | SB: _/6
+**Scorecard:** B: _/6 | N: _/7 | SB: _/6
 **Overall:** PASS | FAIL
 ```

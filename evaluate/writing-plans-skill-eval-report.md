@@ -1,239 +1,333 @@
 # writing-plans Skill Evaluation Report
 
-> Evaluation framework: skill-creator
-> Evaluation date: 2026-03-25
+> Evaluation framework: [skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator)
+> Evaluation date: 2026-03-27
 > Evaluation target: `writing-plans`
 
 ---
 
-`writing-plans` is a structured implementation-planning skill that standardizes the full workflow from "a user describes a feature request" to "a workable execution plan is produced." It covers repository discovery, scope and risk grading, TDD task breakdown, path labeling, a two-stage Post-Writing Workflow (Format Gate + Reviewer Loop), and execution handoff. Its three strongest advantages are: (1) it requires every file path to carry a discovery-state label (`[Existing]` / `[New]` / `[Inferred]` / `[Speculative]`), so executors know which assumptions must be validated before implementation; (2) after the plan body is written, Standard/Deep mode forces a two-stage Post-Writing Workflow, where the Format Gate checks structural compliance and the Reviewer Loop audits logical flaws from an adversarial perspective, separating "looks complete" from "actually holds up logically"; and (3) it automatically selects Lite / Standard / Deep mode based on change size and risk, with Deep mode adding dependency graphs and multiple Reviewer Loop passes for high-risk cases.
-
----
+`writing-plans` is a structured skill for pre-implementation planning in multi-step tasks. It links requirement clarification, applicability checks, path discovery, and scope assessment through 4 mandatory Gates, with the goal of producing high-quality implementation plans that have verified paths, graded risks, defined interfaces, and are ready to execute immediately. Its three strongest advantages are: a 4-Gate upfront flow that prevents "ghost plans" from being written before the task is clear; four execution modes (`SKIP` / `Lite` / `Standard` / `Deep`) that scale output to task complexity and avoid document overload; and a verification system built around `[Existing]` / `[New]` / `[Inferred]` / `[Speculative]` path labels plus `[interface]` / `[test-assertion]` / `[command]` code-block tags, turning the plan into an engineering document that is both verifiable and executable.
 
 ## 1. Skill Overview
 
-### 1.1 Core Components
+`writing-plans` is a structured implementation-planning skill. It defines 4 mandatory Gates, 4 execution modes, 10 anti-pattern checks, and a template system covering 6 change types. Its purpose is to ensure every plan completes requirement clarification, path verification, and risk grading before writing begins.
 
-| File | Lines | Responsibility |
-|---|---|---|
-| `SKILL.md` | ~300 | Main skill definition (Applicability Gate, mode selection, Scope & Risk, TDD task breakdown, path labeling, Post-Writing Workflow) |
-| `references/reviewer-checklist.md` | ~80 | Review checklist used by the Reviewer Loop (B1-B5 Blocking, N1-N7 Non-Blocking, SB1-SB6 Substance) |
+**Core components**:
 
-### 1.2 Post-Writing Workflow
-
-After the plan body is completed, the skill forces the following three-step sequence:
-
-```
-Step 1 → Self-Check (Format Gate)       — Always runs, fixes structural errors
-Step 2 → Reviewer Loop (Substance Gate) — Always runs in Standard/Deep mode
-Step 3 → Execution Handoff
-```
-
-The Format Gate (Step 1) and Reviewer Loop (Step 2) are designed to be complementary rather than interchangeable: the Format Gate checks structural compliance (path labels, presence of validation commands, placeholders, etc.), while the Reviewer Loop checks whether the plan is logically sound from the perspective of someone who has never seen the repo before (SB1 causal task ordering, SB2 conflicting parallel write targets, SB3 validity of verification commands, SB4 scope alignment, SB5 path consistency, SB6 failure detection for high-risk tasks).
+| File | Lines | Role |
+|------|------:|------|
+| `SKILL.md` | 301 | Main skill definition (4-Gate flow, 4 execution modes, Output Contract) |
+| `references/requirements-clarity-gate.md` | 128 | Gate 1: 5-dimension requirement-clarity rules |
+| `references/applicability-gate.md` | 51 | Gate 2: applicability decision tree and mode selection |
+| `references/repo-discovery-protocol.md` | 80 | Gate 3: path verification protocol and 4-label system |
+| `references/golden-scenarios.md` | 157 | GOOD/BAD examples across 6 scenario types |
+| `references/reviewer-checklist.md` | 71 | Three-layer review checklist: B / N / SB |
+| `references/anti-examples.md` | 104 | 10 anti-patterns (BAD/GOOD + WHY) |
+| `references/plan-update-protocol.md` | 44 | Drift severity and replanning thresholds |
+| `references/plan-templates/feature.md` | 39 | Feature-plan template |
+| `references/plan-templates/bugfix.md` | 31 | Bug-fix template |
+| `references/plan-templates/refactor.md` | 48 | Refactor template |
+| `references/plan-templates/migration.md` | 44 | Migration template |
+| `references/plan-templates/api-change.md` | 42 | API-change template |
+| `references/plan-templates/docs-only.md` | 45 | Documentation-change template, mainly for the SKIP path |
+| Test suite (`test_skill_contract.py` + `test_golden_scenarios.py`) | 831 | Contract tests + golden-scenario validation |
 
 ---
 
 ## 2. Test Design
 
-### 2.1 Scenario Definitions
+### 2.1 Scenario Definition
 
-| # | Scenario Name | Tech Stack | Core Challenge | Targeted Assertion Focus |
-|---|---|---|---|---|
-| 1 | New gRPC service RPC method | Go + gRPC + protoc + mockery | Hard dependency chain for code generation (proto → stub → impl → test); degraded path mode | SB1 (task ordering causality), SB3 (validation-command correctness), SB6 (code-generation failure detection) |
-| 2 | React class component refactor | React + TypeScript + CSS Modules + Vitest | Pure refactor scenario (must not add functionality); framework awareness (Vitest vs Jest) | SB4 (scope alignment: no feature expansion), SB3 (build passes ≠ behavior verified) |
-| 3 | Django soft-delete migration for `orders` table | Django + PostgreSQL + migrations | High-risk cross-module change (DB schema + ORM + query layer); production data risk | SB1 (migration order: schema before ORM), SB6 (proactive failure detection during deployment window) |
+| # | Scenario | Core challenge | Expected result |
+|---|----------|----------------|-----------------|
+| 1 | Clear feature request | JWT auth for a Go API, crossing auth boundaries in 5 packages | Standard-mode plan, all Gates pass, path labels, interface code blocks |
+| 2 | Vague request | "Make the system faster", with no scope, metrics, or target | Gate 1 STOP, ask clarifying questions, no plan document generated |
+| 3 | Documentation change | Update README with a new API section | Gate 2 SKIP, concise execution checklist, no full plan document |
 
-### 2.2 Evaluation Method
+**Scenario 1 test prompt:**
+> "I need to add JWT-based user authentication to our Go REST API. The API currently serves `/users` and `/products` endpoints. I want to add `/auth/login`, `/auth/register`, and `/auth/refresh` endpoints with middleware that protects existing routes."
 
-For each scenario, two sub-agents are run independently:
-- **with_skill**: must read and follow `SKILL.md`, including all Post-Writing Workflow steps
-- **without_skill**: uses the model's default capability with no skill loaded
+**Scenario 2 test prompt:**
+> "Make the system faster. There are some performance issues we need to fix."
 
-Each scenario has 10 assertions, for 30 assertions total. Scoring rule: PASS = 1.0, PARTIAL = 0.5, FAIL = 0.
+**Scenario 3 test prompt:**
+> "Update the README.md to add a section about the new API endpoints we just added. Just document what they do and show example curl commands."
 
-### 2.3 Assertion Matrix (30 Items)
+### 2.2 Assertion Matrix (34 items)
 
-**Scenario 1 — New gRPC Service RPC Method**
-
-| ID | Assertion | With-Skill | Without-Skill |
-|----|-----------|:----------:|:-------------:|
-| A1 | Declares Standard or Deep execution mode | PASS | FAIL |
-| A2 | All file paths include path labels | PASS | FAIL |
-| A3 | Plan output path follows the naming convention | PARTIAL | FAIL |
-| A4 | Validation commands use `go test` (framework-aware) | PASS | PASS |
-| A5 | Includes protoc code-generation commands | PASS | PASS |
-| A6 | Reviewer Loop is explicitly executed and outputs a Plan Review structure | PASS | FAIL |
-| A7 | Reviewer Loop checks SB1-SB6 one by one | PASS | FAIL |
-| A8 | Execution Handoff provides execution-mode choices | PASS | FAIL |
-| A9 | Every task includes at least one runnable validation command | PASS | PARTIAL |
-| A10 | No unfilled placeholders remain at the end of the plan | PASS | PARTIAL |
-
-**Scenario 2 — React Class Component Refactor**
+**Scenario 1: Clear feature request (13 items)**
 
 | ID | Assertion | With-Skill | Without-Skill |
 |----|-----------|:----------:|:-------------:|
-| B1 | Declares Standard execution mode | PASS | FAIL |
-| B2 | All file paths include path labels | PASS | FAIL |
-| B3 | Test commands use `npx vitest` (not jest/pytest) | PASS | PASS |
-| B4 | Plan explicitly constrains "no new functionality" | PASS | PASS |
-| B5 | Reviewer Loop is triggered and outputs a structured review report | PASS | FAIL |
-| B6 | Reviewer Loop checks SB4 (scope aligned with goal) | PASS | FAIL |
-| B7 | Reviewer Loop checks SB3 (validation commands test behavior, not just compilation) | PASS | FAIL |
-| B8 | Every task includes runnable validation commands | PASS | PASS |
-| B9 | Execution Handoff provides execution-mode choices | PASS | FAIL |
-| B10 | Plan output path follows the convention | PARTIAL | FAIL |
+| A1 | Systematically run all 4 Gates, with command evidence | PASS | FAIL |
+| A2 | Gate 2 (Applicability) selects Standard mode | PASS | FAIL |
+| A3 | Gate 3 (Repo Discovery) adds `[Existing]` / `[New]` labels to all paths | PASS | FAIL |
+| A4 | Uses the `feature.md` template structure, with all required sections | PASS | FAIL |
+| A5 | Uses `[interface]` code blocks, not full implementations | PASS | FAIL |
+| A6 | Uses `[command]` code blocks for verification steps, with exact commands | PASS | FAIL |
+| A7 | Passes all Critical items in the Quality Scorecard (B: 6/6) | PASS | FAIL |
+| A8 | Includes a reviewer loop, at least 1 round | PASS | FAIL |
+| A9 | Does not include full function implementations (Anti-Pattern #2) | PASS | FAIL |
+| A10 | Includes rollback and risk assessment for each task | PASS | PARTIAL |
+| A11 | Plan structure matches the Output Contract | PASS | FAIL |
+| A12 | Scope and risk grading are explicit, as Gate 4 output | PASS | FAIL |
+| A13 | Independent tasks are marked as parallelizable | PASS | FAIL |
 
-**Scenario 3 — Django `orders` Soft-Delete Migration**
+**Scenario 2: Vague request (10 items)**
 
 | ID | Assertion | With-Skill | Without-Skill |
 |----|-----------|:----------:|:-------------:|
-| C1 | Declares Deep execution mode (high-risk cross-module change) | PASS | FAIL |
-| C2 | All file paths include path labels | PASS | FAIL |
-| C3 | Includes Django migration commands (`makemigrations` + `migrate`) | PASS | PASS |
-| C4 | Includes rollback strategy for schema changes | PASS | PASS |
-| C5 | Reviewer Loop is triggered and outputs a structured review report | PASS | FAIL |
-| C6 | Reviewer Loop checks SB1 (schema migration before ORM update) | PASS | FAIL |
-| C7 | Reviewer Loop checks SB6 (high-risk tasks include proactive failure detection) | PASS | FAIL |
-| C8 | Dependency graph clearly marks task dependencies | PASS | FAIL |
-| C9 | Every task includes runnable validation commands | PASS | PARTIAL |
-| C10 | Execution Handoff provides at least two execution options | PASS | FAIL |
+| B1 | Gate 1 identifies ambiguity, with multiple STOP dimensions triggered | PASS | PARTIAL |
+| B2 | Asks specific clarifying questions, at least 3 | PASS | PASS |
+| B3 | Does not skip Gate 1 and jump straight to a plan document | PASS | PASS |
+| B4 | Clarifying questions cover goals, scope, and constraints | PASS | PASS |
+| B5 | Questions include concrete dimensions such as performance metrics, component scope, baseline, and target | PASS | PARTIAL |
+| B6 | Clearly explains why clarification is needed instead of guessing | PASS | PASS |
+| B7 | Does not use `[Speculative]` paths, with no degraded-mode abuse | PASS | PASS |
+| B8 | Does not generate a plan body | PASS | PASS |
+| B9 | Explains the path to continue after clarification | PASS | PASS |
+| B10 | Output format matches the Gate 1 failure protocol, with a STOP declaration | PASS | FAIL |
+
+**Scenario 3: Documentation change (11 items)**
+
+| ID | Assertion | With-Skill | Without-Skill |
+|----|-----------|:----------:|:-------------:|
+| C1 | Gate 2 (Applicability) correctly chooses SKIP mode | PASS | PARTIAL |
+| C2 | Explicitly states the reason for SKIP: docs-only change with no cross-module dependency | PASS | PASS |
+| C3 | Does not generate a full Standard or Deep plan document | PASS | PASS |
+| C4 | Recommends direct execution, or provides an execution checklist | PASS | PASS |
+| C5 | Does not run the full Gate 3 (Repo Discovery) flow | PASS | PASS |
+| C6 | Does not invent unverified file paths or endpoints | PASS | FAIL |
+| C7 | Does not run a Quality Scorecard evaluation, which is unnecessary in SKIP mode | PASS | PASS |
+| C8 | Does not trigger a reviewer loop | PASS | PASS |
+| C9 | Output stays concise, with a clear decision section | PARTIAL | FAIL |
+| C10 | Matches the SKIP signals in the `docs-only.md` template | PASS | FAIL |
+| C11 | Follows the Output Contract for the SKIP branch | PASS | FAIL |
 
 ---
 
-## 3. Test Results
+## 3. Pass Rate Comparison
 
 ### 3.1 Overall Pass Rate
 
-| Direction | PASS | PARTIAL | FAIL | Weighted Score | Pass Rate |
-|---|:---:|:---:|:---:|:---:|:---:|
-| with_skill | 28 | 2 | 0 | 29.0 / 30 | **96.7%** |
-| without_skill | 8 | 4 | 18 | 10.0 / 30 | **33.3%** |
+| Config | Pass | Partial | Fail | Pass rate |
+|--------|-----:|--------:|-----:|-----------|
+| **With Skill** | 33 | 1 | 0 | **97%** (counting PARTIAL as 0.5 = **98.5%**) |
+| **Without Skill** | 13 | 4 | 17 | **38%** (counting PARTIAL as 0.5 = **44%**) |
 
-**Δ = +63.4pp**
+**Pass-rate gain: +59 pp** (with PARTIAL: +54.5 pp)
 
-### 3.2 Per-Scenario Scores
+### 3.2 Pass Rate by Scenario
 
-| Scenario | with_skill | without_skill | Delta |
-|---|:---:|:---:|:---:|
-| Scenario 1: gRPC | 9.5 / 10 | 2.5 / 10 | +70pp |
-| Scenario 2: React Refactor | 9.5 / 10 | 3.0 / 10 | +65pp |
-| Scenario 3: Django Migration | 10.0 / 10 | 2.5 / 10 | +75pp |
+| Scenario | With-Skill | Without-Skill | Delta |
+|----------|:----------:|:-------------:|:-----:|
+| 1. Clear feature request | 13/13 (100%) | 0.5/13 (4%) | +96 pp |
+| 2. Vague request | 10/10 (100%) | 8/10 (80%) | +20 pp |
+| 3. Documentation change | 10.5/11 (95%) | 6.5/11 (59%) | +36 pp |
 
-### 3.3 Reviewer Loop Metrics
+> Note: Scenario 2 has a smaller gap (+20 pp) because when a request is clearly vague, the baseline model also tends to ask clarifying questions naturally. The skill's added value is in the structured Gate 1 analysis, questions mapped precisely to the D1-D5 dimensions, and the standardized STOP-protocol output.
 
-| Metric | with_skill | without_skill |
-|---|:---:|:---:|
-| Reviewer Loop activation rate | 3/3 = **100%** | 0/3 = 0% |
-| Full SB1-SB6 check execution rate | 3/3 = **100%** | 0/3 = 0% |
-| Reviewer found substantive non-blocking issues | **4** | 0 |
-| Missed blocking issues | 0 | N/A (not reviewed) |
+### 3.3 Substantive Dimensions (Core Capabilities Independent of Flow Structure)
 
----
+To control for "flow-assertion bias", 12 additional substantive checks that do not depend on the flow itself were evaluated:
 
-## 4. Analysis of Key Behavioral Differences
+| ID | Check | With-Skill | Without-Skill |
+|----|-------|:----------:|:-------------:|
+| S1 | Scenario 2: correctly identifies ambiguity and refuses to plan immediately | PASS | PASS |
+| S2 | Scenario 3: recognizes that a docs-only change does not need a formal plan | PASS | PARTIAL |
+| S3 | Scenario 1: all file paths are verified before being written into the plan | PASS | FAIL |
+| S4 | Scenario 1: each task includes an independent rollback step | PASS | FAIL |
+| S5 | Scenario 1: plan contains interface definitions only, with no full function bodies | PASS | FAIL |
+| S6 | Scenario 1: parallelizable tasks are explicitly marked | PASS | FAIL |
+| S7 | Scenario 1: verification steps include runnable, exact commands | PASS | PASS |
+| S8 | Scenario 1: execution mode (`SKIP` / `Lite` / `Standard` / `Deep`) is explicitly declared | PASS | FAIL |
+| S9 | Scenario 1: plan contains clear in-scope and out-of-scope boundaries | PASS | FAIL |
+| S10 | Scenario 1: change risk level is explicitly classified | PASS | FAIL |
+| S11 | Scenario 1: plan is validated against the review checklist (B / N / SB) | PASS | FAIL |
+| S12 | Scenario 3: output contains no invented paths or speculative endpoints | PASS | FAIL |
 
-### 4.1 Substantive Issues Found by the Reviewer Loop
-
-In all three scenarios, the Reviewer Loop found logical defects that the Format Gate could not detect:
-
-**Scenario 1 (gRPC) — SB3 + Additional:**
-> `go test ./internal/service/... -run . -count=1` runs the existing tests and verifies "no regression," but it does not verify the behavior of the new method `GetUserProfile` itself (that responsibility belongs to Task 4). The Reviewer also found an additional gap: if `GetUserProfile` requires a new method on the repository interface, Task 3 is missing the sub-step that updates that interface definition. This is a dependency blind spot in the plan.
-
-**Scenario 2 (React) — SB3 FLAG:**
-> `npx tsc --noEmit` and `npx vite build` verify type correctness and CSS Module import resolution, but they cannot catch cases where a CSS class name is applied to the wrong JSX element. The Reviewer records this as a known limitation and states that behavior correctness is delegated to the Vitest run in Task 4. This is a logical blind spot the Format Gate cannot detect.
-
-**Scenario 3 (Django Migration) — SB2 + SB6 FLAGS:**
-> - **SB2**: The Dependency Graph allows Task 1 (migration file) and Task 2 (`models.py` + `managers.py`) to be written in parallel, but both touch `orders/models.py`, creating merge-conflict risk. The Reviewer recommends explicit file ownership: Task 1 only touches migration files, while Task 2 owns `models.py` and `managers.py`.
-> - **SB6**: Task 5 deploys code before applying the migration, and the deployment-window check is only passive error-rate monitoring (you only notice after errors happen). The Reviewer recommends adding proactive failure detection, such as checking column existence in `AppConfig.ready()`, or using a feature flag to delay activation of `SoftDeleteManager` until the migration is confirmed.
-
-All four of these issues are logical or operational-safety problems that are invisible to pure structural checks in the Format Gate. They are exactly the kind of issue the Reviewer Loop was designed to catch.
-
-### 4.2 Mode Awareness and Framework Adaptation
-
-without_skill shows a solid baseline ability in framework-specific command selection: in Scenario 2 it correctly used `npx vitest` (not jest), and in Scenario 3 it correctly used `python manage.py migrate`. The skill adds relatively limited value in domain-command selection itself.
-
-The skill's core added value is concentrated in three dimensions that are completely missing in without_skill:
-- **Structural guardrails**: path labeling, mode declaration, and dependency graphs were absent in 3/3 scenarios
-- **Logical review**: 3/3 scenarios had no Reviewer Loop at all, and all 4 substantive issues were missed
-- **Execution continuity**: 3/3 scenarios lacked Execution Handoff, leaving an intent gap between planning and execution
-
-### 4.3 Typical Side-by-Side Difference
-
-Using Scenario 3 as an example for dependency declaration:
-
-**with_skill** explicitly declares the dependency graph:
-```
-Task 1: Schema Migration   [no deps]           [blocks: 2, 3]
-Task 2: ORM Model+Manager  [depends: 1]        [blocks: 3, 4]
-Task 3: Query Layer Mig.   [depends: 2]        [blocks: 4]
-Task 4: Test Suite         [depends: 1, 2, 3]  [blocks: 5]
-Task 5: Deployment         [depends: 4]
-```
-
-**without_skill** implied the same intent through seven sequentially numbered phases, but did not declare it formally. The executor has to infer dependencies manually, which creates a real risk of sequence mistakes in high-risk scenarios.
+**Substantive pass rate**: With-Skill **12/12 (100%)** vs Without-Skill **3/12 (25%)**, gain **+75 pp** (counting PARTIAL = 3.5/12 ≈ 29%, gain **+71 pp**).
 
 ---
 
-## 5. Token Cost-Efficiency Analysis
+## 4. Key Difference Analysis
 
-### 5.1 Plan Document Size
+### 4.1 Behaviors Unique to With-Skill (Completely Missing in the Baseline)
 
-| Scenario | with_skill Lines | without_skill Lines | Post-Writing Workflow Overhead |
-|---|:---:|:---:|:---:|
-| Scenario 1: gRPC | 379 | 312 | ~100 lines |
-| Scenario 2: React Refactor | 314 | 163 | ~105 lines |
-| Scenario 3: Django Migration | 644 | 456 | ~137 lines |
-| **Average** | **446** | **310** | **~114 lines (+37%)** |
+| Behavior | Impact |
+|----------|--------|
+| **Systematic 4-Gate flow** | Gate 1 checks requirement clarity, Gate 2 selects the mode, Gate 3 verifies paths, and Gate 4 classifies risk, with explicit output at each step |
+| **Four-label path-verification system** | `[Existing]` / `[New]` / `[Inferred]` / `[Speculative]` prevents ghost paths from appearing in plan documents |
+| **Semantic code-block labels** | `[interface]` contains only signatures and structs, `[test-assertion]` captures expected behavior, and `[command]` contains exact commands, preventing implementation code from leaking into the plan |
+| **`SKIP` / `Lite` / `Standard` / `Deep` mode decisions** | Adjusts output size to task complexity; docs-only changes do not trigger Standard plans, which avoids over-engineering |
+| **Per-task rollback protocol** | Every task block ends with a concrete rollback step, not a single line at the bottom of a checklist |
+| **Reviewer loop** | Standard mode triggers 1 round of three-layer review (B / N / SB) as a self-check mechanism |
+| **Output Contract structured output** | Fixed structure: Gate verdicts -> file map -> task blocks with dependencies and blockers -> verification commands |
+| **Gate 1 STOP protocol** | For vague requests, explicitly declares STOP, explains why, and gives a "continue after clarification" pipeline |
 
-### 5.2 Breakdown of Overhead Sources
+### 4.2 Behaviors the Baseline Can Do, but at Lower Quality
 
-| Overhead Source | Estimated Token Increase | Benefit Gained |
-|---|:---:|---|
-| Path labeling | ~120 | Every file path carries discovery-state metadata, so executors know what still requires runtime validation |
-| Format Gate (Step 1) | ~200 | Structural-compliance guarantees: C1-C4 Critical, S1-S6 Standard, H1-H4 Hygiene |
-| Reviewer Loop (Step 2) | ~800 | SB1-SB6 logical review; in this round it found 4 substantive issues across 3/3 scenarios |
-| Execution Handoff (Step 3) | ~80 | Execution-mode choice, reducing intent discontinuity between planning and implementation |
+| Behavior | With-Skill quality | Without-Skill quality |
+|----------|--------------------|-----------------------|
+| Ambiguity detection | Systematic Gate 1 analysis with 4 STOP-trigger dimensions and a structured STOP declaration | Natural-language recognition; can ask questions, but without a dimension framework |
+| Clarifying-question design | 5 precise questions mapped to D1-D5 dimensions | 4 questions with similar coverage, but weaker structure |
+| Handling no-plan-needed scenarios | Formal SKIP decision + execution checklist + Gate summary table | Writes README content directly; useful but oversized and without a decision explanation |
+| Commands | `[command]` tag + exact commands + expected-output notes | Bare command blocks, with no expected output |
+| Risk treatment | Formal Gate 4 grading (Medium-High) + per-task rollback | Safety checklist with 8 items, but no risk levels or rollback |
 
-The Reviewer Loop adds about 800 tokens, and across the 3 scenarios it found 4 substantive issues. **The cost per substantive issue found is about 600 tokens**, and each of those issues belongs to a class of logical defect that would not have been found without a Reviewer.
+### 4.3 Key Findings by Scenario
 
-### 5.3 Cost-Efficiency Rating
+**Scenario 1 (clear feature)**:
+- With-Skill: All 4 Gates pass in Standard mode. The 580-line plan includes a file map with 10 fully labeled paths, 6 task blocks with a dependency graph, Tasks 4 and 5 marked as parallelizable, and a Reviewer Loop with B:6/6 + N:7/7 + SB:6/6.
+- Without-Skill: Produces a 13-section plan that includes a full `Config` struct, full handler logic, and full token-service code, violating Anti-Pattern #2. It has no path labels, no parallelization markers, no rollback, and no reviewer loop. The gap is large.
 
-with_skill uses about 35-45% more total tokens than without_skill, and in return delivers: pass rate improvement from 33.3% to 96.7% (+63.4pp); 100% Reviewer Loop coverage; and 4 substantive logical issues identified early.
+**Scenario 2 (vague request)**:
+- With-Skill: Gate 1 clearly identifies 4 STOP triggers, asks 5 precise questions covering p99 latency, component scope, baseline vs target, constraints, and existing profiling data, explains that writing a plan would "invent the problem by inertia", and gives a 4-step continuation pipeline: rerun Gate 1 -> classify -> discovery -> planning.
+- Without-Skill: Asks 4 questions of comparable quality and also proactively gives a `pprof` usage guide and a classification of common Go performance issues. The main difference is that it has no STOP declaration and no Gate protocol, so it does not define when to "move into planning."
 
-**Cost-efficiency rating: Excellent.** The token cost per 1pp pass-rate improvement is about 15 tokens, indicating strong marginal returns.
+**Scenario 3 (documentation change)**:
+- With-Skill: Runs the Gate 2 decision tree fully, shows a decision table with 6 signals all pointing to SKIP, and outputs "no formal plan needed, execute directly" plus a 5-step execution checklist and a Gate summary table, 72 lines total.
+- Without-Skill: Correctly recognizes that no plan is needed, but then writes about 200 lines of README content, including 10 endpoints inferred from handler filenames and full curl examples. The output is useful to the user, but the core issue is path hygiene: inferred endpoint paths such as `GET /users` and `POST /products` were written without verification, which counts as invented paths in the output.
+
+---
+
+## 5. Token Cost-Effectiveness Analysis
+
+### 5.1 Skill Context Token Cost
+
+| Component | Lines | Estimated tokens | Load timing |
+|-----------|------:|-----------------:|-------------|
+| `SKILL.md` | 301 | ~2,200 | Always |
+| `applicability-gate.md` | 51 | ~360 | Gate 2, in most scenarios |
+| `repo-discovery-protocol.md` | 80 | ~560 | Gate 3, for Standard / Deep |
+| `requirements-clarity-gate.md` | 128 | ~900 | Gate 1, for vague requests |
+| A plan template (any one) | 31-48 | ~220-340 | When matching the scenario type |
+| **Typical Standard scenario total** | ~505 | **~3,390** | `SKILL.md` + Gate 2 + Gate 3 + 1 template |
+| **Typical Gate 1 STOP scenario** | ~429 | **~3,100** | `SKILL.md` + Gate 1 reference |
+| **Typical SKIP scenario** | ~397 | **~2,875** | `SKILL.md` + Gate 2 + docs template |
+| **Weighted average across the 3 scenarios** | ~444 | **~3,122** | - |
+
+Note: `golden-scenarios.md` (157 lines), `reviewer-checklist.md` (71 lines), and `anti-examples.md` (104 lines) are only loaded during reviewer loops or as references and are not counted in typical scenario context.
+
+### 5.2 Cost-Effectiveness Calculation
+
+| Metric | Value |
+|--------|------|
+| Overall pass-rate gain (with PARTIAL) | +54.5 pp |
+| Overall pass-rate gain (strict PASS only) | +59 pp |
+| Substantive pass-rate gain | +75 pp |
+| Skill context cost (typical scenario) | ~3,100 tokens |
+| **Token cost per 1% pass-rate gain (overall)** | **~57 tokens/1%** |
+| **Token cost per 1% pass-rate gain (substantive)** | **~41 tokens/1%** |
+
+### 5.3 Comparison with Other Skills
+
+| Skill | Token cost | Pass-rate gain | Tokens/1% |
+|-------|-----------:|---------------:|----------:|
+| `git-commit` | ~1,150 | +22 pp | ~51 |
+| `go-makefile-writer` | ~3,960 (full) | +31 pp | ~128 |
+| `create-pr` | ~3,400 | +71 pp | ~48 |
+| **`writing-plans`** | **~3,100** | **+54.5 pp** | **~57** |
+
+`writing-plans` is slightly less efficient than `create-pr` on a tokens/1% basis (~57 vs ~48), mainly because in Scenario 2 the baseline can already ask clarifying questions naturally. That narrows the Scenario 2 gap to +20 pp and lowers the overall cost-effectiveness. On the substantive dimension, however, the skill's efficiency (~41 tokens/1%) is better than all compared skills.
+
+### 5.4 Token Return Curve
+
+```text
+Mapping token investment to return:
+
+~2,200 tokens (SKILL.md only):
+  -> Gains: 4-Gate flow skeleton, 4 execution modes, path-label rules,
+            code-block labeling, Output Contract, 10 anti-patterns
+  -> Estimated coverage: ~85% of total pass-rate gain
+
++360 tokens (applicability-gate.md):
+  -> Gains: decision tree, 7 signal types, "Looks Small But Isn't" patterns
+  -> Estimated coverage: +8% gain (Gate 2 related assertions)
+
++560 tokens (repo-discovery-protocol.md):
+  -> Gains: 5-step discovery protocol, label definitions, path-verification rules
+  -> Estimated coverage: +5% gain (path-label assertions)
+
++220-340 tokens (plan template):
+  -> Gains: scenario-specific template structure and trigger signals
+  -> Estimated coverage: +2% gain (template-compliance assertions)
+```
+
+`SKILL.md` alone provides about 85% of the total value; the applicability gate plus discovery protocol add another 13%; templates contribute the final 2% at the margin.
 
 ---
 
 ## 6. Overall Score
 
-### 6.1 Weighted Score
+### 6.1 Scores by Dimension
 
-| Dimension | Weight | with_skill | without_skill |
-|---|:---:|:---:|:---:|
-| Assertion pass rate | 40% | 9.67 / 10 | 3.33 / 10 |
-| Reviewer Loop activation and coverage | 20% | 10.0 / 10 | 0 / 10 |
-| Ability to find substantive issues | 20% | 9.5 / 10 | 0 / 10 |
-| Execution readiness (Handoff + path labeling) | 10% | 9.5 / 10 | 2.0 / 10 |
-| Token cost-efficiency | 10% | 9.0 / 10 | N/A |
+| Dimension | With Skill | Without Skill | Delta |
+|-----------|-----------:|--------------:|------:|
+| Gate execution completeness (systematic 4-Gate flow + command evidence) | 5.0/5 | 1.0/5 | +4.0 |
+| Plan structure quality (template compliance + path labels + code-block labels) | 5.0/5 | 1.5/5 | +3.5 |
+| Mode-selection accuracy (`SKIP` / `Lite` / `Standard` / `Deep`) | 5.0/5 | 2.0/5 | +3.0 |
+| Path verification + anti-pattern avoidance (path labels + no ghost paths + no full implementation) | 5.0/5 | 1.5/5 | +3.5 |
+| Requirement-clarification quality (structured Gate 1 STOP vs natural questioning) | 5.0/5 | 4.0/5 | +1.0 |
+| Structured-output compliance (Output Contract + SKIP branch compliance) | 5.0/5 | 1.5/5 | +3.5 |
+| **Overall average** | **5.0/5** | **1.9/5** | **+3.1** |
 
-**with_skill weighted overall score: 9.60 / 10**
+**Notes on the dimension scores**:
+
+- **Gate execution completeness**: With-Skill runs the Gates systematically across all 3 scenarios: Gate 1 STOP in Scenario 2, Gate 1 + 2 with SKIP in Scenario 3, and all 4 Gates in Scenario 1. Each Gate has explicit output and decision evidence. Without-Skill has no Gate system, so the maximum reasonable score is 1.0/5.
+- **Plan structure quality**: In Scenario 1, With-Skill produces a complete 580-line plan with a file map, 6 task blocks, a dependency graph, per-task rollback, and `[interface]` / `[command]` code blocks. Without-Skill produces a 13-section unstructured plan that includes full implementation code and lacks path labels, template sections, and a review loop, so it scores 1.5/5.
+- **Mode-selection accuracy**: With-Skill selects the correct mode in all 3 scenarios (`Standard` / `STOP` / `SKIP`). Without-Skill does not declare a mode in Scenario 1, and in Scenario 3 it writes README content directly instead of a SKIP decision plus checklist, so it scores 2.0/5.
+- **Path verification + anti-pattern avoidance**: In Scenario 1, all 10 paths in the With-Skill file map are labeled, and in Scenario 3 it does not write speculative endpoints. Without-Skill includes full implementation code in Scenario 1 (Anti-Pattern #2) and writes 10 inferred endpoint paths in Scenario 3, so it scores 1.5/5.
+- **Requirement-clarification quality**: In Scenario 2, both versions can ask clarifying questions, and the baseline even adds a `pprof` usage guide, which is extra value. The main gap is that Without-Skill lacks a structured STOP declaration and a follow-up pipeline, so it scores 4.0/5.
+- **Structured-output compliance**: With-Skill produces standardized output in all 3 scenarios, including Gate summary tables, decision-tree walk-throughs, and the Output Contract. Without-Skill has no Output Contract, so it scores 1.5/5.
+
+### 6.2 Weighted Total Score
+
+| Dimension | Weight | Score | Reason | Weighted |
+|-----------|-------:|------:|--------|---------:|
+| Assertion pass rate (delta) | 25% | 9.5/10 | +54.5 pp overall / +75 pp substantive; lower than `create-pr` (+71 pp) because Scenario 2 has a smaller gap | 2.375 |
+| Gate execution completeness | 20% | 10.0/10 | Gates executed systematically in all 3 scenarios, with explicit output at each step | 2.00 |
+| Plan structure quality | 15% | 10.0/10 | Path labels, code-block labels, and task dependency graphs are all present | 1.50 |
+| Mode-selection accuracy | 15% | 10.0/10 | Correct `SKIP` / `STOP` / `Standard` decisions in all 3 scenarios | 1.50 |
+| Token cost-effectiveness | 15% | 7.5/10 | ~57 tokens/1% overall; strong baseline performance in Scenario 2 narrows the gap; on substantive checks ~41 tokens/1% is best-in-class | 1.125 |
+| Path verification + anti-pattern avoidance | 10% | 9.5/10 | Only C9 is PARTIAL, because the output length is 72 lines vs a suggested <=15 lines; but the SKIP scenario needs a Gate decision table, so the overage is reasonable | 0.95 |
+| **Weighted total** | **100%** | | | **9.45/10** |
+
+### 6.3 Comparison with Other Skills
+
+| Skill | Weighted total | Pass-rate delta | Tokens/1% | Strongest dimension |
+|-------|---------------:|----------------:|----------:|---------------------|
+| **create-pr** | **9.55/10** | +71 pp | ~48 | Gate flow (+3.5), Output Contract (+4.0) |
+| **writing-plans** | **9.45/10** | +54.5 pp | ~57 | Gate execution (+4.0), path verification (+3.5) |
+| `go-makefile-writer` | 9.16/10 | +31 pp | ~128 | CI reproducibility (+3.0) |
+
+`writing-plans` receives the second-highest overall score in this evaluation, at 9.45/10, slightly below `create-pr` at 9.55/10. The main reasons for the gap are:
+
+1. **Slightly smaller pass-rate delta** (+54.5 pp vs +71 pp): in Scenario 2, the baseline also performs well, which reduces the overall difference.
+2. **Slightly weaker token efficiency** (~57 tokens/1% vs ~48 tokens/1%): again driven by the small Scenario 2 gap.
+
+What the two skills share is that **PR creation** and **implementation planning** are both areas where the baseline model lacks strong structure, so the marginal value of a dedicated skill is high.
+
+**Why it lost points**:
+
+- **Assertion pass rate (9.5/10)**: In Scenario 2, the baseline model can naturally ask clarifying questions, so the gap is only +20 pp. If the evaluation added boundary cases such as "complex feature + partially existing paths," the difference would likely be larger.
+- **Token cost-effectiveness (7.5/10)**: `golden-scenarios.md` (157 lines, ~1,100 tokens) and `plan-update-protocol.md` (44 lines, ~310 tokens) were not loaded in typical scenarios. They are on-demand, low-frequency references rather than real waste.
 
 ---
 
-## 7. Recommendations for Improvement
+## 7. Conclusion
 
-**Low Priority L1 — Clarify output-path convention**
+In this evaluation, the `writing-plans` skill demonstrates highly consistent 4-Gate execution and precise mode-selection logic. Its **substantive pass rate reaches 100% (12/12)**, and its overall pass rate is **98.5%**, compared with **44%** for the baseline, a gap of **+54.5 percentage points**.
 
-In two scenarios, the user explicitly specified the output path, so the default `docs/plans/YYYY-MM-DD-*.md` convention was not used (these were scored as PARTIAL assertions). This is a reasonable behavior because the skill correctly prioritizes direct user instruction, but the Output Contract in `SKILL.md` does not distinguish these two cases explicitly. Recommended wording: "If the user explicitly specifies a path, use that path; otherwise default to `docs/plans/YYYY-MM-DD-{slug}.md`."
+**Core value**:
 
-**Low Priority L2 — Tighten the SB6 blocking condition**
+1. **4-Gate upfront flow**: It blocks "start writing a plan for a vague request" (Anti-Pattern #10) at Gate 1, and blocks "run the full Standard flow for a README update" at Gate 2.
+2. **Four-label path-verification system**: `[Existing]` / `[New]` / `[Inferred]` / `[Speculative]` makes every path in the plan traceable and removes ghost paths.
+3. **Semantic code-block labels**: `[interface]` / `[test-assertion]` / `[command]` prevents implementation code from leaking into the plan (Anti-Pattern #2) and keeps the plan at interface-level precision.
+4. **Dynamic mode selection**: `SKIP` for documentation changes, `STOP` for vague requests, and `Standard` for cross-package feature work. All 3 scenarios chose the correct mode.
 
-In Scenario 3, SB6 correctly identified the passive deployment-window detection problem and suggested improvements, but it was treated only as a non-blocking flag. For high-risk tasks in Deep mode, consider expanding the SB6 blocking condition from "no failure-detection step at all" to also include "only passive detection," to strengthen coverage for production-risk scenarios.
+**Main risks and improvement space**:
 
----
-
-## 8. Conclusion
-
-The structured guardrails in the `writing-plans` skill (path labeling, mode declaration, and the two-stage Post-Writing Workflow) delivered consistent and measurable benefits across three very different scenarios. Final score: **9.60 / 10**, with a pass rate of **96.7%** (vs 33.3% without_skill, +63.4pp). The Reviewer Loop triggered in 100% of cases and identified real logical flaws in every scenario.
-
-**Recommendation: Production-ready, suitable for Standard and Deep planning workflows.**
+- **Scenario 2 gap is narrow** (+20 pp): when a request is obviously vague, the baseline also tends to ask questions. The skill's differentiated value is in the systematic STOP declaration, D1-D5 question design, and follow-up pipeline, but reviewers can easily overlook that structural value.
+- **C9's line-count limit is too strict**: the SKIP scenario needs to show a Gate decision table, which is structured evidence. A 72-line output is reasonable, so the "<=15 lines" assertion would be better replaced with "no full plan body."
+- **Low usage of `golden-scenarios.md`**: this 157-line reference was not actively loaded in any of the 3 test scenarios. `SKILL.md` should give clearer guidance on when to pull it into the reviewer-loop phase.
