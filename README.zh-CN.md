@@ -181,14 +181,18 @@
 - [`基础篇.md`](bestpractice/基础篇.md)
 - [`进阶篇.md`](bestpractice/进阶篇.md)
 - [`评估篇.md`](bestpractice/评估篇.md)
+- [`迭代篇.md`](bestpractice/迭代篇.md)
 - [`集成篇.md`](bestpractice/集成篇.md)
+- [`架构篇.md`](bestpractice/架构篇.md)
 
 这些文档主要回答：
 
 - 为什么 skill 会成为 AI 编程助手中的关键抽象
 - 高质量 skill 应该遵循什么设计模式
 - 如何用量化方法评估 skill 的真实价值
+- 当 skill 在实践中暴露问题时，如何系统化迭代改进
 - 如何把 skill 融入开发流程，而不是停留在单次对话里
+- 当单 Skill 出现注意力稀释时，如何用 Multi-Agent 架构扩展能力边界
 
 <a id="cn-rationale"></a>
 ## skill 设计说明

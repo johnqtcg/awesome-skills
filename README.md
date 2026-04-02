@@ -176,14 +176,18 @@ If you prefer Chinese, start from [bestpractice/README.zh-CN.md](bestpractice/RE
 - [Fundamentals.md](bestpractice/Fundamentals.md)
 - [Advanced.md](bestpractice/Advanced.md)
 - [Evaluation.md](bestpractice/Evaluation.md)
+- [Iteration.md](bestpractice/Iteration.md)
 - [Integration.md](bestpractice/Integration.md)
+- [Architecture.md](bestpractice/Architecture.md)
 
 These documents mainly answer:
 
 - why skills matter as a key abstraction for AI coding assistants
 - what design patterns high-quality skills should follow
 - how to evaluate the real value of a skill quantitatively
+- how to improve a skill systematically when misses or quality issues show up
 - how to integrate skills into engineering workflows instead of leaving them inside a single chat
+- how to scale heavy skills with Multi-Agent architecture when attention starts to dilute
 
 <a id="en-rationale"></a>
 ## Skill Design Docs

@@ -24,6 +24,7 @@
    - [7.10 Common Misunderstandings](#710-common-misunderstandings)
 8. [Real-World Examples: From Simple to Complex](#8-real-world-examples-from-simple-to-complex)
    - [8.1 Simple Case: `git-commit`](#81-simple-case-git-commit)
+   - [8.3 A Closer Look at `git-commit`: The Art of Explicit Constraints](#83-a-closer-look-at-git-commit-the-art-of-explicit-constraints)
    - [8.2 Complex Case: `go-code-reviewer`](#82-complex-case-go-code-reviewer)
 9. [Design Philosophy: From Teachable to Executable](#9-design-philosophy-from-teachable-to-executable)
    - [9.1 Three Forms of Knowledge](#91-three-forms-of-knowledge)
@@ -461,6 +462,71 @@ The following three screenshots come from an actual commit in the `issue2md` pro
 **Report**: the output includes a structured commit hash, file list, quality-gate result (`make ci-api-integration passed`), and a clear note about unrelated changes that were not committed. This same commit later triggers the all-green CI pipeline shown in §12.2.
 
 Even a simple skill like this still relies on gates. That is a shared trait across all high-quality skills. Its deeper value, though, is that it turns the team's Git standard into executable enforcement, and Chapter 9 explains that idea in more detail.
+
+### 8.3 A Closer Look at `git-commit`: The Art of Explicit Constraints
+
+§8.1 showed what `git-commit` produces. This section steps back to the prompt-design level and unpacks three decisions that make it work.
+
+#### Decision 1: Bidirectional Constraints, Not Just Positive Rules
+
+Most skills only state positive norms: they tell the AI what a good commit looks like. The `git-commit` prompt goes further — it enumerates **5 engineering pain points** as negative constraints too:
+
+1. **Bad repo state**: conflict markers, detached HEAD, an in-progress rebase
+2. **Staging sprawl**: unrelated changes, temp files, or submodule pointer drift mixing into one commit
+3. **Credential leakage**: API keys, private keys, and database URIs entering version history
+4. **Unverified quality**: committing before tests pass, letting breakage reach the main branch
+5. **Semantic drift in the message**: invented scope names, an overlong subject, mixing multiple intentions into one commit
+
+This "define the target + enumerate what is forbidden" approach is more effective for the same reason anti-examples work in §6.2: LLMs naturally lean toward "do something rather than nothing." Without explicit negative constraints, the model will happily skip checks, invent plausible scope names, and commit even from an abnormal repo state. Positive norms define the destination; negative constraints define the boundaries that block "well-intentioned" shortcuts.
+
+#### Decision 2: Precision Gradient — Exact Rules for Fragile Actions, Principles for Flexible Ones
+
+This is §6.8 "Degrees of Freedom" applied in practice. The `git-commit` prompt assigns different levels of precision to different actions:
+
+| Action | Constraint Type | Specific Rule |
+|--------|-----------------|---------------|
+| Subject length | Hard constraint | ≤ 50 characters (GitHub truncation threshold) |
+| Body line length | Hard constraint | ≤ 72 characters (terminal `git log` readability) |
+| Scope discovery | Algorithmic rule | Scan the last 30 commits; use a scope only if it appears ≥ 3 times |
+| Body content | Principle | "Explain why the change was made, not just what changed" |
+| Footer | Principle | "`BREAKING CHANGE`, `Closes #`, and `Refs:` are all optional" |
+
+**The logic**: subject length is a concrete, verifiable hard constraint — GitHub will truncate anything longer, so the exact number is given. Body content depends on the context of each change and cannot be prescribed in advance, so a guiding principle is given and the judgment is left to the model. Mixing up these two levels — rigid rules for flexible situations, or vague principles for fragile ones — either makes the skill too brittle or leaves critical rules unenforced.
+
+#### Decision 3: Pain Points Directly Drive Workflow Structure
+
+The 5 pain points above are not just background. They map directly onto the skeleton of the 7-step serial workflow:
+
+```
+Pain Point                     → Workflow Step
+────────────────────────────────────────────────────────────────
+Bad repo state                 → Step 1: Preflight (6 repo health checks)
+Staging sprawl                 → Step 2: Staging (force confirmation for >8 files + git add -p)
+Credential leakage             → Step 3: Secret gate (regex scan + 4-tier filtering)
+Unverified quality             → Step 4: Quality gate (ecosystem detection + matching commands)
+Semantic drift in the message  → Step 5: Compose message (scope algorithm + hard constraints)
+────────────────────────────────────────────────────────────────
+(Workflow-specific)            → Step 6: Commit (--amend disabled by default)
+(Workflow-specific)            → Step 7: Post-commit report (structured output contract)
+```
+
+Every pain point maps to exactly one gate step, nothing missing, nothing extraneous. Deriving the workflow from pain points rather than filling in rules after the workflow is designed makes logical gaps far less likely — every step exists because there is a concrete problem it prevents.
+
+#### The Concrete Shape of Negative Constraints
+
+The scope-discovery algorithm is the best entry point for understanding how anti-examples become executable constraints. The prompt says only "scope names the module affected," but the skill turns that into a runnable algorithm with one critical guard clause:
+
+```bash
+git log --oneline -30 | grep -oE '^[0-9a-f]+ [a-z]+\([a-z0-9_-]+\):' \
+  | sort | uniq -c | sort -rn
+# >= 3 commits with the same scope → use that scope
+# < 3 per scope → omit scope, use <type>: <subject>
+# Never invent a scope not in the canonical set.
+```
+
+That last line — **"Never invent a scope not in the canonical set"** — is a textbook negative constraint. Without it, the model will make reasonable inferences: seeing changes in `internal/auth/`, it will suggest `auth` as the scope, even if that project has never used `auth` in a commit. The inference is logical in isolation, but over time it pollutes the scope namespace in the commit history and breaks scripts that rely on consistent scope names like `git log --grep`. One explicit negative constraint stops a well-meaning model from doing harm.
+
+The three decisions together demonstrate a single core principle: **the quality of a prompt depends not only on what it says, but also on what it explicitly forbids.**
 
 ### 8.2 Complex Case: `go-code-reviewer`
 

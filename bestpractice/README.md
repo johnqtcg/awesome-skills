@@ -2,7 +2,7 @@
 title: Best Practices for Claude Code Skills
 owner: john
 status: active
-last_updated: 2026-03-11
+last_updated: 2026-04-02
 applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 ---
 
@@ -10,8 +10,9 @@ applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 
 > **Core takeaway**: A skill is an "on-demand module of specialized capability" in Claude Code. The key to a high-quality skill is not a longer prompt, but three things:
 > **progressive disclosure** (three-layer loading to control context cost), **mandatory gates** (non-skippable checkpoints that constrain AI behavior), and **anti-examples** (teaching AI what *not* to do is often more effective than teaching it what to do).
-> And evaluating a skill is no longer based on gut feeling. **Three-dimensional quantitative evaluation** (trigger accuracy, real task performance, and token cost-effectiveness) makes a skill's value measurable.
-> This guide covers the full path from principles and design patterns to **quantitative evaluation**, real-world iteration, and integration into the development workflow, so you can build, validate, and maintain production-grade skills.
+> Evaluating a skill no longer relies on gut feeling — **three-dimensional quantitative evaluation** (trigger accuracy, real task performance, and token cost-effectiveness) makes the value of a skill measurable.
+> When evaluation exposes weaknesses, **root-cause-driven iteration** helps fix them precisely: classifying each miss as a checklist gap, a model-execution omission, or a domain-knowledge blind spot determines which remedy to apply. And when a single skill carries too many review dimensions, **Skill-Agent collaboration** in a Multi-Agent architecture resolves the attention-dilution problem that prompting alone cannot fix.
+> This guide covers the full path from principles and design patterns to quantitative evaluation, practice-driven iteration, workflow integration, and Multi-Agent architecture, so you can build, validate, maintain, and scale production-grade skills.
 
 ## Table of Contents
 
@@ -30,12 +31,22 @@ applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 
 [Evaluation.md](Evaluation.md) (for validating the real value of skills with data)
 - Skill evaluation: quantitative validation across three dimensions
+
+[Iteration.md](Iteration.md) (for systematically improving skills when misses or quality issues arise)
 - Skills as digital assets: practice-driven continuous iteration
+- Iteration methodology: root-cause classification framework (checklist gap vs model-execution omission vs domain-knowledge blind spot)
+- Real-world case studies: from 8 misses to 2 (75% improvement)
+- Iteration boundaries and stop signals
 
 [Integration.md](Integration.md) (for readers who want to integrate skills into team engineering practices)
 - Bringing skills into the development workflow
 - How skills relate to other Claude Code features
 - A cross-tool comparison of AI coding assistant customization
+
+[Architecture.md](Architecture.md) (for readers whose heavy skills suffer from attention dilution or need Multi-Agent orchestration)
+- Attention dilution: architectural root cause and the Multi-Agent solution
+- Grep-Gated execution protocol: turning 75% of checklist items into rule-driven pre-scans
+- Three-round validation: from missed findings to 13/13 complete coverage
 
 **Appendices**
 - [Appendix A: Glossary](#appendix-a-glossary)
@@ -45,6 +56,8 @@ applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 
 ---
 
+
+<a id="appendix-a-glossary"></a>
 ## Appendix A: Glossary
 
 | Term | Meaning |
@@ -60,6 +73,8 @@ applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 | **Gate** | A non-skippable checkpoint inside a skill. If the condition is not met, the next step is blocked. This is different from a checklist, which can be skipped |
 | **Anti-example** | A clearly documented "do not do / do not report" case inside a skill, used to suppress the AI's tendency toward false positives |
 
+
+<a id="appendix-b-maintenance-notes"></a>
 ## Appendix B: Maintenance Notes
 
 **Update this document when any of the following happens:**
@@ -69,11 +84,15 @@ applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 3. Any referenced skill scores or benchmark data in this guide changes, for example after a major skill refactor
 4. Competing tools such as Cursor, Copilot, or CodeRabbit ship new features that make the comparison in this guide outdated
 5. The **skill-creator evaluation framework changes** (for example, new evaluation dimensions or tooling updates), making Chapter 10 outdated
+6. **New real-world iteration cases accumulate** and the existing three-category root-cause framework needs a new category, affecting Chapters 15–16
+7. **Multi-Agent orchestration best practices evolve** (for example, Anthropic publishes new orchestration patterns or new findings emerge about the Grep-Gated protocol), making Chapters 17–18 outdated
 
 **Review cadence**: once per quarter (the skill ecosystem and AI coding assistant landscape change quickly)
 
 ---
 
+
+<a id="appendix-c-skill-quality-self-check-list"></a>
 ## Appendix C: Skill Quality Self-Check List
 
 After creating or iterating on a skill, use the checklist below to validate its quality:
@@ -94,9 +113,13 @@ After creating or iterating on a skill, use the checklist below to validate its 
 | 12 | Has token cost-effectiveness been calculated? | You know the extra token cost and developer-time ROI | **10.4** |
 | 13 | Does naming follow the hard constraints? | kebab-case, no reserved words, correct `SKILL.md` casing | **7.8** |
 | 14 | Is the skill composable? | It does not assume exclusive control of tools/context and coexists well with other skills | **9.5** |
+| 15 | Has the skill been through practice-driven iteration? | Any misses can be classified into one of the three root-cause categories, and were fixed with targeted remedies | **15–16** |
+| 16 | Has a heavy, multi-dimensional skill been assessed for Multi-Agent upgrade? | If the skill covers more than 3 independent dimensions and regularly produces 5+ High findings, consider a Skill-Agent architecture | **17–18** |
 
-**How to use it**: passing at least 10 of the 14 items is acceptable; passing 13 or more is excellent. For any failed item, use the related chapter to improve it.
+**How to use it**: passing at least 12 of the 16 items is acceptable; passing 15 or more is excellent. For any failed item, use the related chapter to improve it.
 
+
+<a id="appendix-d-further-reading"></a>
 ## Appendix D: Further Reading
 
 - [The Complete Guide to Building Skills for Claude](https://resources.anthropic.com/hubfs/The-Complete-Guide-to-Building-Skill-for-Claude.pdf) — Anthropic's official skill guide (PDF), covering fundamentals, planning, testing and iteration, distribution, patterns, and troubleshooting

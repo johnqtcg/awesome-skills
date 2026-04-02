@@ -6,6 +6,7 @@
    - [12.2 CI Workflow: Skill-Driven Automated Gates](#122-ci-workflow-skill-driven-automated-gates)
    - [12.3 Code Review: AI-Driven PR Review](#123-code-review-ai-driven-pr-review)
    - [12.4 The Full Quality Pipeline](#124-the-full-quality-pipeline)
+   - [12.5 Team Adoption Strategy: Gradual Rollout and Handling Resistance](#125-team-adoption-strategy-gradual-rollout-and-handling-resistance)
 13. [How Skills Relate to Other Claude Code Features](#13-how-skills-relate-to-other-claude-code-features)
    - [13.1 Feature Comparison](#131-feature-comparison)
    - [13.2 Selection Decision Tree](#132-selection-decision-tree)
@@ -113,6 +114,33 @@ Human review + merge
 ```
 
 Each stage is backed by a corresponding skill, and local behavior stays aligned with CI behavior.
+
+<a id="125-team-adoption-strategy-gradual-rollout-and-handling-resistance"></a>
+### 12.5 Team Adoption Strategy: Gradual Rollout and Handling Resistance
+
+The technical integration of a skill is only half the problem. The other half is **team buy-in**. Even the best tool gets shelved if the rollout triggers resistance. The following graduated approach has been validated in practice. The guiding principle is simple: prove value first, then codify as process.
+
+**Phase 1: Individual pilot (weeks 1–2)**
+
+One or two team members who are already comfortable with AI tooling use the skill in their daily work, collecting real positive examples and genuine problem reports. The goal at this stage is not adoption — it is **accumulating evidence that persuades the rest of the team**. Without real-world proof, any evangelism rings hollow.
+
+**Phase 2: Opt-in availability (weeks 2–4)**
+
+Commit the skill to the project's `.claude/skills/` directory, but do not mandate its use. At a team meeting, share the concrete examples gathered in Phase 1 — for instance, "the skill caught a credential leak before it reached the repo." The cardinal rule here is: **persuade through evidence, not by mandate**. Pushing adoption by decree tends to generate backlash and slows uptake.
+
+**Phase 3: CI gate integration**
+
+Once most team members are voluntarily using the skill, integrate it into the CI pipeline as a quality gate. At this point the team already has a mental model of how the skill behaves, so the integration does not create surprises. Adding the gate too early is a common mistake — setting a hard block before trust is established turns the skill into "that annoying obstacle" rather than a safety net.
+
+**Common objections and how to address them**
+
+| Objection | Response |
+|-----------|----------|
+| "The skill slows down my commits" | First check whether false positives are high; tune the skill before broadening adoption |
+| "I don't trust AI-generated review comments" | Start with advisory mode (output as suggestions, not blockers) during the early phases |
+| "The rules are too rigid for my use case" | Add reasonable degradation and opt-out paths to the skill |
+
+Gradual adoption is ultimately an engineering problem requiring the same care as writing the skill itself: manage expectations, build trust incrementally, and reduce friction at every step.
 
 ---
 

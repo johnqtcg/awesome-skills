@@ -2,7 +2,7 @@
 title: Claude Code Skill 最佳实践
 owner: john
 status: active
-last_updated: 2026-03-11
+last_updated: 2026-04-02
 applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 ---
 
@@ -11,7 +11,8 @@ applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 > **核心结论**：Skill 是 Claude Code 中"按需加载的专业能力模块"。高质量 skill 的关键不在于 prompt 写得多长，而在于三件事：
 > **渐进式披露**（三层加载控制上下文成本）、**强制门禁**（用不可跳过的检查点约束 AI 行为）、**反例教学**（教 AI "什么不该做"比"该做什么"更有效）。
 > 而评估一个 skill 写得好不好，不再依赖主观感觉——**三维度量化评估**（触发准确率、实际任务表现、Token 效费比）让 skill 的价值可被精确度量。
-> 本章节从原理、设计模式、**量化评估**、实战迭代到开发流程集成，完整介绍如何构建、验证和维护生产级 skill。
+> 进一步地，如何**根因驱动地迭代改进** skill 质量（区分 checklist 缺失、模型执行遗漏、领域知识盲区三类根因），以及当单 Skill 方案遭遇**注意力稀释**时如何升级为 **Skill-Agent 协作的 Multi-Agent 架构**，本文档体系均有完整覆盖。
+> 本章节从原理、设计模式、**量化评估**、实践迭代、开发流程集成到 Multi-Agent 架构，完整介绍如何构建、验证、维护和扩展生产级 skill。
 
 ## 目录
 
@@ -30,12 +31,22 @@ applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 
 [评估篇.md](评估篇.md)（用数据验证 skill 的真实价值）
 - Skill 评估：三维度量化验证
+
+[迭代篇.md](迭代篇.md)（在实践中发现问题 / 希望系统提升 skill 质量的读者）
 - Skill 是数字资产：实践驱动的持续迭代
+- 迭代方法论：根因分类框架（checklist 缺失 vs 模型执行遗漏 vs 领域知识盲区）
+- 实战案例：从 8 处遗漏到 2 处（75% 改进）
+- 迭代边界与停止信号
 
 [集成篇.md](集成篇.md)（将 skill 融入团队工程实践的读者）
 - 将 Skill 融入开发流程
 - Skill 与其他 Claude Code 特性的关系
 - AI 编程助手定制能力横向对比
+
+[架构篇.md](架构篇.md)（重度 Skill 产生注意力稀释 / 需要 Multi-Agent 编排的读者）
+- 注意力稀释：架构根因与 Multi-Agent 解法
+- Grep-Gated 执行协议：75% 检查项变为规则驱动预扫描
+- 三轮迭代验证：从漏报到 13/13 全覆盖
 
 **附录**
 - [附录 A：术语表](#a)
@@ -73,6 +84,8 @@ applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 3. 本文引用的 skill 评分或测试数据发生变化（如 skill 经过重大重构）
 4. 竞品工具（Cursor、Copilot、CodeRabbit）推出与 skill 对标的新功能，使横向对比过时
 5. **skill-creator 评估框架更新**（如新增评估维度、评估工具变更），使第 10 章内容过时
+6. **新的实战迭代案例积累**，现有三类根因框架需要补充新根因类型（影响第 15-16 章）
+7. **Multi-Agent 编排最佳实践演进**（如 Anthropic 发布新编排模式或 Grep-Gated 协议有新发现），使第 17-18 章内容过时
 
 **审查周期**：每季度一次（skill 生态和 AI 编程助手领域变化较快）
 
@@ -100,8 +113,10 @@ applicable_versions: Claude Code 1.0+, Agent Skills Standard 1.0
 | 12 | 是否计算过 Token 效费比 | 知道额外 token 成本和开发者时间 ROI | **10.4** |
 | 13 | 命名是否符合硬限制 | kebab-case、无保留词、SKILL.md 大小写正确 | **7.8** |
 | 14 | 是否具备可组合性 | 不假设独占工具/上下文，与其他 skill 和谐共存 | **9.5** |
+| 15 | 是否经历过实践驱动迭代 | 遭遇漏报时能归类为三类根因之一，并针对性修复 | **15-16** |
+| 16 | 多维度复杂 Skill 是否评估了 Multi-Agent 升级 | 超过 3 个独立维度且高缺陷密度场景时，考虑 Skill-Agent 架构 | **17-18** |
 
-**使用方式**：14 项中通过 10 项以上为合格；通过 13 项以上为优秀。不达标的项可参照对应章节改进。
+**使用方式**：16 项中通过 12 项以上为合格；通过 15 项以上为优秀。不达标的项可参照对应章节改进。
 
 
 <a id="d"></a>

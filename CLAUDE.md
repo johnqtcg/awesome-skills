@@ -11,7 +11,7 @@ bestpractice/  →  skills/  →  evaluate/  →  outputexample/
 (methodology)     (examples)  (reports)     (real outputs)
 ```
 
-- **`bestpractice/`** — skill design methodology docs (`Fundamentals.md`, `Advanced.md`, `Evaluation.md`, `Integration.md`), bilingual (EN + ZH)
+- **`bestpractice/`** — skill design methodology docs (`Fundamentals.md`, `Advanced.md`, `Evaluation.md`, `Iteration.md`, `Integration.md`, `Architecture.md`), bilingual (EN + ZH)
 - **`skills/`** — 21 production-ready Claude Code skills, each centered on a `SKILL.md` with optional `scripts/`, `references/`, and `agents/` subdirs
 - **`evaluate/`** — formal review reports paired EN/ZH (`<skill-name>-skill-eval-report.md` / `.zh-CN.md`)
 - **`outputexample/`** — real task outputs (PDFs, test code, CI configs, screenshots)
@@ -75,7 +75,7 @@ When adding or editing a skill, update all three layers together:
 2. `evaluate/<name>-skill-eval-report.md` + `.zh-CN.md`
 3. `outputexample/<name>/`
 
-Bilingual consistency is required: any change to an English doc needs a matching update to its `.zh-CN.md` counterpart (and vice versa). This applies to `README.md`, `CONTRIBUTING.md`, `bestpractice/*.md`, and `evaluate/` reports.
+Bilingual consistency is required: any change to an English doc needs a matching update to its `.zh-CN.md` counterpart (and vice versa). This applies to `README.md`, `CONTRIBUTING.md`, `bestpractice/*.md` (all six chapters plus `README.zh-CN.md`), and `evaluate/` reports.
 
 ## Pre-PR Checks
 

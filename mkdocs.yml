@@ -90,14 +90,18 @@ nav:
       - Fundamentals: bestpractice/Fundamentals.md
       - Advanced: bestpractice/Advanced.md
       - Evaluation: bestpractice/Evaluation.md
+      - Iteration: bestpractice/Iteration.md
       - Integration: bestpractice/Integration.md
+      - Architecture: bestpractice/Architecture.md
 
   - 最佳实践（中文）:
       - 概述: bestpractice/README.zh-CN.md
       - 基础篇: bestpractice/基础篇.md
       - 进阶篇: bestpractice/进阶篇.md
       - 评估篇: bestpractice/评估篇.md
+      - 迭代篇: bestpractice/迭代篇.md
       - 集成篇: bestpractice/集成篇.md
+      - 架构篇: bestpractice/架构篇.md
 
   - Rationale:
       - Overview: rationale/index.md
