@@ -45,6 +45,9 @@ theme:
   icon:
     repo: fontawesome/brands/github
 
+hooks:
+  - hooks/set_landing_templates.py
+
 plugins:
   - search:
       separator: '[\s\-\.\u3000\u3001\u3002\uff0c]+'

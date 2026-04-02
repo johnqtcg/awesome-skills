@@ -1,8 +1,3 @@
----
-template: home-zh.html
-title: awesome-skills
----
-
 # awesome-skills
 
 > 面向工程化落地的 **Claude Code Skill** 体系——设计说明 · 量化评估 · 黄金测试 · 完整工作流集成
