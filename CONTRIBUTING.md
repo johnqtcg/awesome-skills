@@ -2,7 +2,7 @@
 title: Contributing Guide
 owner: john
 status: active
-last_updated: 2026-03-13
+last_updated: 2026-04-02
 applicable_versions: repository layout as of 2026-03
 ---
 
@@ -45,11 +45,12 @@ This repository welcomes contributions such as:
 
 ## 3. Repository Structure
 
-Please understand the four core directories first:
+Five interconnected layers make up this repository. Please understand each before contributing:
 
 | Path | Purpose |
 | --- | --- |
-| [bestpractice/](bestpractice/README.md) | Skill best-practice docs, in Chinese and English |
+| [bestpractice/](bestpractice/README.md) | Skill design methodology docs, in Chinese and English |
+| [rationale/](rationale/) | Per-skill design rationale docs explaining the *why* behind each skill; each skill has `design.md` + `design.zh-CN.md` |
 | [skills/](skills/index.md) | High-quality skill examples |
 | [evaluate/](evaluate/index.md) | Skill review reports, in Chinese and English |
 | [outputexample/](outputexample/index.md) | Real output examples from skills |
@@ -59,10 +60,11 @@ Please understand the four core directories first:
 If you are adding a new high-quality skill, the preferred submission unit is a complete package rather than a single isolated `SKILL.md`:
 
 1. `skills/<skill-name>/SKILL.md`
-2. at least one review report:
+2. `rationale/<skill-name>/design.md` + `design.zh-CN.md`
+3. at least one review report:
    - `evaluate/<skill-name>-skill-eval-report.zh-CN.md`
    - `evaluate/<skill-name>-skill-eval-report.md`
-3. at least one output example directory:
+4. at least one output example directory:
    - `outputexample/<skill-name>/`
 
 This is not a hard mechanical rule, but it matches how the repository is currently organized and gives the strongest contribution quality.
@@ -114,6 +116,7 @@ If you are adding a skill, also verify that its supporting files are present:
 
 ```bash
 find "skills/<skill-name>" -maxdepth 2 -type f | sort
+find "rationale/<skill-name>" -maxdepth 1 -type f | sort
 find evaluate -maxdepth 1 -type f | rg "<skill-name>"
 find outputexample -maxdepth 2 -type f | rg "<skill-name>"
 ```

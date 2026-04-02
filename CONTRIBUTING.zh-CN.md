@@ -2,7 +2,7 @@
 title: 贡献指南
 owner: john
 status: active
-last_updated: 2026-03-13
+last_updated: 2026-04-02
 applicable_versions: repository layout as of 2026-03
 ---
 
@@ -45,11 +45,12 @@ Language:
 
 ## 3. 仓库结构约定
 
-请先熟悉仓库的四个核心目录：
+仓库由五层组成，层层递进，贡献前请先了解每一层的职责：
 
 | 路径 | 作用 |
 | --- | --- |
-| [`bestpractice/`](bestpractice/README.zh-CN.md) | skill 最佳实践文档，中英双语 |
+| [`bestpractice/`](bestpractice/README.zh-CN.md) | skill 设计方法论文档，中英双语 |
+| [`rationale/`](rationale/) | 每个 skill 的设计原理文档，解释"为什么这样设计"；每个 skill 有 `design.md` + `design.zh-CN.md` |
 | [`skills/`](skills/index.md) | 高质量 skill 示例 |
 | [`evaluate/`](evaluate/index.md) | 对 skill 的评审报告，中英双语 |
 | [`outputexample/`](outputexample/index.md) | skill 的真实输出样例 |
@@ -59,10 +60,11 @@ Language:
 如果你要新增一个高质量 skill，推荐按“完整贡献单元”提交，而不是只提交一个孤立的 `SKILL.md`：
 
 1. `skills/<skill-name>/SKILL.md`
-2. 至少一份评审报告：
+2. `rationale/<skill-name>/design.md` + `design.zh-CN.md`
+3. 至少一份评审报告：
    - `evaluate/<skill-name>-skill-eval-report.zh-CN.md`
    - `evaluate/<skill-name>-skill-eval-report.md`
-3. 至少一个输出样例目录：
+4. 至少一个输出样例目录：
    - `outputexample/<skill-name>/`
 
 这不是机械要求，但这是本仓库当前最符合实际的贡献方式。仓库现有内容就是按这种闭环组织的。
@@ -114,6 +116,7 @@ git diff --check
 
 ```bash
 find "skills/<skill-name>" -maxdepth 2 -type f | sort
+find "rationale/<skill-name>" -maxdepth 1 -type f | sort
 find evaluate -maxdepth 1 -type f | rg "<skill-name>"
 find outputexample -maxdepth 2 -type f | rg "<skill-name>"
 ```

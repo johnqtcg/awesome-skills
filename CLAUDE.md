@@ -4,14 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Repo Is
 
-A documentation and asset repository — no application code. The four core directories form a closed loop:
+A documentation and asset repository — no application code. Five interconnected layers make up the repository:
 
 ```
-bestpractice/  →  skills/  →  evaluate/  →  outputexample/
-(methodology)     (examples)  (reports)     (real outputs)
+bestpractice/  →  rationale/  →  skills/  →  evaluate/  →  outputexample/
+(methodology)     (design docs)  (examples)  (reports)     (real outputs)
 ```
 
 - **`bestpractice/`** — skill design methodology docs (`Fundamentals.md`, `Advanced.md`, `Evaluation.md`, `Iteration.md`, `Integration.md`, `Architecture.md`), bilingual (EN + ZH)
+- **`rationale/`** — per-skill design rationale docs explaining the *why* behind each skill's structure and decisions; each skill has `design.md` + `design.zh-CN.md`
 - **`skills/`** — 21 production-ready Claude Code skills, each centered on a `SKILL.md` with optional `scripts/`, `references/`, and `agents/` subdirs
 - **`evaluate/`** — formal review reports paired EN/ZH (`<skill-name>-skill-eval-report.md` / `.zh-CN.md`)
 - **`outputexample/`** — real task outputs (PDFs, test code, CI configs, screenshots)
@@ -69,11 +70,13 @@ Deployed to GitHub Pages via CI on push to `main`.
 
 ## Contribution Rules
 
-When adding or editing a skill, update all three layers together:
+When adding or editing a skill, update all five layers together:
 
 1. `skills/<name>/SKILL.md` (and supporting files)
-2. `evaluate/<name>-skill-eval-report.md` + `.zh-CN.md`
-3. `outputexample/<name>/`
+2. `rationale/<name>/design.md` + `design.zh-CN.md`
+3. `evaluate/<name>-skill-eval-report.md` + `.zh-CN.md`
+4. `outputexample/<name>/`
+5. `bestpractice/` docs if the skill introduces or validates a new design pattern
 
 Bilingual consistency is required: any change to an English doc needs a matching update to its `.zh-CN.md` counterpart (and vice versa). This applies to `README.md`, `CONTRIBUTING.md`, `bestpractice/*.md` (all six chapters plus `README.zh-CN.md`), and `evaluate/` reports.
 
