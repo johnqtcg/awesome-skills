@@ -1,0 +1,74 @@
+/* =============================================================
+   GLOBAL MATERIAL THEME ENHANCEMENTS
+   Applied across all documentation pages (not just landing page).
+   ============================================================= */
+
+/* ------------------------------------------------------------------
+   Typography: inject Space Mono for code + IBM Plex Sans for prose
+   ------------------------------------------------------------------ */
+@import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+/* Override Material's default code font */
+:root {
+  --md-code-font: 'Space Mono', 'Courier New', monospace;
+}
+
+/* ------------------------------------------------------------------
+   Code blocks: warmer, more refined appearance
+   ------------------------------------------------------------------ */
+.md-typeset code,
+.md-typeset pre code {
+  font-family: 'Space Mono', monospace !important;
+  font-size: 0.78em;
+}
+
+/* Improve code block padding */
+.md-typeset pre > code {
+  padding: 1.1em 1.4em !important;
+}
+
+/* ------------------------------------------------------------------
+   Tables: tighter, crisper
+   ------------------------------------------------------------------ */
+.md-typeset table:not([class]) th,
+.md-typeset table:not([class]) td {
+  padding: 10px 14px;
+  font-size: 0.82em;
+}
+
+.md-typeset table:not([class]) th {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.72em;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------------
+   Admonitions: slightly more refined
+   ------------------------------------------------------------------ */
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: 6px;
+}
+
+/* ------------------------------------------------------------------
+   Navigation: minor refinements
+   ------------------------------------------------------------------ */
+.md-nav__title,
+.md-nav__item .md-nav__link {
+  font-size: 0.72rem;
+}
+
+/* Slightly tighter tab nav */
+.md-tabs__item {
+  font-size: 0.76rem;
+  letter-spacing: 0.02em;
+}
+
+/* ------------------------------------------------------------------
+   Scrollbar: slim, consistent with landing page aesthetic
+   ------------------------------------------------------------------ */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--md-default-fg-color--lightest) transparent;
+}

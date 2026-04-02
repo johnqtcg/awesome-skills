@@ -1,0 +1,478 @@
+{% extends "main.html" %}
+
+{% block content %}
+<div class="lp-root">
+
+  <!-- ============================================================
+       HERO
+  ============================================================ -->
+  <section class="lp-hero">
+    <div class="lp-hero__bg">
+      <div class="lp-hero__grid"></div>
+      <div class="lp-hero__glow"></div>
+    </div>
+    <div class="lp-container lp-hero__inner">
+      <p class="lp-hero__eyebrow">Production-Ready AI Skill Engineering</p>
+      <h1 class="lp-hero__title">awesome<span class="lp-t-accent">-skills</span></h1>
+      <p class="lp-hero__sub">
+        Not just prompt templates. A traceable five-layer system for designing,
+        evaluating, and integrating Claude&nbsp;Code skills into real engineering workflows.
+      </p>
+      <div class="lp-stats" aria-label="Project statistics">
+        <div class="lp-stat">
+          <strong class="lp-stat__num" data-count-to="21">21</strong>
+          <span class="lp-stat__label">Production<br>Skills</span>
+        </div>
+        <div class="lp-stat__sep" aria-hidden="true"></div>
+        <div class="lp-stat">
+          <strong class="lp-stat__num" data-count-to="42">42</strong>
+          <span class="lp-stat__label">Rationale<br>Docs</span>
+        </div>
+        <div class="lp-stat__sep" aria-hidden="true"></div>
+        <div class="lp-stat">
+          <strong class="lp-stat__num" data-count-to="169">169</strong>
+          <span class="lp-stat__label">Golden<br>Fixtures</span>
+        </div>
+        <div class="lp-stat__sep" aria-hidden="true"></div>
+        <div class="lp-stat">
+          <strong class="lp-stat__num" data-count-to="347" data-suffix="x">347x</strong>
+          <span class="lp-stat__label">Dev-Time<br>ROI</span>
+        </div>
+      </div>
+      <nav class="lp-hero__cta" aria-label="Primary navigation">
+        <a href="bestpractice/" class="lp-btn lp-btn--primary">Read Methodology</a>
+        <a href="rationale/" class="lp-btn lp-btn--outline">Explore Rationale</a>
+        <a href="https://github.com/johnqtcg/awesome-skills" class="lp-btn lp-btn--ghost"
+           target="_blank" rel="noopener noreferrer">GitHub&nbsp;↗</a>
+      </nav>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       FIVE-LAYER CHAIN
+  ============================================================ -->
+  <section class="lp-section" id="architecture">
+    <div class="lp-container">
+      <header class="lp-section__hd">
+        <span class="lp-tag">Architecture</span>
+        <h2 class="lp-section__h">A Five-Layer Knowledge Chain</h2>
+        <p class="lp-section__p">
+          Each layer feeds the next — from abstract principles to measured, executable evidence.
+        </p>
+      </header>
+      <div class="lp-arch" role="list">
+
+        <a href="bestpractice/" class="lp-arch__node" role="listitem">
+          <code class="lp-arch__dir">bestpractice/</code>
+          <strong class="lp-arch__name">Methodology</strong>
+          <span class="lp-arch__desc">
+            Design principles, evaluation framework, iteration patterns, and workflow integration
+          </span>
+        </a>
+
+        <div class="lp-arch__arr" aria-hidden="true">&#8594;</div>
+
+        <a href="rationale/" class="lp-arch__node" role="listitem">
+          <code class="lp-arch__dir">rationale/</code>
+          <strong class="lp-arch__name">Design Logic</strong>
+          <span class="lp-arch__desc">
+            Why each skill's gates, structure, and tradeoffs are designed the way they are
+          </span>
+        </a>
+
+        <div class="lp-arch__arr" aria-hidden="true">&#8594;</div>
+
+        <a href="skills/google-search/SKILL/" class="lp-arch__node lp-arch__node--hl" role="listitem">
+          <code class="lp-arch__dir">skills/</code>
+          <strong class="lp-arch__name">Executable Skills</strong>
+          <span class="lp-arch__desc">
+            21 production-ready skill artifacts shaped by the methodology above
+          </span>
+        </a>
+
+        <div class="lp-arch__arr" aria-hidden="true">&#8594;</div>
+
+        <a href="evaluate/go-code-reviewer-skill-eval-report/" class="lp-arch__node" role="listitem">
+          <code class="lp-arch__dir">evaluate/</code>
+          <strong class="lp-arch__name">Quantitative Proof</strong>
+          <span class="lp-arch__desc">
+            Formal review reports with trigger accuracy, ROI, and regression data
+          </span>
+        </a>
+
+        <div class="lp-arch__arr" aria-hidden="true">&#8594;</div>
+
+        <a href="outputexample/" class="lp-arch__node" role="listitem">
+          <code class="lp-arch__dir">outputexample/</code>
+          <strong class="lp-arch__name">Real Outputs</strong>
+          <span class="lp-arch__desc">
+            Actual artifacts from real tasks: PDFs, CI configs, test code, screenshots
+          </span>
+        </a>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       PROOF METRICS
+  ============================================================ -->
+  <section class="lp-section lp-section--alt" id="evidence">
+    <div class="lp-container">
+      <header class="lp-section__hd">
+        <span class="lp-tag">Evidence</span>
+        <h2 class="lp-section__h">Quantitative, Not Anecdotal</h2>
+        <p class="lp-section__p">
+          Trigger accuracy, task performance, and token cost-effectiveness &mdash;
+          measured across real scenarios with deterministic regression tests.
+        </p>
+      </header>
+      <div class="lp-metrics">
+
+        <div class="lp-metric">
+          <div class="lp-metric__skill">go-code-reviewer</div>
+          <div class="lp-metric__big">347<span class="lp-metric__unit">x</span></div>
+          <div class="lp-metric__label">developer-time ROI</div>
+          <div class="lp-metric__note">+36&thinsp;pp signal-to-noise in subtle defect scenarios</div>
+          <a href="evaluate/go-code-reviewer-skill-eval-report/" class="lp-metric__lnk">
+            Read report &#8594;
+          </a>
+        </div>
+
+        <div class="lp-metric">
+          <div class="lp-metric__skill">google-search</div>
+          <div class="lp-metric__big">+74<span class="lp-metric__unit">pp</span></div>
+          <div class="lp-metric__label">assertion pass rate</div>
+          <div class="lp-metric__note">Structured evidence chains vs. unstructured ad-hoc search</div>
+          <a href="evaluate/google-search-skill-eval-report/" class="lp-metric__lnk">
+            Read report &#8594;
+          </a>
+        </div>
+
+        <div class="lp-metric">
+          <div class="lp-metric__skill">unit-test</div>
+          <div class="lp-metric__big">+38<span class="lp-metric__unit">pp</span></div>
+          <div class="lp-metric__label">assertion pass rate</div>
+          <div class="lp-metric__note">Table-driven tests with boundary and concurrency hunting</div>
+          <a href="evaluate/unit-test-skill-eval-report/" class="lp-metric__lnk">
+            Read report &#8594;
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       SKILLS GRID
+  ============================================================ -->
+  <section class="lp-section" id="skills">
+    <div class="lp-container">
+      <header class="lp-section__hd">
+        <span class="lp-tag">Skills</span>
+        <h2 class="lp-section__h">21 Production-Ready Skills</h2>
+        <p class="lp-section__p">
+          Each skill ships with paired rationale docs, evaluation reports, and regression tests.
+        </p>
+      </header>
+
+      <!-- Backend Pipeline -->
+      <div class="lp-cat">
+        <h3 class="lp-cat__title">
+          <span class="lp-badge lp-badge--pipe">Pipeline</span>
+          Backend Development
+        </h3>
+        <div class="lp-grid">
+          <a href="skills/go-makefile-writer/SKILL/" class="lp-card">
+            <span class="lp-card__name">go-makefile-writer</span>
+            <span class="lp-card__desc">Design or refactor root Makefiles for Go with consistent fmt&thinsp;/&thinsp;test&thinsp;/&thinsp;lint&thinsp;/&thinsp;build gates</span>
+          </a>
+          <a href="skills/git-commit/SKILL/" class="lp-card">
+            <span class="lp-card__name">git-commit</span>
+            <span class="lp-card__desc">Secret-scan + quality gates before commit, then standardized message generation</span>
+          </a>
+          <a href="skills/create-pr/SKILL/" class="lp-card">
+            <span class="lp-card__name">create-pr</span>
+            <span class="lp-card__desc">High-quality PRs with multiple preflight gates and structured body content</span>
+          </a>
+          <a href="skills/go-ci-workflow/SKILL/" class="lp-card">
+            <span class="lp-card__name">go-ci-workflow</span>
+            <span class="lp-card__desc">GitHub Actions CI for Go: Make-driven, locally consistent, caching and layered gates</span>
+          </a>
+          <a href="skills/go-code-reviewer/SKILL/" class="lp-card">
+            <span class="lp-card__name">go-code-reviewer</span>
+            <span class="lp-card__desc">Defect-first automated code review &mdash; real bugs and regressions, not style nits</span>
+          </a>
+          <a href="skills/security-review/SKILL/" class="lp-card">
+            <span class="lp-card__name">security-review</span>
+            <span class="lp-card__desc">Exploitability-first review across auth, input, dependencies, and container risks</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Testing -->
+      <div class="lp-cat">
+        <h3 class="lp-cat__title">
+          <span class="lp-badge lp-badge--test">Testing</span>
+          Testing &amp; Validation
+        </h3>
+        <div class="lp-grid">
+          <a href="skills/unit-test/SKILL/" class="lp-card">
+            <span class="lp-card__name">unit-test</span>
+            <span class="lp-card__desc">Table-driven tests with boundary hunting, mapping loss, and concurrency edge cases</span>
+          </a>
+          <a href="skills/tdd-workflow/SKILL/" class="lp-card">
+            <span class="lp-card__name">tdd-workflow</span>
+            <span class="lp-card__desc">Practical TDD with Red&#8594;Green&#8594;Refactor evidence and risk-path coverage</span>
+          </a>
+          <a href="skills/api-integration-test/SKILL/" class="lp-card">
+            <span class="lp-card__name">api-integration-test</span>
+            <span class="lp-card__desc">Real runtime config, explicit gates, timeout&thinsp;/&thinsp;retry safety, and failure diagnosis</span>
+          </a>
+          <a href="skills/e2e-test/SKILL/" class="lp-card">
+            <span class="lp-card__name">e2e-test</span>
+            <span class="lp-card__desc">E2E tests for key user journeys, balanced for CI integration and reliability</span>
+          </a>
+          <a href="skills/fuzzing-test/SKILL/" class="lp-card">
+            <span class="lp-card__name">fuzzing-test</span>
+            <span class="lp-card__desc">Go fuzz tests with applicability gate &mdash; refuses low-value targets upfront</span>
+          </a>
+          <a href="skills/thirdparty-api-integration-test/SKILL/" class="lp-card">
+            <span class="lp-card__name">thirdparty-api-integration-test</span>
+            <span class="lp-card__desc">External contract validation with explicit run gates and timeout controls</span>
+          </a>
+          <a href="skills/systematic-debugging/SKILL/" class="lp-card">
+            <span class="lp-card__name">systematic-debugging</span>
+            <span class="lp-card__desc">Root-cause analysis required before fixes &mdash; no guess-driven debugging loops</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Research -->
+      <div class="lp-cat">
+        <h3 class="lp-cat__title">
+          <span class="lp-badge lp-badge--research">Research</span>
+          Search &amp; Research
+        </h3>
+        <div class="lp-grid lp-grid--2col">
+          <a href="skills/google-search/SKILL/" class="lp-card">
+            <span class="lp-card__name">google-search</span>
+            <span class="lp-card__desc">Query classification, evidence chains, cross-checking, and reusable search strings</span>
+          </a>
+          <a href="skills/deep-research/SKILL/" class="lp-card">
+            <span class="lp-card__name">deep-research</span>
+            <span class="lp-card__desc">Source-backed research with content extraction and anti-hallucination checks</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Docs -->
+      <div class="lp-cat">
+        <h3 class="lp-cat__title">
+          <span class="lp-badge lp-badge--docs">Docs</span>
+          Documentation &amp; Planning
+        </h3>
+        <div class="lp-grid">
+          <a href="skills/writing-plans/SKILL/" class="lp-card">
+            <span class="lp-card__name">writing-plans</span>
+            <span class="lp-card__desc">Evidence-backed implementation plans with dependency graphs and post-write review loops</span>
+          </a>
+          <a href="skills/update-doc/SKILL/" class="lp-card">
+            <span class="lp-card__name">update-doc</span>
+            <span class="lp-card__desc">Docs-drift detection and evidence-backed README synchronization</span>
+          </a>
+          <a href="skills/readme-generator/SKILL/" class="lp-card">
+            <span class="lp-card__name">readme-generator</span>
+            <span class="lp-card__desc">Project-shape detection and evidence-based generation across service&thinsp;/&thinsp;lib&thinsp;/&thinsp;CLI&thinsp;/&thinsp;monorepo</span>
+          </a>
+          <a href="skills/tech-doc-writer/SKILL/" class="lp-card">
+            <span class="lp-card__name">tech-doc-writer</span>
+            <span class="lp-card__desc">Runbooks, API docs, RFCs &mdash; type classification, audience analysis, anti-staleness rules</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- Tools -->
+      <div class="lp-cat">
+        <h3 class="lp-cat__title">
+          <span class="lp-badge lp-badge--tool">Tools</span>
+          Tool Automation
+        </h3>
+        <div class="lp-grid lp-grid--2col">
+          <a href="skills/yt-dlp-downloader/SKILL/" class="lp-card">
+            <span class="lp-card__name">yt-dlp-downloader</span>
+            <span class="lp-card__desc">Format-probing downloads for videos, playlists, audio extraction, subtitles, and auth content</span>
+          </a>
+          <a href="skills/local-transcript/SKILL/" class="lp-card">
+            <span class="lp-card__name">local-transcript</span>
+            <span class="lp-card__desc">Accelerated local ASR with Chinese normalization, paragraphing, and multi-format export</span>
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================
+       ENGINEERING PIPELINE
+  ============================================================ -->
+  <section class="lp-section lp-section--alt" id="pipeline">
+    <div class="lp-container">
+      <header class="lp-section__hd">
+        <span class="lp-tag">Integration</span>
+        <h2 class="lp-section__h">A Complete Engineering Pipeline</h2>
+        <p class="lp-section__p">
+          Backend skills compose into an end-to-end flow from first line of code to merged PR.
+        </p>
+      </header>
+      <div class="lp-pipe" role="list">
+
+        <div class="lp-pipe__stage" role="listitem">
+          <div class="lp-pipe__icon">&#9670;</div>
+          <div class="lp-pipe__name">Coding</div>
+        </div>
+        <div class="lp-pipe__conn" aria-hidden="true"></div>
+
+        <div class="lp-pipe__stage" role="listitem">
+          <div class="lp-pipe__icon">&#11043;</div>
+          <div class="lp-pipe__name">Write / Fix Tests</div>
+          <div class="lp-pipe__skills">unit-test &middot; tdd-workflow &middot; api-integration-test &middot; e2e-test</div>
+        </div>
+        <div class="lp-pipe__conn" aria-hidden="true"></div>
+
+        <a href="skills/go-makefile-writer/SKILL/" class="lp-pipe__stage lp-pipe__stage--link" role="listitem">
+          <div class="lp-pipe__icon">&#11043;</div>
+          <div class="lp-pipe__name">make fmt / lint</div>
+          <div class="lp-pipe__skills">go-makefile-writer</div>
+        </a>
+        <div class="lp-pipe__conn" aria-hidden="true"></div>
+
+        <a href="skills/git-commit/SKILL/" class="lp-pipe__stage lp-pipe__stage--link" role="listitem">
+          <div class="lp-pipe__icon">&#11043;</div>
+          <div class="lp-pipe__name">git commit</div>
+          <div class="lp-pipe__skills">git-commit</div>
+        </a>
+        <div class="lp-pipe__conn" aria-hidden="true"></div>
+
+        <a href="skills/create-pr/SKILL/" class="lp-pipe__stage lp-pipe__stage--link" role="listitem">
+          <div class="lp-pipe__icon">&#11043;</div>
+          <div class="lp-pipe__name">create PR</div>
+          <div class="lp-pipe__skills">create-pr</div>
+        </a>
+        <div class="lp-pipe__conn" aria-hidden="true"></div>
+
+        <a href="skills/go-ci-workflow/SKILL/" class="lp-pipe__stage lp-pipe__stage--link" role="listitem">
+          <div class="lp-pipe__icon">&#11043;</div>
+          <div class="lp-pipe__name">CI + Review</div>
+          <div class="lp-pipe__skills">go-ci-workflow &middot; go-code-reviewer &middot; security-review</div>
+        </a>
+        <div class="lp-pipe__conn" aria-hidden="true"></div>
+
+        <div class="lp-pipe__stage lp-pipe__stage--final" role="listitem">
+          <div class="lp-pipe__icon">&#10003;</div>
+          <div class="lp-pipe__name">Human Review + Merge</div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       QUICK START
+  ============================================================ -->
+  <section class="lp-section" id="quickstart">
+    <div class="lp-container">
+      <header class="lp-section__hd">
+        <span class="lp-tag">Quick Start</span>
+        <h2 class="lp-section__h">Three Steps to Your First Skill</h2>
+      </header>
+      <div class="lp-qs">
+
+        <div class="lp-qs__step">
+          <div class="lp-qs__n">01</div>
+          <div class="lp-qs__body">
+            <h3 class="lp-qs__title">Browse and choose a skill</h3>
+            <p class="lp-qs__p">
+              Find a skill in the grid above, or start with
+              <a href="skills/google-search/SKILL/">google-search</a> as a straightforward
+              first example. Read the paired
+              <a href="rationale/">rationale docs</a> to understand the design decisions.
+            </p>
+          </div>
+        </div>
+
+        <div class="lp-qs__step">
+          <div class="lp-qs__n">02</div>
+          <div class="lp-qs__body">
+            <h3 class="lp-qs__title">Copy the skill directory</h3>
+            <pre class="lp-qs__pre"><code># Project-level (one project)
+cp -r skills/&lt;name&gt; .claude/skills/&lt;name&gt;
+
+# User-level (all projects)
+cp -r skills/&lt;name&gt; ~/.claude/skills/&lt;name&gt;</code></pre>
+          </div>
+        </div>
+
+        <div class="lp-qs__step">
+          <div class="lp-qs__n">03</div>
+          <div class="lp-qs__body">
+            <h3 class="lp-qs__title">Claude Code activates it automatically</h3>
+            <p class="lp-qs__p">
+              When the task matches, Claude Code invokes the skill &mdash; no manual configuration.
+              For a deeper study, read the full methodology:
+              <a href="bestpractice/">Best Practice &#8594;</a>
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       RECOMMENDED READING PATH
+  ============================================================ -->
+  <section class="lp-section lp-section--alt lp-section--last" id="reading-path">
+    <div class="lp-container">
+      <header class="lp-section__hd">
+        <span class="lp-tag">Recommended Path</span>
+        <h2 class="lp-section__h">Where to Start Reading</h2>
+      </header>
+      <ol class="lp-path">
+        <li class="lp-path__step">
+          <span class="lp-path__n">1</span>
+          <div class="lp-path__body">
+            <a href="bestpractice/" class="lp-path__link">bestpractice/README.md</a>
+            <span class="lp-path__note">Build the overall picture of the methodology</span>
+          </div>
+        </li>
+        <li class="lp-path__step">
+          <span class="lp-path__n">2</span>
+          <div class="lp-path__body">
+            <a href="rationale/google-search/design/" class="lp-path__link">rationale/google-search/design.md</a>
+            <span class="lp-path__note">Read the design rationale for a concrete skill</span>
+          </div>
+        </li>
+        <li class="lp-path__step">
+          <span class="lp-path__n">3</span>
+          <div class="lp-path__body">
+            <a href="skills/google-search/SKILL/" class="lp-path__link">skills/google-search/SKILL.md</a>
+            <span class="lp-path__note">Open the executable skill artifact itself</span>
+          </div>
+        </li>
+        <li class="lp-path__step">
+          <span class="lp-path__n">4</span>
+          <div class="lp-path__body">
+            <a href="evaluate/google-search-skill-eval-report/" class="lp-path__link">evaluate/google-search-skill-eval-report.md</a>
+            <span class="lp-path__note">Read the quantitative evaluation report</span>
+          </div>
+        </li>
+      </ol>
+      <p class="lp-path__zh">
+        <a href="index-zh/">&#20013;&#25991;&#29256;&#35831;&#20174;&#36825;&#37324;&#24320;&#22987;&nbsp;&#8594;</a>
+      </p>
+    </div>
+  </section>
+
+</div>
+{% endblock %}

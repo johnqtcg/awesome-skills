@@ -1,3 +1,8 @@
+---
+template: home.html
+title: awesome-skills
+---
+
 # awesome-skills: Production-Ready Claude Code Skills
 
 > Production-ready **Claude Code Skills** with design rationale, quantitative evaluation, golden test fixtures, and end-to-end engineering workflow integration.

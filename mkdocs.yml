@@ -15,6 +15,7 @@ site_dir: site
 theme:
   name: material
   language: en
+  custom_dir: docs/overrides
   features:
     - navigation.tabs
     - navigation.sections
@@ -75,6 +76,7 @@ extra:
   generator: false
 
 extra_css:
+  - assets/stylesheets/custom-theme.css
   - assets/stylesheets/landing-page.css
 extra_javascript:
   - assets/javascripts/landing-page.js

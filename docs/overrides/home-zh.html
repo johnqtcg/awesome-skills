@@ -1,0 +1,478 @@
+{% extends "main.html" %}
+
+{% block content %}
+<div class="lp-root">
+
+  <!-- ============================================================
+       英雄区 HERO
+       注意：index-zh.md 构建为 /awesome-skills/index-zh/
+       所有站内相对链接必须加 ../ 前缀
+  ============================================================ -->
+  <section class="lp-hero">
+    <div class="lp-hero__bg">
+      <div class="lp-hero__grid"></div>
+      <div class="lp-hero__glow"></div>
+    </div>
+    <div class="lp-container lp-hero__inner">
+      <p class="lp-hero__eyebrow">面向工程化落地的 AI Skill 体系</p>
+      <h1 class="lp-hero__title">awesome<span class="lp-t-accent">-skills</span></h1>
+      <p class="lp-hero__sub">
+        不只是 prompt 模板。一套从设计到验证、到工作流集成的完整五层知识体系，
+        专为 Claude&nbsp;Code Skill 工程化落地而构建。
+      </p>
+      <div class="lp-stats" aria-label="项目统计">
+        <div class="lp-stat">
+          <strong class="lp-stat__num" data-count-to="21">21</strong>
+          <span class="lp-stat__label">生产级<br>Skills</span>
+        </div>
+        <div class="lp-stat__sep" aria-hidden="true"></div>
+        <div class="lp-stat">
+          <strong class="lp-stat__num" data-count-to="42">42</strong>
+          <span class="lp-stat__label">设计说明<br>文档</span>
+        </div>
+        <div class="lp-stat__sep" aria-hidden="true"></div>
+        <div class="lp-stat">
+          <strong class="lp-stat__num" data-count-to="169">169</strong>
+          <span class="lp-stat__label">黄金测试<br>场景</span>
+        </div>
+        <div class="lp-stat__sep" aria-hidden="true"></div>
+        <div class="lp-stat">
+          <strong class="lp-stat__num" data-count-to="347" data-suffix="x">347x</strong>
+          <span class="lp-stat__label">开发效率<br>ROI</span>
+        </div>
+      </div>
+      <nav class="lp-hero__cta" aria-label="主要导航">
+        <a href="../bestpractice/README.zh-CN/" class="lp-btn lp-btn--primary">阅读方法论</a>
+        <a href="../rationale/index.zh-CN/" class="lp-btn lp-btn--outline">浏览设计说明</a>
+        <a href="https://github.com/johnqtcg/awesome-skills" class="lp-btn lp-btn--ghost"
+           target="_blank" rel="noopener noreferrer">GitHub&nbsp;↗</a>
+      </nav>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       五层知识链
+  ============================================================ -->
+  <section class="lp-section" id="architecture">
+    <div class="lp-container">
+      <header class="lp-section__hd">
+        <span class="lp-tag">架构</span>
+        <h2 class="lp-section__h">五层可追溯知识链</h2>
+        <p class="lp-section__p">
+          每一层都向下一层输入——从抽象原则到可量化、可执行的结果证据。
+        </p>
+      </header>
+      <div class="lp-arch" role="list">
+
+        <a href="../bestpractice/README.zh-CN/" class="lp-arch__node" role="listitem">
+          <code class="lp-arch__dir">bestpractice/</code>
+          <strong class="lp-arch__name">方法论</strong>
+          <span class="lp-arch__desc">
+            设计原则、量化评估框架、迭代模式与工作流集成方法
+          </span>
+        </a>
+
+        <div class="lp-arch__arr" aria-hidden="true">&#8594;</div>
+
+        <a href="../rationale/index.zh-CN/" class="lp-arch__node" role="listitem">
+          <code class="lp-arch__dir">rationale/</code>
+          <strong class="lp-arch__name">设计说明</strong>
+          <span class="lp-arch__desc">
+            每个 skill 的门禁、结构与取舍是怎样设计的，以及原因
+          </span>
+        </a>
+
+        <div class="lp-arch__arr" aria-hidden="true">&#8594;</div>
+
+        <a href="../skills/google-search/SKILL/" class="lp-arch__node lp-arch__node--hl" role="listitem">
+          <code class="lp-arch__dir">skills/</code>
+          <strong class="lp-arch__name">可执行 Skills</strong>
+          <span class="lp-arch__desc">
+            21 个经过方法论打磨的生产级 skill 产物
+          </span>
+        </a>
+
+        <div class="lp-arch__arr" aria-hidden="true">&#8594;</div>
+
+        <a href="../evaluate/go-code-reviewer-skill-eval-report.zh-CN/" class="lp-arch__node" role="listitem">
+          <code class="lp-arch__dir">evaluate/</code>
+          <strong class="lp-arch__name">量化证明</strong>
+          <span class="lp-arch__desc">
+            包含触发准确率、ROI 数据与回归测试结果的正式评审报告
+          </span>
+        </a>
+
+        <div class="lp-arch__arr" aria-hidden="true">&#8594;</div>
+
+        <a href="../outputexample/" class="lp-arch__node" role="listitem">
+          <code class="lp-arch__dir">outputexample/</code>
+          <strong class="lp-arch__name">真实产出</strong>
+          <span class="lp-arch__desc">
+            真实任务中的产出物：PDF、CI 配置、测试代码、截图
+          </span>
+        </a>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       量化证据
+  ============================================================ -->
+  <section class="lp-section lp-section--alt" id="evidence">
+    <div class="lp-container">
+      <header class="lp-section__hd">
+        <span class="lp-tag">实测数据</span>
+        <h2 class="lp-section__h">定量结论，而非主观感受</h2>
+        <p class="lp-section__p">
+          触发准确率、任务完成率与 token 成本效益——基于真实场景的确定性回归测量。
+        </p>
+      </header>
+      <div class="lp-metrics">
+
+        <div class="lp-metric">
+          <div class="lp-metric__skill">go-code-reviewer</div>
+          <div class="lp-metric__big">347<span class="lp-metric__unit">x</span></div>
+          <div class="lp-metric__label">开发效率 ROI</div>
+          <div class="lp-metric__note">微妙缺陷场景下信噪比提升 +36&thinsp;pp</div>
+          <a href="../evaluate/go-code-reviewer-skill-eval-report.zh-CN/" class="lp-metric__lnk">
+            查看评审报告 &#8594;
+          </a>
+        </div>
+
+        <div class="lp-metric">
+          <div class="lp-metric__skill">google-search</div>
+          <div class="lp-metric__big">+74<span class="lp-metric__unit">pp</span></div>
+          <div class="lp-metric__label">断言通过率</div>
+          <div class="lp-metric__note">结构化证据链 vs. 无结构临时搜索的对比</div>
+          <a href="../evaluate/google-search-skill-eval-report.zh-CN/" class="lp-metric__lnk">
+            查看评审报告 &#8594;
+          </a>
+        </div>
+
+        <div class="lp-metric">
+          <div class="lp-metric__skill">unit-test</div>
+          <div class="lp-metric__big">+38<span class="lp-metric__unit">pp</span></div>
+          <div class="lp-metric__label">断言通过率</div>
+          <div class="lp-metric__note">表驱动测试 + 边界值与并发边界专项追踪</div>
+          <a href="../evaluate/unit-test-skill-eval-report.zh-CN/" class="lp-metric__lnk">
+            查看评审报告 &#8594;
+          </a>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       Skill 卡片网格
+  ============================================================ -->
+  <section class="lp-section" id="skills">
+    <div class="lp-container">
+      <header class="lp-section__hd">
+        <span class="lp-tag">Skill 列表</span>
+        <h2 class="lp-section__h">21 个生产级 Skills</h2>
+        <p class="lp-section__p">
+          每个 skill 均配有设计说明文档、量化评审报告和回归测试。
+        </p>
+      </header>
+
+      <!-- 后端管线 -->
+      <div class="lp-cat">
+        <h3 class="lp-cat__title">
+          <span class="lp-badge lp-badge--pipe">Pipeline</span>
+          后端开发
+        </h3>
+        <div class="lp-grid">
+          <a href="../skills/go-makefile-writer/SKILL/" class="lp-card">
+            <span class="lp-card__name">go-makefile-writer</span>
+            <span class="lp-card__desc">为 Go 项目设计或重构根目录 Makefile，统一 fmt&thinsp;/&thinsp;test&thinsp;/&thinsp;lint&thinsp;/&thinsp;build 门禁</span>
+          </a>
+          <a href="../skills/git-commit/SKILL/" class="lp-card">
+            <span class="lp-card__name">git-commit</span>
+            <span class="lp-card__desc">提交前 secret 扫描 + 质量门禁，自动生成规范化 commit 消息</span>
+          </a>
+          <a href="../skills/create-pr/SKILL/" class="lp-card">
+            <span class="lp-card__name">create-pr</span>
+            <span class="lp-card__desc">带多项预检门禁和结构化正文的高质量 PR 创建流程</span>
+          </a>
+          <a href="../skills/go-ci-workflow/SKILL/" class="lp-card">
+            <span class="lp-card__name">go-ci-workflow</span>
+            <span class="lp-card__desc">Go 项目 GitHub Actions CI：Make 驱动、本地一致、分层门禁</span>
+          </a>
+          <a href="../skills/go-code-reviewer/SKILL/" class="lp-card">
+            <span class="lp-card__name">go-code-reviewer</span>
+            <span class="lp-card__desc">缺陷优先的自动化代码审查——聚焦真实 bug 和回归风险，而非风格备注</span>
+          </a>
+          <a href="../skills/security-review/SKILL/" class="lp-card">
+            <span class="lp-card__name">security-review</span>
+            <span class="lp-card__desc">可利用性优先的安全审查：鉴权、输入、依赖、容器全覆盖</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- 测试 -->
+      <div class="lp-cat">
+        <h3 class="lp-cat__title">
+          <span class="lp-badge lp-badge--test">Testing</span>
+          测试与验证
+        </h3>
+        <div class="lp-grid">
+          <a href="../skills/unit-test/SKILL/" class="lp-card">
+            <span class="lp-card__name">unit-test</span>
+            <span class="lp-card__desc">表驱动测试，专项追踪边界值、映射丢失与并发边界</span>
+          </a>
+          <a href="../skills/tdd-workflow/SKILL/" class="lp-card">
+            <span class="lp-card__name">tdd-workflow</span>
+            <span class="lp-card__desc">有证据的 TDD：Red&#8594;Green&#8594;Refactor 流程 + 风险路径覆盖</span>
+          </a>
+          <a href="../skills/api-integration-test/SKILL/" class="lp-card">
+            <span class="lp-card__name">api-integration-test</span>
+            <span class="lp-card__desc">真实运行时配置、显式门禁、超时&thinsp;/&thinsp;重试安全与失败诊断</span>
+          </a>
+          <a href="../skills/e2e-test/SKILL/" class="lp-card">
+            <span class="lp-card__name">e2e-test</span>
+            <span class="lp-card__desc">关键用户路径的 E2E 测试，兼顾 CI 集成与可靠性</span>
+          </a>
+          <a href="../skills/fuzzing-test/SKILL/" class="lp-card">
+            <span class="lp-card__name">fuzzing-test</span>
+            <span class="lp-card__desc">Go fuzz 测试，含适用性门禁——拒绝低价值目标，避免无效模糊测试</span>
+          </a>
+          <a href="../skills/thirdparty-api-integration-test/SKILL/" class="lp-card">
+            <span class="lp-card__name">thirdparty-api-integration-test</span>
+            <span class="lp-card__desc">外部 API 契约验证，含显式执行门禁与超时控制</span>
+          </a>
+          <a href="../skills/systematic-debugging/SKILL/" class="lp-card">
+            <span class="lp-card__name">systematic-debugging</span>
+            <span class="lp-card__desc">修复前必须完成根因分析——禁止猜测式调试循环</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- 调研 -->
+      <div class="lp-cat">
+        <h3 class="lp-cat__title">
+          <span class="lp-badge lp-badge--research">Research</span>
+          搜索与调研
+        </h3>
+        <div class="lp-grid lp-grid--2col">
+          <a href="../skills/google-search/SKILL/" class="lp-card">
+            <span class="lp-card__name">google-search</span>
+            <span class="lp-card__desc">查询分类、证据链构建、交叉验证与可复用检索串</span>
+          </a>
+          <a href="../skills/deep-research/SKILL/" class="lp-card">
+            <span class="lp-card__name">deep-research</span>
+            <span class="lp-card__desc">有来源支撑的深度调研，含内容抽取与反幻觉检查</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- 文档 -->
+      <div class="lp-cat">
+        <h3 class="lp-cat__title">
+          <span class="lp-badge lp-badge--docs">Docs</span>
+          文档与规划
+        </h3>
+        <div class="lp-grid">
+          <a href="../skills/writing-plans/SKILL/" class="lp-card">
+            <span class="lp-card__name">writing-plans</span>
+            <span class="lp-card__desc">有证据支撑的实施计划，含依赖图与写后审查循环</span>
+          </a>
+          <a href="../skills/update-doc/SKILL/" class="lp-card">
+            <span class="lp-card__name">update-doc</span>
+            <span class="lp-card__desc">文档漂移检测与有证据支撑的 README 同步</span>
+          </a>
+          <a href="../skills/readme-generator/SKILL/" class="lp-card">
+            <span class="lp-card__name">readme-generator</span>
+            <span class="lp-card__desc">项目形态检测 + 基于证据的 README 生成，覆盖服务&thinsp;/&thinsp;库&thinsp;/&thinsp;CLI&thinsp;/&thinsp;monorepo</span>
+          </a>
+          <a href="../skills/tech-doc-writer/SKILL/" class="lp-card">
+            <span class="lp-card__name">tech-doc-writer</span>
+            <span class="lp-card__desc">Runbook、API 文档、RFC——类型分类、受众分析、防过时规则</span>
+          </a>
+        </div>
+      </div>
+
+      <!-- 工具 -->
+      <div class="lp-cat">
+        <h3 class="lp-cat__title">
+          <span class="lp-badge lp-badge--tool">Tools</span>
+          工具自动化
+        </h3>
+        <div class="lp-grid lp-grid--2col">
+          <a href="../skills/yt-dlp-downloader/SKILL/" class="lp-card">
+            <span class="lp-card__name">yt-dlp-downloader</span>
+            <span class="lp-card__desc">格式探测式下载：视频、播放列表、音频提取、字幕与鉴权内容</span>
+          </a>
+          <a href="../skills/local-transcript/SKILL/" class="lp-card">
+            <span class="lp-card__name">local-transcript</span>
+            <span class="lp-card__desc">本地加速 ASR + 中文规范化、分段与多格式导出</span>
+          </a>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================
+       工程 Pipeline 可视化
+  ============================================================ -->
+  <section class="lp-section lp-section--alt" id="pipeline">
+    <div class="lp-container">
+      <header class="lp-section__hd">
+        <span class="lp-tag">工作流集成</span>
+        <h2 class="lp-section__h">一条完整的工程交付管线</h2>
+        <p class="lp-section__p">
+          后端 skills 可组合成端到端流程——从第一行代码到合并 PR。
+        </p>
+      </header>
+      <div class="lp-pipe" role="list">
+
+        <div class="lp-pipe__stage" role="listitem">
+          <div class="lp-pipe__icon">&#9670;</div>
+          <div class="lp-pipe__name">编写代码</div>
+        </div>
+        <div class="lp-pipe__conn" aria-hidden="true"></div>
+
+        <div class="lp-pipe__stage" role="listitem">
+          <div class="lp-pipe__icon">&#11043;</div>
+          <div class="lp-pipe__name">编写&thinsp;/&thinsp;修复测试</div>
+          <div class="lp-pipe__skills">unit-test &middot; tdd-workflow &middot; api-integration-test &middot; e2e-test</div>
+        </div>
+        <div class="lp-pipe__conn" aria-hidden="true"></div>
+
+        <a href="../skills/go-makefile-writer/SKILL/" class="lp-pipe__stage lp-pipe__stage--link" role="listitem">
+          <div class="lp-pipe__icon">&#11043;</div>
+          <div class="lp-pipe__name">make fmt / lint</div>
+          <div class="lp-pipe__skills">go-makefile-writer</div>
+        </a>
+        <div class="lp-pipe__conn" aria-hidden="true"></div>
+
+        <a href="../skills/git-commit/SKILL/" class="lp-pipe__stage lp-pipe__stage--link" role="listitem">
+          <div class="lp-pipe__icon">&#11043;</div>
+          <div class="lp-pipe__name">git commit</div>
+          <div class="lp-pipe__skills">git-commit</div>
+        </a>
+        <div class="lp-pipe__conn" aria-hidden="true"></div>
+
+        <a href="../skills/create-pr/SKILL/" class="lp-pipe__stage lp-pipe__stage--link" role="listitem">
+          <div class="lp-pipe__icon">&#11043;</div>
+          <div class="lp-pipe__name">创建 PR</div>
+          <div class="lp-pipe__skills">create-pr</div>
+        </a>
+        <div class="lp-pipe__conn" aria-hidden="true"></div>
+
+        <a href="../skills/go-ci-workflow/SKILL/" class="lp-pipe__stage lp-pipe__stage--link" role="listitem">
+          <div class="lp-pipe__icon">&#11043;</div>
+          <div class="lp-pipe__name">CI + 审查</div>
+          <div class="lp-pipe__skills">go-ci-workflow &middot; go-code-reviewer &middot; security-review</div>
+        </a>
+        <div class="lp-pipe__conn" aria-hidden="true"></div>
+
+        <div class="lp-pipe__stage lp-pipe__stage--final" role="listitem">
+          <div class="lp-pipe__icon">&#10003;</div>
+          <div class="lp-pipe__name">人工审查 + 合并</div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       快速入门
+  ============================================================ -->
+  <section class="lp-section" id="quickstart">
+    <div class="lp-container">
+      <header class="lp-section__hd">
+        <span class="lp-tag">快速入门</span>
+        <h2 class="lp-section__h">三步上手第一个 Skill</h2>
+      </header>
+      <div class="lp-qs">
+
+        <div class="lp-qs__step">
+          <div class="lp-qs__n">01</div>
+          <div class="lp-qs__body">
+            <h3 class="lp-qs__title">浏览并选择一个 skill</h3>
+            <p class="lp-qs__p">
+              从上方列表中找一个与你工作场景匹配的 skill，或从
+              <a href="../skills/google-search/SKILL/">google-search</a> 入手。
+              阅读配套的<a href="../rationale/index.zh-CN/">设计说明</a>可以帮助理解背后的设计决策。
+            </p>
+          </div>
+        </div>
+
+        <div class="lp-qs__step">
+          <div class="lp-qs__n">02</div>
+          <div class="lp-qs__body">
+            <h3 class="lp-qs__title">复制 skill 目录</h3>
+            <pre class="lp-qs__pre"><code># 项目级安装（仅当前项目）
+cp -r skills/&lt;名称&gt; .claude/skills/&lt;名称&gt;
+
+# 个人级安装（所有项目）
+cp -r skills/&lt;名称&gt; ~/.claude/skills/&lt;名称&gt;</code></pre>
+          </div>
+        </div>
+
+        <div class="lp-qs__step">
+          <div class="lp-qs__n">03</div>
+          <div class="lp-qs__body">
+            <h3 class="lp-qs__title">Claude Code 自动激活</h3>
+            <p class="lp-qs__p">
+              任务匹配时 Claude Code 会自动调用 skill，无需手动配置。
+              如需深入了解方法论，从这里开始：
+              <a href="../bestpractice/README.zh-CN/">最佳实践 &#8594;</a>
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       推荐阅读路径
+  ============================================================ -->
+  <section class="lp-section lp-section--alt lp-section--last" id="reading-path">
+    <div class="lp-container">
+      <header class="lp-section__hd">
+        <span class="lp-tag">推荐路径</span>
+        <h2 class="lp-section__h">从哪里开始读</h2>
+      </header>
+      <ol class="lp-path">
+        <li class="lp-path__step">
+          <span class="lp-path__n">1</span>
+          <div class="lp-path__body">
+            <a href="../bestpractice/README.zh-CN/" class="lp-path__link">bestpractice/README.zh-CN.md</a>
+            <span class="lp-path__note">建立对整体方法论的基本认知</span>
+          </div>
+        </li>
+        <li class="lp-path__step">
+          <span class="lp-path__n">2</span>
+          <div class="lp-path__body">
+            <a href="../rationale/google-search/design.zh-CN/" class="lp-path__link">rationale/google-search/design.zh-CN.md</a>
+            <span class="lp-path__note">阅读某个具体 skill 的设计说明</span>
+          </div>
+        </li>
+        <li class="lp-path__step">
+          <span class="lp-path__n">3</span>
+          <div class="lp-path__body">
+            <a href="../skills/google-search/SKILL/" class="lp-path__link">skills/google-search/SKILL.md</a>
+            <span class="lp-path__note">打开对应的可执行 skill 产物</span>
+          </div>
+        </li>
+        <li class="lp-path__step">
+          <span class="lp-path__n">4</span>
+          <div class="lp-path__body">
+            <a href="../evaluate/google-search-skill-eval-report.zh-CN/" class="lp-path__link">evaluate/google-search-skill-eval-report.zh-CN.md</a>
+            <span class="lp-path__note">查看量化评审报告</span>
+          </div>
+        </li>
+      </ol>
+      <p class="lp-path__zh">
+        <a href="../">Switch to English version &#8594;</a>
+      </p>
+    </div>
+  </section>
+
+</div>
+{% endblock %}
