@@ -10,7 +10,7 @@ prerequisite: Evaluation.md (§10–11)
 
 ## Table of Contents
 
-15. [Iteration Methodology](#15-iteration-methodology)
+- [15. Iteration Methodology](#15-iteration-methodology)
     - [15.1 Two Drivers of Iteration](#151-two-drivers-of-iteration)
     - [15.2 The Four Phases of an Iteration Cycle](#152-the-four-phases-of-an-iteration-cycle)
     - [15.3 Root-Cause Classification Framework](#153-root-cause-classification-framework)
@@ -19,7 +19,7 @@ prerequisite: Evaluation.md (§10–11)
         - [15.4.2 Model-Execution Omission: The Limits of Rule Constraints](#1542-model-execution-omission-the-limits-of-rule-constraints)
         - [15.4.3 Domain-Knowledge Blind Spot: The Finite Value of References](#1543-domain-knowledge-blind-spot-the-finite-value-of-references)
     - [15.5 Verification Methodology](#155-verification-methodology)
-16. [Case Studies and Iteration Boundaries](#16-case-studies-and-iteration-boundaries)
+- [16. Case Studies and Iteration Boundaries](#16-case-studies-and-iteration-boundaries)
     - [16.1 Three Root Causes in Practice (Using a Code-Review Skill as the Example)](#161-three-root-causes-in-practice-using-a-code-review-skill-as-the-example)
     - [16.2 Miss Attribution Summary](#162-miss-attribution-summary)
     - [16.3 `git-commit` Skill Iteration Cases (a Complementary Perspective)](#163-git-commit-skill-iteration-cases-a-complementary-perspective)

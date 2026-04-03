@@ -1,16 +1,16 @@
 
 ## Table of Contents
 
-10. [Skill Evaluation: Quantitative Validation Across Three Dimensions](#10-skill-evaluation-quantitative-validation-across-three-dimensions)
-   - [10.1 The Three Evaluation Dimensions](#101-the-three-evaluation-dimensions)
-   - [10.2 Dimension One: Trigger Accuracy](#102-dimension-one-trigger-accuracy)
-   - [10.3 Dimension Two: Real Task Performance](#103-dimension-two-real-task-performance)
-   - [10.4 Dimension Three: Token Cost-Effectiveness](#104-dimension-three-token-cost-effectiveness)
-   - [10.5 Representative Case: Evaluating `go-code-reviewer`](#105-representative-case-evaluating-go-code-reviewer)
-   - [10.6 Second Validation: Evaluating the `unit-test` Skill](#106-second-validation-evaluating-the-unit-test-skill)
-   - [10.7 Evaluation-Driven Iteration](#107-evaluation-driven-iteration)
-   - [10.8 Evaluation Toolchain](#108-evaluation-toolchain)
-   - [10.9 Why Evaluation Matters: Quality Infrastructure for the Skill Ecosystem](#109-why-evaluation-matters-quality-infrastructure-for-the-skill-ecosystem)
+- [10. Skill Evaluation: Quantitative Validation Across Three Dimensions](#10-skill-evaluation-quantitative-validation-across-three-dimensions)
+    - [10.1 The Three Evaluation Dimensions](#101-the-three-evaluation-dimensions)
+    - [10.2 Dimension One: Trigger Accuracy](#102-dimension-one-trigger-accuracy)
+    - [10.3 Dimension Two: Real Task Performance](#103-dimension-two-real-task-performance)
+    - [10.4 Dimension Three: Token Cost-Effectiveness](#104-dimension-three-token-cost-effectiveness)
+    - [10.5 Representative Case: Evaluating `go-code-reviewer`](#105-representative-case-evaluating-go-code-reviewer)
+    - [10.6 Second Validation: Evaluating the `unit-test` Skill](#106-second-validation-evaluating-the-unit-test-skill)
+    - [10.7 Evaluation-Driven Iteration](#107-evaluation-driven-iteration)
+    - [10.8 Evaluation Toolchain](#108-evaluation-toolchain)
+    - [10.9 Why Evaluation Matters: Quality Infrastructure for the Skill Ecosystem](#109-why-evaluation-matters-quality-infrastructure-for-the-skill-ecosystem)
 
 
 ## 10. Skill Evaluation: Quantitative Validation Across Three Dimensions

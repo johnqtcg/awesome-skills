@@ -14,12 +14,12 @@ prerequisite: Advanced.md (§6–9), Iteration.md (§15–16)
 
 ## Table of Contents
 
-17. [Attention Dilution: An Architectural Problem, Not a Prompting Problem](#17-attention-dilution-an-architectural-problem-not-a-prompting-problem)
+- [17. Attention Dilution: An Architectural Problem, Not a Prompting Problem](#17-attention-dilution-an-architectural-problem-not-a-prompting-problem)
     - [17.1 The Pattern of Attention Dilution (Using a Code-Review Skill as the Example)](#171-the-pattern-of-attention-dilution-using-a-code-review-skill-as-the-example)
     - [17.2 Root Cause: Attention Competition in the Context Window](#172-root-cause-attention-competition-in-the-context-window)
     - [17.3 Why Multi-Agent Is the Right Direction](#173-why-multi-agent-is-the-right-direction)
     - [17.4 A Map of Five Orchestration Patterns: Each Has Its Strengths](#174-a-map-of-five-orchestration-patterns-each-has-its-strengths)
-18. [Skill-Agent Collaboration Architecture: Design, Implementation, and Validation](#18-skill-agent-collaboration-architecture-design-implementation-and-validation)
+- [18. Skill-Agent Collaboration Architecture: Design, Implementation, and Validation](#18-skill-agent-collaboration-architecture-design-implementation-and-validation)
     - [18.1 Three Architecture Options Compared (Decision Matrix)](#181-three-architecture-options-compared-decision-matrix)
     - [18.2 Skill Splitting Guide](#182-skill-splitting-guide)
     - [18.3 Lead Agent Triage Mechanism](#183-lead-agent-triage-mechanism)
@@ -161,6 +161,37 @@ The first advantage directly addresses the core problem in this document: when a
 - Used **fewer tokens** (56.9K vs 138.2K) to achieve **higher accuracy**, proving that specialized division of labor can improve both quality and efficiency simultaneously
 
 These results reveal a counterintuitive conclusion: the advantage of Multi-Agent comes not from "using more compute," but from **letting each agent focus on a more specific task in a clean context**.
+
+<a id="1733-architecture-over-model-reducing-dependency-on-top-tier-reasoning-models"></a>
+#### 17.3.3 Architecture Over Model: Reducing Dependency on Top-Tier Reasoning Models
+
+The empirical data in §17.3.2 points to a conclusion worth highlighting on its own: Multi-Agent architecture isn't just about "using cheaper models to do the same thing" — it's about **using cheaper models to do something better**.
+
+| Configuration | Model | Review Quality (Baseline Case) | Missed Findings |
+|---------------|-------|:-----------------------------:|:---------------:|
+| Single Agent | Opus 4 | 4 High found, 1 Medium missed | 1 |
+| Multi-Agent Orchestrator-Workers | Sonnet 4 Workers + Sonnet Lead | All 13/13 captured | 0 |
+
+**Why can a cheaper model + better architecture outperform a stronger model + single agent?**
+
+The root cause is a mismatch between task structure and model capability. Opus genuinely outperforms Sonnet on a single focused task — but when asked to simultaneously cover 5 independent dimensions in the same context, attention dilution systematically degrades its per-dimension performance. Sonnet, when responsible for only one dimension (e.g., concurrency issues only), operates near full focus with no cross-dimension attention competition.
+
+Put differently: **for multi-dimensional tasks, Sonnet × N focused agents can outperform Opus × 1 generalist agent.**
+
+**Cost trade-off:**
+
+| Dimension | Single Opus Agent | Multi-Agent Sonnet Workers |
+|-----------|:-----------------:|:--------------------------:|
+| Per-call inference cost | High (Opus ~5–10× Sonnet pricing) | Low (each worker uses Sonnet/Haiku) |
+| Total token consumption | Low (single call) | High (multiple parallel agents cumulate) |
+| Overall cost | Medium | Medium (more tokens, lower per-token price — roughly comparable) |
+| Review quality | Subject to attention dilution | More comprehensive, more stable |
+
+Although parallel multi-agent execution accumulates more total tokens, each individual inference call uses a lower-cost model. The two effects offset each other — overall cost is often roughly comparable, while quality improves significantly.
+
+**Core insight:** This changes the mental model for model selection. The old question was "which is the most powerful model I should use?" — the better question is now "can I restructure my task so each agent only needs to excel at one thing?" If yes, a mid-tier model with a well-designed architecture often outperforms a top-tier model with a naive architecture.
+
+For scenarios suffering from attention dilution, this means: **you don't need to wait for the next-generation model to resolve missed findings — architecture refactoring is a more controllable, more predictable solution on the models you already have.**
 
 <a id="174-a-map-of-five-orchestration-patterns-each-has-its-strengths"></a>
 ### 17.4 A Map of Five Orchestration Patterns: Each Has Its Strengths

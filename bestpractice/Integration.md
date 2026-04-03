@@ -1,21 +1,21 @@
 
 ## Table of Contents
 
-12. [Bringing Skills into the Development Workflow](#12-bringing-skills-into-the-development-workflow)
-   - [12.1 Local Development: Makefile-Driven Quality Gates](#121-local-development-makefile-driven-quality-gates)
-   - [12.2 CI Workflow: Skill-Driven Automated Gates](#122-ci-workflow-skill-driven-automated-gates)
-   - [12.3 Code Review: AI-Driven PR Review](#123-code-review-ai-driven-pr-review)
-   - [12.4 The Full Quality Pipeline](#124-the-full-quality-pipeline)
-   - [12.5 Team Adoption Strategy: Gradual Rollout and Handling Resistance](#125-team-adoption-strategy-gradual-rollout-and-handling-resistance)
-13. [How Skills Relate to Other Claude Code Features](#13-how-skills-relate-to-other-claude-code-features)
-   - [13.1 Feature Comparison](#131-feature-comparison)
-   - [13.2 Selection Decision Tree](#132-selection-decision-tree)
-   - [13.3 Common Composition Patterns](#133-common-composition-patterns)
-   - [13.4 One-Sentence Summary](#134-one-sentence-summary)
-14. [A Cross-Tool Comparison of AI Coding Assistant Customization](#14-a-cross-tool-comparison-of-ai-coding-assistant-customization)
-   - [14.1 Customization Capabilities of Mainstream Tools](#141-customization-capabilities-of-mainstream-tools)
-   - [14.2 Comparing AI Code Review Tools](#142-comparing-ai-code-review-tools)
-   - [14.3 Trend Outlook](#143-trend-outlook)
+- [12. Bringing Skills into the Development Workflow](#12-bringing-skills-into-the-development-workflow)
+    - [12.1 Local Development: Makefile-Driven Quality Gates](#121-local-development-makefile-driven-quality-gates)
+    - [12.2 CI Workflow: Skill-Driven Automated Gates](#122-ci-workflow-skill-driven-automated-gates)
+    - [12.3 Code Review: AI-Driven PR Review](#123-code-review-ai-driven-pr-review)
+    - [12.4 The Full Quality Pipeline](#124-the-full-quality-pipeline)
+    - [12.5 Team Adoption Strategy: Gradual Rollout and Handling Resistance](#125-team-adoption-strategy-gradual-rollout-and-handling-resistance)
+- [13. How Skills Relate to Other Claude Code Features](#13-how-skills-relate-to-other-claude-code-features)
+    - [13.1 Feature Comparison](#131-feature-comparison)
+    - [13.2 Selection Decision Tree](#132-selection-decision-tree)
+    - [13.3 Common Composition Patterns](#133-common-composition-patterns)
+    - [13.4 One-Sentence Summary](#134-one-sentence-summary)
+- [14. A Cross-Tool Comparison of AI Coding Assistant Customization](#14-a-cross-tool-comparison-of-ai-coding-assistant-customization)
+    - [14.1 Customization Capabilities of Mainstream Tools](#141-customization-capabilities-of-mainstream-tools)
+    - [14.2 Comparing AI Code Review Tools](#142-comparing-ai-code-review-tools)
+    - [14.3 Trend Outlook](#143-trend-outlook)
 
 
 ## 12. Bringing Skills into the Development Workflow
@@ -45,14 +45,14 @@ A CI workflow should be a thin wrapper around Makefile targets. Using the `issue
 jobs:
   ci:
     steps:
-      - name: Install golangci-lint
+       - name: Install golangci-lint
         run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2
-      - name: Run CI gate
+       - name: Run CI gate
         run: make ci COVER_MIN=80
 
   docker-build:
     steps:
-      - name: Build image
+       - name: Build image
         run: make docker-build
 ```
 
@@ -77,7 +77,7 @@ on:
 jobs:
   review:
     steps:
-      - uses: anthropics/claude-code-action@v1.0.3
+       - uses: anthropics/claude-code-action@v1.0.3
         with:
           prompt: |
             Read .claude/skills/go-code-reviewer/SKILL.md,

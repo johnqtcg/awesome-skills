@@ -287,6 +287,13 @@
   color: #a85700;
 }
 
+/* Restore landing-page button text colors overridden by .md-typeset a above.
+   .md-typeset a (0,1,1) beats .lp-btn--primary (0,1,0), making amber text
+   on amber background invisible. This rule wins by specificity. */
+.md-typeset a.lp-btn { color: inherit; }
+.md-typeset .lp-btn--primary,
+.md-typeset .lp-btn--primary:hover { color: #0a0808; }
+
 /* ------------------------------------------------------------------
    Content width: constrain long lines for readability
    ------------------------------------------------------------------ */
