@@ -25,9 +25,10 @@ prerequisite: Advanced.md (§6–9), Iteration.md (§15–16)
     - [18.3 Lead Agent Triage Mechanism](#183-lead-agent-triage-mechanism)
     - [18.4 Grep-Gated Execution Protocol (Core Innovation)](#184-grep-gated-execution-protocol-core-innovation)
     - [18.5 Three-Round Iterative Validation](#185-three-round-iterative-validation)
-    - [18.6 Frequently Asked Questions](#186-frequently-asked-questions)
-    - [18.7 Degradation and Error Handling](#187-degradation-and-error-handling)
-    - [18.8 Cost Model and Applicability](#188-cost-model-and-applicability)
+    - [18.6 Complete Implementation Reference](#186-complete-implementation-reference)
+    - [18.7 Frequently Asked Questions](#187-frequently-asked-questions)
+    - [18.8 Degradation and Error Handling](#188-degradation-and-error-handling)
+    - [18.9 Cost Model and Applicability](#189-cost-model-and-applicability)
 
 ---
 
@@ -790,8 +791,20 @@ Summary: 7 High / 6 Medium — 13/13 expected findings captured.
 
 The improvement loop is now complete: single-skill attention dilution → Multi-Agent architecture refactor → triage blind-spot fix → Grep-Gated protocol introduction → 13/13 full capture.
 
-<a id="186-frequently-asked-questions"></a>
-### 18.6 Frequently Asked Questions
+<a id="186-complete-implementation-reference"></a>
+### 18.6 Complete Implementation Reference
+
+The Multi-Agent architecture described in this chapter is published as runnable files in this repository and can be deployed directly to a Claude Code environment:
+
+| Content | Path | Description |
+|---------|------|-------------|
+| Orchestrator Skill | [`skills/go-review-lead/SKILL.md`](../skills/go-review-lead/SKILL.md) | Lead Agent triage logic, consolidation rules, and report format |
+| 7 vertical review Skills | `skills/go-{concurrency,performance,error,security,quality,test,logic}-review/SKILL.md` | Per-dimension checklists, Grep-Gated patterns, and output format |
+| 8 Agent definition files | [`outputexample/go-review-lead/agents/`](../outputexample/go-review-lead/agents/) | Drop-in files for `.claude/agents/` — ready to copy and use |
+| Deployment guide | [`outputexample/go-review-lead/README.md`](../outputexample/go-review-lead/README.md) | Installation steps, prerequisites, and usage examples |
+
+<a id="187-frequently-asked-questions"></a>
+### 18.7 Frequently Asked Questions
 
 **Q: How should cross-dimension issues (e.g., unbounded goroutines = concurrency + performance) be handled?**
 
@@ -809,8 +822,8 @@ No. The Lead Agent's work is triage (pattern matching) and aggregation (merge an
 
 Yes — this is a known trade-off in the protocol. A grep MISS means the pattern did not match; the item is automatically marked NOT FOUND and semantic analysis is skipped. Therefore pattern design is critical: the wide-net principle (prefer HITs over MISSes) and composite patterns (HIT on A AND NOT B) are the two core design tools for maximizing coverage while keeping patterns stable.
 
-<a id="187-degradation-and-error-handling"></a>
-### 18.7 Degradation and Error Handling
+<a id="188-degradation-and-error-handling"></a>
+### 18.8 Degradation and Error Handling
 
 Multi-Agent introduces additional failure points. A single skill either succeeds or fails as a whole; with 8 parallel agents, any one may time out, fail to load a skill, or return malformed output.
 
@@ -831,8 +844,8 @@ Concurrency dimension not covered in this review — recommend re-running
 with: "Use the go-concurrency-reviewer agent to review <file>"
 ```
 
-<a id="188-cost-model-and-applicability"></a>
-### 18.8 Cost Model and Applicability
+<a id="189-cost-model-and-applicability"></a>
+### 18.9 Cost Model and Applicability
 
 **When to use which architecture:**
 
