@@ -1,0 +1,485 @@
+/* =============================================================
+   SECTION LANDING PAGES — section-pages.css
+   Scoped exclusively to .sp-root.
+   Relies on .lp-tag / .lp-badge / .lp-btn defined in landing-page.css.
+   ============================================================= */
+
+/* ------------------------------------------------------------------
+   Design tokens: mirror lp-root values so --lp-* vars resolve inside
+   .sp-root (they are scoped to .lp-root in landing-page.css).
+   ------------------------------------------------------------------ */
+.sp-root {
+  /* Dark (default) */
+  --lp-bg:           #0a0e1a;
+  --lp-bg-alt:       #0d1220;
+  --lp-surface:      #101829;
+  --lp-card:         #141d30;
+  --lp-card-hover:   #182135;
+  --lp-border:       #1e2d47;
+  --lp-border-hover: #2c4169;
+
+  --lp-text:         #dde3ef;
+  --lp-text-2:       #8d9ab5;
+  --lp-text-3:       #4e5c76;
+
+  --lp-amber:        #f59e0b;
+  --lp-amber-hover:  #fbbf24;
+  --lp-amber-dim:    rgba(245, 158, 11, 0.10);
+  --lp-amber-glow:   rgba(245, 158, 11, 0.18);
+  --lp-cyan:         #22d3ee;
+  --lp-cyan-dim:     rgba(34, 211, 238, 0.10);
+
+  --lp-ff-display:   'Space Mono', 'Courier New', monospace;
+  --lp-ff-body:      'IBM Plex Sans', system-ui, sans-serif;
+  --lp-radius:       6px;
+  --lp-radius-lg:    10px;
+  --lp-trans:        150ms ease;
+}
+
+[data-md-color-scheme="default"] .sp-root {
+  --lp-bg:           #f6f4f0;
+  --lp-bg-alt:       #eeebe5;
+  --lp-surface:      #e8e4de;
+  --lp-card:         #ffffff;
+  --lp-card-hover:   #fdfcfb;
+  --lp-border:       #d8d2c8;
+  --lp-border-hover: #b8b0a4;
+
+  --lp-text:         #1a1510;
+  --lp-text-2:       #5a5145;
+  --lp-text-3:       #9c9080;
+
+  --lp-amber:        #c96a00;
+  --lp-amber-hover:  #a85700;
+  --lp-amber-dim:    rgba(201, 106, 0, 0.08);
+  --lp-amber-glow:   rgba(201, 106, 0, 0.12);
+  --lp-cyan:         #0077aa;
+  --lp-cyan-dim:     rgba(0, 119, 170, 0.08);
+}
+
+/* Base reset inside sp-root */
+.sp-root a { text-decoration: none; color: inherit; }
+.sp-root * { box-sizing: border-box; }
+
+/* ------------------------------------------------------------------
+   Page hero band
+   ------------------------------------------------------------------ */
+.sp-page-hero {
+  padding: 28px 0 32px 20px;
+  border-left: 3px solid var(--lp-amber);
+  margin-bottom: 40px;
+}
+
+.sp-page-hero .lp-tag { margin-bottom: 14px; }
+
+.sp-hero__title {
+  font-family: var(--lp-ff-display) !important;
+  font-size: clamp(1.5rem, 3.5vw, 2.2rem) !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em !important;
+  color: var(--lp-text) !important;
+  margin: 10px 0 12px !important;
+  line-height: 1.2 !important;
+  border: none !important;
+}
+
+.sp-hero__desc {
+  font-family: var(--lp-ff-body);
+  font-size: 0.95rem;
+  font-weight: 300;
+  line-height: 1.7;
+  color: var(--lp-text-2);
+  max-width: 660px;
+  margin: 0 0 16px;
+}
+
+/* Inline stat chips in hero */
+.sp-stat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.sp-stat-chip {
+  font-family: var(--lp-ff-display);
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  color: var(--lp-text-3);
+  padding: 4px 12px;
+  border: 1px solid var(--lp-border);
+  border-radius: 999px;
+  background: var(--lp-surface);
+}
+
+/* ------------------------------------------------------------------
+   Category section wrapper
+   ------------------------------------------------------------------ */
+.sp-cat-section {
+  margin-bottom: 36px;
+}
+
+.sp-cat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.sp-cat-count {
+  font-family: var(--lp-ff-display);
+  font-size: 0.68rem;
+  color: var(--lp-text-3);
+  letter-spacing: 0.05em;
+}
+
+/* ------------------------------------------------------------------
+   Card grid — fills available content-area width (~800px)
+   ------------------------------------------------------------------ */
+.sp-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+
+/* ------------------------------------------------------------------
+   Skill / rationale cards
+   ------------------------------------------------------------------ */
+.sp-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+  background: var(--lp-card);
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius);
+  transition: border-color var(--lp-trans), background var(--lp-trans), transform var(--lp-trans);
+}
+
+.sp-card:hover {
+  border-color: var(--lp-amber);
+  background: var(--lp-card-hover);
+  transform: translateY(-2px);
+}
+
+.sp-card__name {
+  display: block;
+  font-family: var(--lp-ff-display);
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--lp-text);
+  letter-spacing: -0.01em;
+}
+
+.sp-card__desc {
+  display: block;
+  font-family: var(--lp-ff-body);
+  font-size: 0.78rem;
+  font-weight: 300;
+  color: var(--lp-text-2);
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------
+   Chapter cards (bestpractice section)
+   ------------------------------------------------------------------ */
+.sp-card-grid--chapters {
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+}
+
+.sp-chapter-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 20px 18px 18px;
+  background: var(--lp-card);
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-lg);
+  overflow: hidden;
+  transition: border-color var(--lp-trans), background var(--lp-trans), transform var(--lp-trans);
+}
+
+.sp-chapter-card:hover {
+  border-color: var(--lp-amber);
+  background: var(--lp-card-hover);
+  transform: translateY(-2px);
+}
+
+.sp-chapter-card--advanced {
+  border-color: var(--lp-amber-dim);
+}
+
+.sp-chapter-card__num {
+  font-family: var(--lp-ff-display);
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: var(--lp-amber);
+  opacity: 0.18;
+  line-height: 1;
+  position: absolute;
+  top: 10px;
+  right: 14px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.sp-chapter-card__audience {
+  font-family: var(--lp-ff-display);
+  font-size: 0.62rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--lp-text-3);
+  margin-bottom: 2px;
+}
+
+.sp-chapter-card__title {
+  font-family: var(--lp-ff-display);
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--lp-text);
+  letter-spacing: -0.01em;
+}
+
+.sp-chapter-card__topics {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.sp-chapter-card__topics li {
+  font-family: var(--lp-ff-body);
+  font-size: 0.76rem;
+  font-weight: 300;
+  color: var(--lp-text-2);
+  padding-left: 12px;
+  position: relative;
+}
+
+.sp-chapter-card__topics li::before {
+  content: '–';
+  position: absolute;
+  left: 0;
+  color: var(--lp-text-3);
+}
+
+/* ------------------------------------------------------------------
+   Reading path (ordered steps)
+   ------------------------------------------------------------------ */
+.sp-reading-order {
+  margin-top: 40px;
+  padding: 24px 20px;
+  background: var(--lp-surface);
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-lg);
+}
+
+.sp-reading-order .lp-tag { margin-bottom: 16px; }
+
+.sp-reading-path {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.sp-reading-path__step {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--lp-border);
+}
+
+.sp-reading-path__step:last-child { border-bottom: none; }
+
+.sp-reading-path__n {
+  font-family: var(--lp-ff-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--lp-amber);
+  min-width: 18px;
+}
+
+.sp-reading-path__step a {
+  font-family: var(--lp-ff-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--lp-text);
+  transition: color var(--lp-trans);
+}
+
+.sp-reading-path__step a:hover { color: var(--lp-amber); }
+
+.sp-reading-path__note {
+  font-family: var(--lp-ff-body);
+  font-size: 0.76rem;
+  font-weight: 300;
+  color: var(--lp-text-3);
+}
+
+/* ------------------------------------------------------------------
+   Evaluate section: top-performer spotlight
+   ------------------------------------------------------------------ */
+.sp-metrics-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 40px;
+}
+
+.sp-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 20px 18px;
+  background: var(--lp-card);
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-lg);
+  transition: border-color var(--lp-trans);
+}
+
+.sp-metric:hover { border-color: var(--lp-amber); }
+
+.sp-metric__skill {
+  font-family: var(--lp-ff-display);
+  font-size: 0.68rem;
+  color: var(--lp-text-3);
+  letter-spacing: 0.05em;
+}
+
+.sp-metric__big {
+  font-family: var(--lp-ff-display);
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: var(--lp-amber);
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+
+.sp-metric__label {
+  font-family: var(--lp-ff-body);
+  font-size: 0.76rem;
+  font-weight: 300;
+  color: var(--lp-text-2);
+  line-height: 1.4;
+  flex: 1;
+}
+
+.sp-metric__links {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.sp-metric__link {
+  font-family: var(--lp-ff-display);
+  font-size: 0.68rem;
+  color: var(--lp-amber);
+  padding: 3px 10px;
+  border: 1px solid var(--lp-amber-dim);
+  border-radius: 999px;
+  transition: background var(--lp-trans);
+}
+
+.sp-metric__link:hover { background: var(--lp-amber-dim); }
+
+/* ------------------------------------------------------------------
+   Evaluate section: full skill list
+   ------------------------------------------------------------------ */
+.sp-eval-list { margin-top: 0; }
+
+.sp-eval-cat-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 28px 0 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--lp-border);
+}
+
+.sp-eval-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--lp-border);
+  transition: background var(--lp-trans);
+}
+
+.sp-eval-row:hover { background: var(--lp-surface); }
+
+.sp-eval-row__name {
+  font-family: var(--lp-ff-display);
+  font-size: 0.78rem;
+  color: var(--lp-text);
+  flex: 1;
+  letter-spacing: -0.01em;
+}
+
+.sp-eval-row__link {
+  font-family: var(--lp-ff-display);
+  font-size: 0.68rem;
+  color: var(--lp-text-3);
+  padding: 3px 10px;
+  border: 1px solid var(--lp-border);
+  border-radius: 999px;
+  transition: color var(--lp-trans), border-color var(--lp-trans);
+  white-space: nowrap;
+}
+
+.sp-eval-row__link:hover {
+  color: var(--lp-amber);
+  border-color: var(--lp-amber);
+}
+
+.sp-eval-row__badge {
+  font-family: var(--lp-ff-display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  color: var(--lp-amber);
+  background: var(--lp-amber-dim);
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+/* Language switcher footer link */
+.sp-lang-link {
+  margin-top: 36px;
+  padding-top: 16px;
+  border-top: 1px solid var(--lp-border);
+  font-family: var(--lp-ff-display);
+  font-size: 0.76rem;
+}
+
+.sp-lang-link a {
+  color: var(--lp-amber);
+  transition: color var(--lp-trans);
+}
+
+.sp-lang-link a:hover { color: var(--lp-amber-hover); }
+
+/* ------------------------------------------------------------------
+   Responsive
+   ------------------------------------------------------------------ */
+@media (max-width: 680px) {
+  .sp-card-grid,
+  .sp-card-grid--chapters {
+    grid-template-columns: 1fr;
+  }
+
+  .sp-metrics-row {
+    grid-template-columns: 1fr;
+  }
+
+  .sp-page-hero {
+    padding-left: 14px;
+  }
+}

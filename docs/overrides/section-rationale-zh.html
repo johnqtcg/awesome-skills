@@ -1,0 +1,156 @@
+{% extends "main.html" %}
+
+{% block content %}
+<div class="sp-root">
+
+  <!-- Page hero -->
+  <!-- Served at rationale/index.zh-CN/ — skill links use ../ prefix -->
+  <div class="sp-page-hero">
+    <span class="lp-tag">设计说明</span>
+    <h1 class="sp-hero__title">21 个 Skill 的设计说明文档</h1>
+    <p class="sp-hero__desc">
+      这一层位于
+      <a href="../../bestpractice/README.zh-CN/">最佳实践</a>的通用方法论
+      和 <a href="../../skills/">Skills</a> 的可执行文件之间，
+      把原本隐含在 <code>SKILL.md</code> 里的设计思路、关键取舍和问题意识单独展开讲清楚。
+    </p>
+  </div>
+
+  <!-- Pipeline category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--pipe">Pipeline</span>
+      <span class="sp-cat-count">6 个 skill</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="../go-makefile-writer/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">go-makefile-writer</span>
+        <span class="sp-card__desc">门禁式 Makefile 设计优于扁平目标列表的原因</span>
+      </a>
+      <a href="../git-commit/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">git-commit</span>
+        <span class="sp-card__desc">约定式提交执行与安全协议设计</span>
+      </a>
+      <a href="../create-pr/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">create-pr</span>
+        <span class="sp-card__desc">有据可查的 PR 生成与完整 diff 分析</span>
+      </a>
+      <a href="../go-ci-workflow/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">go-ci-workflow</span>
+        <span class="sp-card__desc">Go CI 流水线设计：lint、测试、构建、发布门禁</span>
+      </a>
+      <a href="../go-code-reviewer/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">go-code-reviewer</span>
+        <span class="sp-card__desc">多智能体并行评审与 Grep-Gated 检查清单执行</span>
+      </a>
+      <a href="../security-review/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">security-review</span>
+        <span class="sp-card__desc">可利用性优先分类与 OWASP 对齐扫描设计</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Testing category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--test">Testing</span>
+      <span class="sp-cat-count">7 个 skill</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="../unit-test/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">unit-test</span>
+        <span class="sp-card__desc">TDD 强制执行、表驱动模式与 80% 覆盖率门禁</span>
+      </a>
+      <a href="../tdd-workflow/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">tdd-workflow</span>
+        <span class="sp-card__desc">红绿重构循环设计与测试先行纪律</span>
+      </a>
+      <a href="../api-integration-test/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">api-integration-test</span>
+        <span class="sp-card__desc">真实数据库集成优于 mock：原理与取舍</span>
+      </a>
+      <a href="../e2e-test/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">e2e-test</span>
+        <span class="sp-card__desc">Playwright 测试路径设计与不稳定测试隔离策略</span>
+      </a>
+      <a href="../fuzzing-test/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">fuzzing-test</span>
+        <span class="sp-card__desc">Go fuzz 测试生成：语料库设计与边界定向</span>
+      </a>
+      <a href="../thirdparty-api-integration-test/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">thirdparty-api-integration-test</span>
+        <span class="sp-card__desc">门控真实 API 测试：保护设计与凭证安全</span>
+      </a>
+      <a href="../systematic-debugging/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">systematic-debugging</span>
+        <span class="sp-card__desc">假设驱动的调试循环与证据积累</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Research category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--research">Research</span>
+      <span class="sp-cat-count">2 个 skill</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="../google-search/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">google-search</span>
+        <span class="sp-card__desc">迭代式检索设计与查询细化协议</span>
+      </a>
+      <a href="../deep-research/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">deep-research</span>
+        <span class="sp-card__desc">多源综合与长研究任务的渐进式披露</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Docs category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--docs">Docs</span>
+      <span class="sp-cat-count">4 个 skill</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="../writing-plans/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">writing-plans</span>
+        <span class="sp-card__desc">计划结构、上下文章节与验证协议</span>
+      </a>
+      <a href="../update-doc/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">update-doc</span>
+        <span class="sp-card__desc">代码地图与文档同步：陈旧检测与更新门禁</span>
+      </a>
+      <a href="../readme-generator/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">readme-generator</span>
+        <span class="sp-card__desc">README 内容策略与读者优先框架</span>
+      </a>
+      <a href="../tech-doc-writer/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">tech-doc-writer</span>
+        <span class="sp-card__desc">技术写作质量门禁与渐进式评审设计</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Tools category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--tool">Tools</span>
+      <span class="sp-cat-count">2 个 skill</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="../yt-dlp-downloader/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">yt-dlp-downloader</span>
+        <span class="sp-card__desc">yt-dlp 封装设计：格式选择与错误处理</span>
+      </a>
+      <a href="../local-transcript/design.zh-CN/" class="sp-card">
+        <span class="sp-card__name">local-transcript</span>
+        <span class="sp-card__desc">本地音频转录流水线与模型选择原理</span>
+      </a>
+    </div>
+  </div>
+
+  <p class="sp-lang-link"><a href="../">English version →</a></p>
+
+</div>
+{% endblock %}

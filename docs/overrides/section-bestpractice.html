@@ -1,0 +1,133 @@
+{% extends "main.html" %}
+
+{% block content %}
+<div class="sp-root">
+
+  <!-- Page hero -->
+<div class="sp-page-hero">
+    <span class="lp-tag">Methodology</span>
+    <h1 class="sp-hero__title">Best Practices for Claude&nbsp;Code Skills</h1>
+    <p class="sp-hero__desc">
+      A complete path from first principles to production: progressive disclosure,
+      mandatory gates, quantitative evaluation, root-cause iteration, and
+      Multi-Agent architecture — all in one six-chapter guide.
+    </p>
+  </div>
+
+  <!-- Six chapter cards -->
+  <div class="sp-card-grid sp-card-grid--chapters">
+
+    <a href="Fundamentals/" class="sp-chapter-card">
+      <div class="sp-chapter-card__num">01</div>
+      <div class="sp-chapter-card__audience">All readers</div>
+      <strong class="sp-chapter-card__title">Fundamentals</strong>
+      <ul class="sp-chapter-card__topics">
+        <li>Why skills exist and the context problem</li>
+        <li>Skill structure, frontmatter, invocation</li>
+        <li>Deployment channels and use cases</li>
+        <li>Progressive disclosure and three-layer loading</li>
+      </ul>
+    </a>
+
+    <a href="Advanced/" class="sp-chapter-card">
+      <div class="sp-chapter-card__num">02</div>
+      <div class="sp-chapter-card__audience">After hands-on experience</div>
+      <strong class="sp-chapter-card__title">Advanced</strong>
+      <ul class="sp-chapter-card__topics">
+        <li>Design patterns for high-quality skills</li>
+        <li>Common pitfalls and anti-patterns</li>
+        <li>Real-world examples: simple to complex</li>
+        <li>From teachable knowledge to executable knowledge</li>
+      </ul>
+    </a>
+
+    <a href="Evaluation/" class="sp-chapter-card">
+      <div class="sp-chapter-card__num">03</div>
+      <div class="sp-chapter-card__audience">For data-driven validation</div>
+      <strong class="sp-chapter-card__title">Evaluation</strong>
+      <ul class="sp-chapter-card__topics">
+        <li>Three-dimensional quantitative evaluation</li>
+        <li>Trigger accuracy measurement</li>
+        <li>Real-task performance scoring</li>
+        <li>Token cost-effectiveness analysis</li>
+      </ul>
+    </a>
+
+    <a href="Iteration/" class="sp-chapter-card">
+      <div class="sp-chapter-card__num">04</div>
+      <div class="sp-chapter-card__audience">When misses occur</div>
+      <strong class="sp-chapter-card__title">Iteration</strong>
+      <ul class="sp-chapter-card__topics">
+        <li>Root-cause classification framework</li>
+        <li>Checklist gap vs execution omission vs domain blindspot</li>
+        <li>Case study: 8 misses → 2 (75% improvement)</li>
+        <li>Iteration boundaries and stop signals</li>
+      </ul>
+    </a>
+
+    <a href="Integration/" class="sp-chapter-card">
+      <div class="sp-chapter-card__num">05</div>
+      <div class="sp-chapter-card__audience">For team workflow integration</div>
+      <strong class="sp-chapter-card__title">Integration</strong>
+      <ul class="sp-chapter-card__topics">
+        <li>Bringing skills into development workflows</li>
+        <li>Relation to other Claude Code features</li>
+        <li>Cross-tool comparison of AI customization</li>
+      </ul>
+    </a>
+
+    <a href="Architecture/" class="sp-chapter-card sp-chapter-card--advanced">
+      <div class="sp-chapter-card__num">06</div>
+      <div class="sp-chapter-card__audience">Multi-Agent architecture</div>
+      <strong class="sp-chapter-card__title">Architecture</strong>
+      <ul class="sp-chapter-card__topics">
+        <li>Attention dilution and the Multi-Agent solution</li>
+        <li>Grep-Gated execution protocol</li>
+        <li>Three-round validation: 13/13 coverage</li>
+        <li>Skill-Agent collaboration patterns</li>
+      </ul>
+    </a>
+
+  </div>
+
+  <!-- Recommended reading order -->
+  <div class="sp-reading-order">
+    <span class="lp-tag">Recommended Reading Order</span>
+    <ol class="sp-reading-path">
+      <li class="sp-reading-path__step">
+        <span class="sp-reading-path__n">1</span>
+        <a href="Fundamentals/">Fundamentals</a>
+        <span class="sp-reading-path__note">— Start here: what skills are and how they work</span>
+      </li>
+      <li class="sp-reading-path__step">
+        <span class="sp-reading-path__n">2</span>
+        <a href="Advanced/">Advanced</a>
+        <span class="sp-reading-path__note">— After you've built and used your first skill</span>
+      </li>
+      <li class="sp-reading-path__step">
+        <span class="sp-reading-path__n">3</span>
+        <a href="Evaluation/">Evaluation</a>
+        <span class="sp-reading-path__note">— When you need to measure real value with data</span>
+      </li>
+      <li class="sp-reading-path__step">
+        <span class="sp-reading-path__n">4</span>
+        <a href="Iteration/">Iteration</a>
+        <span class="sp-reading-path__note">— When evaluation exposes weaknesses to fix</span>
+      </li>
+      <li class="sp-reading-path__step">
+        <span class="sp-reading-path__n">5</span>
+        <a href="Integration/">Integration</a>
+        <span class="sp-reading-path__note">— When bringing skills into a team workflow</span>
+      </li>
+      <li class="sp-reading-path__step">
+        <span class="sp-reading-path__n">6</span>
+        <a href="Architecture/">Architecture</a>
+        <span class="sp-reading-path__note">— When a single skill suffers attention dilution</span>
+      </li>
+    </ol>
+  </div>
+
+  <p class="sp-lang-link"><a href="README.zh-CN/">中文版 →</a></p>
+
+</div>
+{% endblock %}

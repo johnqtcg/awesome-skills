@@ -1,0 +1,159 @@
+{% extends "main.html" %}
+
+{% block content %}
+<div class="sp-root">
+
+  <!-- Page hero -->
+  <!-- Served at skills/ (index page) — skill dirs are siblings -->
+  <div class="sp-page-hero">
+    <span class="lp-tag">Skills</span>
+    <h1 class="sp-hero__title">21 Production-Ready Skills</h1>
+    <p class="sp-hero__desc">
+      Each skill is an on-demand module of specialized capability for Claude Code.
+      Organized below by workflow category — use the left navigation to jump directly
+      to any skill, or browse by category here.
+    </p>
+    <div class="sp-stat-chips">
+      <span class="sp-stat-chip">21 Skills</span>
+      <span class="sp-stat-chip">5 Categories</span>
+      <span class="sp-stat-chip">169 Golden Fixtures</span>
+      <span class="sp-stat-chip">347x Dev-Time ROI</span>
+    </div>
+  </div>
+
+  <!-- Pipeline category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--pipe">Pipeline</span>
+      <span class="sp-cat-count">6 skills</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="go-makefile-writer/SKILL/" class="sp-card">
+        <span class="sp-card__name">go-makefile-writer</span>
+        <span class="sp-card__desc">Design and refactor canonical Go Makefiles with fmt, lint, test, build gates</span>
+      </a>
+      <a href="git-commit/SKILL/" class="sp-card">
+        <span class="sp-card__name">git-commit</span>
+        <span class="sp-card__desc">Safely create conventional commits with pre-flight checks</span>
+      </a>
+      <a href="create-pr/SKILL/" class="sp-card">
+        <span class="sp-card__name">create-pr</span>
+        <span class="sp-card__desc">Generate evidence-backed PRs by analysing the full commit history</span>
+      </a>
+      <a href="go-ci-workflow/SKILL/" class="sp-card">
+        <span class="sp-card__name">go-ci-workflow</span>
+        <span class="sp-card__desc">Create or update GitHub Actions CI workflows for Go projects</span>
+      </a>
+      <a href="go-code-reviewer/SKILL/" class="sp-card">
+        <span class="sp-card__name">go-code-reviewer</span>
+        <span class="sp-card__desc">Comprehensive Go code review with parallel vertical domain agents</span>
+      </a>
+      <a href="security-review/SKILL/" class="sp-card">
+        <span class="sp-card__name">security-review</span>
+        <span class="sp-card__desc">Exploitability-first security audit across OWASP Top 10 categories</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Testing category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--test">Testing</span>
+      <span class="sp-cat-count">7 skills</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="unit-test/SKILL/" class="sp-card">
+        <span class="sp-card__name">unit-test</span>
+        <span class="sp-card__desc">Enforce TDD workflow with table-driven tests and 80% coverage gates</span>
+      </a>
+      <a href="tdd-workflow/SKILL/" class="sp-card">
+        <span class="sp-card__name">tdd-workflow</span>
+        <span class="sp-card__desc">Practical test-driven development: red → green → refactor</span>
+      </a>
+      <a href="api-integration-test/SKILL/" class="sp-card">
+        <span class="sp-card__name">api-integration-test</span>
+        <span class="sp-card__desc">Create and maintain real-database API integration tests</span>
+      </a>
+      <a href="e2e-test/SKILL/" class="sp-card">
+        <span class="sp-card__name">e2e-test</span>
+        <span class="sp-card__desc">Design and run Playwright E2E tests for critical user flows</span>
+      </a>
+      <a href="fuzzing-test/SKILL/" class="sp-card">
+        <span class="sp-card__name">fuzzing-test</span>
+        <span class="sp-card__desc">Generate Go fuzz tests with targeted corpus and boundary cases</span>
+      </a>
+      <a href="thirdparty-api-integration-test/SKILL/" class="sp-card">
+        <span class="sp-card__name">thirdparty-api-integration-test</span>
+        <span class="sp-card__desc">Gated real third-party API tests with credential safety checks</span>
+      </a>
+      <a href="systematic-debugging/SKILL/" class="sp-card">
+        <span class="sp-card__name">systematic-debugging</span>
+        <span class="sp-card__desc">Hypothesis-driven debugging with evidence accumulation loops</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Research category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--research">Research</span>
+      <span class="sp-cat-count">2 skills</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="google-search/SKILL/" class="sp-card">
+        <span class="sp-card__name">google-search</span>
+        <span class="sp-card__desc">Real-time web search with iterative retrieval and query refinement</span>
+      </a>
+      <a href="deep-research/SKILL/" class="sp-card">
+        <span class="sp-card__name">deep-research</span>
+        <span class="sp-card__desc">Multi-source deep research with synthesis and progressive disclosure</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Docs category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--docs">Docs</span>
+      <span class="sp-cat-count">4 skills</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="writing-plans/SKILL/" class="sp-card">
+        <span class="sp-card__name">writing-plans</span>
+        <span class="sp-card__desc">Create implementation plans with context sections and verification steps</span>
+      </a>
+      <a href="update-doc/SKILL/" class="sp-card">
+        <span class="sp-card__name">update-doc</span>
+        <span class="sp-card__desc">Keep codemaps and documentation in sync with the codebase</span>
+      </a>
+      <a href="readme-generator/SKILL/" class="sp-card">
+        <span class="sp-card__name">readme-generator</span>
+        <span class="sp-card__desc">Generate or refactor READMEs with audience-first framing</span>
+      </a>
+      <a href="tech-doc-writer/SKILL/" class="sp-card">
+        <span class="sp-card__name">tech-doc-writer</span>
+        <span class="sp-card__desc">Write and review technical documentation with quality gates</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Tools category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--tool">Tools</span>
+      <span class="sp-cat-count">2 skills</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="yt-dlp-downloader/SKILL/" class="sp-card">
+        <span class="sp-card__name">yt-dlp-downloader</span>
+        <span class="sp-card__desc">Generate and run yt-dlp commands with smart format selection</span>
+      </a>
+      <a href="local-transcript/SKILL/" class="sp-card">
+        <span class="sp-card__name">local-transcript</span>
+        <span class="sp-card__desc">Transcribe local audio files using Whisper with model selection</span>
+      </a>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

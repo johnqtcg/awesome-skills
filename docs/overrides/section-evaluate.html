@@ -1,0 +1,187 @@
+{% extends "main.html" %}
+
+{% block content %}
+<div class="sp-root">
+
+  <!-- Page hero -->
+  <!-- Served at evaluate/ (index page) — report files are siblings -->
+  <div class="sp-page-hero">
+    <span class="lp-tag">Evaluation Reports</span>
+    <h1 class="sp-hero__title">Quantitative Evaluation — 21&nbsp;Skills × 2&nbsp;Languages</h1>
+    <p class="sp-hero__desc">
+      Formal evaluation reports measuring trigger accuracy, real-task performance,
+      and token cost-effectiveness. Available in English and Chinese for every skill.
+    </p>
+  </div>
+
+  <!-- Top performers spotlight -->
+  <div class="sp-metrics-row">
+    <div class="sp-metric">
+      <div class="sp-metric__skill">go-code-reviewer</div>
+      <div class="sp-metric__big">347x</div>
+      <div class="sp-metric__label">Developer-time ROI vs manual review</div>
+      <div class="sp-metric__links">
+        <a href="go-code-reviewer-skill-eval-report/" class="sp-metric__link">EN</a>
+        <a href="go-code-reviewer-skill-eval-report.zh-CN/" class="sp-metric__link">中文</a>
+      </div>
+    </div>
+    <div class="sp-metric">
+      <div class="sp-metric__skill">google-search</div>
+      <div class="sp-metric__big">+74pp</div>
+      <div class="sp-metric__label">Assertion pass rate improvement</div>
+      <div class="sp-metric__links">
+        <a href="google-search-skill-eval-report/" class="sp-metric__link">EN</a>
+        <a href="google-search-skill-eval-report.zh-CN/" class="sp-metric__link">中文</a>
+      </div>
+    </div>
+    <div class="sp-metric">
+      <div class="sp-metric__skill">unit-test</div>
+      <div class="sp-metric__big">+38pp</div>
+      <div class="sp-metric__label">Assertion pass rate improvement</div>
+      <div class="sp-metric__links">
+        <a href="unit-test-skill-eval-report/" class="sp-metric__link">EN</a>
+        <a href="unit-test-skill-eval-report.zh-CN/" class="sp-metric__link">中文</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Full report index -->
+  <div class="sp-eval-list">
+
+    <!-- Pipeline -->
+    <div class="sp-eval-cat-header">
+      <span class="lp-badge lp-badge--pipe">Pipeline</span>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">go-makefile-writer</span>
+      <a href="go-makefile-writer-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="go-makefile-writer-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">git-commit</span>
+      <a href="git-commit-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="git-commit-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">create-pr</span>
+      <a href="create-pr-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="create-pr-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">go-ci-workflow</span>
+      <a href="go-ci-workflow-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="go-ci-workflow-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">go-code-reviewer</span>
+      <a href="go-code-reviewer-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="go-code-reviewer-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+      <span class="sp-eval-row__badge">347x ROI</span>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">security-review</span>
+      <a href="security-review-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="security-review-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+
+    <!-- Testing -->
+    <div class="sp-eval-cat-header">
+      <span class="lp-badge lp-badge--test">Testing</span>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">unit-test</span>
+      <a href="unit-test-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="unit-test-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+      <span class="sp-eval-row__badge">+38pp</span>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">tdd-workflow</span>
+      <a href="tdd-workflow-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="tdd-workflow-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">api-integration-test</span>
+      <a href="api-integration-test-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="api-integration-test-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">e2e-test</span>
+      <a href="e2e-test-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="e2e-test-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">fuzzing-test</span>
+      <a href="fuzzing-test-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="fuzzing-test-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">thirdparty-api-integration-test</span>
+      <a href="thirdparty-api-integration-test-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="thirdparty-api-integration-test-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">systematic-debugging</span>
+      <a href="systematic-debugging-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="systematic-debugging-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+
+    <!-- Research -->
+    <div class="sp-eval-cat-header">
+      <span class="lp-badge lp-badge--research">Research</span>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">google-search</span>
+      <a href="google-search-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="google-search-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+      <span class="sp-eval-row__badge">+74pp</span>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">deep-research</span>
+      <a href="deep-research-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="deep-research-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+
+    <!-- Docs -->
+    <div class="sp-eval-cat-header">
+      <span class="lp-badge lp-badge--docs">Docs</span>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">writing-plans</span>
+      <a href="writing-plans-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="writing-plans-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">update-doc</span>
+      <a href="update-doc-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="update-doc-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">readme-generator</span>
+      <a href="readme-generator-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="readme-generator-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">tech-doc-writer</span>
+      <a href="tech-doc-writer-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="tech-doc-writer-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+
+    <!-- Tools -->
+    <div class="sp-eval-cat-header">
+      <span class="lp-badge lp-badge--tool">Tools</span>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">yt-dlp-downloader</span>
+      <a href="yt-dlp-downloader-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="yt-dlp-downloader-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+    <div class="sp-eval-row">
+      <span class="sp-eval-row__name">local-transcript</span>
+      <a href="local-transcript-skill-eval-report/" class="sp-eval-row__link">EN</a>
+      <a href="local-transcript-skill-eval-report.zh-CN/" class="sp-eval-row__link">中文</a>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}

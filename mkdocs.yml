@@ -81,6 +81,7 @@ extra:
 extra_css:
   - assets/stylesheets/custom-theme.css
   - assets/stylesheets/landing-page.css
+  - assets/stylesheets/section-pages.css
 extra_javascript:
   - assets/javascripts/landing-page.js
 
@@ -157,6 +158,7 @@ nav:
       - yt-dlp-downloader: rationale/yt-dlp-downloader/design.zh-CN.md
 
   - Skills:
+      - Overview: skills/index.md
       - api-integration-test: skills/api-integration-test/SKILL.md
       - create-pr: skills/create-pr/SKILL.md
       - deep-research: skills/deep-research/SKILL.md
@@ -180,6 +182,7 @@ nav:
       - yt-dlp-downloader: skills/yt-dlp-downloader/SKILL.md
 
   - Evaluation Reports:
+      - Overview: evaluate/index.md
       - English:
           - api-integration-test: evaluate/api-integration-test-skill-eval-report.md
           - create-pr: evaluate/create-pr-skill-eval-report.md

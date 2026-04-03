@@ -1,12 +1,33 @@
 """
 MkDocs hook: inject landing-page templates without touching the source markdown.
 
-docs/index.md    → home.html
-docs/index-zh.md → home-zh.html
+Homepage:
+  docs/index.md       → home.html
+  docs/index-zh.md    → home-zh.html
 
-Both files are symlinks to README.md / README.zh-CN.md, which are also
-shown on GitHub, so frontmatter must not be added to those files.
+Section landing pages:
+  bestpractice/README.md       → section-bestpractice.html
+  bestpractice/README.zh-CN.md → section-bestpractice-zh.html
+  rationale/index.md           → section-rationale.html
+  rationale/index.zh-CN.md     → section-rationale-zh.html
+  skills/index.md              → section-skills.html
+  evaluate/index.md            → section-evaluate.html
+
+Source files are either symlinks (homepages) or stubs that must not carry
+frontmatter (they render on GitHub too), so the template assignment happens
+here via the hook instead.
 """
+
+TEMPLATE_MAP = {
+    "index.md":                     "home.html",
+    "index-zh.md":                  "home-zh.html",
+    "bestpractice/README.md":       "section-bestpractice.html",
+    "bestpractice/README.zh-CN.md": "section-bestpractice-zh.html",
+    "rationale/index.md":           "section-rationale.html",
+    "rationale/index.zh-CN.md":     "section-rationale-zh.html",
+    "skills/index.md":              "section-skills.html",
+    "evaluate/index.md":            "section-evaluate.html",
+}
 
 
 def on_page_markdown(markdown, page, config, files):
@@ -16,8 +37,7 @@ def on_page_markdown(markdown, page, config, files):
     on_page_markdown fires after read_source (page.meta is populated)
     but before the template is resolved — the right moment.
     """
-    if page.file.src_path == "index.md":
-        page.meta["template"] = "home.html"
-    elif page.file.src_path == "index-zh.md":
-        page.meta["template"] = "home-zh.html"
+    template = TEMPLATE_MAP.get(page.file.src_path)
+    if template:
+        page.meta["template"] = template
     return markdown

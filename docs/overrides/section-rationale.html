@@ -1,0 +1,159 @@
+{% extends "main.html" %}
+
+{% block content %}
+<div class="sp-root">
+
+  <!-- Page hero -->
+  <!-- Note: this template is served at rationale/ so sibling skill dirs
+       are referenced directly (e.g. go-makefile-writer/design/),
+       and cross-section links use ../ -->
+  <div class="sp-page-hero">
+    <span class="lp-tag">Design Rationale</span>
+    <h1 class="sp-hero__title">21 Skill Design&nbsp;Rationale Docs</h1>
+    <p class="sp-hero__desc">
+      This layer sits between the cross-skill principles in
+      <a href="../bestpractice/README/">Best Practice</a> and the executable artifacts in
+      <a href="../skills/">Skills</a>.
+      Each document makes the design reasoning, key tradeoffs, and problem framing explicit
+      — rather than leaving them implicit inside <code>SKILL.md</code>.
+    </p>
+  </div>
+
+  <!-- Pipeline category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--pipe">Pipeline</span>
+      <span class="sp-cat-count">6 skills</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="go-makefile-writer/design/" class="sp-card">
+        <span class="sp-card__name">go-makefile-writer</span>
+        <span class="sp-card__desc">Why gate-based Makefile design outperforms flat target lists</span>
+      </a>
+      <a href="git-commit/design/" class="sp-card">
+        <span class="sp-card__name">git-commit</span>
+        <span class="sp-card__desc">Conventional commits enforcement and safety protocol design</span>
+      </a>
+      <a href="create-pr/design/" class="sp-card">
+        <span class="sp-card__name">create-pr</span>
+        <span class="sp-card__desc">Evidence-backed PR generation and full diff analysis</span>
+      </a>
+      <a href="go-ci-workflow/design/" class="sp-card">
+        <span class="sp-card__name">go-ci-workflow</span>
+        <span class="sp-card__desc">CI pipeline design for Go: lint, test, build, release gates</span>
+      </a>
+      <a href="go-code-reviewer/design/" class="sp-card">
+        <span class="sp-card__name">go-code-reviewer</span>
+        <span class="sp-card__desc">Multi-agent parallel review and grep-gated checklist execution</span>
+      </a>
+      <a href="security-review/design/" class="sp-card">
+        <span class="sp-card__name">security-review</span>
+        <span class="sp-card__desc">Exploitability-first triage and OWASP-aligned scan design</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Testing category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--test">Testing</span>
+      <span class="sp-cat-count">7 skills</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="unit-test/design/" class="sp-card">
+        <span class="sp-card__name">unit-test</span>
+        <span class="sp-card__desc">TDD enforcement, table-driven patterns, and 80% coverage gates</span>
+      </a>
+      <a href="tdd-workflow/design/" class="sp-card">
+        <span class="sp-card__name">tdd-workflow</span>
+        <span class="sp-card__desc">Red-green-refactor cycle design and test-first discipline</span>
+      </a>
+      <a href="api-integration-test/design/" class="sp-card">
+        <span class="sp-card__name">api-integration-test</span>
+        <span class="sp-card__desc">Real-database integration over mocks: rationale and tradeoffs</span>
+      </a>
+      <a href="e2e-test/design/" class="sp-card">
+        <span class="sp-card__name">e2e-test</span>
+        <span class="sp-card__desc">Playwright journey design and quarantine strategy for flaky tests</span>
+      </a>
+      <a href="fuzzing-test/design/" class="sp-card">
+        <span class="sp-card__name">fuzzing-test</span>
+        <span class="sp-card__desc">Go fuzz test generation: corpus design and boundary targeting</span>
+      </a>
+      <a href="thirdparty-api-integration-test/design/" class="sp-card">
+        <span class="sp-card__name">thirdparty-api-integration-test</span>
+        <span class="sp-card__desc">Gated real-API tests: guard design and credential safety</span>
+      </a>
+      <a href="systematic-debugging/design/" class="sp-card">
+        <span class="sp-card__name">systematic-debugging</span>
+        <span class="sp-card__desc">Hypothesis-driven debugging loops and evidence accumulation</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Research category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--research">Research</span>
+      <span class="sp-cat-count">2 skills</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="google-search/design/" class="sp-card">
+        <span class="sp-card__name">google-search</span>
+        <span class="sp-card__desc">Iterative retrieval design and query refinement protocol</span>
+      </a>
+      <a href="deep-research/design/" class="sp-card">
+        <span class="sp-card__name">deep-research</span>
+        <span class="sp-card__desc">Multi-source synthesis and progressive disclosure for long research</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Docs category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--docs">Docs</span>
+      <span class="sp-cat-count">4 skills</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="writing-plans/design/" class="sp-card">
+        <span class="sp-card__name">writing-plans</span>
+        <span class="sp-card__desc">Plan structure, context sections, and verification protocol</span>
+      </a>
+      <a href="update-doc/design/" class="sp-card">
+        <span class="sp-card__name">update-doc</span>
+        <span class="sp-card__desc">Codemaps and docs sync: staleness detection and update gates</span>
+      </a>
+      <a href="readme-generator/design/" class="sp-card">
+        <span class="sp-card__name">readme-generator</span>
+        <span class="sp-card__desc">README content strategy and audience-first framing</span>
+      </a>
+      <a href="tech-doc-writer/design/" class="sp-card">
+        <span class="sp-card__name">tech-doc-writer</span>
+        <span class="sp-card__desc">Technical writing quality gates and progressive review design</span>
+      </a>
+    </div>
+  </div>
+
+  <!-- Tools category -->
+  <div class="sp-cat-section">
+    <div class="sp-cat-header">
+      <span class="lp-badge lp-badge--tool">Tools</span>
+      <span class="sp-cat-count">2 skills</span>
+    </div>
+    <div class="sp-card-grid">
+      <a href="yt-dlp-downloader/design/" class="sp-card">
+        <span class="sp-card__name">yt-dlp-downloader</span>
+        <span class="sp-card__desc">yt-dlp wrapper design: format selection and error handling</span>
+      </a>
+      <a href="local-transcript/design/" class="sp-card">
+        <span class="sp-card__name">local-transcript</span>
+        <span class="sp-card__desc">Local audio transcription pipeline and model selection rationale</span>
+      </a>
+    </div>
+  </div>
+
+  <p class="sp-lang-link"><a href="index.zh-CN/">中文版 →</a></p>
+
+</div>
+{% endblock %}

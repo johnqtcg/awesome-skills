@@ -4,17 +4,87 @@
    ============================================================= */
 
 /* ------------------------------------------------------------------
-   Typography: inject Space Mono for code + IBM Plex Sans for prose
+   Fonts: Space Mono (code / display) + IBM Plex Sans (prose)
    ------------------------------------------------------------------ */
 @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
 
-/* Override Material's default code font */
 :root {
   --md-code-font: 'Space Mono', 'Courier New', monospace;
 }
 
 /* ------------------------------------------------------------------
-   Code blocks: warmer, more refined appearance
+   Prose typography: IBM Plex Sans throughout
+   ------------------------------------------------------------------ */
+.md-typeset {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-weight: 300;
+  font-size: 0.92rem;
+  line-height: 1.8;
+}
+
+.md-typeset p {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-weight: 300;
+  line-height: 1.8;
+}
+
+/* Lead paragraph: slightly larger */
+.md-typeset > p:first-of-type {
+  font-size: 1.02rem;
+  font-weight: 300;
+  line-height: 1.75;
+  color: var(--md-default-fg-color--light);
+}
+
+/* ------------------------------------------------------------------
+   Heading hierarchy
+   ------------------------------------------------------------------ */
+.md-typeset h1 {
+  font-family: 'Space Mono', monospace;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  margin-top: 0;
+  margin-bottom: 0.6em;
+  padding-bottom: 0.5em;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-typeset h2 {
+  font-family: 'Space Mono', monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  margin-top: 2em;
+  margin-bottom: 0.5em;
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+
+.md-typeset h3 {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 1.0rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  margin-top: 1.6em;
+  margin-bottom: 0.4em;
+}
+
+.md-typeset h4 {
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  font-size: 0.88rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--md-default-fg-color--light);
+  margin-top: 1.4em;
+  margin-bottom: 0.3em;
+}
+
+/* ------------------------------------------------------------------
+   Code: Space Mono, refined sizing
    ------------------------------------------------------------------ */
 .md-typeset code,
 .md-typeset pre code {
@@ -22,14 +92,47 @@
   font-size: 0.78em;
 }
 
-/* Improve code block padding */
+/* Code block padding */
 .md-typeset pre > code {
   padding: 1.1em 1.4em !important;
 }
 
+/* Dark mode: subtle surface tint on code blocks */
+[data-md-color-scheme="slate"] .md-typeset pre {
+  background: #0d1220 !important;
+  border: 1px solid #1e2d47;
+}
+
+/* Light mode: warm off-white */
+[data-md-color-scheme="default"] .md-typeset pre {
+  background: #f0ede8 !important;
+  border: 1px solid #d8d2c8;
+}
+
+/* Inline code: amber tint */
+[data-md-color-scheme="slate"] .md-typeset :not(pre) > code {
+  background: rgba(245, 158, 11, 0.10);
+  color: #f59e0b;
+  border-radius: 3px;
+  padding: 0.12em 0.4em;
+}
+
+[data-md-color-scheme="default"] .md-typeset :not(pre) > code {
+  background: rgba(201, 106, 0, 0.08);
+  color: #c96a00;
+  border-radius: 3px;
+  padding: 0.12em 0.4em;
+}
+
 /* ------------------------------------------------------------------
-   Tables: tighter, crisper
+   Tables: tighter, crisper, with alternating rows
    ------------------------------------------------------------------ */
+.md-typeset table:not([class]) {
+  display: table;
+  width: 100%;
+  font-size: 0.82em;
+}
+
 .md-typeset table:not([class]) th,
 .md-typeset table:not([class]) td {
   padding: 10px 14px;
@@ -43,26 +146,152 @@
   text-transform: uppercase;
 }
 
+/* Alternating row tint */
+[data-md-color-scheme="slate"] .md-typeset table:not([class]) tr:nth-child(even) {
+  background: rgba(30, 45, 71, 0.35);
+}
+
+[data-md-color-scheme="default"] .md-typeset table:not([class]) tr:nth-child(even) {
+  background: rgba(216, 210, 200, 0.25);
+}
+
+/* Row hover */
+.md-typeset table:not([class]) tbody tr:hover {
+  background: var(--md-accent-fg-color--transparent) !important;
+}
+
 /* ------------------------------------------------------------------
-   Admonitions: slightly more refined
+   Admonitions: accent-tuned borders
    ------------------------------------------------------------------ */
 .md-typeset .admonition,
 .md-typeset details {
   border-radius: 6px;
+  border-left-width: 3px;
+}
+
+/* Note: amber */
+.md-typeset .admonition.note,
+.md-typeset details.note {
+  border-left-color: #f59e0b;
+}
+[data-md-color-scheme="default"] .md-typeset .admonition.note,
+[data-md-color-scheme="default"] .md-typeset details.note {
+  border-left-color: #c96a00;
+}
+
+/* Tip: cyan */
+.md-typeset .admonition.tip,
+.md-typeset details.tip {
+  border-left-color: #22d3ee;
+}
+[data-md-color-scheme="default"] .md-typeset .admonition.tip,
+[data-md-color-scheme="default"] .md-typeset details.tip {
+  border-left-color: #0077aa;
+}
+
+/* Info: softer purple */
+.md-typeset .admonition.info,
+.md-typeset details.info {
+  border-left-color: #a78bfa;
+}
+
+/* Warning: orange */
+.md-typeset .admonition.warning,
+.md-typeset details.warning {
+  border-left-color: #fb923c;
+}
+
+/* Danger: red */
+.md-typeset .admonition.danger,
+.md-typeset details.danger {
+  border-left-color: #f87171;
+}
+
+/* Admonition title font */
+.md-typeset .admonition-title,
+.md-typeset summary {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.78em;
+  letter-spacing: 0.02em;
 }
 
 /* ------------------------------------------------------------------
-   Navigation: minor refinements
+   Navigation: refined font sizes and active indicator
    ------------------------------------------------------------------ */
 .md-nav__title,
 .md-nav__item .md-nav__link {
   font-size: 0.72rem;
 }
 
+/* Active nav item: amber */
+.md-nav__item .md-nav__link--active {
+  color: #f59e0b;
+  font-weight: 500;
+}
+[data-md-color-scheme="default"] .md-nav__item .md-nav__link--active {
+  color: #c96a00;
+}
+
 /* Slightly tighter tab nav */
 .md-tabs__item {
   font-size: 0.76rem;
   letter-spacing: 0.02em;
+}
+
+/* Active tab underline: amber */
+.md-tabs__link--active {
+  color: #f59e0b !important;
+}
+.md-tabs__link--active::after {
+  background-color: #f59e0b !important;
+}
+[data-md-color-scheme="default"] .md-tabs__link--active {
+  color: #c96a00 !important;
+}
+[data-md-color-scheme="default"] .md-tabs__link--active::after {
+  background-color: #c96a00 !important;
+}
+
+/* ------------------------------------------------------------------
+   Table of contents sidebar
+   ------------------------------------------------------------------ */
+.md-nav--secondary .md-nav__link {
+  font-size: 0.72rem;
+}
+
+.md-nav--secondary .md-nav__link--active {
+  color: #f59e0b;
+  font-weight: 500;
+  border-left: 2px solid #f59e0b;
+  padding-left: 6px;
+  margin-left: -8px;
+}
+[data-md-color-scheme="default"] .md-nav--secondary .md-nav__link--active {
+  color: #c96a00;
+  border-left-color: #c96a00;
+}
+
+/* ------------------------------------------------------------------
+   Links in content
+   ------------------------------------------------------------------ */
+[data-md-color-scheme="slate"] .md-typeset a {
+  color: #f59e0b;
+}
+[data-md-color-scheme="slate"] .md-typeset a:hover {
+  color: #fbbf24;
+}
+[data-md-color-scheme="default"] .md-typeset a {
+  color: #c96a00;
+}
+[data-md-color-scheme="default"] .md-typeset a:hover {
+  color: #a85700;
+}
+
+/* ------------------------------------------------------------------
+   Content width: constrain long lines for readability
+   ------------------------------------------------------------------ */
+.md-content__inner {
+  max-width: 800px;
 }
 
 /* ------------------------------------------------------------------

@@ -1,0 +1,132 @@
+{% extends "main.html" %}
+
+{% block content %}
+<div class="sp-root">
+
+  <!-- Page hero -->
+  <div class="sp-page-hero">
+    <span class="lp-tag">方法论</span>
+    <h1 class="sp-hero__title">Claude&nbsp;Code Skills 最佳实践</h1>
+    <p class="sp-hero__desc">
+      从基础原理到生产落地的完整路径：渐进式披露、强制门禁、量化评估、根因迭代、
+      多智能体架构——尽在这六章指南中。
+    </p>
+  </div>
+
+  <!-- Six chapter cards -->
+  <div class="sp-card-grid sp-card-grid--chapters">
+
+    <a href="../基础篇/" class="sp-chapter-card">
+      <div class="sp-chapter-card__num">01</div>
+      <div class="sp-chapter-card__audience">所有读者</div>
+      <strong class="sp-chapter-card__title">基础篇</strong>
+      <ul class="sp-chapter-card__topics">
+        <li>Skill 存在的原因与上下文问题</li>
+        <li>Skill 结构、frontmatter 与调用方式</li>
+        <li>部署位置与适用场景</li>
+        <li>渐进式披露与三层加载</li>
+      </ul>
+    </a>
+
+    <a href="../进阶篇/" class="sp-chapter-card">
+      <div class="sp-chapter-card__num">02</div>
+      <div class="sp-chapter-card__audience">有实战经验后阅读</div>
+      <strong class="sp-chapter-card__title">进阶篇</strong>
+      <ul class="sp-chapter-card__topics">
+        <li>高质量 Skill 的设计模式</li>
+        <li>常见陷阱与反模式</li>
+        <li>真实案例：从简单到复杂</li>
+        <li>从可传授知识到可执行知识</li>
+      </ul>
+    </a>
+
+    <a href="../评估篇/" class="sp-chapter-card">
+      <div class="sp-chapter-card__num">03</div>
+      <div class="sp-chapter-card__audience">需要数据验证价值时</div>
+      <strong class="sp-chapter-card__title">评估篇</strong>
+      <ul class="sp-chapter-card__topics">
+        <li>三维量化评估框架</li>
+        <li>触发准确率测量</li>
+        <li>真实任务表现评分</li>
+        <li>Token 成本效益分析</li>
+      </ul>
+    </a>
+
+    <a href="../迭代篇/" class="sp-chapter-card">
+      <div class="sp-chapter-card__num">04</div>
+      <div class="sp-chapter-card__audience">出现遗漏时</div>
+      <strong class="sp-chapter-card__title">迭代篇</strong>
+      <ul class="sp-chapter-card__topics">
+        <li>根因分类框架</li>
+        <li>检查清单缺失 vs 执行遗漏 vs 领域盲区</li>
+        <li>案例：8 处遗漏 → 2 处（提升 75%）</li>
+        <li>迭代边界与停止信号</li>
+      </ul>
+    </a>
+
+    <a href="../集成篇/" class="sp-chapter-card">
+      <div class="sp-chapter-card__num">05</div>
+      <div class="sp-chapter-card__audience">融入团队工作流时</div>
+      <strong class="sp-chapter-card__title">集成篇</strong>
+      <ul class="sp-chapter-card__topics">
+        <li>将 Skill 纳入开发工作流</li>
+        <li>与其他 Claude Code 功能的关系</li>
+        <li>AI 编程助手定制化横向对比</li>
+      </ul>
+    </a>
+
+    <a href="../架构篇/" class="sp-chapter-card sp-chapter-card--advanced">
+      <div class="sp-chapter-card__num">06</div>
+      <div class="sp-chapter-card__audience">多智能体架构</div>
+      <strong class="sp-chapter-card__title">架构篇</strong>
+      <ul class="sp-chapter-card__topics">
+        <li>注意力稀释与多智能体解决方案</li>
+        <li>Grep-Gated 执行协议</li>
+        <li>三轮验证：13/13 全覆盖</li>
+        <li>Skill-Agent 协作模式</li>
+      </ul>
+    </a>
+
+  </div>
+
+  <!-- Recommended reading order -->
+  <div class="sp-reading-order">
+    <span class="lp-tag">推荐阅读顺序</span>
+    <ol class="sp-reading-path">
+      <li class="sp-reading-path__step">
+        <span class="sp-reading-path__n">1</span>
+        <a href="../基础篇/">基础篇</a>
+        <span class="sp-reading-path__note">— 从这里开始：Skill 是什么、如何运作</span>
+      </li>
+      <li class="sp-reading-path__step">
+        <span class="sp-reading-path__n">2</span>
+        <a href="../进阶篇/">进阶篇</a>
+        <span class="sp-reading-path__note">— 建好并用过第一个 Skill 之后</span>
+      </li>
+      <li class="sp-reading-path__step">
+        <span class="sp-reading-path__n">3</span>
+        <a href="../评估篇/">评估篇</a>
+        <span class="sp-reading-path__note">— 需要用数据衡量真实价值时</span>
+      </li>
+      <li class="sp-reading-path__step">
+        <span class="sp-reading-path__n">4</span>
+        <a href="../迭代篇/">迭代篇</a>
+        <span class="sp-reading-path__note">— 评估暴露出弱点需要修复时</span>
+      </li>
+      <li class="sp-reading-path__step">
+        <span class="sp-reading-path__n">5</span>
+        <a href="../集成篇/">集成篇</a>
+        <span class="sp-reading-path__note">— 将 Skill 引入团队工作流时</span>
+      </li>
+      <li class="sp-reading-path__step">
+        <span class="sp-reading-path__n">6</span>
+        <a href="../架构篇/">架构篇</a>
+        <span class="sp-reading-path__note">— 单个 Skill 出现注意力稀释时</span>
+      </li>
+    </ol>
+  </div>
+
+  <p class="sp-lang-link"><a href="../">English version →</a></p>
+
+</div>
+{% endblock %}
