@@ -1,22 +1,25 @@
 # Go Multi-Agent Code Review — Deployment Guide
 
-This directory contains ready-to-deploy agent definition files for the 8-Agent Go code review system described in [`bestpractice/Architecture.md`](../../bestpractice/Architecture.md) §17–18.
+This directory contains ready-to-deploy agent definition files for the 7-Agent Go code review system described in [`bestpractice/Architecture.md`](../../bestpractice/Architecture.md) §17–18.
+
+> **Platform constraint**: Claude Code does not allow subagents to spawn other subagents ("Subagents cannot spawn other subagents"). The `go-review-lead` orchestrator therefore runs as a **Skill in the main conversation**, not as an agent definition in `.claude/agents/`. The 7 Worker Agents in `agents/` are dispatched by the main conversation, not by a Lead Agent.
 
 ## What's in This Directory
 
 ```
-agents/
-├── go-review-lead.md          # Orchestrator: triage + consolidation (never reviews code itself)
-├── go-security-reviewer.md    # Worker: SQL injection, XSS, secrets, auth flaws
-├── go-concurrency-reviewer.md # Worker: race conditions, goroutine leaks, deadlocks
-├── go-performance-reviewer.md # Worker: allocations, N+1, slice pre-allocation
-├── go-error-reviewer.md       # Worker: error wrapping, resource lifecycle, panics
-├── go-quality-reviewer.md     # Worker: naming, structure, modern Go idioms
-├── go-test-reviewer.md        # Worker: table-driven tests, coverage, assertions
-└── go-logic-reviewer.md       # Worker: boundary conditions, state machines, nil safety
+agents/                            # 7 vertical Worker Agents only
+├── go-security-reviewer.md        # Worker: SQL injection, XSS, secrets, auth flaws
+├── go-concurrency-reviewer.md     # Worker: race conditions, goroutine leaks, deadlocks
+├── go-performance-reviewer.md     # Worker: allocations, N+1, slice pre-allocation
+├── go-error-reviewer.md           # Worker: error wrapping, resource lifecycle, panics
+├── go-quality-reviewer.md         # Worker: naming, structure, modern Go idioms
+├── go-test-reviewer.md            # Worker: table-driven tests, coverage, assertions
+└── go-logic-reviewer.md           # Worker: boundary conditions, state machines, nil safety
 ```
 
 Each file is a Claude Code agent definition (YAML frontmatter + system prompt). The agents are lightweight by design — they load their domain knowledge at runtime via the Skill tool, so the definition files stay short and maintainable.
+
+The `go-review-lead` orchestrator is **not in this directory**. It lives in `skills/go-review-lead/SKILL.md` and is loaded by the main conversation.
 
 ## Prerequisites
 
@@ -24,7 +27,6 @@ Each Worker Agent loads a corresponding vertical skill at runtime. These skills 
 
 | Agent file | Required skill |
 |-----------|----------------|
-| `go-review-lead.md` | `go-review-lead` skill |
 | `go-concurrency-reviewer.md` | `go-concurrency-review` skill |
 | `go-performance-reviewer.md` | `go-performance-review` skill |
 | `go-error-reviewer.md` | `go-error-review` skill |
@@ -32,6 +34,8 @@ Each Worker Agent loads a corresponding vertical skill at runtime. These skills 
 | `go-quality-reviewer.md` | `go-quality-review` skill |
 | `go-test-reviewer.md` | `go-test-review` skill |
 | `go-logic-reviewer.md` | `go-logic-review` skill |
+
+The `go-review-lead` skill is loaded by the main conversation — it is the orchestrator, not a worker.
 
 The source files for all 8 skills are in the `skills/` directory of this repository (e.g. `skills/go-concurrency-review/SKILL.md`).
 
@@ -55,13 +59,22 @@ for skill in go-review-lead \
 done
 ```
 
-### Step 2 — Install the agent definitions
+### Step 2 — Install the Worker Agent definitions
 
-Copy the agent definition files to `~/.claude/agents/`. Create the directory if it doesn't exist.
+Copy **only the 7 Worker Agent** definition files to `~/.claude/agents/`. Do **not** copy `go-review-lead.md` — it does not belong in `agents/`.
 
 ```bash
 mkdir -p ~/.claude/agents
-cp outputexample/go-review-lead/agents/*.md ~/.claude/agents/
+# Copy all worker agents (go-review-lead is a Skill, not here)
+for agent in go-security-reviewer \
+             go-concurrency-reviewer \
+             go-performance-reviewer \
+             go-error-reviewer \
+             go-quality-reviewer \
+             go-test-reviewer \
+             go-logic-reviewer; do
+  cp "outputexample/go-review-lead/agents/${agent}.md" ~/.claude/agents/
+done
 ```
 
 Claude Code discovers agents in `~/.claude/agents/` automatically — no further configuration is needed.
@@ -72,32 +85,31 @@ List installed agents to confirm:
 
 ```bash
 ls ~/.claude/agents/ | grep go-
-# Expected output:
+# Expected output (7 workers, no go-review-lead):
 # go-concurrency-reviewer.md
 # go-error-reviewer.md
 # go-logic-reviewer.md
 # go-performance-reviewer.md
 # go-quality-reviewer.md
-# go-review-lead.md
 # go-security-reviewer.md
 # go-test-reviewer.md
 ```
 
 ## Usage
 
-Once installed, trigger a full Go review from any Claude Code session in a Go repository:
+The `go-review-lead` Skill runs in the **main conversation**. Invoke it by asking Claude to use the skill:
 
 ```
-@go-review-lead review this PR
+Use the go-review-lead skill to review this PR
 ```
 
-or more explicitly:
+or simply:
 
 ```
-Use go-review-lead to review the Go changes in src/
+Review the Go changes in src/ using go-review-lead
 ```
 
-The Lead Agent will:
+The main conversation (running the go-review-lead Skill) will:
 
 1. Run `git diff -- '*.go'` to identify changed Go files
 2. Run a compile pre-check (`go build`)
@@ -114,7 +126,7 @@ You can also invoke any Worker Agent directly for a focused review:
 
 ## Model Configuration
 
-All agents default to `sonnet` (see the `model:` field in each `.md` file). This is intentional: each Worker Agent focuses on a single dimension, so a mid-tier model with full attention on one domain outperforms a top-tier model splitting attention across all dimensions simultaneously. See [`Architecture.md` §17.3.3](../../bestpractice/Architecture.md#1733-architecture-over-model-reducing-dependency-on-top-tier-reasoning-models) for the rationale.
+All Worker Agents default to `sonnet` (see the `model:` field in each `.md` file). This is intentional: each Worker Agent focuses on a single dimension, so a mid-tier model with full attention on one domain outperforms a top-tier model splitting attention across all dimensions simultaneously. See [`Architecture.md` §17.3.3](../../bestpractice/Architecture.md#1733-architecture-over-model-reducing-dependency-on-top-tier-reasoning-models) for the rationale.
 
 To change the model for a specific agent, edit the `model:` field before copying:
 

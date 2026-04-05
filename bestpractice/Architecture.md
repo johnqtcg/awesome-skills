@@ -22,7 +22,7 @@ prerequisite: Advanced.md (§6–9), Iteration.md (§15–16)
 - [18. Skill-Agent Collaboration Architecture: Design, Implementation, and Validation](#18-skill-agent-collaboration-architecture-design-implementation-and-validation)
     - [18.1 Three Architecture Options Compared (Decision Matrix)](#181-three-architecture-options-compared-decision-matrix)
     - [18.2 Skill Splitting Guide](#182-skill-splitting-guide)
-    - [18.3 Lead Agent Triage Mechanism](#183-lead-agent-triage-mechanism)
+    - [18.3 Triage Mechanism (go-review-lead Skill in the Main Conversation)](#183-lead-agent-triage-mechanism)
     - [18.4 Grep-Gated Execution Protocol (Core Innovation)](#184-grep-gated-execution-protocol-core-innovation)
     - [18.5 Three-Round Iterative Validation](#185-three-round-iterative-validation)
     - [18.6 Complete Implementation Reference](#186-complete-implementation-reference)
@@ -481,7 +481,7 @@ Regardless of input content, always execute the same fixed set of paths?
 <a id="18-skill-agent-collaboration-architecture-design-implementation-and-validation"></a>
 ## 18. Skill-Agent Collaboration Architecture: Design, Implementation, and Validation
 
-> This chapter uses the `go-code-reviewer` → 8-agent orchestration system as the running case to demonstrate the full implementation path for an Orchestrator-Workers architecture. The design principles covered (vertical splitting, Lead does not review, on-demand triage, Grep-Gated protocol) are not specific to code review — they apply to any heavy skill that suffers from attention dilution.
+> This chapter uses the `go-code-reviewer` → 7-agent orchestration system as the running case to demonstrate the full implementation path for an Orchestrator-Workers architecture. The design principles covered (vertical splitting, main conversation handles orchestration, on-demand triage, Grep-Gated protocol) are not specific to code review — they apply to any heavy skill that suffers from attention dilution.
 
 <a id="181-three-architecture-options-compared-decision-matrix"></a>
 ### 18.1 Three Architecture Options Compared (Decision Matrix)
@@ -489,26 +489,29 @@ Regardless of input content, always execute the same fixed set of paths?
 | Architecture | Characteristics | Known Problems | Recommended |
 |--------------|-----------------|----------------|:-----------:|
 | **A: Single Skill** | 1 agent loads all review knowledge, completes all dimensions in one call | Attention dilution; High findings systematically suppress other dimensions; proven misses | Basic scenarios |
-| **B: Multi-Agent without Skills** | 8 agents (1 Lead + 7 Vertical), prompt-only, no skills loaded | Clean context, but no domain review rules; relies entirely on AI's general knowledge; may miss project-specific rules | Not recommended |
-| **C: Multi-Agent + Vertical Skills** | 8 agents, each loads a vertical domain skill; Lead only does triage and aggregation | Slightly higher design and maintenance cost | ✅ Recommended |
+| **B: Multi-Agent without Skills** | 7 vertical agents, prompt-only, no skills loaded; main conversation handles orchestration | Clean context, but no domain review rules; relies entirely on AI's general knowledge; may miss project-specific rules | Not recommended |
+| **C: Multi-Agent + Vertical Skills** | Main conversation loads go-review-lead Skill for triage and aggregation; 7 vertical agents each load their domain skill | Slightly higher design and maintenance cost | ✅ Recommended |
 
 Core principles of Architecture C:
 
 **Principle 1: Each agent loads exactly one dimension's skill.** A Performance Agent's context primarily contains only performance-related knowledge and the code to be reviewed, with no other dimensions' rules and no findings from other agents. This significantly raises the probability that the model focuses its attention on the Performance checklist.
 
-**Principle 2: The Lead Agent does not review code.** The Lead Agent is a "neutral referee" — it does not load any review skill and does not directly inspect code logic. If the Lead also reviewed, its own findings would bias its aggregation of other agents' results, recreating the same problem as the heavy skill.
+**Principle 2: The main conversation (orchestrator role) does not review code.** After loading the go-review-lead Skill, the main conversation acts as the orchestrator — it only does triage and aggregation, loads no vertical review skills, and does not directly analyze code logic. If the orchestrator also reviewed, its own findings would bias its aggregation of the other agents' results, recreating the same problem as the heavy skill.
 
-**Principle 3: Agents load knowledge on demand through Skill tools.** Agent definition files are lightweight (a few dozen lines of prompts). Review knowledge is stored in standalone skill files that agents load at runtime via the `Skill()` tool. No content is duplicated, and skill files can be reused across agents.
+**Principle 3: Vertical agents load knowledge on demand through Skill tools.** Agent definition files are lightweight (a few dozen lines of prompts). Review knowledge is stored in standalone skill files that agents load at runtime via the `Skill()` tool. No content is duplicated, and skill files can be reused across agents.
 
-Full architecture overview (1 Lead + 7 Vertical Agents):
+**Principle 4 (platform constraint): Orchestration must run in the main conversation, not in a subagent.** Claude Code explicitly states that subagents cannot spawn other subagents ("Subagents cannot spawn other subagents"). Therefore go-review-lead **must run as a Skill in the main conversation** and must not be configured as an agent definition in `.claude/agents/` — if it were, it would run as a subagent and Agent tool calls would be silently ignored, causing parallel dispatch to fail.
+
+Full architecture overview (main conversation Skill orchestration + 7 vertical agents):
 
 ```
                       PR Diff / Code Snippet
                              │
                              ↓
-                   [Lead Agent (Sonnet)]
-                   Responsibilities: triage + aggregation
-                   Loads no review skills
+              [Main conversation + go-review-lead Skill]
+                   Responsibilities: triage + dispatch + aggregation
+                   Loads go-review-lead Skill
+                   Does not load vertical review skills
                    Does not directly review code
                              │
                      Phases 1-4: Triage
@@ -528,7 +531,7 @@ Full architecture overview (1 Lead + 7 Vertical Agents):
     └────────┴────────┴───────┴───────┴────────┴────────┘
                              │
                              ↓
-                   Phase 2: Lead Agent aggregates
+                     Main conversation aggregates
                    Merge findings + deduplicate + sort by severity
                              │
                              ↓
@@ -561,8 +564,10 @@ skills/
 ├── go-test-review/SKILL.md          # coverage, assertion quality, test isolation
 └── go-logic-review/SKILL.md         # business logic, boundaries, nil, error propagation
 
-.claude/agents/
-├── go-review-lead.md                # triage + aggregation (no code review)
+# go-review-lead runs as a Skill in the main conversation — NOT in .claude/agents/
+# The main conversation loads it via: skills/go-review-lead/SKILL.md
+
+.claude/agents/                      # contains only the 7 vertical worker agents
 ├── go-security-reviewer.md          # loads go-security-review
 ├── go-concurrency-reviewer.md       # loads go-concurrency-review
 ├── go-performance-reviewer.md       # loads go-performance-review
@@ -575,7 +580,7 @@ skills/
 **Checklist cap principle:** each vertical skill's checklist must not exceed 15 items. If it does, the dimension can be split further. This cap is not arbitrary — a checklist of 15 items or fewer stays within the coverage range of the model's attention in an isolated context. Exceeding it reintroduces within-dimension dilution risk.
 
 <a id="183-lead-agent-triage-mechanism"></a>
-### 18.3 Lead Agent Triage Mechanism (Using `go-review-lead` as the Example)
+### 18.3 Triage Mechanism (go-review-lead Skill Running in the Main Conversation)
 
 #### Two-Level Triage
 
@@ -616,7 +621,7 @@ Level 1 consumes no tokens. Combined, the two levels cost negligibly per triage.
 
 | Approach | Simple Style PR | Complex Concurrency PR | Full-scope Refactor |
 |----------|:--------------:|:---------------------:|:------------------:|
-| Full 8 agents (no triage) | ~$0.16 | ~$0.16 | ~$0.16 |
+| Full 7 agents (no triage) | ~$0.16 | ~$0.16 | ~$0.16 |
 | Triage + on-demand dispatch | ~$0.02 | ~$0.07 | ~$0.10 |
 | Original single skill | ~$0.03 | ~$0.03 (but misses) | ~$0.03 (but misses) |
 
@@ -644,13 +649,13 @@ For each sub-agent, the execution flow becomes:
 2. Identify target files (or write bare code snippets to $TMPDIR/review_snippet.go)
 3. For all grep-gated checklist items, run grep with the patterns from the skill
 4. grep HIT  → model performs semantic confirmation (true positive vs false positive)
-5. grep MISS → automatically mark NOT FOUND, skip semantic analysis, do not report to Lead
+5. grep MISS → automatically mark NOT FOUND, skip semantic analysis, do not report to the main conversation
 6. Items without grep patterns (pure semantic items) → full model reasoning
 7. Report only FOUND items
 8. Include in Execution Status an audit line: Grep pre-scan: X/Y items hit, Z confirmed
 ```
 
-When the Lead Agent receives sub-agent reports, it verifies coverage using the audit lines rather than blindly trusting "no report = no problem."
+When the main conversation aggregates sub-agent reports, it verifies coverage using the audit lines rather than blindly trusting "no report = no problem."
 
 #### Coverage Statistics
 
@@ -721,7 +726,7 @@ The same `getBatchUser` code from §17.1 was used for three complete validation 
 
 | Metric | Round 1: Single Skill | Round 2: Multi-Agent v1 | Round 3: Multi-Agent + Grep-Gated |
 |--------|:---------------------:|:----------------------:|:--------------------------------:|
-| Architecture | 1 agent + heavy skill | 8 agents, on-demand triage | 8 agents + Grep-Gated protocol |
+| Architecture | 1 agent + heavy skill | 8 agents misconfigured (Lead as agent, parallel dispatch blocked) | 7 worker agents + main conversation Skill orchestration + Grep-Gated |
 | Agents dispatched | 1 | 4 (performance skipped) | 5 (including performance) |
 | High findings | 4 | 7 | 7 |
 | Medium findings | 1 (1 missed) | 2 (4+ missed) | 6 |
@@ -735,7 +740,7 @@ The single-skill call found 4 High concurrent defects, but missed Slice Pre-allo
 
 #### Round 2: Multi-Agent v1 New Problems
 
-After the initial 1 skill → 8 agents refactor, validation revealed two new problems:
+After the initial 1 skill → Multi-Agent refactor (at this stage, the Lead was incorrectly configured as an agent definition, which blocked parallel dispatch due to the platform constraint that subagents cannot spawn subagents), validation revealed two additional problems:
 
 **Problem 1: Triage blind spot.** `go-review-lead`'s Phase 2 original trigger condition only fired on `make` calls **with** a capacity argument — but `make([]*User, 0)` was the case **without** a capacity argument. The rule matched in reverse, so `go-performance-reviewer` was skipped entirely. Submitting the code as a bare snippet also invalidated Phase 3's file-path heuristic.
 
@@ -798,9 +803,9 @@ The Multi-Agent architecture described in this chapter is published as runnable 
 
 | Content | Path | Description |
 |---------|------|-------------|
-| Orchestrator Skill | [`skills/go-review-lead/SKILL.md`](../skills/go-review-lead/SKILL.md) | Lead Agent triage logic, consolidation rules, and report format |
+| Orchestrator Skill | [`skills/go-review-lead/SKILL.md`](../skills/go-review-lead/SKILL.md) | Main conversation orchestration logic: triage rules, aggregation format, report spec (runs as a Skill — not an agent definition) |
 | 7 vertical review Skills | `skills/go-{concurrency,performance,error,security,quality,test,logic}-review/SKILL.md` | Per-dimension checklists, Grep-Gated patterns, and output format |
-| 8 Agent definition files | [`outputexample/go-review-lead/agents/`](../outputexample/go-review-lead/agents/) | Drop-in files for `.claude/agents/` — ready to copy and use |
+| 7 Agent definition files | [`outputexample/go-review-lead/agents/`](../outputexample/go-review-lead/agents/) | Drop-in vertical worker agent files for `.claude/agents/` — does not include go-review-lead |
 | Deployment guide | [`outputexample/go-review-lead/README.md`](../outputexample/go-review-lead/README.md) | Installation steps, prerequisites, and usage examples |
 
 <a id="187-frequently-asked-questions"></a>
@@ -808,15 +813,15 @@ The Multi-Agent architecture described in this chapter is published as runnable 
 
 **Q: How should cross-dimension issues (e.g., unbounded goroutines = concurrency + performance) be handled?**
 
-Allow two agents to independently report the same issue from their respective angles. The Lead Agent deduplicates during aggregation, taking the higher severity and merging the evidence. Cross-reports are better than omissions — the cost of deduplication is far less than the cost of missing a real bug. `REV-008` (unbounded goroutines) was formally reported by the Concurrency Agent from a concurrency perspective, but also has performance semantics; the two are merged into one finding, with the higher severity (Medium) taken.
+Allow two agents to independently report the same issue from their respective angles. The main conversation deduplicates during aggregation, taking the higher severity and merging the evidence. Cross-reports are better than omissions — the cost of deduplication is far less than the cost of missing a real bug. `REV-008` (unbounded goroutines) was formally reported by the Concurrency Agent from a concurrency perspective, but also has performance semantics; the two are merged into one finding, with the higher severity (Medium) taken.
 
 **Q: Should all heavy skills be split?**
 
 No. The criteria: covers 3+ independent dimensions, regularly produces 5+ High findings in a single review, or users repeatedly report misses. If a skill covers only one dimension and has fewer than 15 checklist items, the context burden is manageable, a single agent is sufficient, and the design and maintenance cost of Multi-Agent is not justified.
 
-**Q: Should the Lead Agent use Opus?**
+**Q: What model should the main conversation use when running the go-review-lead Skill?**
 
-No. The Lead Agent's work is triage (pattern matching) and aggregation (merge and sort). It does not require deep reasoning. Haiku or Sonnet is sufficient. Using Opus for triage is over-configuration. Use Sonnet for the dedicated review agents; consider Opus for especially complex architectural-level reviews.
+Sonnet is sufficient. Triage (pattern matching) and aggregation (merge and sort) do not require deep reasoning. Using Opus here is over-configuration. Use Sonnet for the vertical review agents; consider Opus for especially complex architectural-level reviews.
 
 **Q: Can Grep-Gated's grep MISSes lead to real-problem omissions?**
 
@@ -825,16 +830,16 @@ Yes — this is a known trade-off in the protocol. A grep MISS means the pattern
 <a id="188-degradation-and-error-handling"></a>
 ### 18.8 Degradation and Error Handling
 
-Multi-Agent introduces additional failure points. A single skill either succeeds or fails as a whole; with 8 parallel agents, any one may time out, fail to load a skill, or return malformed output.
+Multi-Agent introduces additional failure points. A single skill either succeeds or fails as a whole; with 7 parallel worker agents, any one may time out, fail to load a skill, or return malformed output.
 
-| Failure Type | Lead Agent Handling |
-|--------------|---------------------|
+| Failure Type | Main Conversation Handling |
+|--------------|----------------------------|
 | Sub-agent timeout (> 120s) | Mark that dimension as `SKIPPED (timeout)`; continue aggregating other results |
 | Sub-agent returns empty findings | Normal; record `0 findings` for that dimension in Execution Status |
 | Sub-agent returns malformed output | Mark as `PARSE_ERROR`; note in Residual Risk: "X dimension incomplete, recommend re-running separately" |
-| Skill file missing (load failure) | Sub-agent reports the error; Lead notes it in Execution Status |
+| Skill file missing (load failure) | Sub-agent reports the error; main conversation notes it in Execution Status |
 
-**Core principle: partial success is better than total failure.** The Lead Agent should always output whatever findings are available rather than discarding the entire report because one agent failed.
+**Core principle: partial success is better than total failure.** The main conversation should always output whatever findings are available rather than discarding the entire report because one agent failed.
 
 If a critical dimension (such as Concurrency) fails, add a note at the end of the report:
 
@@ -854,18 +859,18 @@ with: "Use the go-concurrency-reviewer agent to review <file>"
 | Single-dimension skill, checklist < 15 items | Single Skill | No attention competition; Multi-Agent overhead is not justified |
 | Multi-dimension skill, misses already observed | Multi-Agent + Vertical Skills | Cross-dimension attention competition; isolated contexts needed |
 | High-frequency lightweight reviews (e.g., variable renames) | Triaged on-demand dispatch (2–3 agents) | Cost ~$0.02, far below full launch |
-| Critical-path full review | Full 8 agents | Cost ~$0.10–0.16; highest quality |
+| Critical-path full review | Full 7 agents | Cost ~$0.10–0.16; highest quality |
 
 **Cost structure:**
 
 - Triage cost (Level 1 grep + Level 2 Haiku): ~$0.001 per call, negligible
 - Each Worker Agent (Haiku, single file): ~$0.005–0.015
-- Lead Agent aggregation (Sonnet): ~$0.01–0.02
-- Typical full review (5 Workers + 1 Lead): ~$0.05–0.10
+- Main conversation aggregation (Sonnet): ~$0.01–0.02
+- Typical full review (5 Workers): ~$0.05–0.10
 
 **Applicability boundaries:**
 
-The conclusions in this document should be scoped to: Go code review; using `getBatchUser` (concurrency/goroutine class) as the primary case with `ListLayout` (security/ORM/design class) as a supplementary cross-domain case; the current implementation of 7 vertical skills + 1 Lead Agent; and the current Grep-Gated checklist coverage (65/86, ~75%).
+The conclusions in this document should be scoped to: Go code review; using `getBatchUser` (concurrency/goroutine class) as the primary case with `ListLayout` (security/ORM/design class) as a supplementary cross-domain case; the current implementation of 7 vertical skills + go-review-lead Skill (main conversation orchestration); and the current Grep-Gated checklist coverage (65/86, ~75%).
 
 Scenarios not yet thoroughly validated include: other programming languages, very large diffs, cross-file complex dependencies, stability across different model versions, and statistically robust false-positive/false-negative rate curves over multiple cases.
 
