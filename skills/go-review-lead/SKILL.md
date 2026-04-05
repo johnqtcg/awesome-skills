@@ -1,7 +1,6 @@
 ---
 name: go-review-lead
 description: Orchestrate a comprehensive Go code review by triaging code changes, dispatching vertical review skills (security, concurrency, error, logic, performance, quality, test) as parallel agents, then consolidating results into a unified report. Use for full Go PR review or comprehensive code review. Replaces the monolithic go-code-reviewer with focused parallel analysis.
-allowed-tools: Read, Grep, Glob, Bash, Agent
 ---
 
 # Go Review Lead — Orchestrator
@@ -234,6 +233,9 @@ Triage result:
 
 ### Step 3: Dispatch Parallel Agents
 
+> **CRITICAL — TRUE PARALLEL EXECUTION REQUIRED**
+> Issue **ALL** selected Agent tool calls in a **single response message** — do NOT call one agent, wait for it to finish, then call the next. Every selected agent must appear as a separate `Agent` tool call block within the same turn. The runtime executes them concurrently only when dispatched together. Serial dispatch defeats the entire architecture.
+
 Launch selected skills as **parallel agents** using the Agent tool. Each agent receives:
 1. The files/diff to review
 2. Instruction to follow its SKILL.md and its **Grep-Gated Execution Protocol**
@@ -289,7 +291,11 @@ Return your complete findings report with grep audit line in Execution Status.
 
 ### Step 4: Consolidate Results
 
-After all agents return, merge their reports:
+After all agents return, collect each agent's full response. For each agent response:
+- Extract all findings (FOUND items) for deduplication and merging
+- Extract the `Execution Status` block — specifically the `Grep pre-scan: X/Y hit, Z confirmed` line — and record it for the Per-skill grep audit in the final Execution Status section
+
+Then merge their reports:
 
 1. **Deduplicate and merge**: When multiple agents flag the same location:
    - **Different issues at same location** → keep both (e.g., Security: "SQL injection at repo.go:67" + Error: "missing error check at repo.go:67" — distinct root causes)
