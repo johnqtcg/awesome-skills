@@ -231,6 +231,114 @@ Each skill defines 7-10 required output fields so results are auditable, parseab
 
 The output contract solves a common LLM problem: **without a contract, the output shape changes every time, so CI cannot consume it reliably.**
 
+#### 6.5.1 Output Format Design Methodology
+
+Fixed fields answer the question of *what* to output. But there is a more fundamental question: **how should those fields be organized and presented?** The following five principles are distilled from a systematic review of the Output Contract sections across all production-grade skills.
+
+---
+
+**Principle 1: Conclusion First**
+
+The verdict or status must appear at the very top. Readers should never have to read to the end to learn the overall result.
+
+```
+# Good format
+**Status**: FAIL  ← result visible at a glance
+**Failed**: 3 out of 47
+
+# Bad format
+Running tests...
+Test suite 1: calculator.test.js
+  - add(1,2) = 3 ... PASS
+  - subtract(5,3) = 2 ... PASS
+  ...               ← pages of output before the reader knows whether it passed
+```
+
+Note: in skills, "conclusion first" goes beyond a summary line. The **review depth (Lite/Standard/Strict)** is also declared in the very first section — so the reader knows the scope of coverage before reading any finding.
+
+---
+
+**Principle 2: Execution Integrity**
+
+Never claim a tool ran when it did not. When a tool is not executed, always output exactly three things:
+
+```
+# Good format
+Coverage: Not run
+Reason: service unreachable (REDIS_URL not configured)
+Reproduce: REDIS_URL=redis://localhost:6379 go test -tags=integration ./...
+
+# Bad format
+Tests ran with some issues. Please check the environment.
+```
+
+This principle governs output *truthfulness*. The other four principles assume the output is true; this one ensures that assumption holds. All 10 production-grade skills enforce it as a hard gate in their Output Contract.
+
+---
+
+**Principle 3: Actionability**
+
+Every piece of information should directly guide the next action. The test: can the recipient — human or downstream agent — act on this immediately without further investigation?
+
+```
+# Actionable
+- [src/form.go:45] handleSubmit: email state not bound to form field
+  Severity: must-fix
+  Fix: bind `form.email` to the email <input> in the template
+
+# Not actionable
+- Some tests failed in the form module → Please check the code
+```
+
+Note: severity labels like `must-fix` vs `follow-up` are themselves part of actionability — they tell the recipient whether this finding is blocking or advisory.
+
+---
+
+**Principle 4: Layered Detail**
+
+Adjust verbosity to match the volume of results. The same skill produces outputs of different "thickness" depending on the outcome:
+
+```
+# All passing → minimal
+**Status**: PASS (47/47)
+
+# Few failures → expand each one
+**Status**: FAIL (44/47)
+### Failed Tests
+- test_1: reason
+- test_2: reason
+- test_3: reason
+
+# Many failures → group by category
+**Status**: FAIL (12/47)
+### Failed Tests by Category
+- Database connection (8 failures): DB server unreachable
+- Auth token (3 failures): Token expired
+- Input validation (1 failure): Missing null check
+```
+
+Note: when findings exceed a soft cap (e.g., 10 in Standard mode), the overflow must **not** be silently dropped. Move them to a Residual Risk section and note "N additional findings deferred to Residual Risk."
+
+---
+
+**Principle 5: Design for Downstream Consumption**
+
+A sub-agent's output will be consumed directly by the main conversation or a CI pipeline. Ask yourself before finalizing: "Can Claude or a script use this output immediately, without parsing it further?"
+
+```
+# Good: downstream agent can generate a fix directly
+### Failed Tests
+- [src/form.go:45] handleSubmit: email state not bound to form field
+
+# Bad: downstream agent still needs to locate the file and function
+- Some tests failed in the form module
+```
+
+Implementation patterns:
+- **JSON summary block** (Standard/Strict mode): machine-parseable summary that CI can consume with `jq`
+- **PASS/FAIL verdict**: boolean, not vague descriptions like "looks okay" or "some issues"
+- **Stable field names**: once published, field names must not change — downstream scripts depend on them, and renaming is a breaking change
+
 ### 6.6 Version and Platform Awareness
 
 Read the project's real version information and adjust recommendations dynamically:
