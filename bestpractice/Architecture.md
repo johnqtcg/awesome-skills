@@ -23,7 +23,7 @@ prerequisite: Advanced.md (§6–9), Iteration.md (§15–16)
     - [18.1 Three Architecture Options Compared (Decision Matrix)](#181-three-architecture-options-compared-decision-matrix)
     - [18.2 Skill Splitting Guide](#182-skill-splitting-guide)
     - [18.3 Triage Mechanism (go-review-lead Skill in the Main Conversation)](#183-lead-agent-triage-mechanism)
-    - [18.4 Grep-Gated Execution Protocol (Core Innovation)](#184-grep-gated-execution-protocol-core-innovation)
+    - [18.4 Grep-Gated Execution Protocol (Core Execution Mechanism)](#184-grep-gated-execution-protocol-core-innovation)
     - [18.5 Three-Round Iterative Validation](#185-three-round-iterative-validation)
     - [18.6 Complete Implementation Reference](#186-complete-implementation-reference)
     - [18.7 Frequently Asked Questions](#187-frequently-asked-questions)
@@ -110,7 +110,7 @@ When a single agent loads a heavy skill, the context window holds all dimensiona
 └─────────────────────────────────────────┘
 ```
 
-Anthropic's internal research provides quantitative support for this phenomenon: in multi-agent research system benchmarks, **token usage explained 80% of performance variance**. The core reason is that each agent executes in a clean context window with higher token efficiency — direct evidence that context contamination ("context rot") degrades single-agent performance.
+Anthropic's internal research provides quantitative support for this phenomenon: in the BrowseComp browsing benchmark, **token usage alone explained 80% of performance variance** (three factors together explained 95%; the remaining 15% was attributed to tool call count and model choice). The core reason is that each agent executes in a clean context window with higher token efficiency — direct evidence that context contamination ("context rot") degrades single-agent performance. (Source: [How we built our multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system), Anthropic Engineering Blog, 2025-06-13)
 
 **This is not a prompting issue; it is an architectural issue.** Mitigations already tried:
 
@@ -153,9 +153,9 @@ The first advantage directly addresses the core problem in this document: when a
 
 #### 17.3.2 Empirical Data: Anthropic + AgentCoder
 
-**Anthropic Multi-Agent Research System Test** (source: Anthropic Engineering Blog, 2025):
-- A Multi-Agent system with Claude Opus 4 (Lead) + Claude Sonnet 4 (Workers) outperformed **single-agent Opus 4 by 90.2%** in internal research benchmarks
-- Token usage explained **80% of the performance variance** — the key is not a stronger model, but that each agent completes a focused task in a clean context
+**Anthropic Multi-Agent Research System Test** (source: [How we built our multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system), Anthropic Engineering Blog, 2025-06-13):
+- A Multi-Agent system with Claude Opus 4 (Lead) + Claude Sonnet 4 (Workers) outperformed **single-agent Opus 4 by 90.2%** on Anthropic's internal research eval
+- In the BrowseComp benchmark, token usage alone explained **80% of the performance variance** — the key is not a stronger model, but that each agent completes a focused task in a clean context
 
 **AgentCoder Academic Research** (source: arXiv:2312.13010):
 - Multi-Agent code generation (Programmer + Test Designer + Test Executor) achieved **96.3% pass@1** on HumanEval; single-agent SOTA was 90.2%
@@ -256,19 +256,9 @@ Core principles of Architecture C:
 
 **Principle 3: Vertical agents load domain knowledge automatically at startup via the `skills:` field.** Agent definition files are lightweight (a few dozen lines of prompts). Review knowledge is stored in standalone skill files. Each agent declares its required skill in the `skills:` frontmatter field — the platform injects the full skill content automatically when the agent starts, with no need to call the `Skill()` tool at runtime. No content is duplicated, and skill files can be reused across agents.
 
-**Principle 4 (platform constraint + engineering decision): Orchestration logic must be encapsulated as a Skill and executed in the main conversation.** This conclusion rests on two layers of reasoning — without either layer, the answer to "why a Skill specifically" is incomplete.
+**Principle 4 (platform constraint + engineering decision): Orchestration logic must be encapsulated as a Skill and executed in the main conversation.**
 
-**Layer 1: Why can orchestration not run as a subagent (i.e., be configured as an agent definition in `.claude/agents/`)?**
-Claude Code explicitly states that subagents cannot spawn other subagents ("Subagents cannot spawn other subagents"). If go-review-lead were configured as an agent definition file, it would run as a subagent when invoked, and its Agent tool calls for parallel dispatch would be silently ignored — the 7 vertical agents would degrade to serial execution, or not be dispatched at all.
-
-**Layer 2: Given that the orchestrator must run in the main conversation, why can it not simply be an inline prompt — why must it be packaged as a Skill?**
-This is the more important question to answer. There are two reasons:
-
-1. **Unacceptable complexity**: The orchestration process is a mixed pipeline-and-parallel-exploration pattern — scope identification → review depth selection → compile pre-check → four-phase triage → dynamic dispatch to N vertical agents in parallel → deduplication and consolidation. Writing this as an inline prompt would produce something far too long and fragile to maintain as a one-off.
-
-2. **No reusability**: Every code review session would require re-supplying this complex prompt from scratch. This is a standardized pipeline that should be encapsulated, not re-written each time.
-
-Complete reasoning chain:
+Conclusion first, reasoning follows:
 
 ```
 Platform constraint: subagents cannot spawn subagents
@@ -279,6 +269,18 @@ Platform constraint: subagents cannot spawn subagents
       → Yes: complexity is contained + standardized + reusable
       → Skill is the only appropriate vehicle
 ```
+
+Each of the two layers has one non-negotiable reason:
+
+**Layer 1: Why can orchestration not run as a subagent (i.e., be configured as an agent definition in `.claude/agents/`)?**
+Claude Code explicitly states that subagents cannot spawn other subagents ("Subagents cannot spawn other subagents"). If go-review-lead were configured as an agent definition file, it would run as a subagent when invoked, and its Agent tool calls for parallel dispatch would be silently ignored — the 7 vertical agents would degrade to serial execution, or not be dispatched at all.
+
+**Layer 2: Given that the orchestrator must run in the main conversation, why can it not simply be an inline prompt — why must it be packaged as a Skill?**
+Two reasons:
+
+1. **Unacceptable complexity**: The orchestration process is a mixed pipeline-and-parallel-exploration pattern — scope identification → review depth selection → compile pre-check → four-phase triage → dynamic dispatch to N vertical agents in parallel → deduplication and consolidation. Writing this as an inline prompt would produce something far too long and fragile to maintain as a one-off.
+
+2. **No reusability**: Every code review session would require re-supplying this complex prompt from scratch. This is a standardized pipeline that should be encapsulated, not re-written each time.
 
 **A deeper observation**: encapsulating the orchestration logic as a Skill is not merely a pragmatic engineering decision — it directly instantiates the architecture pattern this chapter describes, and does so simultaneously at two levels:
 
@@ -358,6 +360,12 @@ Both experiments point to the same counter-intuitive finding: **the driver of at
 
 The implication: one independent context per review dimension is the **minimum sufficient condition** for eliminating attention dilution. Remove one dimension's isolation and the suppression mechanism reappears, producing missed findings.
 
+**A note on the numbers in the table:**
+
+- **15/15 and the 13/13 in §18.5 are not contradictory.** 13 was the "expected finding count" entering Round 3 — the set of issues already known from Rounds 1 and 2. After Round 3 completed, the 7-Agent architecture surfaced 2 additional findings not captured in either earlier round (REV-008 unbounded goroutines and REV-009 slice pre-allocation, both formally reported), raising the baseline case total to 15. The 15/15 in §18.1 reflects the final capture count after all iterations; the 13/13 in §18.5 reflects the target that was set going into Round 3.
+
+- **How 31.6% is calculated:** Sum the total number of finding reports across all 7 agents — call this N_total (counting duplicate reports of the same issue by different agents). After deduplication, call the unique finding count N_unique. Duplication rate = (N_total − N_unique) / N_total. In the baseline case: the 7 agents produced approximately 22 finding reports in total; after deduplication, 15 unique findings remained. (22 − 15) / 22 ≈ 31.6%. For the 3-Agent compact approach: ~11 total reports for 9 unique findings yields ~18%, shown as ~15% in the table as an approximation.
+
 The 31.6% cross-agent duplication rate is not waste — it is the structural cost of parallel multi-dimension coverage, and the guarantor of correctness. The 7-Agent architecture is not over-engineering; it is the simplest design that actually works. Do not reduce entities without necessity.
 
 <a id="182-skill-splitting-guide"></a>
@@ -399,7 +407,15 @@ skills/
 └── go-logic-reviewer.md             # loads go-logic-review
 ```
 
-**Checklist cap principle:** each vertical skill's checklist must not exceed 15 items. If it does, the dimension can be split further. This cap is not arbitrary — a checklist of 15 items or fewer stays within the coverage range of the model's attention in an isolated context. Exceeding it reintroduces within-dimension dilution risk.
+**Checklist cap principle:** each vertical skill's checklist must not exceed 15 items. If it does, the dimension can be split further. This cap is derived from the cases documented in this chapter: in an isolated context, single-dimension checklists of 15 items or fewer showed no observable within-dimension attention dilution; beyond that, High findings within the same dimension began to suppress Medium-level items (the within-dimension dilution in §18.5 Round 2 is an example). **Treat 15 as an empirical starting point, not a universally validated constant** — different model versions, code volumes, and skill prompt structures may all shift this threshold. Use observable miss rates in your own context to decide whether further splitting is warranted.
+
+**If a vertical skill's checklist already exceeds 15 items**, use this decision path:
+
+1. **Observe first, split second.** The trigger for further splitting is reproducible miss symptoms, not the item count itself. Verify through actual reviews whether observable misses are occurring before committing to a split — premature splitting introduces unnecessary architectural maintenance cost.
+
+2. **Split by severity, not by topic.** The empirical validation in §18.1 shows that attention dilution is driven by severity disparity, not topic relatedness. If the oversized checklist contains High-severity items, separating High/Critical items from Medium/Low items into two independent skills is usually more effective than further topic-based subdivision.
+
+3. **Extend grep coverage before evaluating the split.** The Grep-Gated protocol releases mechanical detection items from the model's attention budget, effectively raising the "overload" threshold. If the current checklist still contains detectable items that lack grep patterns, improve pattern coverage first — this may eliminate observed misses without requiring a split.
 
 <a id="183-lead-agent-triage-mechanism"></a>
 ### 18.3 Triage Mechanism (go-review-lead Skill Running in the Main Conversation)
@@ -452,7 +468,7 @@ On-demand dispatch saves about 80% of cost on simple PRs; on complex PRs the cos
 > Note: the above costs are approximate estimates based on Claude Haiku 4.5 / Sonnet 4.6 official pricing as of March 2026. Actual costs also depend on code volume (token count); these figures are order-of-magnitude references only.
 
 <a id="184-grep-gated-execution-protocol-core-innovation"></a>
-### 18.4 Grep-Gated Execution Protocol (Core Innovation)
+### 18.4 Grep-Gated Execution Protocol (Core Execution Mechanism)
 
 #### Rethinking the Fundamental Problem
 
@@ -460,7 +476,7 @@ The first-round Multi-Agent architecture (§18.5 Round 2) exposed a fundamental 
 
 **The model is not a human. It has tools it can use.**
 
-Core solution: **tool-assisted detection + model judgment**. For checklist items with clear syntactic features, have the model first do a mechanical grep scan, then do semantic confirmation on HIT results. Only genuinely reasoning-heavy semantic items get full model analysis.
+Engineering solution: **tool-assisted detection + model judgment**. For checklist items with clear syntactic features, have the model first do a mechanical grep scan, then do semantic confirmation on HIT results. Only genuinely reasoning-heavy semantic items get full model analysis.
 
 #### Execution Flow (Step by Step)
 
@@ -558,11 +574,11 @@ The same `getBatchUser` code from §17.1 was used for three complete validation 
 
 #### Round 1: Single Skill Failure
 
-The single-skill call found 4 High concurrent defects, but missed Slice Pre-allocation. The model later acknowledged that the Performance checklist's attention had been crowded out by High findings. This is the starting point for the refactoring.
+The single-skill call found 4 High concurrent defects, but missed Slice Pre-allocation. The model later acknowledged that the Performance checklist's attention had been crowded out by High findings — confirming attention dilution as an architectural root cause and motivating the refactoring.
 
 #### Round 2: Multi-Agent v1 New Problems
 
-After the initial 1 skill → Multi-Agent refactor, the architecture had already shifted to **main-conversation Skill orchestration + 7 worker agents**, but validation still revealed two additional problems because the system had **no Grep-Gated protocol yet** and the original triage heuristics were still incomplete:
+After the first-stage refactoring, the architecture shifted to **main-conversation Skill orchestration + 7 worker agents**. Because the system had **no Grep-Gated protocol yet** and the original triage heuristics were still incomplete, validation exposed two new problems:
 
 **Problem 1: Triage blind spot.** `go-review-lead`'s Phase 2 original trigger condition only fired on `make` calls **with** a capacity argument — but `make([]*User, 0)` was the case **without** a capacity argument. The rule matched in reverse, so `go-performance-reviewer` was skipped entirely. Submitting the code as a bare snippet also invalidated Phase 3's file-path heuristic.
 
@@ -585,7 +601,7 @@ Summary: 7 High / 2 Medium / 1 Low.
 
 To fix the triage blind spot, Phase 2 trigger conditions were updated to detect zero-capacity `make` as well, and Phase 3 added batch-semantics function name heuristics (`getBatchUser` hits directly). To fix within-dimension attention dilution, the Grep-Gated execution protocol was introduced.
 
-Validation result: **all 13 expected findings were captured in this baseline case, with no new omissions observed.**
+Validation result: **all 13 expected findings were captured in this baseline case, with no new omissions observed.** Beyond that, the 7-Agent architecture surfaced 2 additional findings not identified in either earlier round — REV-008 (unbounded goroutines) and REV-009 (slice pre-allocation) were both formally reported — raising the baseline case total to 15, which corresponds to the 15/15 (100%) figure in the §18.1 summary table.
 
 Complete trajectory of `slice pre-allocation`:
 
@@ -616,7 +632,7 @@ Final report (excerpt):
 Summary: 7 High / 6 Medium — 13/13 expected findings captured.
 ```
 
-The improvement loop is now complete: single-skill attention dilution → Multi-Agent architecture refactor → triage blind-spot fix → Grep-Gated protocol introduction → 13/13 full capture.
+The improvement loop is complete: single-skill attention dilution → Multi-Agent architecture refactor → triage blind-spot fix → Grep-Gated protocol introduction → 13/13 full capture.
 
 <a id="186-complete-implementation-reference"></a>
 ### 18.6 Complete Implementation Reference
@@ -720,4 +736,4 @@ Scenarios not yet thoroughly validated include: other programming languages, ver
 
 ---
 
-> **Key conclusions from this chapter**: attention dilution is a structural limitation of LLMs under multi-dimension, single-context conditions. Stronger prompts can mitigate it but cannot eliminate it. Skill-Agent collaboration resolves the problem through two orthogonal means: Multi-Agent (Orchestrator-Workers pattern) eliminates cross-dimension attention competition; the Grep-Gated protocol converts 75% of checklist items into rule-driven pre-scans, reducing probabilistic omissions within each dimension. Together, in the baseline `go-code-reviewer` case, they achieve 13/13 complete coverage. The five orchestration patterns (§17.4) provide a systematic architecture-selection reference for different task structures — Orchestrator-Workers is the best fit for "content-driven, dynamic subtasks" scenarios, but only one of five options.
+> **Key conclusions from this chapter**: attention dilution is a structural limitation of LLMs under multi-dimension, single-context conditions. Stronger prompts can mitigate it but cannot eliminate it. Skill-Agent collaboration resolves the problem through two orthogonal means: Multi-Agent (Orchestrator-Workers pattern) eliminates cross-dimension attention competition; the Grep-Gated protocol converts 75% of checklist items into rule-driven pre-scans, reducing probabilistic omissions within each dimension. Together, in the baseline `go-code-reviewer` case, they achieve 13/13 complete coverage. §17.4 evaluates all five orchestration patterns against the code-review scenario one by one, making a technical case that Orchestrator-Workers is the only pattern that simultaneously satisfies "supports parallelism" and "content-driven subtask selection"; the same evaluation framework can be applied directly to pattern selection for other task types.
