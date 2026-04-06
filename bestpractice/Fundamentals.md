@@ -21,6 +21,7 @@
     - [5.2 Selective Loading Table](#52-selective-loading-table)
     - [5.3 Add a Table of Contents to Long Files](#53-add-a-table-of-contents-to-long-files)
     - [5.4 Three Principles for the Main File: Quick Reference, 80/20 Split, and Contractual References](#54-three-principles-for-the-main-file-quick-reference-8020-split-and-contractual-references)
+    - [5.5 Content Splitting Decision Tree: Five Principles](#55-content-splitting-decision-tree-five-principles)
 
 ## 1. Why Skills Exist
 
@@ -324,7 +325,17 @@ Put deterministic logic into scripts instead of prompt text for three reasons:
 2. **Determinism**: the same input always gives the same output, without depending on LLM reasoning
 3. **Testability**: scripts can be tested independently in CI
 
-For example, `discover_ci_needs.sh` scans a repository and outputs structured TSV data. Claude makes decisions based on that deterministic output instead of guessing the repo structure.
+Scripts serve two complementary roles — opposite in direction, identical in principle:
+
+**Gathering input**: `discover_ci_needs.sh` scans a repository and outputs structured TSV data. Claude makes decisions based on that deterministic output instead of guessing the repo structure.
+
+**Generating output**: a script produces the final artifact directly. For example, a codebase-visualizer skill needs to tell Claude only one thing:
+
+```bash
+python ~/.claude/skills/codebase-visualizer/scripts/visualize.py .
+```
+
+The script runs, generates `codebase-map.html`, and opens it in the browser. Claude never needs to understand any HTML, CSS, or JavaScript — it only needs to know "which command to run." That is roughly 10 tokens, compared to the 2,000+ tokens Claude would need to generate the HTML itself. This is progressive disclosure taken to its logical conclusion: implementation details are fully delegated to the script, and Claude retains only the instruction layer.
 
 ---
 
@@ -433,5 +444,52 @@ When the user asks about revenue growth, ARPU, or revenue composition:
 3. **Expected content**: what loading it provides ("full BAD/GOOD catalog covering 6 anti-pattern types")
 
 **These three principles form a complete progressive disclosure chain**: the Quick Reference routes user intent to the right section or reference file; the 80/20 rule determines what stays in the main file and what moves out; contractual references ensure that moved-out content is loaded precisely when triggered. Remove any one of the three and progressive disclosure breaks down.
+
+<a id="55-content-splitting-decision-tree-five-principles"></a>
+### 5.5 Content Splitting Decision Tree: Five Principles
+
+Sections 5.1–5.4 answered "how to load content." This section answers the more upstream question: **given a piece of content, which layer does it belong in?**
+
+![content-splitting-decision-tree](images/knowledge-break-down.png)
+
+Behind the decision tree are five complementary principles:
+
+| Principle | What it means | Where it goes |
+|-----------|---------------|---------------|
+| **Core semantics inline** | The operating framework, routing logic, and core rules needed on every activation | `SKILL.md` body |
+| **Deterministic logic externalized** | Fixed-input → fixed-output operations (validation, discovery, formatting) | `scripts/` |
+| **Structure independent** | Standardized output formats (report templates, code scaffolds, document structures) | `templates/` |
+| **Data deferred** | Static reference data, industry benchmarks, specification documents — useful but not needed every time | `references/` |
+| **Examples separated** | Usage examples and illustrations — demonstrative content that does not participate in the execution path | `examples/` |
+
+**Core insight**: `SKILL.md` should be a router, not an encyclopedia. It tells Claude "for situation X, go to file Y," rather than inlining every answer in the main file.
+
+#### Why 500 Lines?
+
+Anthropic recommends keeping `SKILL.md` under **500 lines**. The number is not arbitrary:
+
+
+- 500 lines ≈ 2,000–3,000 tokens (including Markdown formatting characters)
+           
+- Plus Claude's system prompt (~1,000–2,000 tokens) and the current conversation context
+           
+- Total token count stays within an efficient range; the marginal cost of activating a skill remains manageable
+
+
+**Exceeding 500 lines usually means** you have mixed "reference material" into "routing instructions" — large blocks of specification text, complete examples, or exhaustive edge-case coverage have crept into the main file. That content is loaded on every activation, but 80% of conversations never actually use it.
+
+#### Refactoring Signals When SKILL.md Exceeds 500 Lines
+
+When `SKILL.md` grows past 500 lines, it usually means one of the five principles has been violated:
+
+| Signal | Violated principle | Remedy |
+|--------|--------------------|--------|
+| Large blocks of "example output" | Examples separated | Move to `examples/`, switch to contractual references |
+| A "complete specification" or "full standard" section | Data deferred | Move to `references/`, load on trigger |
+| A step sequence that could be extracted as a standalone command | Deterministic logic externalized | Extract into a `scripts/` script |
+| Recurring output format descriptions | Structure independent | Extract to `templates/`, maintain in one place |
+| Multiple entirely independent "when the user is in scenario X" branches | Core semantics inline over-expanded | Split vertically into multiple single-dimension skills (see Architecture chapter §18) |
+
+Getting content into the right layer is the prerequisite for the loading strategies described in §5.1–5.4 to work precisely.
 
 ---
