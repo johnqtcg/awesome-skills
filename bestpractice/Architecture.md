@@ -18,7 +18,7 @@ prerequisite: Advanced.md (§6–9), Iteration.md (§15–16)
     - [17.1 The Pattern of Attention Dilution (Using a Code-Review Skill as the Example)](#171-the-pattern-of-attention-dilution-using-a-code-review-skill-as-the-example)
     - [17.2 Root Cause: Attention Competition in the Context Window](#172-root-cause-attention-competition-in-the-context-window)
     - [17.3 Why Multi-Agent Is the Right Direction](#173-why-multi-agent-is-the-right-direction)
-    - [17.4 A Map of Five Orchestration Patterns: Each Has Its Strengths](#174-a-map-of-five-orchestration-patterns-each-has-its-strengths)
+    - [17.4 Pattern Selection: Why Orchestrator-Workers](#174-pattern-selection-why-orchestrator-workers)
 - [18. Skill-Agent Collaboration Architecture: Design, Implementation, and Validation](#18-skill-agent-collaboration-architecture-design-implementation-and-validation)
     - [18.1 Three Architecture Options Compared (Decision Matrix)](#181-three-architecture-options-compared-decision-matrix)
     - [18.2 Skill Splitting Guide](#182-skill-splitting-guide)
@@ -194,294 +194,50 @@ Although parallel multi-agent execution accumulates more total tokens, each indi
 
 For scenarios suffering from attention dilution, this means: **you don't need to wait for the next-generation model to resolve missed findings — architecture refactoring is a more controllable, more predictable solution on the models you already have.**
 
-<a id="174-a-map-of-five-orchestration-patterns-each-has-its-strengths"></a>
-### 17.4 A Map of Five Orchestration Patterns: Each Has Its Strengths
+<a id="174-pattern-selection-why-orchestrator-workers"></a>
+### 17.4 Pattern Selection: Why Orchestrator-Workers
 
-After establishing Multi-Agent's advantages, the next question is: **which orchestration pattern should I choose?** This section systematically maps five foundational patterns to help skill designers find the best architecture for different tasks, not just for the code-review scenario.
+After establishing Multi-Agent's advantages, the next question is: **which orchestration pattern should I choose?**
 
-Anthropic defines five foundational orchestration patterns, classified by when subtask decisions are made and how execution is structured:
+Anthropic defines five foundational orchestration patterns. Evaluating each against the Go code-review scenario:
 
-| Pattern | Core Mechanism | Subtask Source | Execution Structure |
-|---------|----------------|----------------|---------------------|
-| **Prompt Chaining** | Steps pass linearly; A's output is B's input | Fixed linear sequence | Sequential |
-| **Routing** | Classify input, route to one specialized handler | Fixed branches, pick one | Exclusive selection |
-| **Parallelization** | Pre-fixed parallel paths run simultaneously, aggregate results | Fixed set, all execute | Parallel |
-| **Orchestrator-Workers** | Orchestrator dynamically decides which workers are needed | Decided at runtime, on-demand | Dynamic parallel |
-| **Evaluator-Optimizer** | Generate → evaluate → refine until quality threshold is met | Fixed two roles, iterative loop | Iterative |
+| Pattern | Core Mechanism | Assessment for This Scenario | Fit? |
+|---------|----------------|------------------------------|:---:|
+| **Pattern 1: Prompt Chaining** | Linear step sequence; each step's output feeds the next | Security/concurrency/performance dimensions have no sequential dependencies — this is not a sequencing problem | ✗ |
+| **Pattern 2: Routing** | Classify input, route to one specialized handler | A single review must cover multiple dimensions simultaneously, not pick one | ✗ |
+| **Pattern 3: Parallelization** | Multiple parallel paths, subtasks **fixed at design time** | Close to what's needed, but fixed subtasks mean all branches always run — cannot prune based on content | △ |
+| **Pattern 4: Orchestrator-Workers** | Central orchestrator **dynamically** decomposes tasks, dispatches Workers on demand | Best match — review dimensions are decided by the code content at runtime | **✓** |
+| **Pattern 5: Evaluator-Optimizer** | Generate → evaluate → refine iterative loop | Code review is a diagnostic task, not an iterative generation task | ✗ |
 
----
-
-#### Pattern 1: Prompt Chaining
-
-**Core:** Step A's output feeds directly into step B, forming a linear pipeline. Each step builds on the previous one.
-
-**When to use:** tasks with clear sequential dependencies; information flows one-way between steps; the output quality of each step directly affects the next.
-
-**Typical backend scenario: API-driven code generation pipeline**
-
-Starting from an OpenAPI spec, progressively generate the full code chain:
+**The key distinction between Pattern 3 and Pattern 4** is the crux of this selection. Both support parallelism; the difference is where subtasks come from:
 
 ```
-OpenAPI spec (input)
-       │
-       ↓
-[Step 1: Interface Parsing Agent]
-  Output: Go structs and interface type definitions
-       │
-       ↓
-[Step 2: Code Generation Agent]
-  Input: Step 1 structs  →  Output: handler + service skeleton
-       │
-       ↓
-[Step 3: Test Generation Agent]
-  Input: full code  →  Output: integration tests
-       │
-       ↓
-Complete code + tests (output)
-```
-
-Each step depends on the previous step's output; handlers must reference already-defined structs, and tests must target known interface shapes. Similar scenarios include database migration assistance (analyze current schema → generate migration SQL → generate rollback SQL → generate change documentation), where there is a one-way dependency between steps.
-
-**Assessment for code review:** ✗ Not applicable. Security/concurrency/performance review dimensions have no sequential dependency; A's output does not need to feed B.
-
----
-
-#### Pattern 2: Routing
-
-**Core:** classify the input, route it to the most suitable specialized handler. Each request travels **one** path; different input types follow completely different processing logic.
-
-**When to use:** input types can be clearly classified; different types need completely different handling; each request needs only one type of processing.
-
-**Typical backend scenario: multi-language code review routing**
-
-Route to the corresponding language skill based on file extension — each request takes only one path:
-
-```
-Code file (input)
-       │
-       ↓
-[Classifier: detect file type]
-       │
-       ├─ .go  → [Go Review Skill]
-       ├─ .py  → [Python Review Skill]
-       ├─ .ts  → [TypeScript Review Skill]
-       └─ .sql → [SQL Review Skill]
-```
-
-Another typical scenario: **SQL operation type routing** — route SQL statements by type, since read optimization and write safety are completely different problem domains:
-
-```
-SQL statement
-  ├─ SELECT        → [Read Performance Agent]
-  ├─ INSERT/UPDATE → [Write Safety Agent]
-  └─ DDL           → [Migration Safety Agent]
-```
-
-**Assessment for code review:** ✗ Not applicable. A single Go code review needs to cover security, concurrency, performance, and other dimensions simultaneously — not select just one.
-
----
-
-#### Pattern 3: Parallelization
-
-**Core:** split the task into **pre-fixed** subtasks, run all in parallel, then aggregate results. The subtask set is determined at design time; every input executes the same N paths.
-
-**When to use:** subtasks are independent of each other; all of these checks must run regardless of input content; total completion time is bounded by the slowest subtask.
-
-**Typical backend scenario 1: multi-format documentation generation**
-
-Generate multiple output formats simultaneously from the same service interface — the three paths are fully independent and always run together regardless of what the interface definition contains:
-
-```
-Service interface definition (input)
-       │
-       ├─→ [Chinese README Agent]  → README.zh-CN.md
-       ├─→ [English README Agent]  → README.md
-       └─→ [OpenAPI Agent]         → openapi.yaml
-```
-
-**Typical backend scenario 2: fixed compliance scan pipeline**
-
-All three checks must be run on every PR merge, no exceptions — these checks are independent of code content:
-
-```
-PR code (input)
-       │
-       ├─→ [License Compliance Agent]   → third-party license issues
-       ├─→ [Dependency Security Agent]  → CVE vulnerability list
-       └─→ [Coding Standards Agent]     → standards violations
-```
-
-This is the most natural fit for Parallelization: a fixed set of checks that must always run completely, independent of input content.
-
-**Key distinction between Parallelization and Orchestrator-Workers:**
-
-```
-Parallelization:
-  Code → [Fixed dispatch: Security + Concurrency + Performance + ...] → Aggregate
+Parallelization (Pattern 3):
+  Code → [Fixed dispatch: Security + Performance + Quality + Logic + ...] → Aggregate
   Subtasks are fixed at design time; every review runs all N paths
 
-Orchestrator-Workers:
+Orchestrator-Workers (Pattern 4):
   Code → [Lead Agent analyzes diff] → Dynamic decision → Dispatch K paths (K ≤ N) → Aggregate
   Subtasks are decided at runtime based on code content
 ```
 
-**Assessment for code review:** △ Close but not optimal. If the code only renames a variable, Parallelization would still launch all 8 agents, costing ~$0.16; Orchestrator-Workers would need only 2 agents, ~$0.02.
+For Go code review, **which agents to dispatch depends on what the code actually contains**:
 
----
+- Code only renames variables → only Quality + Logic needed (2 agents)
+- Code introduces `go func` + `sync.WaitGroup` → also need Concurrency + Error (4 agents)
+- Code contains `make([]*T, 0)` + batch functions → also need Performance (5 agents)
+- Code has `_test.go` changes → also need Test (6 agents)
 
-#### Pattern 4: Orchestrator-Workers
+This "content-driven dimension selection" cannot be known at design time — the orchestrator must decide dynamically at runtime based on input. This is exactly Anthropic's definition of the Orchestrator-Workers applicable scenario: **"cannot predict which subtasks will be needed in advance; the Orchestrator must decide dynamically based on input."**
 
-**Core:** a central orchestrator analyzes the input and **dynamically decides at runtime** which workers are needed and their task boundaries, then schedules them in parallel and aggregates the results. The subtask list is not fixed at design time; the orchestrator decides based on the specific input.
-
-**When to use:** the subtasks needed depend on the input content and cannot be known at design time; different inputs need different combinations of processing; the work requires a "understands the big picture, assigns tasks" coordinator.
-
-**Typical backend scenario 1: content-driven code review** (this document's case — see §18)
-
-Dispatch review agents based on code content:
-
-```
-Code diff (input)
-       │
-       ↓
-[Lead Agent triage]
-       │
-       ├─ contains go func / sync      → dispatch Concurrency Agent
-       ├─ contains make([], 0) + append → dispatch Performance Agent
-       ├─ contains _test.go changes     → dispatch Test Agent
-       ├─ always dispatch               → Quality + Logic Agent
-       └─ no SQL/HTTP patterns          → skip Security Agent (log reason)
-```
-
-5 lines of variable renames: 2 agents. A PR introducing concurrency and performance issues: 5 agents — dynamic allocation, costs only what is needed.
-
-**Typical backend scenario 2: adaptive bug-fix pipeline**
-
-Lead Agent analyzes the bug's impact surface and dynamically decides which fix actions are needed — the fix scope depends entirely on the bug's nature:
-
-```
-Bug report (input)
-       │
-       ↓
-[Lead Agent analyzes impact scope]
-       │
-       ├─ affects database operations → dispatch DB fix + migration Agent
-       ├─ affects API interface       → dispatch interface fix + contract update Agent
-       ├─ tests need supplementing    → dispatch test completion Agent
-       └─ cross-module propagation   → additionally dispatch doc update + notification Agent
-```
-
-**Assessment for code review:** ✅ **Optimal choice.** "Which agents are needed depends on the code being reviewed" — this is exactly Anthropic's definition of the Orchestrator-Workers applicable scenario: **"cannot predict which subtasks will be needed in advance; the orchestrator must decide dynamically based on input."**
-
----
-
-#### Pattern 5: Evaluator-Optimizer
-
-**Core:** a generate → evaluate → refine iterative loop, continuing until a quality threshold is met or an iteration limit is reached. The evaluation result determines whether to continue iterating and how to improve.
-
-**When to use:** initial output quality is unstable and needs iterative refinement; there are actionable quality standards (can judge "pass/fail"); iterative improvement has positive returns and converges within a few rounds.
-
-**Typical backend scenario 1: SQL query auto-optimization**
-
-Execution plan quality can be judged mechanically (`Index Scan` vs `Seq Scan`), making this an ideal Evaluator-Optimizer scenario:
-
-```
-Business query requirement (input)
-       │
-       ↓
-[Generation Agent] → initial SQL
-       │
-       ↓
-[Evaluation Agent] ← run EXPLAIN, check execution plan
-       │
-       ├─ Pass (Index Scan, row estimate ≤ threshold) → output SQL
-       └─ Fail (Seq Scan or row count too high)
-              │
-              ↓
-       [Optimization Agent] → rewrite SQL or suggest new index
-              │
-              └─→ loop (limit 3 rounds)
-```
-
-**Typical backend scenario 2: test-coverage auto-completion**
-
-Use actual test run results as the evaluation basis, iterating until coverage meets the target:
-
-```
-Function to be tested (input)
-       │
-       ↓
-[Generation Agent] → initial test code
-       │
-       ↓
-[Evaluation Agent] ← run go test -race -cover
-       │
-       ├─ Pass (coverage ≥ 80%, no data race) → output test code
-       └─ Fail (mark uncovered code paths)
-              │
-              ↓
-       [Completion Agent] → add boundary tests for uncovered paths
-              │
-              └─→ loop (limit 2 rounds)
-```
-
-**Typical backend scenario 3: API design quality iteration**
-
-Use checklist pass rate as the evaluation standard, driving iterative refinement of interface definitions:
-
-```
-Functional requirement (input)
-       │
-       ↓
-[Design Agent] → initial interface definition
-       │
-       ↓
-[Evaluation Agent] ← REST standards checklist + security checklist + backward-compatibility check
-       │
-       ├─ Pass (all checklist items ✅) → output interface definition
-       └─ Fail (list specific violations)
-              │
-              ↓
-       [Improvement Agent] → revise interface definition
-              │
-              └─→ loop (limit 2 rounds)
-```
-
-**Key Evaluator-Optimizer trade-off:** every iteration adds latency and token cost. This is appropriate for scenarios where output quality has a significant business impact and there is an actionable evaluation standard. If the evaluation standard is vague (such as "code readability"), it easily falls into an ineffective loop.
-
-**Assessment for code review:** ✗ Not applicable. Code review is a diagnostic task and should honestly reflect the current state of the code — "improving the review report" and "fixing the reviewed code" are different tasks and should not be confused in an Evaluator-Optimizer loop.
-
----
-
-#### Selection Decision Tree
-
-```
-Facing a new Multi-Agent task — how do I choose?
-
-Do steps have sequential dependencies (A's output is B's input)?
-  Yes → Prompt Chaining
-  No ↓
-
-Can input be classified, and does each request need only one type of processing?
-  Yes → Routing
-  No ↓
-
-Is iterative refinement needed, with an actionable quality threshold?
-  Yes → Evaluator-Optimizer
-  No ↓
-
-Regardless of input content, always execute the same fixed set of paths?
-  Yes → Parallelization
-  No → Orchestrator-Workers (subtasks depend on input content, decided at runtime)
-```
-
-**Final selection for Go code review:** which agents to dispatch depends on the code being reviewed (concurrency patterns need a Concurrency Agent, `make([], 0)` needs a Performance Agent). This is a textbook "subtasks decided at runtime" scenario, and the decision tree points to Orchestrator-Workers. §18 shows the full implementation and validation process.
+Forcing Parallelization here means launching all 7 agents on every review — a 5-line variable rename incurs the full agent fleet's token cost and latency. The cost-effectiveness ratio collapses. Triage is the Orchestrator's core value.
 
 ---
 
 <a id="18-skill-agent-collaboration-architecture-design-implementation-and-validation"></a>
 ## 18. Skill-Agent Collaboration Architecture: Design, Implementation, and Validation
 
-> This chapter uses the `go-code-reviewer` → 7-agent orchestration system as the running case to demonstrate the full implementation path for an Orchestrator-Workers architecture. The design principles covered (vertical splitting, main conversation handles orchestration, on-demand triage, Grep-Gated protocol) are not specific to code review — they apply to any heavy skill that suffers from attention dilution.
+> **Pattern selected — now for implementation.** §17 diagnosed attention dilution, §17.3 established the Multi-Agent direction, and §17.4 selected Orchestrator-Workers from five candidate patterns. This chapter uses the `go-code-reviewer` → 7-agent orchestration system as the running case to answer the next question: **how do you turn a pattern choice into a runnable, verifiable, reusable architecture?** The design principles covered (vertical splitting, main conversation handles orchestration, on-demand triage, Grep-Gated protocol) are not specific to code review — they apply to any heavy skill that suffers from attention dilution.
 
 <a id="181-three-architecture-options-compared-decision-matrix"></a>
 ### 18.1 Three Architecture Options Compared (Decision Matrix)
@@ -498,7 +254,7 @@ Core principles of Architecture C:
 
 **Principle 2: The main conversation (orchestrator role) does not review code.** After loading the go-review-lead Skill, the main conversation acts as the orchestrator — it only does triage and aggregation, loads no vertical review skills, and does not directly analyze code logic. If the orchestrator also reviewed, its own findings would bias its aggregation of the other agents' results, recreating the same problem as the heavy skill.
 
-**Principle 3: Vertical agents load knowledge on demand through Skill tools.** Agent definition files are lightweight (a few dozen lines of prompts). Review knowledge is stored in standalone skill files that agents load at runtime via the `Skill()` tool. No content is duplicated, and skill files can be reused across agents.
+**Principle 3: Vertical agents load domain knowledge automatically at startup via the `skills:` field.** Agent definition files are lightweight (a few dozen lines of prompts). Review knowledge is stored in standalone skill files. Each agent declares its required skill in the `skills:` frontmatter field — the platform injects the full skill content automatically when the agent starts, with no need to call the `Skill()` tool at runtime. No content is duplicated, and skill files can be reused across agents.
 
 **Principle 4 (platform constraint + engineering decision): Orchestration logic must be encapsulated as a Skill and executed in the main conversation.** This conclusion rests on two layers of reasoning — without either layer, the answer to "why a Skill specifically" is incomplete.
 
@@ -874,20 +630,21 @@ The Multi-Agent architecture described in this chapter is published as runnable 
 | 7 Agent definition files | [`outputexample/go-review-lead/agents/`](../outputexample/go-review-lead/agents/) | Drop-in vertical worker agent files for `.claude/agents/` — does not include go-review-lead |
 | Deployment guide | [`outputexample/go-review-lead/README.md`](../outputexample/go-review-lead/README.md) | Installation steps, prerequisites, and usage examples |
 
+The execution unfolds in four steps:
 
-
+**Step 1 — Scope identification + review depth selection + pre-compile check**: The main conversation reads the diff, identifies changed file types (Go source / test files / config), selects review depth (Strict / Standard), and runs a compile check. Compile failures are reported immediately as REV-001/REV-002 without blocking downstream flow.
 
 ![review-depth+precompile](images/step-one.png)
 
-
+**Step 2 — Triage + parallel dispatch**: The go-review-lead Skill pattern-matches against the diff (sync import, `go func`, `make([`, `_test.go`, etc.), decides which worker agents to activate, and dispatches all selected agents in a **single response** to ensure true parallel execution.
 
 ![triage+dispatch](images/step-two.png)
 
-
+**Step 3 — Integrate sub-agent results**: After the 7 worker agents complete their respective dimension reviews in parallel, the main conversation collects all returned results, deduplicates by Finding ID (cross-dimension duplicates are merged into one entry at the higher severity), and extracts each agent's Execution Status line.
 
 ![integrate review results returned by sub agents](images/step-three.png)
 
-
+**Step 4 — Final review report**: The main conversation sorts findings by severity and outputs a standardized Markdown report containing: Executive Summary, Finding list (each with dimension label and evidence), Execution Status matrix, and Residual Risk notes.
 
 ![final review report](images/step-four.png)
 
