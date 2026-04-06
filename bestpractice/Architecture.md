@@ -569,6 +569,41 @@ Full architecture overview (main conversation Skill orchestration + 7 vertical a
                          Final report
 ```
 
+#### Empirical Validation: Why Simpler Alternatives Fail
+
+Architecture C (7-Agent + vertical Skills) may look over-engineered at first glance — after all, the best architecture is the simplest one that works, not the most complex. Before settling on this design, two simpler alternatives were tested experimentally. The data gave a clear negative answer.
+
+**Experiment 1: Single Agent + Grep-Gated Protocol**
+
+Hypothesis: adding a Grep-Gated execution protocol to the existing `go-code-reviewer` Skill (88 checklist items, 66 grep-gated) plus a compile pre-check would mechanically eliminate attention dilution, without needing Multi-Agent context isolation.
+
+Result: detection rate 62% — **identical to the baseline single Agent**. The Grep-Gated protocol successfully reduced cases where the model skipped mechanical checklist items, but did not solve the core problem: when multiple dimensions of checklists coexist in one context, High-severity findings still systematically suppress Medium-severity findings during semantic analysis.
+
+**Experiment 2: 3-Agent Compact Orchestration**
+
+Hypothesis: Security, Concurrency, and Error are closely related business domains and can be merged into a single subagent context, reducing token cost while maintaining adequate detection rate.
+
+7 agents were collapsed into 3: Security+Concurrency+Error in one agent, Performance+Quality in a second, Logic+Test in a third.
+
+Result: detection rate dropped to 69%, missing 4 out of 13 issues. Four High-severity concurrency bugs suppressed a Medium-severity Nil `*User` error within the merged context — **exactly the same mechanism** as the original single-Agent case where High concurrency findings suppressed Medium performance findings. Business-domain relatedness provides no protection against attention competition.
+
+**Results Summary**
+
+| Approach | Detection rate | Duplication rate | Token cost |
+|----------|---------------|-----------------|------------|
+| Original single Agent | 8/13 (62%) | 0% | ~$0.03 |
+| Single Agent + Grep-Gated | 8/13 (62%) | 0% | ~$0.03 |
+| 3-Agent compact | 9/13 (69%) | ~15% | ~$0.05 |
+| **7-Agent optimized (recommended)** | **15/15 (100%)** | **31.6%** | **~$0.08** |
+
+**The Core Mechanism**
+
+Both experiments point to the same counter-intuitive finding: **the driver of attention dilution is severity disparity, not topic relatedness**. Whenever High and Medium findings coexist in the same context, High findings systematically suppress Medium findings during semantic analysis — regardless of which business domain they belong to.
+
+The implication: one independent context per review dimension is the **minimum sufficient condition** for eliminating attention dilution. Remove one dimension's isolation and the suppression mechanism reappears, producing missed findings.
+
+The 31.6% cross-agent duplication rate is not waste — it is the structural cost of parallel multi-dimension coverage, and the guarantor of correctness. The 7-Agent architecture is not over-engineering; it is the simplest design that actually works. Do not reduce entities without necessity.
+
 <a id="182-skill-splitting-guide"></a>
 ### 18.2 Skill Splitting Guide (Using `go-code-reviewer` as the Example)
 
