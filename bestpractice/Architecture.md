@@ -500,7 +500,38 @@ Core principles of Architecture C:
 
 **Principle 3: Vertical agents load knowledge on demand through Skill tools.** Agent definition files are lightweight (a few dozen lines of prompts). Review knowledge is stored in standalone skill files that agents load at runtime via the `Skill()` tool. No content is duplicated, and skill files can be reused across agents.
 
-**Principle 4 (platform constraint): Orchestration must run in the main conversation, not in a subagent.** Claude Code explicitly states that subagents cannot spawn other subagents ("Subagents cannot spawn other subagents"). Therefore go-review-lead **must run as a Skill in the main conversation** and must not be configured as an agent definition in `.claude/agents/` — if it were, it would run as a subagent and Agent tool calls would be silently ignored, causing parallel dispatch to fail.
+**Principle 4 (platform constraint + engineering decision): Orchestration logic must be encapsulated as a Skill and executed in the main conversation.** This conclusion rests on two layers of reasoning — without either layer, the answer to "why a Skill specifically" is incomplete.
+
+**Layer 1: Why can orchestration not run as a subagent (i.e., be configured as an agent definition in `.claude/agents/`)?**
+Claude Code explicitly states that subagents cannot spawn other subagents ("Subagents cannot spawn other subagents"). If go-review-lead were configured as an agent definition file, it would run as a subagent when invoked, and its Agent tool calls for parallel dispatch would be silently ignored — the 7 vertical agents would degrade to serial execution, or not be dispatched at all.
+
+**Layer 2: Given that the orchestrator must run in the main conversation, why can it not simply be an inline prompt — why must it be packaged as a Skill?**
+This is the more important question to answer. There are two reasons:
+
+1. **Unacceptable complexity**: The orchestration process is a mixed pipeline-and-parallel-exploration pattern — scope identification → review depth selection → compile pre-check → four-phase triage → dynamic dispatch to N vertical agents in parallel → deduplication and consolidation. Writing this as an inline prompt would produce something far too long and fragile to maintain as a one-off.
+
+2. **No reusability**: Every code review session would require re-supplying this complex prompt from scratch. This is a standardized pipeline that should be encapsulated, not re-written each time.
+
+Complete reasoning chain:
+
+```
+Platform constraint: subagents cannot spawn subagents
+  → orchestration must run in the main conversation
+  → Option A: use an inline prompt for each review session?
+      → No: pipeline too complex + not reusable
+  → Option B: encapsulate as a Skill, invoked by the main conversation
+      → Yes: complexity is contained + standardized + reusable
+      → Skill is the only appropriate vehicle
+```
+
+**A deeper observation**: encapsulating the orchestration logic as a Skill is not merely a pragmatic engineering decision — it directly instantiates the architecture pattern this chapter describes, and does so simultaneously at two levels:
+
+| Level | Role | Pattern |
+|-------|------|---------|
+| **Macro** | Main conversation invokes orchestration Skill → Skill dispatches 7 subagents in parallel → Skill deduplicates and consolidates → main conversation presents result | Skill orchestrates Agents |
+| **Micro** | Each subagent loads its own specialized vertical review Skill to perform its work | Agent depends on Skill |
+
+Both levels run the same Skill-Agent collaboration pattern; the architecture is self-consistent from top to bottom: **orchestration uses a Skill, execution uses a Skill, and Agents are what connect them**. This is not coincidence — it is the Skill-Agent collaboration idea applied consistently throughout.
 
 Full architecture overview (main conversation Skill orchestration + 7 vertical agents):
 
@@ -807,6 +838,25 @@ The Multi-Agent architecture described in this chapter is published as runnable 
 | 7 vertical review Skills | `skills/go-{concurrency,performance,error,security,quality,test,logic}-review/SKILL.md` | Per-dimension checklists, Grep-Gated patterns, and output format |
 | 7 Agent definition files | [`outputexample/go-review-lead/agents/`](../outputexample/go-review-lead/agents/) | Drop-in vertical worker agent files for `.claude/agents/` — does not include go-review-lead |
 | Deployment guide | [`outputexample/go-review-lead/README.md`](../outputexample/go-review-lead/README.md) | Installation steps, prerequisites, and usage examples |
+
+
+
+
+![review-depth+precompile](images/step-one.png)
+
+
+
+![triage+dispatch](images/step-two.png)
+
+
+
+![integrate review results returned by sub agents](images/step-three.png)
+
+
+
+![final review report](images/step-four.png)
+
+
 
 <a id="187-frequently-asked-questions"></a>
 ### 18.7 Frequently Asked Questions

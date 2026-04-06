@@ -10,6 +10,7 @@ prerequisite: Evaluation.md (§10–11)
 
 ## Table of Contents
 
+- [Claude-as-Co-Author: The Skill Authorship Loop](#co-author)
 - [15. Iteration Methodology](#15-iteration-methodology)
     - [15.1 Two Drivers of Iteration](#151-two-drivers-of-iteration)
     - [15.2 The Four Phases of an Iteration Cycle](#152-the-four-phases-of-an-iteration-cycle)
@@ -25,6 +26,108 @@ prerequisite: Evaluation.md (§10–11)
     - [16.3 `git-commit` Skill Iteration Cases (a Complementary Perspective)](#163-git-commit-skill-iteration-cases-a-complementary-perspective)
     - [16.4 Iteration Stop Signals](#164-iteration-stop-signals)
     - [16.5 The Full Skill Lifecycle and Multi-Layer Defence](#165-the-full-skill-lifecycle-and-multi-layer-defence)
+
+---
+
+<a id="co-author"></a>
+## Claude-as-Co-Author: The Skill Authorship Loop
+
+Before addressing how to improve a skill that already exists — finding misses, classifying root causes, applying fixes, verifying results, there is a more fundamental question: **what determines the initial quality ceiling?**
+
+The answer depends largely on whether you use a significantly underrated resource: **involving Claude in the skill-drafting process itself**.
+
+### Why Claude Is Good at Writing Skills
+
+Skills and Agents are Claude's native runtime components. During training and alignment, the model deeply internalized what kinds of execution instructions make itself execute reliably — tacit knowledge 
+that no external documentation can replicate. Claude-authored skills tend to have tight structure, clean checklist boundaries, and precisely worded execution rules. This is not coincidence; 
+it is a native speaker writing in their native language.
+
+The practical implication: **hand-writing a skill is excellent practice for learning the structure, but after that first draft, give Claude your full design intent and let it participate in the rewrite or refactor**.
+
+### Intent Compilation: What This Loop Does
+
+Think of the process as **intent compilation**:
+
+- **You supply**: the problem to be solved, the pain points encountered, the design constraints
+- **Claude outputs**: an executable Agent structure (checklist, execution rules, anti-example gates)
+- **The key difference from traditional programming**: the "compiler" participates in design decisions rather than passively translating
+
+When you review Claude's output, you are doing two things simultaneously: verifying that your intent was preserved, and learning from its structural choices — why it organized the checklist that way, why a given execution rule is worded as it is. This is learning the language from its native speaker.
+
+### Practical Workflow
+
+```
+① Write the first draft yourself
+   ↓  Goal: force yourself to think through the requirements; understand the skill's structural logic
+② Describe your intent to Claude
+   ↓  Tell it: the problem you need to solve, the pain points you've hit, the limits of your current design
+③ Claude rewrites / refactors
+   ↓  It contributes: structural correctness, execution-rule phrasing, anti-example gate patterns
+④ Human reviews Claude's version
+   ↓  Two goals: confirm intent is preserved; learn from its design decisions
+⑤ Refine further on top of its version
+   ↓  You contribute: domain knowledge, scenario specificity, alignment with your real usage context
+   ↓
+   Enter the §15 debugging loop
+```
+
+### Two Cognitive Advantages, Combined
+
+| Source | Strengths | Limitations |
+|--------|-----------|-------------|
+| User   | Domain knowledge, problem specificity, real-world usage context | Less structural experience than the training corpus |
+| Claude | Structural correctness, execution-rule phrasing, execution intuition internalized through training | Lacks your domain and business context |
+
+**The prerequisite**: before asking Claude to rewrite, you need to be able to describe your intent clearly. For example, Not "write me a code review skill," 
+but "I use this skill to review Go concurrency code; the core problem is attention dilution causing concurrent-defect misses; I want to solve this with a
+Grep-Gated pre-scan mechanism that forces pattern confirmation before semantic analysis." The more specific the requirements, the closer Claude's output is to your actual scenario.
+
+### Effect on Iteration Efficiency
+
+Using this authorship loop well significantly reduces the debugging workload in §15:
+
+- **Checklist gaps** (§15.3 fix rate 100%): Claude's initial drafts tend to be structurally more complete, with fewer structural omissions to discover.
+- **Model-execution omissions** (§15.3 fix rate 67%): Claude has a more accurate internal model of its own execution characteristics, and can proactively word execution rules to prevent attention competition in high-defect-density scenarios.
+
+This does not mean you can skip the debugging loop — domain-knowledge blind spots still require real-world exposure to surface. But **the higher the starting point, the fewer refinement cycles are needed downstream**.
+
+### Claude as Reviewer: The Evaluation-Feedback-Improvement Loop
+
+The workflow above covers the **initial authorship** phase. But the collaboration loop does not end once the first usable version exists — it is equally valuable during iteration.
+
+Beyond quantitative evaluation with the skill-creator Skill (§15.5), there is a complementary qualitative path: **hand Claude the current Skill together with a few real usage records (including any missed or falsely flagged cases) and ask it to act as a reviewer**:
+
+1. **Evaluate**: structural completeness and execution robustness of the Skill
+2. **Identify**: concrete design problems (unclear checklist boundaries, ambiguous rule wording, missing anti-example guards)
+3. **Propose**: prioritized improvement directions and specific change suggestions
+4. **You validate**: adopt what makes sense and move into the next cycle
+
+```
+Evaluation-Feedback-Improvement Loop (complementary to quantitative evaluation):
+
+Skill in use → problem surfaces
+      ↓
+Describe pain point to Claude + provide usage records
+      ↓
+Claude reviews → locates root cause → proposes directions
+      ↓
+You validate
+      ↓
+Revise Skill → verify with real use
+      ↓
+(next cycle)
+```
+
+This process resembles **meta-programming through human-AI dialogue**: you supply the framework and the pain points; Claude's review draws on its deeply internalized model of its own execution characteristics — it knows which kinds of wording tend to cause rules to be skipped under high-defect-density, and which checklist boundaries tend to produce execution ambiguity. This is not document proofreading; it is **metacognitive feedback**.
+
+The two evaluation paths are complementary, not redundant:
+
+| Path | What you get | Best at finding |
+|------|-------------|-----------------|
+| Quantitative evaluation (skill-creator Skill) | Scores, pass rates, token cost-efficiency — comparable and trackable | **Whether** there is a problem |
+| Qualitative evaluation (Claude as reviewer) | Structural blind spots, wording ambiguity, execution risk prediction | **Why** there is a problem |
+
+The most efficient combination: quantitative evaluation surfaces **that** something is wrong; Claude's review pinpoints **why** it is wrong; you decide **how** to fix it.
 
 ---
 
