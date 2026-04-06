@@ -9,6 +9,7 @@ APP_REF = SKILL_DIR / "references" / "applicability-checklist.md"
 CI_REF = SKILL_DIR / "references" / "ci-strategy.md"
 CRASH_REF = SKILL_DIR / "references" / "crash-handling.md"
 TARGET_REF = SKILL_DIR / "references" / "target-priority.md"
+ANTI_EXAMPLES_REF = SKILL_DIR / "references" / "anti-examples.md"
 
 
 def frontmatter(text: str) -> str:
@@ -96,22 +97,32 @@ class TemplateTests(unittest.TestCase):
 
 
 class AntiExampleTests(unittest.TestCase):
+    # Anti-examples moved to references/anti-examples.md (progressive disclosure).
+    # SKILL.md contains a contractual reference; full content lives in the reference file.
+
     def test_anti_examples_section_exists(self) -> None:
-        content = SKILL_MD.read_text()
-        self.assertIn("Anti-Examples (Common Fuzzing Mistakes)", content)
+        # Section heading stays in SKILL.md as the contractual reference anchor
+        skill = SKILL_MD.read_text()
+        ref = ANTI_EXAMPLES_REF.read_text()
+        self.assertTrue(
+            "Anti-Examples (Common Fuzzing Mistakes)" in skill or
+            "Anti-Examples" in ref,
+            "anti-examples section not found in SKILL.md or references/anti-examples.md",
+        )
 
     def test_minimum_anti_example_count(self) -> None:
-        content = SKILL_MD.read_text()
+        # Full catalog is in references/anti-examples.md
+        content = ANTI_EXAMPLES_REF.read_text()
         count = len(re.findall(r"### Mistake \d+:", content))
-        self.assertGreaterEqual(count, 7, f"expected >=7 anti-examples, got {count}")
+        self.assertGreaterEqual(count, 7, f"expected >=7 anti-examples in reference file, got {count}")
 
     def test_anti_examples_have_bad_good_pairs(self) -> None:
-        content = SKILL_MD.read_text()
+        content = ANTI_EXAMPLES_REF.read_text()
         self.assertIn("// BAD:", content)
         self.assertIn("// GOOD:", content)
 
     def test_key_anti_examples_present(self) -> None:
-        content = SKILL_MD.read_text()
+        content = ANTI_EXAMPLES_REF.read_text()
         self.assertIn("trivial function", content.lower())
         self.assertIn("No oracle", content)
         self.assertIn("Skip rate", content)

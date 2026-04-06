@@ -9,6 +9,18 @@ allowed-tools: Read, Grep, Glob, Bash
 Use this skill to review Go code for real defects and risk, not just style.
 The review must be evidence-based, policy-aligned, and actionable.
 
+## Quick Reference
+
+| When you need to… | Jump to |
+|---|---|
+| Select review depth (Lite / Standard / Strict) | §Execution Modes |
+| Read repo policy before reviewing | §Review Policy Sources |
+| Execute full review checklist | §Review Checklist |
+| Determine finding severity | §Finding Severity |
+| Decide what NOT to report | §Review Discipline |
+| Format findings and report | §Output Format |
+| See a complete formatted output example | Load `references/example-output.md` |
+
 ## When To Use
 Trigger this skill when the user asks for:
 - Go code review / PR review / diff review
@@ -416,41 +428,10 @@ This section captures items that are valuable context but do not belong in Findi
 1-3 lines only, after findings. Include origin breakdown: `X introduced / Y pre-existing / Z uncertain`.
 If findings were capped by volume limit, note: `N additional lower-priority issues moved to Residual Risk`.
 
-### Example Output (End-to-End)
-The example below shows the minimum shape. Keep findings short, evidence-backed, and origin-aware.
-```
-### Review Mode
-- Standard
-- 4 files changed, includes concurrency and persistence paths
+### Example Output Reference
 
-### Findings
-
-#### [High] Race Condition on Shared Map
-- **ID:** REV-001
-- **Origin:** introduced
-- **Baseline:** new
-- **Principle:** N/A (no constitution.md)
-- **Location:** internal/cache/store.go:42
-- **Impact:** Concurrent HTTP handlers write to shared map; will panic under load
-- **Evidence:** `go vet -race` confirms; map write at L42, concurrent access from handler at L78
-- **Recommendation:** Replace with `sync.Map` or protect with `sync.RWMutex`
-- **Action:** must-fix
-
-#### [High] SQL Injection in Existing Query Builder
-- **ID:** REV-002
-- **Origin:** pre-existing
-- **Baseline:** new
-- **Principle:** N/A
-- **Location:** internal/repo/user.go:67
-- **Impact:** User-controlled input directly concatenated into SQL query
-- **Evidence:** `fmt.Sprintf("SELECT * FROM users WHERE name = '%s'", name)`
-- **Recommendation:** Use parameterized query: `db.QueryContext(ctx, "SELECT * FROM users WHERE name = ?", name)`
-- **Action:** follow-up issue
-
-### Summary
-1 introduced / 1 pre-existing / 0 uncertain.
-The pre-existing SQL injection is reported for visibility and follow-up, not as merge debt for the author.
-```
+When you need to verify report formatting or check what a complete review looks like:
+→ Load `references/example-output.md` for a full example covering Review Mode, Findings with all required fields (ID, Origin, Baseline, Principle, Location, Impact, Evidence, Recommendation, Action), and Summary.
 
 ## No-Finding Case
 If no issues are found:

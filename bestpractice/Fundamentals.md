@@ -20,6 +20,7 @@
     - [5.1 Core Idea](#51-core-idea)
     - [5.2 Selective Loading Table](#52-selective-loading-table)
     - [5.3 Add a Table of Contents to Long Files](#53-add-a-table-of-contents-to-long-files)
+    - [5.4 Three Principles for the Main File: Quick Reference, 80/20 Split, and Contractual References](#54-three-principles-for-the-main-file-quick-reference-8020-split-and-contractual-references)
 
 ## 1. Why Skills Exist
 
@@ -376,5 +377,61 @@ Any reference file longer than 100 lines should have a table of contents at the 
 ...
 16. [Validation Checklist](#16-validation-checklist)
 ```
+
+### 5.4 Three Principles for the Main File: Quick Reference, 80/20 Split, and Contractual References
+
+The first three sections described the three-layer loading structure (L1/L2/L3) and the basic form of selective loading. In practice, though, a `SKILL.md` that stays under 500 lines can still force Claude to scan line by line to find what it needs. The following three principles work together to give the main file its own navigation capability.
+
+#### Principle 1: Quick Reference Routing Table — The Entry Layer
+
+Place a routing table right after `## Core Rules`. Each row maps one type of user intent directly to the section or reference file that handles it:
+
+```markdown
+## Quick Reference
+
+| When you need to… | Jump to |
+|---|---|
+| Generate README from scratch | §Pre-Generation Gates → §Project Type Routing |
+| Update an existing README | §README Update Triggers + load `references/checklist.md` |
+| Chinese or bilingual output | §Chinese Guidelines + load `references/bilingual-guidelines.md` |
+| Monorepo project | §Monorepo Rules + load `references/monorepo-rules.md` |
+| Check output quality | §README Quality Scorecard |
+```
+
+The Quick Reference's job is to **terminate scanning at the first screen**: Claude reads the table and locates what it needs in O(1) rather than O(n), with no need to scan the rest of the file.
+
+#### Principle 2: High-Frequency Inline, Low-Frequency External (80/20 Rule)
+
+Content in `SKILL.md` should be organized by usage frequency, not by logical completeness:
+
+| Content type | Where it goes | Typical examples |
+|---|---|---|
+| Core rules, trigger conditions, main workflow | Inline in main file | Hard Rules, Workflow Steps, Mode Selection |
+| The 1–2 most common examples or anti-examples | Inline in main file | BAD/GOOD pair for the most frequent mistake |
+| Full example outputs, anti-example catalogs | `references/` (external) | `example-output.md`, `anti-examples.md` |
+| Template libraries, advanced tuning, CI config | `references/` (external) | `templates.md`, `advanced-tuning.md` |
+
+The test: **80% of requests need only 20% of the content**. If a section is only used in specific scenarios ("when the user requests CI integration", "when refactoring an existing document"), it belongs in L3 — link out, don't inline.
+
+#### Principle 3: Contractual References — All Three Elements Are Required
+
+Section 5.2 showed the basic form of selective loading. A contractual reference is the upgraded version: the reference is not just a path, it is a **contract** that tells Claude exactly when to load and what to expect:
+
+```markdown
+# ❌ Weak reference (Claude doesn't know when to load it)
+See `reference/revenue.md` for more details.
+# ✅ Contractual reference (trigger condition + path + expected content)
+## Revenue Analysis
+When the user asks about revenue growth, ARPU, or revenue composition:
+→ Load `reference/revenue.md` for calculation formulas and industry benchmarks
+```
+
+**The three required elements of a contractual reference**:
+
+1. **Trigger condition**: when the file should be loaded ("when the user asks about X", "when signal Y is detected")
+2. **File path**: where to find the content (`references/xxx.md`)
+3. **Expected content**: what loading it provides ("full BAD/GOOD catalog covering 6 anti-pattern types")
+
+**These three principles form a complete progressive disclosure chain**: the Quick Reference routes user intent to the right section or reference file; the 80/20 rule determines what stays in the main file and what moves out; contractual references ensure that moved-out content is loaded precisely when triggered. Remove any one of the three and progressive disclosure breaks down.
 
 ---

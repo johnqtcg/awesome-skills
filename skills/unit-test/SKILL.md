@@ -7,6 +7,19 @@ description: 'Use when the user asks for unit tests (e.g, "单元测试", "unit 
 
 Create and refine Go tests for this repository with table-driven cases and explicit bug-hunting rules.
 
+## Quick Reference
+
+| When you need to… | Jump to |
+|---|---|
+| Quick tests for simple functions | Light mode — §Execution Modes |
+| Normal feature development | Standard mode (default) — §Execution Modes |
+| High-risk / release / concurrent code | Strict mode — §Execution Modes |
+| Fix or triage failing tests | §Test Execution Hardening |
+| Supplement coverage on existing code | §Coverage Gate Policy |
+| Know if a Killer Case is required | Standard + Strict modes: always required — §Killer Case |
+| Check Go version compatibility | §Go Version Gate |
+| Write a Killer Case | §Killer Case — Definition + load `references/killer-case-patterns.md` |
+
 ## Hard Rules
 
 - Name test files as `<target_file>_test.go`, co-located with source.
@@ -36,7 +49,8 @@ A **killer case** is a test case designed to catch a specific, named defect. It 
 
 A killer case is NOT just another edge case — it is explicitly tied to a defect hypothesis. If you cannot name the defect it catches, it is not a killer case.
 
-See `references/killer-case-patterns.md` for 6 concrete Go templates.
+When writing a killer case and you need concrete Go patterns or templates:
+→ Load `references/killer-case-patterns.md` for 6 Go templates covering off-by-one, mapping loss, concurrency, nil-safety, boundary, and error-path defects.
 
 ### Anti-examples (DO NOT write these tests)
 - Testing Go standard library behavior (e.g., json.Marshal serializes struct correctly)

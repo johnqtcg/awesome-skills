@@ -17,6 +17,20 @@ Generate high-quality README documents from codebase evidence, with clear struct
 - Keep internal workflow reporting out of README body by default. Evidence maps, scorecards, and verification-state reporting belong in the assistant response unless the user explicitly asks for them in the document.
 - Treat top-level `README.md` as a user-facing homepage first and a maintainer reference second, unless the user explicitly wants an internal-only README.
 
+## Quick Reference
+
+| When you need to… | Jump to |
+|---|---|
+| Generate README from scratch | §Pre-Generation Gates → §Project Type Routing → §Generation Workflow |
+| Update an existing README | §README Update Triggers + load `references/checklist.md` |
+| Chinese or bilingual output | §Chinese / Bilingual README Guidelines + load `references/bilingual-guidelines.md` |
+| Monorepo project | §Monorepo Rules + load `references/monorepo-rules.md` |
+| Lightweight / small project | §Lightweight Mode |
+| Calibrate ToC and navigation | §README Navigation Rule |
+| Check output quality | §README Quality Scorecard (3-Tier) |
+| Validate evidence mapping | §Evidence Mapping Output |
+| Check/avoid README anti-patterns | See §Anti-Examples for top failure; full catalog in `references/anti-examples.md` |
+
 ## Pre-Generation Gates (Mandatory)
 
 ### 1) Audience and Language Gate
@@ -286,7 +300,7 @@ Never write a fabricated JSON/YAML body as if it were real output when no eviden
 
 ## Anti-Examples (BAD / GOOD Markdown Pairs)
 
-Use these patterns to suppress the most common README failures.
+**Most common failure — process-state labels in README body:**
 
 BAD:
 
@@ -310,133 +324,10 @@ make lint
 ```
 ````
 
-Topic: process labels.
+This applies to all process-state language: `Verified`, `Not verified in this environment`, `PASS/FAIL` — these belong in the assistant response, not the README body.
 
-BAD:
-
-```markdown
-## Maintainer workflow
-
-Install pre-commit hooks, set up internal dashboards, then scroll down for what the project does.
-```
-
-GOOD:
-
-````markdown
-## Overview
-
-Explain the product value first. Move maintainer workflow to a later section or contributor guide.
-````
-
-Topic: Maintainer workflow before value proposition.
-
-BAD:
-
-```markdown
-![Coverage](https://codecov.io/gh/example/project/badge.svg)
-![Downloads](https://img.shields.io/npm/dm/example)
-```
-
-GOOD:
-
-````markdown
-![CI](https://github.com/example/project/actions/workflows/ci.yml/badge.svg)
-![License](https://img.shields.io/badge/license-MIT-blue)
-````
-
-Topic: badge fabrication.
-
-BAD:
-
-```markdown
-## Configuration
-
-`DB_HOST=localhost`
-`REDIS_URL=redis://localhost:6379`
-`JWT_SECRET=changeme`
-```
-
-GOOD:
-
-````markdown
-## Configuration
-
-Configuration source: `.env.example`
-Unknown variables: `Not found in repo`
-````
-
-Topic: configuration guessing.
-
-BAD:
-
-```markdown
-## Project Structure
-
-Huge monorepo tree with every nested file for every app and package.
-```
-
-GOOD:
-
-````markdown
-## Repository Overview
-
-| Module | Path | Description |
-|--------|------|-------------|
-| API | `apps/api/` | Public HTTP service |
-| Worker | `apps/worker/` | Background jobs |
-````
-
-Topic: monorepo tree dump.
-
-BAD:
-
-```markdown
-## Quick Start / 快速开始
-
-### Installation / 安装
-```
-
-GOOD:
-
-````markdown
-## 快速开始
-
-### 安装
-````
-
-Topic: Double-language headings.
-
-BAD:
-
-````markdown
-## Usage
-
-Output:
-
-```json
-{"status":"ok"}
-```
-````
-
-GOOD:
-
-````markdown
-## Usage
-
-```bash
-curl -s localhost:8080/health
-```
-
-Response:
-
-```json
-{"status":"ok"}
-```
-````
-
-Topic: Output snippet without input command.
-
-This applies to all process-state language — not just verification tables. Additional low-frequency anti-patterns live in `references/anti-examples.md`.
+When refactoring an existing README that may contain low-frequency anti-patterns (fabricated badges, guessed config values, monorepo tree dumps, double-language headings, output-without-input snippets):
+→ Load `references/anti-examples.md` for the full BAD/GOOD catalog with correction guidance for each pattern.
 
 ## Generation Workflow
 
@@ -574,19 +465,25 @@ bash "<path-to-skill>/scripts/run_regression.sh"
 
 ## Load References Selectively
 
-- `scripts/discover_readme_needs.sh`
-  Run first (step 1 of Generation Workflow) to collect repo facts deterministically.
-- `references/templates.md`
-  Load when generating a new README from scratch or switching project type template.
-- `references/golden-<type>.md` (service / library / cli / monorepo / lightweight)
-  Load **only the file matching the detected project type** when calibrating output quality. See `references/golden-examples.md` for the index.
-- `references/command-priority.md`
-  Load **only when command conflicts appear** (e.g., Makefile + package.json + CI scripts all define overlapping commands).
-- `references/checklist.md`
-  Load **only in refactor mode** (updating an existing README) during final review phase.
-- `references/anti-examples.md`
-  Load **only when refactoring** an existing README that may contain low-frequency anti-patterns (tree dumps, double-language headings, missing input commands).
-- `references/bilingual-guidelines.md`
-  Load **only when the output language is Chinese or bilingual** for heading style, language-split rules, and bilingual anti-patterns.
-- `references/monorepo-rules.md`
-  Load **only when the detected project type is monorepo** for tree-depth limits, per-app pointer tables, and submodule README linking rules.
+When generating a README from scratch or switching template:
+→ Load `references/templates.md` for Template A–E structures and section checklists.
+
+When you need to match a golden-quality example for a specific project type (service / library / cli / monorepo / lightweight), or for calibrating output quality against a reference:
+→ Load `references/golden-<type>.md` (the file matching the detected type) for calibrated output examples. See `references/golden-examples.md` for the index.
+
+When command conflicts appear (Makefile + package.json + CI scripts all define overlapping commands):
+→ Load `references/command-priority.md` for the resolution precedence rules.
+
+When updating an existing README (refactor mode), during the final review phase:
+→ Load `references/checklist.md` for the section-by-section refactor checklist.
+
+When refactoring an existing README that may contain fabricated badges, guessed config, monorepo tree dumps, double-language headings, or output-without-input patterns:
+→ Load `references/anti-examples.md` for the full BAD/GOOD catalog with correction guidance for each anti-pattern.
+
+When the output language is Chinese or bilingual:
+→ Load `references/bilingual-guidelines.md` for heading style, language-split rules, and bilingual anti-patterns.
+
+When the detected project type is monorepo:
+→ Load `references/monorepo-rules.md` for tree-depth limits, per-app pointer tables, and submodule README linking rules.
+
+Run `scripts/discover_readme_needs.sh` first (step 1 of Generation Workflow) to collect repo facts deterministically.

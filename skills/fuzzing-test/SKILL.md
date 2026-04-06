@@ -7,14 +7,37 @@ description: Generate Go fuzz tests (Go 1.18+ testing.F) for specified code when
 
 Generate high-signal Go fuzz tests only when targets are suitable.
 
+## Quick Reference
+
+| When you need to… | Jump to |
+|---|---|
+| Determine if a target is suitable for fuzzing | §Applicability Gate (run first, always) |
+| Choose among multiple candidate targets | §Target Priority Gate + load `references/target-priority.md` |
+| Write the fuzz harness | §Harness Templates |
+| Handle a discovered crash | §Crash Documentation + load `references/crash-handling.md` |
+| Set up CI integration | Load `references/ci-strategy.md` |
+| Diagnose a slow / ineffective fuzz run | Load `references/advanced-tuning.md` |
+| Avoid common fuzzing mistakes | Load `references/anti-examples.md` |
+
 ## Load References Selectively
 
-Load on condition:
-- `references/applicability-checklist.md` — **only when** target suitability is ambiguous (borderline cases).
-- `references/target-priority.md` — **only when** 3+ candidate targets need prioritization.
-- `references/crash-handling.md` — **only when** fuzz discovers a crash that needs documentation.
-- `references/ci-strategy.md` — **only when** the user requests CI integration for fuzz tests.
-- `references/advanced-tuning.md` — **only when** diagnosing ineffective fuzz runs, OOM, leaks, flaky failures, or tuning performance.
+When target suitability is ambiguous (borderline cases):
+→ Load `references/applicability-checklist.md` for the full suitability decision tree with edge-case guidance.
+
+When 3+ candidate targets need prioritization:
+→ Load `references/target-priority.md` for the bug-finding-yield ranking criteria and tie-breaking rules.
+
+When a fuzz run discovers a crash that needs documentation:
+→ Load `references/crash-handling.md` for crash triage steps, corpus commit policy, and regression test patterns.
+
+When the user requests CI integration for fuzz tests:
+→ Load `references/ci-strategy.md` for GitHub Actions configuration, corpus caching, and time-budget settings.
+
+When diagnosing an ineffective fuzz run, OOM, leaks, flaky failures, or performance issues:
+→ Load `references/advanced-tuning.md` for seed quality analysis, skip-rate diagnosis, allocation profiling, and harness simplification patterns.
+
+When you need to avoid or check for common fuzzing mistakes (trivial targets, missing oracle, bad seeds, OOM, global state, time-based assertions, dropped corpus):
+→ Load `references/anti-examples.md` for 7 BAD/GOOD code patterns covering the most frequent harness mistakes.
 
 ## Applicability Gate (Must Run First)
 
@@ -343,87 +366,6 @@ Record a baseline before scaling up:
 - time budget used for the measurement
 
 If `execs/sec` is too low for meaningful exploration, simplify the harness before asking for longer fuzz windows.
-
-## Anti-Examples (Common Fuzzing Mistakes)
-
-### Mistake 1: Fuzzing a trivial function (Gate 1 failure)
-
-```go
-// BAD: trivial arithmetic — fuzz adds zero value over unit tests
-func FuzzAdd(f *testing.F) {
-	f.Add(1, 2)
-	f.Fuzz(func(t *testing.T, a, b int) {
-		got := Add(a, b)
-		if got != a+b {
-			t.Fatalf("Add(%d, %d) = %d", a, b, got)
-		}
-	})
-}
-// GOOD: don't fuzz — write table-driven unit tests instead.
-```
-
-### Mistake 2: No oracle (Gate 3 failure)
-
-```go
-// BAD: no assertion — only catches panics, misses logic bugs
-f.Fuzz(func(t *testing.T, data []byte) {
-	result, _ := Transform(data)
-	_ = result // never checked
-})
-// GOOD: always assert an invariant (round-trip, domain constraint, valid set).
-```
-
-### Mistake 3: Skip rate explosion from bad seeds
-
-```go
-// BAD: Skip rate >90%; the harness rarely reaches interesting logic
-f.Add([]byte("}{"))
-f.Fuzz(func(t *testing.T, data []byte) {
-	var req Request
-	if err := json.Unmarshal(data, &req); err != nil {
-		t.Skip()
-	}
-})
-// GOOD: add multiple valid seeds so the mutator explores useful structure first.
-```
-
-### Mistake 4: Missing size guard causes OOM
-
-```go
-// BAD: no bound, risk of OOM or pathological allocation spikes
-f.Fuzz(func(t *testing.T, data []byte) {
-	_, _ = ParseLargeBlob(data)
-})
-// GOOD: bound input before expensive parsing
-```
-
-### Mistake 5: Fuzzing global/external state
-
-```go
-// BAD: global/external state dominates behavior; results are non-deterministic
-f.Fuzz(func(t *testing.T, data []byte) {
-	_, _ = CreateOrder(context.Background(), db, data)
-})
-// GOOD: fuzz the pure validation layer and cover DB behavior with integration tests.
-```
-
-### Mistake 6: Time/random-based assertions
-
-```go
-// BAD: assertion depends on wall clock or randomness
-f.Fuzz(func(t *testing.T, data []byte) {
-	require.Equal(t, time.Now().Unix(), Parse(data).Timestamp)
-})
-// GOOD: assert structural properties and stable invariants only.
-```
-
-### Mistake 7: Dropping crash corpus or regression input
-
-```go
-// BAD: fix the bug but discard the crashing input
-os.RemoveAll("testdata/fuzz/FuzzParseXxx")
-// GOOD: keep the crashing corpus entry and replay it in CI.
-```
 
 ## Quality Scorecard
 

@@ -9,6 +9,7 @@ TEMPLATES_REF = SKILL_DIR / "references" / "templates.md"
 CHECKLIST_REF = SKILL_DIR / "references" / "checklist.md"
 COMMAND_REF = SKILL_DIR / "references" / "command-priority.md"
 GOLDEN_REF = SKILL_DIR / "references" / "golden-examples.md"
+ANTI_EXAMPLES_REF = SKILL_DIR / "references" / "anti-examples.md"
 DISCOVER_SCRIPT = SKILL_DIR / "scripts" / "discover_readme_needs.sh"
 
 
@@ -21,6 +22,11 @@ def frontmatter(text: str) -> str:
 
 def skill_text() -> str:
     return SKILL_MD.read_text()
+
+
+def anti_examples_text() -> str:
+    """Anti-examples live in references/anti-examples.md (progressive disclosure)."""
+    return ANTI_EXAMPLES_REF.read_text()
 
 
 # ── 1. Frontmatter ──────────────────────────────────────────────
@@ -73,14 +79,18 @@ class TestAntiExamples(unittest.TestCase):
         self.assertIn("Anti-Examples (BAD / GOOD Markdown Pairs)", skill_text())
 
     def test_bad_good_count(self):
-        data = skill_text()
-        bad_count = len(re.findall(r"^BAD:", data, re.MULTILINE))
-        good_count = len(re.findall(r"^GOOD:", data, re.MULTILINE))
+        # High-frequency top example stays inline; full catalog in references/anti-examples.md
+        inline = skill_text()
+        ref = anti_examples_text()
+        combined = inline + "\n" + ref
+        bad_count = len(re.findall(r"^BAD:", combined, re.MULTILINE))
+        good_count = len(re.findall(r"^GOOD:", combined, re.MULTILINE))
         self.assertGreaterEqual(bad_count, 7, f"only {bad_count} BAD examples")
         self.assertGreaterEqual(good_count, 7, f"only {good_count} GOOD examples")
 
     def test_anti_example_topics(self):
-        data = skill_text()
+        # Topics are split: top failure inline in SKILL.md, full catalog in references/anti-examples.md
+        combined = skill_text() + "\n" + anti_examples_text()
         topics = [
             "process labels",
             "Maintainer workflow",
@@ -91,10 +101,10 @@ class TestAntiExamples(unittest.TestCase):
             "Output snippet",
         ]
         for t in topics:
-            self.assertIn(t.lower(), data.lower(), f"anti-example topic missing: {t}")
+            self.assertIn(t.lower(), combined.lower(), f"anti-example topic missing: {t}")
 
     def test_anti_examples_have_markdown_code(self):
-        data = skill_text()
+        data = skill_text() + "\n" + anti_examples_text()
         anti_section_start = data.index("Anti-Examples")
         anti_section = data[anti_section_start:]
         code_blocks = re.findall(r"```markdown", anti_section)

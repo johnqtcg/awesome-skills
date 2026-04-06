@@ -6,6 +6,7 @@ from pathlib import Path
 SKILL_DIR = Path(__file__).resolve().parents[2]
 SKILL_MD = SKILL_DIR / "SKILL.md"
 API_REF = SKILL_DIR / "references" / "go-api-http-checklist.md"
+EXAMPLE_OUTPUT_REF = SKILL_DIR / "references" / "example-output.md"
 
 
 def frontmatter(text: str) -> str:
@@ -168,12 +169,16 @@ class GoCodeReviewerSkillContractTests(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_output_example_exists(self) -> None:
-        self.assertIn("### Example Output (End-to-End)", self.skill_text)
-        self.assertIn("REV-001", self.skill_text)
-        self.assertIn("Origin:** introduced", self.skill_text)
-        self.assertIn("Origin:** pre-existing", self.skill_text)
-        self.assertIn("Action:** must-fix", self.skill_text)
-        self.assertIn("Action:** follow-up issue", self.skill_text)
+        # Example output moved to references/example-output.md (progressive disclosure).
+        # SKILL.md has a contractual reference; full example is in the reference file.
+        self.assertIn("### Example Output Reference", self.skill_text)
+        self.assertIn("references/example-output.md", self.skill_text)
+        example_text = EXAMPLE_OUTPUT_REF.read_text()
+        self.assertIn("REV-001", example_text)
+        self.assertIn("Origin:** introduced", example_text)
+        self.assertIn("Origin:** pre-existing", example_text)
+        self.assertIn("Action:** must-fix", example_text)
+        self.assertIn("Action:** follow-up issue", example_text)
 
     # ------------------------------------------------------------------
     # NEW: Grey-area anti-examples
