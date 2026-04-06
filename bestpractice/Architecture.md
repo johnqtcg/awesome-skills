@@ -755,15 +755,15 @@ The same `getBatchUser` code from §17.1 was used for three complete validation 
 
 #### Three-Round Comparison at a Glance
 
-| Metric | Round 1: Single Skill | Round 2: Multi-Agent v1 | Round 3: Multi-Agent + Grep-Gated |
-|--------|:---------------------:|:----------------------:|:--------------------------------:|
-| Architecture | 1 agent + heavy skill | 8 agents misconfigured (Lead as agent, parallel dispatch blocked) | 7 worker agents + main conversation Skill orchestration + Grep-Gated |
-| Agents dispatched | 1 | 4 (performance skipped) | 5 (including performance) |
-| High findings | 4 | 7 | 7 |
-| Medium findings | 1 (1 missed) | 2 (4+ missed) | 6 |
-| Slice pre-allocation | ❌ Not found | ❌ Not found (performance not triaged) | ✅ REV-009 formally reported |
-| Unbounded goroutines | ❌ Residual Risk only | ⚠️ Sometimes missed | ✅ REV-008 formally reported |
-| Total findings captured | 8/9 (1 missed) | Unstable | **13/13** |
+| Metric | Round 1: Single Skill |                 Round 2: Multi-Agent v1                 | Round 3: Multi-Agent + Grep-Gated |
+|--------|:---------------------:|:-------------------------------------------------------:|:--------------------------------:|
+| Architecture | 1 agent + heavy skill | 7 worker agents + main conversation Skill orchestration | 7 worker agents + main conversation Skill orchestration + Grep-Gated |
+| Agents dispatched | 1 |                 4 (performance skipped)                 | 5 (including performance) |
+| High findings | 4 |                            7                            | 7 |
+| Medium findings | 1 (1 missed) |                      2 (4+ missed)                      | 6 |
+| Slice pre-allocation | ❌ Not found |          ❌ Not found (performance not triaged)          | ✅ REV-009 formally reported |
+| Unbounded goroutines | ❌ Residual Risk only |                   ⚠️ Sometimes missed                   | ✅ REV-008 formally reported |
+| Total findings captured | 8/9 (1 missed) |                        Unstable                         | **13/13** |
 
 #### Round 1: Single Skill Failure
 
@@ -771,7 +771,7 @@ The single-skill call found 4 High concurrent defects, but missed Slice Pre-allo
 
 #### Round 2: Multi-Agent v1 New Problems
 
-After the initial 1 skill → Multi-Agent refactor (at this stage, the Lead was incorrectly configured as an agent definition, which blocked parallel dispatch due to the platform constraint that subagents cannot spawn subagents), validation revealed two additional problems:
+After the initial 1 skill → Multi-Agent refactor, the architecture had already shifted to **main-conversation Skill orchestration + 7 worker agents**, but validation still revealed two additional problems because the system had **no Grep-Gated protocol yet** and the original triage heuristics were still incomplete:
 
 **Problem 1: Triage blind spot.** `go-review-lead`'s Phase 2 original trigger condition only fired on `make` calls **with** a capacity argument — but `make([]*User, 0)` was the case **without** a capacity argument. The rule matched in reverse, so `go-performance-reviewer` was skipped entirely. Submitting the code as a bare snippet also invalidated Phase 3's file-path heuristic.
 
@@ -801,7 +801,7 @@ Complete trajectory of `slice pre-allocation`:
 | Round | Status | Reason |
 |-------|--------|--------|
 | Round 1 (single skill) | Not found | Performance checklist attention crowded out by 4 High findings |
-| Round 2 (Multi-Agent v1) | Not found → Residual Risk | Performance agent not triaged; within-dimension attention competition remained |
+| Round 2 (Multi-Agent v1) | Not found | Performance agent not triaged; within-dimension attention competition still affected other Medium findings |
 | Round 3 (Multi-Agent + Grep-Gated) | **REV-009 [Medium] formally reported** | `make([]*User, 0)` mechanically hit by grep pattern; cannot be suppressed by attention dilution |
 
 Final report (excerpt):
