@@ -6,7 +6,9 @@
 
 ---
 
-`deep-research` is a source-backed research skill for factual and analytical research tasks. It suits technical surveys, option comparison, claim verification, and cross-source synthesis, emphasizing evidence retrieval before conclusions. Its three main strengths are: built-in evidence-chain requirements and hallucination-aware validation that reduce unsupported conclusions; a stable 7-section output template suitable for reusable research reports; and numbered citations, source-credibility labels, and execution-completeness notes that make results easier to verify, review, and extend.
+Snapshot note: this report evaluates the `deep-research` skill as of **2026-03-12**. The current repository head has since expanded the skill to a 9-section output contract with `references/` and helper scripts. Structural counts and token estimates below refer to the evaluated snapshot, not the latest head revision.
+
+`deep-research` is a source-backed research skill for factual and analytical research tasks. It suits technical surveys, option comparison, claim verification, and cross-source synthesis, emphasizing evidence retrieval before conclusions. In the evaluated snapshot, its three main strengths were: built-in evidence-chain requirements and hallucination-aware validation that reduce unsupported conclusions; a stable 7-section output template suitable for reusable research reports; and numbered citations, source-credibility labels, and execution-completeness notes that make results easier to verify, review, and extend.
 
 ## 1. Evaluation Overview
 
@@ -45,7 +47,7 @@ This evaluation reviews the deep-research skill along two axes: **actual task pe
 
 ### 2.3 Skill Characteristics
 
-deep-research is a **single-file skill** (SKILL.md only, no references): 193 lines, 985 words, ~1,350 tokens. Core components:
+At evaluation time, deep-research was a **single-file skill** (SKILL.md only, no references): 193 lines, 985 words, ~1,350 tokens. Core components:
 
 | Component | Lines | Est. tokens |
 |-----------|-------|-------------|
@@ -197,7 +199,7 @@ This is the skill’s **unique** differentiator and accounts for 12 assertion de
 
 ### 5.1 Skill Size
 
-deep-research is a **very lightweight skill**—single file, no references, fixed ~1,350 token cost.
+At evaluation time, deep-research was a **very lightweight skill**—single file, no references, fixed ~1,350 token cost.
 
 | File | Lines | Words | Bytes | Est. tokens |
 |------|-------|-------|------|-------------|

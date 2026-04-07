@@ -13,10 +13,15 @@ bestpractice/  →  rationale/  →  skills/  →  evaluate/  →  outputexample
 
 - **`bestpractice/`** — skill design methodology docs (`Fundamentals.md`, `Advanced.md`, `Evaluation.md`, `Iteration.md`, `Integration.md`, `Architecture.md`), bilingual (EN + ZH)
 - **`rationale/`** — per-skill design rationale docs explaining the *why* behind each skill's structure and decisions; each skill has `design.md` + `design.zh-CN.md`
-- **`skills/`** — 21 production-ready Claude Code skills, each centered on a `SKILL.md` with optional `scripts/`, `references/`, and `agents/` subdirs
+- **`skills/`** — 29 installable Claude Code skills in total: 21 production-ready skills plus 8 multi-agent Go review components, each centered on a `SKILL.md` with optional `scripts/`, `references/`, and `agents/` subdirs
 - **`evaluate/`** — formal review reports paired EN/ZH (`<skill-name>-skill-eval-report.md` / `.zh-CN.md`)
 - **`outputexample/`** — real task outputs (PDFs, test code, CI configs, screenshots)
 - **`docs/`** — MkDocs Material site source; served at GitHub Pages
+
+Important scope note:
+
+- The **21 production-ready skills** are the set with full five-layer coverage (`rationale/`, `skills/`, `evaluate/`, `outputexample/`).
+- The additional **8 Go review components** exist to support the multi-agent review architecture (`go-review-lead` + vertical review skills). They are installable and regression-tested, but they do not yet have standalone `rationale/`, `evaluate/`, or `outputexample/` tracks.
 
 ## Skill Structure Convention
 
@@ -70,13 +75,15 @@ Deployed to GitHub Pages via CI on push to `main`.
 
 ## Contribution Rules
 
-When adding or editing a skill, update all five layers together:
+When adding or editing a production-ready skill, update all five layers together:
 
 1. `skills/<name>/SKILL.md` (and supporting files)
 2. `rationale/<name>/design.md` + `design.zh-CN.md`
 3. `evaluate/<name>-skill-eval-report.md` + `.zh-CN.md`
 4. `outputexample/<name>/`
 5. `bestpractice/` docs if the skill introduces or validates a new design pattern
+
+For the 8 multi-agent Go review components, update the skill itself, its references/tests, and shared architecture docs as needed. Those components do not currently require standalone `rationale/`, `evaluate/`, or `outputexample/` directories.
 
 Bilingual consistency is required: any change to an English doc needs a matching update to its `.zh-CN.md` counterpart (and vice versa). This applies to `README.md`, `CONTRIBUTING.md`, `bestpractice/*.md` (all six chapters plus `README.zh-CN.md`), and `evaluate/` reports.
 

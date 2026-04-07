@@ -159,27 +159,37 @@ nav:
 
   - Skills:
       - Overview: skills/index.md
-      - api-integration-test: skills/api-integration-test/SKILL.md
-      - create-pr: skills/create-pr/SKILL.md
-      - deep-research: skills/deep-research/SKILL.md
-      - e2e-test: skills/e2e-test/SKILL.md
-      - fuzzing-test: skills/fuzzing-test/SKILL.md
-      - git-commit: skills/git-commit/SKILL.md
-      - go-ci-workflow: skills/go-ci-workflow/SKILL.md
-      - go-code-reviewer: skills/go-code-reviewer/SKILL.md
-      - go-makefile-writer: skills/go-makefile-writer/SKILL.md
-      - google-search: skills/google-search/SKILL.md
-      - local-transcript: skills/local-transcript/SKILL.md
-      - readme-generator: skills/readme-generator/SKILL.md
-      - security-review: skills/security-review/SKILL.md
-      - systematic-debugging: skills/systematic-debugging/SKILL.md
-      - tdd-workflow: skills/tdd-workflow/SKILL.md
-      - tech-doc-writer: skills/tech-doc-writer/SKILL.md
-      - thirdparty-api-integration-test: skills/thirdparty-api-integration-test/SKILL.md
-      - unit-test: skills/unit-test/SKILL.md
-      - update-doc: skills/update-doc/SKILL.md
-      - writing-plans: skills/writing-plans/SKILL.md
-      - yt-dlp-downloader: skills/yt-dlp-downloader/SKILL.md
+      - Production-Ready Skills:
+          - api-integration-test: skills/api-integration-test/SKILL.md
+          - create-pr: skills/create-pr/SKILL.md
+          - deep-research: skills/deep-research/SKILL.md
+          - e2e-test: skills/e2e-test/SKILL.md
+          - fuzzing-test: skills/fuzzing-test/SKILL.md
+          - git-commit: skills/git-commit/SKILL.md
+          - go-ci-workflow: skills/go-ci-workflow/SKILL.md
+          - go-code-reviewer: skills/go-code-reviewer/SKILL.md
+          - go-makefile-writer: skills/go-makefile-writer/SKILL.md
+          - google-search: skills/google-search/SKILL.md
+          - local-transcript: skills/local-transcript/SKILL.md
+          - readme-generator: skills/readme-generator/SKILL.md
+          - security-review: skills/security-review/SKILL.md
+          - systematic-debugging: skills/systematic-debugging/SKILL.md
+          - tdd-workflow: skills/tdd-workflow/SKILL.md
+          - tech-doc-writer: skills/tech-doc-writer/SKILL.md
+          - thirdparty-api-integration-test: skills/thirdparty-api-integration-test/SKILL.md
+          - unit-test: skills/unit-test/SKILL.md
+          - update-doc: skills/update-doc/SKILL.md
+          - writing-plans: skills/writing-plans/SKILL.md
+          - yt-dlp-downloader: skills/yt-dlp-downloader/SKILL.md
+      - Multi-Agent Review Components:
+          - go-review-lead: skills/go-review-lead/SKILL.md
+          - go-security-review: skills/go-security-review/SKILL.md
+          - go-concurrency-review: skills/go-concurrency-review/SKILL.md
+          - go-error-review: skills/go-error-review/SKILL.md
+          - go-logic-review: skills/go-logic-review/SKILL.md
+          - go-performance-review: skills/go-performance-review/SKILL.md
+          - go-quality-review: skills/go-quality-review/SKILL.md
+          - go-test-review: skills/go-test-review/SKILL.md
 
   - Evaluation Reports:
       - Overview: evaluate/index.md

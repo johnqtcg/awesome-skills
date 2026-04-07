@@ -55,9 +55,14 @@ Language:
 | [`evaluate/`](evaluate/index.md) | 对 skill 的评审报告，中英双语 |
 | [`outputexample/`](outputexample/index.md) | skill 的真实输出样例 |
 
+当前分层说明：
+
+- **21 个生产级 skill** 具备完整的五层闭环。
+- **8 个 Multi-Agent Go 评审组件** 位于 `skills/` 下，作为可安装、可回归测试的编排构件存在；它们暂未按独立 skill 维度维护单独的 rationale / evaluate / outputexample。
+
 ## 4. 推荐的贡献单元
 
-如果你要新增一个高质量 skill，推荐按“完整贡献单元”提交，而不是只提交一个孤立的 `SKILL.md`：
+如果你要新增一个生产级高质量 skill，推荐按“完整贡献单元”提交，而不是只提交一个孤立的 `SKILL.md`：
 
 1. `skills/<skill-name>/SKILL.md`
 2. `rationale/<skill-name>/design.md` + `design.zh-CN.md`
@@ -67,7 +72,9 @@ Language:
 4. 至少一个输出样例目录：
    - `outputexample/<skill-name>/`
 
-这不是机械要求，但这是本仓库当前最符合实际的贡献方式。仓库现有内容就是按这种闭环组织的。
+这不是机械要求，但这是本仓库当前生产级 skill 最符合实际的贡献方式。仓库现有的生产级内容就是按这种闭环组织的。
+
+对于那 8 个 Multi-Agent Go 评审组件，贡献单元可以更小：优先更新 skill 本体、references/tests，以及必要的共享架构文档；它们当前不强制要求单独的 rationale / evaluate / outputexample 目录。
 
 ## 5. 命名与组织约定
 

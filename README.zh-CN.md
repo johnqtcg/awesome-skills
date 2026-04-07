@@ -9,6 +9,7 @@
 一个围绕高质量 **Claude Code Skill** 方法论、设计说明、评审、验证与工作流落地构建的开源项目。
 
 - **21** 个生产级 Claude Code Skills：覆盖 Go、测试、安全、CI/CD、调研、文档、规划
+- **29** 个可安装 skill：其中 21 个为生产级 skill，另外 8 个为 Multi-Agent Go 评审编排组件
 - **42** 份设计说明文档（中英双语），每个 skill 都有对应的说明链路
 - **42** 份量化评审报告（中英双语），含可追溯指标
 - **169** 个 golden JSON 场景 + **40** 个 Python 测试文件，确定性回归保障
@@ -29,7 +30,7 @@ npx skills add johnqtcg/awesome-skills --skill <skill-名称> -g
 # 安装多个 skill
 npx skills add johnqtcg/awesome-skills --skill go-review-lead systematic-debugging unit-test -g
 
-# 一键安装全部 29 个 skill
+# 一键安装全部 29 个 skill（21 个生产级 + 8 个编排组件）
 npx skills add johnqtcg/awesome-skills --all -g
 ```
 
@@ -38,6 +39,12 @@ npx skills add johnqtcg/awesome-skills --all -g
 ```bash
 npx skills find
 ```
+
+安装范围说明：
+
+- 仓库总计提供 **29** 个可安装 skill。
+- 其中 **21 个生产级 skill** 是完整的闭环集合，具备 rationale、evaluation 和 output examples。
+- 额外的 **8 个 skill** 是供 Multi-Agent Go 评审架构复用的编排组件；它们可安装、可回归测试，但暂不单独计入“生产级 skill”统计。
 
 ### 方式二 — 手动安装
 

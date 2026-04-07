@@ -9,6 +9,7 @@
 A curated system for **AI skill engineering** — not just a prompt collection. Built for Claude Code and applicable to any AI coding assistant, this project covers the full loop from reusable skill methodology to skill-specific design rationale to quantitative evaluation and real software engineering workflow integration.
 
 - **21** production-ready Claude Code skills: Go, testing, security, CI/CD, research, docs, planning
+- **29** installable skills in total: 21 production-ready skills + 8 multi-agent Go review components used by the orchestration architecture
 - **42** paired design rationale docs (EN + ZH), one explanation track for each skill
 - **42** paired evaluation reports (EN + ZH) with quantitative metrics
 - **169** golden test fixtures + **40** Python test files for deterministic regression
@@ -29,7 +30,7 @@ npx skills add johnqtcg/awesome-skills --skill <skill-name> -g
 # Install a curated set
 npx skills add johnqtcg/awesome-skills --skill go-review-lead systematic-debugging unit-test -g
 
-# Install all 29 skills at once
+# Install all 29 skills at once (21 production-ready + 8 multi-agent review components)
 npx skills add johnqtcg/awesome-skills --all -g
 ```
 
@@ -38,6 +39,12 @@ Browse and search skills interactively:
 ```bash
 npx skills find
 ```
+
+Install scope note:
+
+- The repository exposes **29** installable skills in total.
+- The **21 production-ready skills** are the fully documented set with rationale, evaluation, and output examples.
+- The additional **8 skills** are reusable Go review orchestration components for the multi-agent review architecture. They are installable and regression-tested, but are not counted as standalone production-ready skills yet.
 
 ### Option 2 — Install manually
 

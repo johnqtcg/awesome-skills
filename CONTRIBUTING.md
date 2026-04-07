@@ -55,9 +55,14 @@ Five interconnected layers make up this repository. Please understand each befor
 | [evaluate/](evaluate/index.md) | Skill review reports, in Chinese and English |
 | [outputexample/](outputexample/index.md) | Real output examples from skills |
 
+Current scope note:
+
+- **21 production-ready skills** have full five-layer coverage.
+- **8 multi-agent Go review components** live under `skills/` as installable, regression-tested building blocks for the review orchestration architecture. They are not yet maintained as standalone rationale/evaluation/outputexample packages.
+
 ## 4. Preferred Contribution Unit
 
-If you are adding a new high-quality skill, the preferred submission unit is a complete package rather than a single isolated `SKILL.md`:
+If you are adding a new production-ready skill, the preferred submission unit is a complete package rather than a single isolated `SKILL.md`:
 
 1. `skills/<skill-name>/SKILL.md`
 2. `rationale/<skill-name>/design.md` + `design.zh-CN.md`
@@ -67,7 +72,9 @@ If you are adding a new high-quality skill, the preferred submission unit is a c
 4. at least one output example directory:
    - `outputexample/<skill-name>/`
 
-This is not a hard mechanical rule, but it matches how the repository is currently organized and gives the strongest contribution quality.
+This is not a hard mechanical rule, but it matches how the production-ready part of the repository is currently organized and gives the strongest contribution quality.
+
+For the 8 multi-agent Go review components, the expected unit is smaller: update the skill, its references/tests, and the shared architecture docs when needed. Those components do not currently require standalone `rationale/`, `evaluate/`, or `outputexample/` directories.
 
 ## 5. Naming and Organization Rules
 
