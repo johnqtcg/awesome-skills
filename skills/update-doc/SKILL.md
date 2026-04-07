@@ -2,7 +2,7 @@
 name: update-doc
 description: Keep repository documentation synchronized with the latest code. Use when updating README/docs/codemaps after code changes, running docs-drift checks, or producing scoped evidence-backed doc patches for service/library/CLI/monorepo projects.
 disable-model-invocation: true
-allowed-tools: Read, Write, Grep, Glob, Bash(git diff*), Bash(git log*), Bash(git status*)
+allowed-tools: Read, Write, Grep, Glob, Bash(git diff*), Bash(git log*), Bash(git status*), Bash(go run*)
 ---
 
 # Update Docs

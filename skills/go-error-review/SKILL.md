@@ -1,7 +1,7 @@
 ---
 name: go-error-review
 description: Review Go code for error handling correctness, nil safety, and failure-path integrity including ignored errors, missing wrapping, panic misuse, SQL/HTTP resource lifecycle, and transaction patterns. Trigger when code contains error returns, panic calls, sql.Rows, transactions, HTTP client/server code, or nil-sensitive pointer operations. Use for error-handling and correctness-focused review.
-allowed-tools: Read, Grep, Glob, Bash(go build*), Bash(go vet*), Bash(staticcheck*)
+allowed-tools: Read, Grep, Glob, Bash(go build*), Bash(go vet*), Bash(staticcheck*), Bash(go test*)
 ---
 
 # Go Error Review

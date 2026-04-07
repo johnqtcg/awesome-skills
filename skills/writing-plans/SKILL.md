@@ -6,7 +6,7 @@ description: >
   before implementation. Covers feature, bugfix, refactor, migration, API change,
   and docs-only plans. NOT for single-file edits, trivial fixes, or tasks
   completable in under 5 minutes.
-allowed-tools: Read, Write, Grep, Glob
+allowed-tools: Read, Write, Grep, Glob, Bash(git log*)
 ---
 
 # Writing Plans

@@ -2,7 +2,7 @@
 name: go-ci-workflow
 description: Use when creating or refactoring GitHub Actions CI workflows for Go repositories. Covers repository-shape detection, Make-driven delegation with formal fallbacks, Go setup, caching, tool pinning, permissions, reusable workflows, and quality gate design.
 disable-model-invocation: true
-allowed-tools: Read, Write, Grep, Glob, Bash(go version*)
+allowed-tools: Read, Write, Grep, Glob, Bash(go version*), Bash(go install*), Bash(go test*), Bash(go build*), Bash(make*), Bash(gosec*), Bash(govulncheck*), Bash(docker build*)
 ---
 
 # Go CI Workflow Writer

@@ -1,7 +1,7 @@
 ---
 name: security-review
 description: Perform exploitability-first security reviews for code changes (auth, input, secrets, API, data, concurrency, container, third-party, and dependency risk), with mandatory evidence, suppression discipline, scope-based review depth, and Go-specific secure-coding gates.
-allowed-tools: Read, Grep, Glob, Bash(go vet*), Bash(go build*), Bash(gosec*), Bash(govulncheck*), Bash(semgrep*), Bash(npm audit*)
+allowed-tools: Read, Grep, Glob, Bash(git diff*), Bash(go vet*), Bash(go build*), Bash(go test -race*), Bash(gosec*), Bash(govulncheck*), Bash(semgrep*), Bash(npm audit*), Bash(curl*), Bash(mvn dependency:tree*), Bash(mvn org.owasp:dependency-check-maven:check*), Bash(mvn spotbugs:check*), Bash(pip-audit*), Bash(safety check*), Bash(bandit*)
 ---
 
 # Security Review

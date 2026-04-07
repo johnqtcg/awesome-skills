@@ -1,7 +1,7 @@
 ---
 name: readme-generator
 description: Generate or refactor project README.md files using repository evidence. Use when the user asks to create/rewrite/standardize README, improve documentation structure, or produce maintainable README templates for different project types (service/library/CLI/monorepo).
-allowed-tools: Read, Write, Grep, Glob, Bash(git log*), Bash(git diff*)
+allowed-tools: Read, Write, Grep, Glob, Bash(git log*), Bash(git diff*), Bash(bash*discover_readme_needs.sh*), Bash(make*), Bash(curl*), Bash(gh api*), Bash(go build*), Bash(go test*), Bash(go vet*), Bash(go get*), Bash(go install*), Bash(pytest*), Bash(cargo test*), Bash(node --test*), Bash(docker compose*)
 ---
 
 # README Generator

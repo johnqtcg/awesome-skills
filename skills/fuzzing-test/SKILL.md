@@ -1,7 +1,7 @@
 ---
 name: fuzzing-test
 description: Generate Go fuzz tests (Go 1.18+ testing.F) for specified code when users ask for fuzzing/模糊测试/fuzz test generation, parser robustness, round-trip, or differential fuzzing. Always run an applicability gate first; if the target is not suitable, explain concrete reasons and stop without writing fuzz test code.
-allowed-tools: Read, Write, Grep, Glob, Bash(go test -fuzz*), Bash(go build*)
+allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go clean*), Bash(go tool cover*), Bash(gh issue*)
 ---
 
 # Fuzzing Test Skill (Go)

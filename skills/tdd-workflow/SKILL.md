@@ -1,7 +1,7 @@
 ---
 name: tdd-workflow
 description: Enforce practical Test-Driven Development for code changes in Go services. Use for new features, bug fixes, refactors, API changes, and new modules. Requires Red-Green-Refactor evidence, defect-hypothesis-driven tests, killer cases, and coverage gates (line + risk-path).
-allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go vet*)
+allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go vet*), Bash(go tool cover*)
 ---
 
 # Go TDD Workflow

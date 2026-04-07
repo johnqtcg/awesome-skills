@@ -1,7 +1,7 @@
 ---
 name: go-code-reviewer
 description: Review Go code with a defect-first approach using repository policy (constitution.md first, then AGENTS.md fallback). Use for code review, PR review, quality checks, risk analysis, and regression detection.
-allowed-tools: Read, Grep, Glob, Bash(go build*), Bash(go vet*), Bash(staticcheck*), Bash(golangci-lint*)
+allowed-tools: Read, Grep, Glob, Bash(go build*), Bash(go vet*), Bash(staticcheck*), Bash(golangci-lint*), Bash(go test*), Bash(go tool cover*), Bash(git blame*)
 ---
 # Go Code Reviewer
 

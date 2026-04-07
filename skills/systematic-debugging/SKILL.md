@@ -1,7 +1,7 @@
 ---
 name: systematic-debugging
 description: Use when debugging, diagnosing, or investigating any bug, test failure, flaky test, race condition, unexpected behavior, build failure, production incident, third-party breakage, root cause analysis, or performance regression before proposing fixes
-allowed-tools: Read, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go run*), Bash(go vet*), Bash(git log*), Bash(git diff*)
+allowed-tools: Read, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go run*), Bash(go vet*), Bash(go mod graph*), Bash(go generate*), Bash(go clean*), Bash(git log*), Bash(git diff*), Bash(git init*), Bash(npm ls*), Bash(python3 -m unittest*), Bash(./scripts/find-polluter.sh*), Bash(df*), Bash(free*), Bash(lsof*), Bash(strace*), Bash(tcpdump*), Bash(dmesg*), Bash(env*), Bash(top*), Bash(log show*), Bash(nslookup*), Bash(curl*), Bash(ulimit*), Bash(rm -rf node_modules*), Bash(mvn clean*)
 ---
 
 # Systematic Debugging

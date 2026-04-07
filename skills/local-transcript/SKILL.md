@@ -2,7 +2,7 @@
 name: local-transcript
 description: Transcribe a specified local video or audio file into cleaned final `.txt`, `.pdf`, or `.docx` transcripts using speech recognition with Apple Silicon GPU acceleration and LLM-based proofreading. Use when the user wants text extracted from a local media file path such as `.mp4`, `.mov`, `.mkv`, `.webm`, `.mp3`, `.m4a`, or `.wav`, and the output language should follow the spoken language in the media automatically. Prefer this skill for local-file transcription workflows that should produce cleaned transcripts with natural paragraphs, LLM-corrected Chinese text, and simplified Chinese output for Chinese speech.
 disable-model-invocation: true
-allowed-tools: Read, Write, Bash(whisper*), Bash(mlx_whisper*), Bash(ffmpeg*)
+allowed-tools: Read, Write, Bash(whisper*), Bash(mlx_whisper*), Bash(ffmpeg*), Bash(uv run*)
 ---
 
 # Local Transcript

@@ -15,6 +15,35 @@ SKILL_MD = SKILL_DIR / "SKILL.md"
 REFERENCES_DIR = SKILL_DIR / "references"
 
 REQUIRED_ECOSYSTEMS = ["go", "node", "python", "java", "rust"]
+REQUIRED_ALLOWED_TOOL_PATTERNS = [
+    "Bash(git add*)",
+    "Bash(git commit*)",
+    "Bash(git status*)",
+    "Bash(git diff*)",
+    "Bash(git log*)",
+    "Bash(git stash*)",
+    "Bash(go list*)",
+    "Bash(go vet*)",
+    "Bash(go test*)",
+    "Bash(pytest*)",
+    "Bash(ruff check*)",
+    "Bash(flake8*)",
+    "Bash(mypy*)",
+    "Bash(pyright*)",
+    "Bash(cargo check*)",
+    "Bash(cargo clippy*)",
+    "Bash(cargo test*)",
+    "Bash(mvn test*)",
+    "Bash(./gradlew*)",
+    "Bash(npm*)",
+    "Bash(yarn*)",
+    "Bash(pnpm*)",
+    "Bash(npx nx*)",
+    "Bash(npx turbo*)",
+    "Bash(npx lerna*)",
+    "Bash(make test*)",
+    "Bash(make check*)",
+]
 
 
 @pytest.fixture
@@ -43,6 +72,19 @@ class TestFrontmatter:
     def test_has_description_field(self, skill_content):
         assert re.search(r"^description:\s+.{20,}", skill_content, re.MULTILINE), (
             "description must be at least 20 chars"
+        )
+
+    def test_allowed_tools_cover_documented_quality_gate_commands(self, skill_content):
+        allowed_tools = re.search(r"^allowed-tools:\s+(.+)$", skill_content, re.MULTILINE)
+        assert allowed_tools, "allowed-tools frontmatter is required"
+        missing = [
+            pattern
+            for pattern in REQUIRED_ALLOWED_TOOL_PATTERNS
+            if pattern not in allowed_tools.group(1)
+        ]
+        assert not missing, (
+            "allowed-tools must cover documented git workflow and quality gate commands; "
+            f"missing: {missing}"
         )
 
 

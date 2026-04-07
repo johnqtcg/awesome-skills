@@ -1,7 +1,7 @@
 ---
 name: e2e-test
 description: "Design, maintain, and execute reliable end-to-end tests for critical user journeys with Agent Browser as first choice for exploration and Playwright as the preferred code path for suites and CI. Use for E2E strategy, journey coverage, flaky test triage, artifact collection, CI gating, regression prevention, and browser automation tasks."
-allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(npx playwright*), Bash(npm run*)
+allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(npx playwright*), Bash(playwright*), Bash(npm run*), Bash(curl*)
 ---
 
 # E2E test

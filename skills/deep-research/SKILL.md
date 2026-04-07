@@ -4,7 +4,7 @@ description: |
   Real-time research workflow for source-backed analysis.
   Use when users ask to research a topic, compare options, investigate claims, analyze trends, or produce synthesis with real citations.
   Handles web research, codebase research, and hybrid (web + codebase) scenarios with mandatory content extraction, hallucination-aware verification, and structured report delivery.
-allowed-tools: Read, Grep, Glob, WebFetch, Bash(python3 scripts/deep_research.py*), Bash(git log*)
+allowed-tools: Read, Grep, Glob, WebFetch, Bash(python3 scripts/deep_research.py*), Bash(git log*), Bash(go test*), Bash(python -c*), Bash(python3 -c*)
 ---
 
 # Deep Research
