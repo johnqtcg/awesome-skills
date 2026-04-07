@@ -18,6 +18,29 @@
 <a id="cn-quickstart"></a>
 ## 快速开始
 
+### 方式一 — 通过 skills CLI 安装（推荐）
+
+支持 Claude Code、Cursor、GitHub Copilot 等 15+ 主流 AI 编程助手：
+
+```bash
+# 安装单个 skill（全局）
+npx skills add johnqtcg/awesome-skills --skill <skill-名称> -g
+
+# 安装多个 skill
+npx skills add johnqtcg/awesome-skills --skill go-review-lead systematic-debugging unit-test -g
+
+# 一键安装全部 29 个 skill
+npx skills add johnqtcg/awesome-skills --all -g
+```
+
+交互式搜索和发现 skill：
+
+```bash
+npx skills find
+```
+
+### 方式二 — 手动安装
+
 1. 浏览下方 [skill 列表](#cn-skills)，找到适合你工作场景的 skill
 2. 将 `skills/<名称>` 目录复制到你的项目中：
    - 项目级（仅当前项目）：`.claude/skills/<名称>`

@@ -18,6 +18,29 @@ A curated system for **AI skill engineering** — not just a prompt collection. 
 <a id="en-quickstart"></a>
 ## Quick Start
 
+### Option 1 — Install with the skills CLI (recommended)
+
+Works with Claude Code, Cursor, GitHub Copilot, and 15+ other agents:
+
+```bash
+# Install a single skill globally
+npx skills add johnqtcg/awesome-skills --skill <skill-name> -g
+
+# Install a curated set
+npx skills add johnqtcg/awesome-skills --skill go-review-lead systematic-debugging unit-test -g
+
+# Install all 29 skills at once
+npx skills add johnqtcg/awesome-skills --all -g
+```
+
+Browse and search skills interactively:
+
+```bash
+npx skills find
+```
+
+### Option 2 — Install manually
+
 1. Browse the [skill list below](#en-skills) and find one relevant to your workflow
 2. Copy the `skills/<name>` directory into your project:
    - Project-level: `.claude/skills/<name>`
