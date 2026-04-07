@@ -11,6 +11,16 @@ allowed-tools: Read, Grep, Glob, Bash
 
 Probe-driven download workflow with explicit format selection and safe retry defaults.
 
+## Quick Reference
+
+| If you need to… | Go to |
+|---|---|
+| Choose scenario (single video / audio / playlist / subtitles / live / SponsorBlock) | §1 Scope Classification |
+| Handle specific resolution, codec, HDR, or AV1 | Load `references/format-selection-guide.md` |
+| Handle private / age-gated / login-required content | §5 Auth Safety Gate + Load `references/safety-and-recovery.md` |
+| Fix extraction errors, throttling, or YouTube failures | Load `references/safety-and-recovery.md` |
+| Check the output contract fields (Scenario / Probe / Command…) | §Output Contract |
+
 ## Mandatory Gates
 
 Gates execute in strict serial order. Any gate failure blocks all subsequent steps.
@@ -184,23 +194,26 @@ Every response must include these 7 fields:
 
 ## Load References Selectively
 
-| Trigger | Reference | Timing |
-|---------|-----------|--------|
-| Every task | `references/scenario-templates.md` | Before scenario selection |
-| Every task | `references/golden-examples.md` | Before formatting the final answer |
-| Choosing between format selectors, playlist modes, or subtitle strategies | `references/decision-rules.md` | Before final command assembly |
-| Specific quality/codec/HDR requests | `references/format-selection-guide.md` | Before probe interpretation |
-| Auth need, extraction errors, or troubleshooting | `references/safety-and-recovery.md` | Before recovery guidance |
-| Reviewing or generating commands | `references/anti-examples.md` | Before quality/self-check |
+For every download task, during scenario classification (Step 1):
+→ Load `references/scenario-templates.md` for 8 complete command templates (single video, playlist, audio extraction, subtitles, authenticated, live stream, SponsorBlock, resolution-capped) to use as the base command.
+
+For every task, before formatting the final answer:
+→ Load `references/golden-examples.md` for fully worked output contract examples showing correct Scenario / Command / Defaults / Execution / Output fields per scenario type.
+
+When choosing between format selectors, playlist modes, or subtitle strategies:
+→ Load `references/decision-rules.md` for decision trees covering format selector priority (`bv*+ba` vs `-f best`), playlist scope flags, subtitle embedding vs external file, and archive file usage.
+
+When the request specifies quality, codec, HDR, AV1, or specific resolution:
+→ Load `references/format-selection-guide.md` for probe output interpretation, codec ranking tables, and HDR/AV1 selection flags.
+
+When the user reports auth errors, extraction failures, or throttling, or when cookies or private content are involved:
+→ Load `references/safety-and-recovery.md` for browser cookie extraction steps, retry flags, yt-dlp-ejs install guide, and throttling recovery patterns.
+
+When reviewing or self-checking a generated command for common mistakes:
+→ Load `references/anti-examples.md` for the full catalog of 8 yt-dlp anti-examples with corrected alternatives.
 
 ## Bundled Assets
 
-- Scenario templates: `references/scenario-templates.md`
-- Decision rules: `references/decision-rules.md`
-- Safety and recovery: `references/safety-and-recovery.md`
-- Golden examples: `references/golden-examples.md`
-- Format selection guide: `references/format-selection-guide.md`
-- Anti-examples (extended): `references/anti-examples.md`
 - Contract tests: `scripts/tests/test_skill_contract.py`
 - Golden scenario tests: `scripts/tests/test_golden_scenarios.py`
 - Regression runner: `scripts/run_regression.sh`

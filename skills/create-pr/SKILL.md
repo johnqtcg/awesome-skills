@@ -259,10 +259,19 @@ Return a concise report in this order:
 3. PR metadata: number, URL, draft/ready, base/head.
 4. Next actions needed from user/reviewers.
 
-## References
+## Load References Selectively
 
-- Checklists: `references/create-pr-checklists.md`
-- PR template: `references/pr-body-template.md`
-- Config example: `references/create-pr-config.example.yaml`
-- Merge strategy: `references/merge-strategy-guide.md`
-- Bundled script: `references/bundled-script-guide.md`
+When executing preflight, quality, or security gate checks:
+→ Load `references/create-pr-checklists.md` for the full 30-item gate checklist (preflight, quality, security, compatibility, docs gates with PASS/FAIL/SUPPRESSED/N/A verdicts).
+
+When composing the PR body:
+→ Load `references/pr-body-template.md` for the 8-section Markdown template (Problem/Context, What Changed, Why This Approach, Risk and Rollback, Test Evidence, Security Notes, Breaking Changes, Reviewer Checklist).
+
+When deciding squash vs. merge vs. rebase strategy:
+→ Load `references/merge-strategy-guide.md` for merge strategy selection table, PR title conventions per strategy, and commit message landing rules.
+
+When running the automated gate + PR creation workflow in one command:
+→ Load `references/bundled-script-guide.md` for `scripts/create_pr.py` usage, flags, and output contract.
+
+When the repo uses a `.create-pr.yaml` config file or you need to create one:
+→ Load `references/create-pr-config.example.yaml` for all supported config keys and their defaults.

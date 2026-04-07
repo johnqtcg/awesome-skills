@@ -6,6 +6,16 @@ allowed-tools: Read, Grep, Glob, Bash, WebFetch
 
 # Google Search
 
+## Quick Reference
+
+| If you need to… | Go to |
+|---|---|
+| Mode budgets: Quick (1–2 queries) / Standard (3–5) / Deep (5–8) | §6 Execution Mode Gate |
+| Search for Go / Python / JS errors, API docs, or RFCs | Load `references/programmer-search-patterns.md` |
+| Search Chinese-language sources (Baidu, Zhihu, WeChat) | Load `references/chinese-search-ecosystem.md` |
+| Search on a fast-changing / conflict-prone topic | Load `references/high-conflict-topics.md` |
+| Evaluate source quality or resolve conflicting sources | Load `references/source-evaluation.md` |
+
 ## Overview
 
 Use this skill to turn vague search requests into a disciplined search-and-verification workflow. Default to doing the search work for the user first, then give them the reusable Google queries and refinement strategy if they want to continue manually.
@@ -255,15 +265,26 @@ Every completed use of this skill must include the fields below. Fields are grad
 
 ## Load References Selectively
 
-| Trigger | Reference | Timing |
-|---------|-----------|--------|
-| Always (query construction) | `references/query-patterns.md` | Before building queries |
-| Category = Programmer search | `references/programmer-search-patterns.md` | Before building queries |
-| Source evaluation or conflict | `references/source-evaluation.md` | Before writing answer |
-| Chinese-language or China-centric topic | `references/chinese-search-ecosystem.md` | Before choosing source path |
-| High-conflict or high-change topic | `references/high-conflict-topics.md` | Before searching |
-| Deciding whether to stop or escalate | `references/ai-search-and-termination.md` | After budget check |
-| First time using skill, or output quality calibration | `references/worked-examples.md` | Before writing answer |
+For every search task, before building queries:
+→ Load `references/query-patterns.md` for core query construction patterns (Primary / Precision / Expansion variants), category-specific operators, and one-variable-at-a-time refinement strategy.
+
+When the search category is Programmer search (error debugging, API docs, code examples, benchmarks, RFC lookup):
+→ Load `references/programmer-search-patterns.md` for error message normalization, `site:` operator shortcuts per source type (GitHub, Stack Overflow, official docs), and technical evidence quality criteria.
+
+When evaluating whether sources are strong enough to support a claim, or when sources conflict:
+→ Load `references/source-evaluation.md` for the source ranking table (Official > Academic > Authoritative secondary > …), conflict resolution rules, originality / recency / directness / independence scoring criteria.
+
+When the topic is Chinese-language or China-centric (content lives in Baidu, Zhihu, WeChat, Weibo):
+→ Load `references/chinese-search-ecosystem.md` for content-type-to-source mapping, Chinese-specific search operators, and cross-validation rules for Chinese-only sources.
+
+When the topic involves active conflict, elections, disasters, market moves, or any fast-changing event:
+→ Load `references/high-conflict-topics.md` for stricter scope-locking rules, source-tiering requirements (no single outlet, require independent confirmation), and temporal anchoring conventions.
+
+When assessing whether to stop searching or escalate to a different tool (AI search, database query):
+→ Load `references/ai-search-and-termination.md` for budget exhaustion thresholds, escalation signals (no new evidence after N queries), and AI-search-vs-Google decision criteria.
+
+When calibrating output quality or validating the report format for the first time:
+→ Load `references/worked-examples.md` for fully worked examples across Quick / Standard / Deep modes with complete output contract fields, evidence chain notation, and reusable query formatting.
 
 ## Worked Examples (Skeleton)
 

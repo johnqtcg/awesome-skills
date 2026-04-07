@@ -7,6 +7,18 @@ description: Keep repository documentation synchronized with the latest code. Us
 
 Synchronize documentation with repository evidence and avoid stale or speculative content.
 
+## Quick Reference
+
+| If you need to… | Go to |
+|---|---|
+| Update README/docs after a code change (default workflow) | §Pre-Update Gates → §Diff Scope Gate → §Workflow |
+| Choose the right doc structure for project type (service / library / CLI / monorepo) | §Project Type Routing + Load `references/project-routing.md` |
+| Check docs-drift: find gaps between code and docs | §Quality Scorecard (12 Checks) + Load `references/update-doc.md` |
+| Add CI checks to catch docs drift automatically | Load `references/ci-drift.md` |
+| Know what language/audience to write for | §Audience and Language Gate |
+| Understand what to mark vs. invent (`Not found in repo`) | §Hard Rules |
+| Get the final scorecard and output format | §Quality Scorecard (12 Checks) + §Output Format |
+
 ## Hard Rules
 
 - Use repository files as the only source of truth.
@@ -455,8 +467,13 @@ Report these in the assistant response, not inside the edited docs unless the us
 - `Scorecard`: 12-item PASS/FAIL/N/A + total.
 - `Open gaps`: unresolved items labeled `Not found in repo`.
 
-## References
+## Load References Selectively
 
-- `references/update-doc.md`
-- `references/project-routing.md`
-- `references/ci-drift.md`
+When synchronizing README or docs after code changes, or applying drift-safe update rules:
+→ Load `references/update-doc.md` for drift-safe synchronization rules, scoped evidence collection patterns, and the 12-item scorecard template.
+
+When determining the appropriate README/docs structure for a project type (service, library, CLI, monorepo):
+→ Load `references/project-routing.md` for structure templates per project type (Service/Backend, Library, CLI, Monorepo) with required sections and ordering.
+
+When adding CI guardrails for docs drift detection, or reviewing CI pipelines for doc coverage:
+→ Load `references/ci-drift.md` for recommended CI checks (markdown linting, link validation, drift detection), ownership policies, and update timing rules.

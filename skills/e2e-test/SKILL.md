@@ -7,6 +7,19 @@ description: "Design, maintain, and execute reliable end-to-end tests for critic
 
 Use this skill to create E2E coverage that is deterministic, evidence-backed, and maintainable in real repositories.
 
+## Quick Reference
+
+| If you need to… | Go to |
+|---|---|
+| Design new E2E test coverage for a user journey | §Operating Model → new journey coverage + Load `references/checklists.md` |
+| Write or update Playwright tests | §Runner Strategy + Load `references/playwright-patterns.md` |
+| Use advanced Playwright (auth, fixtures, mocking, CI sharding) | Load `references/playwright-deep-patterns.md` |
+| Triage a flaky or failing E2E test | §Operating Model → flaky triage + Load `references/checklists.md` |
+| Use Agent Browser for exploration or repro | §Runner Strategy + Load `references/agent-browser-workflows.md` |
+| Design CI gates for E2E suites | §Operating Model → CI gate design + Load `references/environment-and-dependency-gates.md` |
+| Avoid common Playwright mistakes | Load `references/anti-examples.md` |
+| See a fully worked E2E output example | Load `references/golden-examples.md` |
+
 ## Use This Skill For
 
 - selecting high-value journeys for E2E coverage
@@ -24,23 +37,25 @@ Do not use this skill for:
 
 ## Load References Selectively
 
-**Always read** (regardless of framework):
-- `references/checklists.md` — pre-run, coverage, flaky triage, quarantine, and result checklists.
-- `references/environment-and-dependency-gates.md` — environment readiness for local, preview, staging, or CI.
+For every E2E task, before making coverage or quality gate decisions:
+→ Load `references/checklists.md` for the 5-checklist suite: pre-run readiness, journey coverage, flaky test triage, quarantine protocol, and result reporting checklists.
 
-**Read only for Playwright / JS projects** (skip for Go, Python, or other non-JS):
-- `references/playwright-patterns.md` — selector, wait, assertion, config baseline, and version/platform gate rules.
-- `references/playwright-deep-patterns.md` — auth state, fixtures, data isolation, mocking, serial/parallel, and CI engineering.
-- `references/anti-examples.md` — common Playwright mistakes with corrected alternatives.
+For every E2E task, to confirm environment is ready before running tests:
+→ Load `references/environment-and-dependency-gates.md` for environment readiness gates per context (local, preview, staging, CI), dependency version checks, and browser/driver compatibility tables.
 
-**Read when using Agent Browser**:
-- `references/agent-browser-workflows.md` — exploration, failure reproduction, flow-to-code conversion, and command starters.
+For Playwright / JS projects only (skip for Go, Python, or non-JS):
+→ Load `references/playwright-patterns.md` for selector strategy (data-testid priority), wait patterns (avoid `waitForTimeout`), assertion contracts, `playwright.config.ts` baseline, and version/platform compatibility gates.
+→ Load `references/playwright-deep-patterns.md` for advanced patterns: auth state reuse, fixture design, test data isolation, HTTP mocking, serial vs parallel execution, and CI engineering (sharding, retry, artifact upload).
+→ Load `references/anti-examples.md` for the catalog of 12 common Playwright mistakes (hard-coded sleeps, fragile selectors, state leakage, missing retries) with corrected alternatives.
 
-**Read when shaping reports or triaging flakes**:
-- `references/golden-examples.md` — full output contract examples for Playwright and Go HTTP E2E tasks.
+When using Agent Browser for exploration or failure reproduction:
+→ Load `references/agent-browser-workflows.md` for Agent Browser command patterns, exploration-to-code conversion workflow, failure reproduction steps, and handoff format from exploration to Playwright code.
 
-**Run before gate decisions** to collect repository facts:
-- `scripts/discover_e2e_needs.sh` — detects Playwright, Node.js, Go, framework, existing tests, env vars, and CI platform.
+When shaping the final E2E report or triaging a flaky test result:
+→ Load `references/golden-examples.md` for full output contract examples covering Playwright journeys and Go HTTP E2E tasks, including expected field formats and scorecard verdicts.
+
+Before gate decisions, run to collect repository facts:
+→ Run `scripts/discover_e2e_needs.sh` for auto-detection of Playwright, Node.js, Go, existing test files, required env vars, and CI platform — output feeds directly into framework selection and gate configuration.
 
 ## Runner Strategy
 

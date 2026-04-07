@@ -294,9 +294,9 @@ class TestProgressiveDisclosure(unittest.TestCase):
         self.assertIn("## Load References Selectively", self.text)
 
     def test_references_triggered_by_context(self):
-        self.assertIn("Trigger", self.text)
-        self.assertIn("Reference", self.text)
-        self.assertIn("Timing", self.text)
+        self.assertIn("## Load References Selectively", self.text)
+        self.assertIn("→ Load", self.text)
+        self.assertIn("references/", self.text)
 
 
 if __name__ == "__main__":

@@ -15,6 +15,19 @@ allowed-tools: Read, Write, StrReplace, Grep, Glob, Shell
 
 Write technical documents that pass one test: **the target reader can complete the task independently without asking anyone.**
 
+## Quick Reference
+
+| If you need to… | Go to |
+|---|---|
+| Write a new document from scratch | §Execution Modes → Write + §Workflow Phase 0–5 |
+| Review an existing document for quality | §Execution Modes → Review + §Quality Scorecard |
+| Improve / refactor an existing document | §Execution Modes → Improve (minimal-diff) |
+| Choose the right document type and template | §Gate 2: Classify Type and Audience + Load `references/templates.md` |
+| Write for a mixed audience (execs + engineers) | Load `references/writing-quality-guide.md` §Funnel Structure |
+| Include code examples or CLI commands | Load `references/writing-quality-guide.md` §Code Examples |
+| Find and fix common doc mistakes (12 anti-patterns) | Load `references/writing-quality-guide.md` §Anti-Examples |
+| Set up doc CI / PR templates / auto-generation | Load `references/docs-as-code.md` |
+
 ## Execution Modes
 
 ### Write (new document from scratch)
@@ -203,19 +216,24 @@ When delivering, recommend the appropriate review cadence for the document.
 
 ## Load References Selectively
 
-- `references/templates.md`
-  Load the template matching the classified document type (Phase 1).
-  Do NOT load all templates — only the one needed.
-- `references/writing-quality-guide.md`
-  Load §Funnel Structure when audience is mixed (Gate 3).
-  Load §Code Examples when document contains code blocks.
-  Load §BAD/GOOD Examples when in Review or Improve mode.
-  Load §Anti-Examples when in Review or Improve mode (12 common documentation mistakes).
-  Load §Review Patterns when in Review mode (severity grouping, before/after fix patterns, common pitfalls).
-  Load §Visual Expression when document needs diagrams.
-- `references/docs-as-code.md`
-  Load **only** when user explicitly asks about doc CI, PR templates, auto-generation, or doc infrastructure setup.
-  Do NOT load this file for normal Write/Review/Improve tasks — it adds ~780 tokens with no benefit for document creation.
+When classifying the document type (Phase 1) and building the initial skeleton:
+→ Load `references/templates.md` for the document type template matching the classification (concept doc, task doc, reference doc, troubleshooting doc, RFC/ADR). Load **only** the section matching the classified type — do not load all templates.
+
+When the audience is mixed (executives + engineers, or unknown):
+→ Load `references/writing-quality-guide.md` §Funnel Structure for the four-layer structure pattern (Executive Summary → Overview → Technical Detail → Appendix) and section-length guidance.
+
+When the document contains code blocks or CLI examples:
+→ Load `references/writing-quality-guide.md` §Code Examples for code block formatting rules, language tag conventions, inline vs block decision criteria, and annotation patterns.
+
+When in Review or Improve mode, assessing existing document quality:
+→ Load `references/writing-quality-guide.md` §BAD/GOOD Examples and §Anti-Examples for the catalog of 12 common documentation mistakes (buried conclusions, walls of text, vague diagnosis, synonym mixing, orphaned docs) with corrected alternatives.
+→ Load `references/writing-quality-guide.md` §Review Patterns for severity grouping (Critical / Major / Minor), before/after fix format, and common review pitfalls.
+
+When the document requires diagrams, flowcharts, or visual structure:
+→ Load `references/writing-quality-guide.md` §Visual Expression for diagram type selection (sequence, flowchart, ER, state), Mermaid syntax conventions, and diagram placement rules.
+
+When the user explicitly asks about doc CI pipelines, PR templates, auto-generation, or doc-as-code infrastructure:
+→ Load `references/docs-as-code.md` for CI check configurations, PR template structure, auto-generation tooling options, and doc ownership policies. **Do not load** for normal Write/Review/Improve tasks — adds ~780 tokens with no benefit for document creation.
 
 ## Output Contract
 

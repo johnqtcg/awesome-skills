@@ -442,22 +442,22 @@ Required anti-example coverage:
 
 ## Load References Selectively
 
-- **`references/root-cause-tracing.md`**
-  Load when the bug appears deep in the stack, the bad value origin is unclear, or you need to trace caller-to-source relationships.
-- **`references/defense-in-depth.md`**
-  Load when the root cause is invalid data, unsafe state transition, or a missing guard at one of several layers.
-- **`references/condition-based-waiting.md`**
-  Load when flaky tests, retries, sleeps, polling loops, or async timing issues appear.
-- **`references/bug-type-strategies.md`**
-  Load when bug type is unclear, symptoms overlap, or you need a strategy per class of issue.
-- **`references/output-contract-template.md`**
-  Load when writing the final debugging report or verifying report completeness.
-- **`references/debugging-report-scorecard.md`**
-  Load when grading the quality of a debugging report or deciding PASS vs FAIL.
-- **`references/bad-good-debugging-reports.md`**
-  Load when the report quality is weak, overly hand-wavy, or you need concrete BAD/GOOD report patterns.
-- **`scripts/find-polluter.sh`**
-  Use when a test suite introduces filesystem or state pollution and you need to isolate the polluting test.
+When the bug appears deep in the stack, the bad value origin is unclear, or you need to trace caller-to-source:
+→ Load `references/root-cause-tracing.md` for backward tracing technique — call chain mapping, value-origin tracking templates, and structured evidence collection from callers to root source.
+When the root cause is invalid data, unsafe state transition, or a missing guard at one of several layers:
+→ Load `references/defense-in-depth.md` for multi-layer guard patterns, layer responsibility matrix, and fix templates that address defense at the correct layer rather than patching symptoms.
+When flaky tests, retries, sleeps, polling loops, or async timing issues appear:
+→ Load `references/condition-based-waiting.md` for condition-based wait patterns, polling/retry templates, race condition detection strategies, and Go `-race` / thread sanitizer usage.
+When the bug type is unclear, symptoms overlap multiple categories, or you need a per-class strategy:
+→ Load `references/bug-type-strategies.md` for the 8-type bug classification matrix (logic error, race condition, data corruption, resource leak, config error, integration failure, performance regression, flaky test) with tailored investigation strategies.
+When writing the final debugging report or verifying report completeness against the required sections:
+→ Load `references/output-contract-template.md` for the 9-section output contract template (Triage, Reproduction, Evidence, Hypothesis log, Root cause, Fix plan, Verification, Residual risk, Scorecard).
+When grading the quality of a debugging report or deciding PASS vs FAIL on report completeness:
+→ Load `references/debugging-report-scorecard.md` for the scorecard rubric with per-section PASS/FAIL criteria and total score thresholds.
+When the report quality is weak, overly hand-wavy, or you need concrete improvement patterns:
+→ Load `references/bad-good-debugging-reports.md` for the BAD/GOOD library of report anti-patterns — vague diagnosis, missing reproduction steps, unverified fixes, and hand-wavy root cause claims with corrected alternatives.
+When a test suite introduces filesystem or state pollution and you need to isolate the polluting test:
+→ Run `scripts/find-polluter.sh` for automated binary-search isolation of the test that causes pollution, with before/after state diffs.
 
 **Related skills:**
 - **`tdd-workflow`** - For creating failing test case (Phase 4, Step 1)

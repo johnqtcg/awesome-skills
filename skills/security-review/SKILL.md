@@ -7,6 +7,19 @@ description: Perform exploitability-first security reviews for code changes (aut
 
 Find exploitable risks early, provide concrete fixes, and keep recommendations practical for engineering delivery.
 
+## Quick Reference
+
+| If you need to… | Go to |
+|---|---|
+| Choose review depth (Lite / Standard / Deep) | §Review Depth Selection |
+| Run a fast Go security scan (skip Gate B/C/E) | Lite depth → Load `references/scenario-checklists.md` only |
+| Run a full Go security review with all gates | Standard/Deep → Load `references/go-secure-coding.md` + `references/scenario-checklists.md` |
+| Review Node.js / TypeScript code | Load `references/lang-nodejs.md` + `references/scenario-checklists.md` |
+| Review Java / Spring code | Load `references/lang-java.md` + `references/scenario-checklists.md` |
+| Review Python / FastAPI / Django code | Load `references/lang-python.md` + `references/scenario-checklists.md` |
+| Calibrate severity (P0–P3) or confidence | Load `references/severity-calibration.md` |
+| Suppress a false positive correctly | §False-Positive Suppression Rules |
+
 ## Review Principles
 
 - Prioritize exploitable risk over style issues.
@@ -471,18 +484,33 @@ Also output a compact JSON block for CI/inbox ingestion:
 
 Read only the references needed for the current review. The review depth and language determine what to load.
 
-| Condition | Load files | Typical tokens |
-|-----------|-----------|---------------|
-| Go code, Standard/Deep | `references/go-secure-coding.md` + `references/scenario-checklists.md` | ~5,800 |
-| Go code, Lite | `references/scenario-checklists.md` only | ~1,200 |
-| Node.js / TypeScript | `references/lang-nodejs.md` + `references/scenario-checklists.md` | ~2,200 |
-| Java / Spring | `references/lang-java.md` + `references/scenario-checklists.md` | ~2,100 |
-| Python / FastAPI / Django | `references/lang-python.md` + `references/scenario-checklists.md` | ~2,000 |
-| General / multi-language | `references/scenario-checklists.md` only | ~1,200 |
-| Severity calibration needed | `references/severity-calibration.md` | ~600 |
-| Additional anti-examples | `references/anti-examples.md` | ~400 |
+For Go code at Standard or Deep depth:
+→ Load `references/go-secure-coding.md` for Gate B resource inventory table (HTTP handlers, DB queries, file ops, goroutines, crypto) and Gate D 10-domain deep-dive (injection, auth, crypto, SSRF, race conditions, secrets, input validation, error handling, logging, dependencies).
+→ Load `references/scenario-checklists.md` for the full 11-scenario checklist (web API, CLI, background worker, gRPC service, etc.) with per-item PASS/FAIL/N/A fields and Go-specific subsections.
 
-**Lite reviews must NOT load `go-secure-coding.md`** — Gate B/C/E are skipped and domain triage uses only SKILL.md definitions.
+For Go code at Lite depth (**do not load `go-secure-coding.md`** — Gate B/C/E are skipped):
+→ Load `references/scenario-checklists.md` only, for scenario-scoped checklist items applicable to Lite gate coverage.
+
+For Node.js / TypeScript code:
+→ Load `references/lang-nodejs.md` for injection patterns, prototype pollution, ReDoS, SSRF, middleware order issues, and TypeScript-specific type-safety bypass risks.
+→ Load `references/scenario-checklists.md` for the cross-language scenario checklist.
+
+For Java / Spring code:
+→ Load `references/lang-java.md` for deserialization vulnerabilities, SpEL/SQL injection, `@PreAuthorize` annotation gaps, config secrets exposure, and Spring Security misconfiguration patterns.
+→ Load `references/scenario-checklists.md` for the cross-language scenario checklist.
+
+For Python / FastAPI / Django code:
+→ Load `references/lang-python.md` for `eval`/`pickle` misuse, SSTI, ORM safety gaps, async blocking risks, and dependency audit patterns.
+→ Load `references/scenario-checklists.md` for the cross-language scenario checklist.
+
+For general or multi-language reviews:
+→ Load `references/scenario-checklists.md` only for the language-agnostic scenario checklist (~1,200 tokens).
+
+When severity or confidence decisions feel ambiguous, or before publishing findings:
+→ Load `references/severity-calibration.md` for confidence downgrade rules, severity scoring matrix, common finding patterns with calibrated severity levels, and CVSS estimation guidance.
+
+When the report needs additional anti-examples for quality validation or reviewer training:
+→ Load `references/anti-examples.md` for extended anti-examples (AE-2 through AE-7) covering N/A abuse, confirmed-without-reproducer, P0-acceptance-without-escalation, and transitive call path omissions.
 
 ## Bundled Assets
 

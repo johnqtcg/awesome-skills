@@ -9,6 +9,15 @@ metadata:
 
 Create a commit from the current working tree with safety gates first, then generate a concise Angular-style message in English.
 
+## Quick Reference
+
+| If you need to… | Go to |
+|---|---|
+| Full commit workflow (preflight → stage → gate → message → commit) | §Workflow |
+| Stage partial changes or split multiple logical groups | §2. Staging |
+| Quality gate by ecosystem (Go / Node / Python / Java / Rust) | §3. Quality Gate |
+| Handle edge cases (empty commit / submodule / squash residual) | §Edge Cases |
+
 ## Hard Rules
 
 - Never commit with unresolved conflicts.
@@ -97,11 +106,17 @@ git diff --cached --name-only | grep '\.' | sed 's/.*\.//' | sort | uniq -c | so
 Map: `go` → Go, `js`/`ts`/`jsx`/`tsx` → Node, `py` → Python, `java`/`kt`/`kts` → Java, `rs` → Rust. Pick the ecosystem with the most staged files. On tie, prefer the ecosystem whose marker file is closest to repo root. If staged files span multiple ecosystems with no majority, run each gate scoped to its own files.
 
 **Run the ecosystem-specific gate** from the matching reference file:
-- Go → [references/quality-gate-go.md](references/quality-gate-go.md)
-- Node.js/TS → [references/quality-gate-node.md](references/quality-gate-node.md)
-- Python → [references/quality-gate-python.md](references/quality-gate-python.md)
-- Java/Kotlin → [references/quality-gate-java.md](references/quality-gate-java.md)
-- Rust → [references/quality-gate-rust.md](references/quality-gate-rust.md)
+
+When staged files are predominantly Go (`.go`):
+→ Load `references/quality-gate-go.md` for `go build`, `go vet`, `golangci-lint`, and `go test` commands with pass/fail thresholds.
+When staged files are predominantly Node.js/TypeScript (`.js`/`.ts`/`.jsx`/`.tsx`):
+→ Load `references/quality-gate-node.md` for `tsc --noEmit`, ESLint, and test runner commands with pass/fail thresholds.
+When staged files are predominantly Python (`.py`):
+→ Load `references/quality-gate-python.md` for `ruff`/`flake8`, `mypy`, and `pytest` commands with pass/fail thresholds.
+When staged files are predominantly Java/Kotlin (`.java`/`.kt`/`.kts`):
+→ Load `references/quality-gate-java.md` for build, checkstyle, and test commands with pass/fail thresholds.
+When staged files are predominantly Rust (`.rs`):
+→ Load `references/quality-gate-rust.md` for `cargo check`, `cargo clippy`, and `cargo test` commands with pass/fail thresholds.
 
 **Fallback** (no marker found): try `make test` or `make check` if a Makefile exists; otherwise skip and note "no quality gate detected" in the report.
 

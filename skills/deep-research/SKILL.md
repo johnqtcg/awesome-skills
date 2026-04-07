@@ -11,6 +11,15 @@ allowed-tools: Read, Grep, Glob, Bash, WebFetch
 
 Source-backed research workflow with mandatory content extraction and hallucination-aware verification.
 
+## Quick Reference
+
+| If you need to… | Go to |
+|---|---|
+| Understand mode budget limits (Quick 5–10 / Standard 15–25 / Deep 30–50 calls) | §4 Research Mode Gate |
+| Understand what the 9-section output must include | §Output Contract + Load `references/output-contract-template.md` |
+| Verify claims or guard against hallucination | Load `references/hallucination-and-verification.md` |
+| Research error messages, API docs, or Go/Python/JS code | Load `references/research-patterns.md` |
+
 ## Mandatory Gates
 
 Gates execute in strict serial order. Any gate failure blocks all subsequent steps.
@@ -222,11 +231,14 @@ Every completed research must include these 9 sections (see `references/output-c
 
 ## Load References Selectively
 
-| Trigger | Reference | Timing |
-|---------|-----------|--------|
-| Always | `references/output-contract-template.md` | Before report generation |
-| Verification or high-risk claims | `references/hallucination-and-verification.md` | Before synthesis |
-| Programmer-specific research | `references/research-patterns.md` | Before building queries |
+For every research task, before generating the final report:
+→ Load `references/output-contract-template.md` for the mandatory 9-section output structure (Research Question, Methodology, Executive Summary, Findings, Evidence Chain, Gaps & Limitations, Reusable Queries, Gate Log, Conclusion) with Quick/Standard/Deep mode field requirements.
+
+When any source makes quantitative claims, model-generated content is suspected, or findings are high-stakes:
+→ Load `references/hallucination-and-verification.md` for AI hallucination type taxonomy, detection methods per type, cross-checking protocols, and confidence-degradation rules when verification fails.
+
+When the research topic is programmer-specific (error debugging, library evaluation, performance comparison, RFC lookup, GitHub code search):
+→ Load `references/research-patterns.md` for query patterns per technical research category, Stack Overflow / GitHub / official-docs source tiers, and programmer-specific evidence quality criteria.
 
 ## Subcommands Reference
 

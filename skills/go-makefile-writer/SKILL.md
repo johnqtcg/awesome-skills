@@ -7,6 +7,18 @@ description: Canonical skill for Go Makefiles. Create/refactor root Makefiles fo
 
 Design a practical root `Makefile` that is readable, reproducible, and aligned with repository layout.
 
+## Quick Reference
+
+| If you need to… | Go to |
+|---|---|
+| Create a Makefile from scratch for a new Go project | §Execution Modes → Create + §Workflow |
+| Refactor or update an existing Makefile (minimal-diff) | §Execution Modes → Refactor |
+| Decide which targets to include (`build`, `test`, `lint`, `ci`…) | §Workflow (Plan targets) |
+| Get a complete working Makefile example to start from | Load `references/golden/simple-project.mk` or `complex-project.mk` |
+| Check quality rules, variable conventions, `.PHONY` requirements | Load `references/makefile-quality-guide.md` |
+| Review a Makefile PR quickly | Load `references/pr-checklist.md` |
+| Handle a monorepo or multi-module Go repo | §Monorepo Support |
+
 ## Execution Modes
 
 Select a mode before starting and state it in the output report.
@@ -170,14 +182,20 @@ Before writing or reviewing a Makefile, check against these common mistakes. If 
 - Keep `run-*` from polluting source directories; prefer `go run ./cmd/...` or run from `bin/`.
 - Pin tool versions in `install-tools` for CI reproducibility (see [quality-guide §11](references/makefile-quality-guide.md#11-tool-installation)).
 
-## Resources
+## Load References Selectively
 
-- Use `scripts/discover_go_entrypoints.sh` to discover `cmd/**/main.go`.
-- Use `references/makefile-quality-guide.md` for target templates and review checklist.
-- Use `references/pr-checklist.md` for fast Makefile PR reviews.
-- Use `references/golden/` for complete Makefile examples:
-  - `simple-project.mk` — single binary, minimal tooling
-  - `complex-project.mk` — multi-binary, Docker, code generation, cross-compilation
+When starting any Makefile creation or refactor task:
+→ Run `scripts/discover_go_entrypoints.sh` first to discover `cmd/**/main.go` binary locations and infer project shape (single-binary vs multi-binary).
+
+When writing or reviewing specific targets (`build`, `test`, `lint`, `run`, `install-tools`), or checking quality rules:
+→ Load `references/makefile-quality-guide.md` for canonical target templates, variable conventions, `.PHONY` rules, self-documenting `help` output, and the 15-item review checklist.
+
+When reviewing a PR that touches a Makefile:
+→ Load `references/pr-checklist.md` for the fast Makefile-specific PR review checklist (target naming, portability, idempotency, CI compatibility).
+
+When you need a complete working Makefile as a starting point or reference:
+→ Load `references/golden/simple-project.mk` for a single-binary project with minimal tooling.
+→ Load `references/golden/complex-project.mk` for a multi-binary project with Docker, code generation, and cross-compilation targets.
 
 ## Output Contract
 
