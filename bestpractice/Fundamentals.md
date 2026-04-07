@@ -22,6 +22,11 @@
     - [5.3 Add a Table of Contents to Long Files](#53-add-a-table-of-contents-to-long-files)
     - [5.4 Three Principles for the Main File: Quick Reference, 80/20 Split, and Contractual References](#54-three-principles-for-the-main-file-quick-reference-8020-split-and-contractual-references)
     - [5.5 Content Splitting Decision Tree: Five Principles](#55-content-splitting-decision-tree-five-principles)
+6. [Tool Isolation and Security Design](#6-tool-isolation-and-security-design)
+    - [6.1 The Design Philosophy of allowed-tools: From Feature Config to Security Constraint](#61-the-design-philosophy-of-allowed-tools-from-feature-config-to-security-constraint)
+    - [6.2 The Three-Question Permission Framework](#62-the-three-question-permission-framework)
+    - [6.3 Three-Tier Permission System: The Stronger the Capability, the Earlier the Governance](#63-three-tier-permission-system-the-stronger-the-capability-the-earlier-the-governance)
+    - [6.4 Production Skill Security Design Checklist](#64-production-skill-security-design-checklist)
 
 ## 1. Why Skills Exist
 
@@ -491,5 +496,118 @@ When `SKILL.md` grows past 500 lines, it usually means one of the five principle
 | Multiple entirely independent "when the user is in scenario X" branches | Core semantics inline over-expanded | Split vertically into multiple single-dimension skills (see Architecture chapter §18) |
 
 Getting content into the right layer is the prerequisite for the loading strategies described in §5.1–5.4 to work precisely.
+
+---
+
+<a id="6-tool-isolation-and-security-design"></a>
+## 6. Tool Isolation and Security Design
+
+The first five chapters covered what a Skill is, where to deploy it, and how to organize its content. One question has been hiding in the background the entire time: **as Skills grow more capable, who ensures they do not overstep their bounds?**
+
+The `allowed-tools` field was mentioned briefly in §2.4 as an optional frontmatter field. But its nature goes much further — it is the mechanism for **baking security constraints directly into structure**, addressing the risk of overreach rather than just limiting functionality.
+
+<a id="61-the-design-philosophy-of-allowed-tools-from-feature-config-to-security-constraint"></a>
+### 6.1 The Design Philosophy of allowed-tools: From Feature Config to Security Constraint
+
+The right way to understand `allowed-tools` is: **define what a Skill cannot do, not just what it can**.
+
+A Skill without `allowed-tools` inherits the full tool set by default — including `Write`, `Edit`, `Bash`, and everything else. For a simple personal Skill this is fine, but for shared Skills or high-risk scenarios, it means "running an audit Skill could accidentally modify files."
+
+Based on a Skill's typical role, there are four standard tool-set patterns:
+
+| Skill type | Typical scenario | Recommended `allowed-tools` | Constraint intent |
+|-----------|-----------------|------------------------------|-------------------|
+| **Audit** | Code review, security scan, quality check | `Read, Grep, Glob` | Read-only, zero side effects |
+| **Generation** | Create files, generate docs, write tests | `Read, Grep, Glob, Write` | Create only, do not modify existing files |
+| **Analysis** | Report generation, data analysis, metrics | `Read, Grep, Glob, Bash(python:*)` | Allow Python execution, block other shell commands |
+| **Execution** | Run tests, CI checks, build verification | `Read, Bash(npm test:*), Bash(pytest:*)` | Controlled execution of specific commands, no arbitrary shell |
+
+Fine-grained constraints like `Bash(python:*)` and `Bash(npm test:*)` are the key capability of `allowed-tools` — they permit a specific tool pattern while blocking everything else. An audit Skill should never have `Write` or `Bash`, not because it "doesn't need them" but because **having them means having the risk**.
+
+**Layered relationship with CLAUDE.md permissions**
+
+`allowed-tools` is a Skill-level constraint, forming a two-layer structure with the global `permissions` in `CLAUDE.md`:
+
+```
+Global permissions (settings.json / CLAUDE.md)
+    └── Project-level permissions (project CLAUDE.md)
+            └── Skill-level allowed-tools (SKILL.md frontmatter)
+```
+
+Skill-level constraints can only tighten permissions, never expand them. If global permissions already block `Bash(rm:*)`, writing `allowed-tools: [Bash]` in a Skill cannot bypass that. Skill-level constraints are a further refinement within the global permission boundary, not a replacement.
+
+<a id="62-the-three-question-permission-framework"></a>
+### 6.2 The Three-Question Permission Framework
+
+Designing permission boundaries for a Skill comes down to answering three questions:
+
+
+![three-layer-system](images/three-layer.png)
+
+
+**Question 1: What can this Skill do?** (tool boundary)
+
+`allowed-tools` answers this directly. The design principle: minimize necessary permissions. A review Skill only needs to read files; a commit Skill needs `Bash(git:*)` but not `Write`.
+
+**Question 2: When can it be triggered?** (trigger control)
+
+Two mechanisms apply here:
+
+- `disable-model-invocation: true`: prevents Claude from auto-loading the Skill based on the description, requiring the user to invoke it explicitly with `/skill-name`. Use this for operations with **side effects** (git commit, file deletion, deployment).
+- **Description precision**: an overly broad description causes Claude to auto-load in scenarios that do not fit. "Help me format code" and "help me check code formatting" express different intents; the description must distinguish them precisely.
+
+**Question 3: Within what boundary does it run?** (runtime boundary)
+
+A Skill's deployment location defines its scope of impact: enterprise-level Skills affect the entire organization, project-level Skills are scoped to the current project, and personal-level Skills only affect one person's workflow. High-risk Skills (involving production data, payments, or permission changes) should only be deployed at layers where explicit authorization exists — not pushed to everyone by default.
+
+Using the `git-commit` Skill as an example, the three answers are:
+
+| Question | Answer |
+|----------|--------|
+| What can it do | `Bash(git:*)` — can run git commands; no `Write` — cannot modify files |
+| When triggered | `disable-model-invocation: true` — only responds to explicit `/commit`, never auto-triggered |
+| Boundary | Project-level deployment, no push permissions, local commit only |
+
+<a id="63-three-tier-permission-system-the-stronger-the-capability-the-earlier-the-governance"></a>
+### 6.3 Three-Tier Permission System: The Stronger the Capability, the Earlier the Governance
+
+A Skill's complexity is not static — it evolves through levels of usage depth:
+
+**Tier 1: SOP Stage**
+
+The Skill executes fixed steps with minimal risk. Controlling one or two tools with `allowed-tools` is sufficient; description precision alone handles trigger control. The main security risk at this stage is unintended file modification.
+
+**Tier 2: Expert System Stage**
+
+The Skill can invoke multiple tools, load extensive references, and make complex judgments based on analysis results. At this point, the three questions need explicit answers: Is the tool set minimized? Are trigger conditions precise? Does the deployment tier match the risk?
+
+**Tier 3: Organizational Intelligence Stage**
+
+Multiple Skills cooperate, automatically orchestrated through SubAgents and pipelines, with trigger chains spanning several Skills. Without a clear permission hierarchy, **a broadly-permissioned Skill can become a privilege-escalation vector** — a low-permission Skill A calls a high-permission Skill B, bypassing constraints that should have existed.
+
+This is the meaning of "the stronger the capability, the earlier the governance": do not wait for a problem to arise before restricting permissions — build constraints into the structure at design time.
+
+<a id="64-production-skill-security-design-checklist"></a>
+### 6.4 Production Skill Security Design Checklist
+
+Before distributing a Skill to your team or deploying it at the enterprise level, verify each item below:
+
+
+| # | Check item | What to verify | Pass criterion | Risk level |
+|---|------------|---------------|----------------|-----------|
+| 1 | Tool minimization | Does `allowed-tools` contain only necessary tools | No excess `Write`, `Edit`, or `Bash` permissions | High |
+| 2 | Trigger control | Is `disable-model-invocation: true` set for Skills with side effects | Skills that modify files, run git ops, or call external services require explicit invocation | High |
+| 3 | Description precision | Will the description cause false triggers | Verify with 20 should-trigger / should-not-trigger queries | Medium |
+| 4 | Deployment tier match | Does the deployment tier match the Skill's risk level | High-risk Skills must not be deployed globally or enterprise-wide by default | High |
+| 5 | Sensitive operation gates | Do operations involving production data, payments, or permission changes have explicit confirmation steps | "Stop and confirm" gates exist in the Workflow | High |
+| 6 | Environment awareness | Do operations in production environments include `ENV=prod` detection and skip logic | Test-purpose Skills must not silently execute in production | Medium |
+| 7 | Secrets handling | Does the Skill ever ask users to paste tokens, passwords, or cookies | Sensitive credentials must never be requested in the conversation under any circumstance | High |
+| 8 | Bash command scope | Is `Bash` constrained to specific command prefixes | Avoid bare `Bash` that allows arbitrary shell execution | Medium |
+| 9 | Contract test coverage | Is `scripts/tests/test_skill_contract.py` present | Structural constraints verified by zero-LLM tests | Low |
+| 10 | Change review process | Do changes to high-risk Skills require a PR review | Enterprise-level Skill changes should go through a Git review workflow | Medium |
+
+**Usage note**: Items 1–8 are checked at Skill design time, item 9 runs automatically in CI, item 10 is enforced in team process. Any "High" risk item that fails is a blocker — it must be resolved before the Skill is published.
+
+> For more `allowed-tools` misuse cases and security anti-patterns, see Advanced chapter §7.5.
 
 ---
