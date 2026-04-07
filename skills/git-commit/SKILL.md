@@ -10,7 +10,6 @@ metadata:
 # Git Commit (Safety Enhanced, Angular Convention)
 
 Create a commit from the current working tree with safety gates first, then generate a concise Angular-style message in English.
-
 ## Quick Reference
 
 | If you need to… | Go to |
@@ -194,7 +193,6 @@ Closes #245
 - **Empty commit** (`--allow-empty`): only if the user explicitly requests it (e.g. to trigger CI). Never create an empty commit by default. When allowed, note it in the post-commit report.
 - **Squash merge residual files**: if `.git/SQUASH_MSG` exists, the user is likely committing a squash merge. Warn them to review the staged files carefully.
 - **Submodule pointer changes**: handled post-staging — always confirm with the user.
-
 ## Failure Handling
 
 - No staged changes → stop and report.
