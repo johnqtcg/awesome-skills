@@ -12,8 +12,14 @@ CHANGED_PKGS=$(git diff --cached --name-only -- '*.go' \
   | sed 's|^|./|')
 ```
 
+## Build
+
+- **<= 20 packages**: `go build ./...`
+- **> 20 packages**: `go build $CHANGED_PKGS`
+
 ## Static Analysis
 
+- Prefer `golangci-lint run` when available and configured for the repo.
 - **<= 20 packages**: `go vet ./...`
 - **> 20 packages**: `go vet $CHANGED_PKGS` (scope to changed packages only)
 

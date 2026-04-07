@@ -23,8 +23,10 @@ REQUIRED_ALLOWED_TOOL_PATTERNS = [
     "Bash(git log*)",
     "Bash(git stash*)",
     "Bash(go list*)",
+    "Bash(go build*)",
     "Bash(go vet*)",
     "Bash(go test*)",
+    "Bash(golangci-lint*)",
     "Bash(pytest*)",
     "Bash(ruff check*)",
     "Bash(flake8*)",
@@ -212,6 +214,11 @@ class TestReferenceFiles:
             assert filename in skill_content, (
                 f"SKILL.md must link to references/{filename}"
             )
+
+    def test_go_reference_aligns_with_skill_summary(self):
+        content = (REFERENCES_DIR / "quality-gate-go.md").read_text(encoding="utf-8")
+        for phrase in ("go build", "golangci-lint", "go vet", "go test"):
+            assert phrase in content, f"quality-gate-go.md must mention {phrase}"
 
 
 # --- Line Count ---
