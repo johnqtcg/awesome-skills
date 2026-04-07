@@ -44,7 +44,7 @@ Take the following Go code submitted to the `go-code-reviewer` skill:
 
 ```go
 func getBatchUser(ctx context.Context, userKeys []*UserKey) ([]*User, error) {
-    userList := make([]*User, 0)  // ← no capacity pre-allocation
+    userList := make([]*User, 0)
 
     var wg sync.WaitGroup
     for i, u := range userKeys {
@@ -55,12 +55,12 @@ func getBatchUser(ctx context.Context, userKeys []*UserKey) ([]*User, error) {
             user, err := redis.GetGuest(ctx, u.Id)
             if err != nil {
                 log.WarnContextf(ctx, "no found guest user: %v", u)
-                continue  // ← continue inside goroutine, compile error
+                continue
             }
-            userList = append(userList, user)  // ← data race
+            userList = append(userList, user)
         }()
     }
-    return userList, nil  // ← missing wg.Wait()
+    return userList, nil
 }
 ```
 
@@ -157,7 +157,7 @@ The first advantage directly addresses the core problem in this document: when a
 - A Multi-Agent system with Claude Opus 4 (Lead) + Claude Sonnet 4 (Workers) outperformed **single-agent Opus 4 by 90.2%** on Anthropic's internal research eval
 - In the BrowseComp benchmark, token usage alone explained **80% of the performance variance** — the key is not a stronger model, but that each agent completes a focused task in a clean context
 
-**AgentCoder Academic Research** (source: arXiv:2312.13010):
+**AgentCoder Academic Research** (source: https://arxiv.org/pdf/2312.13010):
 - Multi-Agent code generation (Programmer + Test Designer + Test Executor) achieved **96.3% pass@1** on HumanEval; single-agent SOTA was 90.2%
 - Used **fewer tokens** (56.9K vs 138.2K) to achieve **higher accuracy**, proving that specialized division of labor can improve both quality and efficiency simultaneously
 
