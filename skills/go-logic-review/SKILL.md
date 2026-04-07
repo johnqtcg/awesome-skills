@@ -1,7 +1,7 @@
 ---
 name: go-logic-review
 description: Review Go code for business logic correctness, boundary conditions, off-by-one errors, state management, data flow integrity, and return value contracts. Trigger on any Go code change that modifies behavior, conditional logic, state transitions, or data processing. Use for logic-correctness focused review.
-allowed-tools: Read, Grep, Glob, Bash
+allowed-tools: Read, Grep, Glob, Bash(go build*), Bash(go vet*)
 ---
 
 # Go Logic Review

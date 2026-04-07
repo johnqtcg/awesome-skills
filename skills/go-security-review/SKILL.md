@@ -1,7 +1,7 @@
 ---
 name: go-security-review
 description: Review Go code for security vulnerabilities including OWASP Top 10, injection, auth/authz, crypto, secrets, SSRF, XSS, and input validation. Trigger when code involves SQL, user input, authentication, HTTP handlers, TLS, crypto, secrets, or file path operations. Use for security-focused code review of Go projects.
-allowed-tools: Read, Grep, Glob, Bash
+allowed-tools: Read, Grep, Glob, Bash(go build*), Bash(go vet*), Bash(gosec*), Bash(govulncheck*)
 ---
 
 # Go Security Review

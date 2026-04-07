@@ -1,6 +1,8 @@
 ---
 name: create-pr
 description: Create evidence-backed pull requests to the GitHub main branch with strict preflight, quality, and security gates. Use when users ask to create/submit/open/update a PR to main (including private repos), decide draft vs ready state, and provide reviewer-ready context for team review.
+disable-model-invocation: true
+allowed-tools: Read, Grep, Glob, Bash(git diff*), Bash(git log*), Bash(git status*), Bash(git push*), Bash(git branch*), Bash(gh pr*), Bash(gh auth*)
 ---
 
 # Create PR

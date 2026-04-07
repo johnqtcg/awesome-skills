@@ -1,6 +1,7 @@
 ---
 name: readme-generator
 description: Generate or refactor project README.md files using repository evidence. Use when the user asks to create/rewrite/standardize README, improve documentation structure, or produce maintainable README templates for different project types (service/library/CLI/monorepo).
+allowed-tools: Read, Write, Grep, Glob, Bash(git log*), Bash(git diff*)
 ---
 
 # README Generator

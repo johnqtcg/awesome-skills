@@ -46,6 +46,16 @@ class TestFrontmatter(unittest.TestCase):
         for tool in ["read", "bash", "webfetch"]:
             self.assertIn(tool, tools, f"allowed-tools should include {tool}")
 
+    def test_allowed_tools_permit_helper_script_execution(self):
+        m = re.search(r"allowed-tools:\s*(.+)", self.text)
+        self.assertIsNotNone(m)
+        tools = m.group(1)
+        self.assertIn(
+            "Bash(python3 scripts/deep_research.py*)",
+            tools,
+            "allowed-tools must permit the documented helper script entrypoint",
+        )
+
 
 class TestMandatoryGates(unittest.TestCase):
     def setUp(self):

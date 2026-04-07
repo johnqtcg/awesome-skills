@@ -1,7 +1,7 @@
 ---
 name: go-quality-review
 description: Review Go code for code quality, style, and modern Go practices including function length, nesting depth, naming, mutable globals, interface design, receiver consistency, modern Go idioms (slog, generics, typed atomics), and static analysis. Trigger when reviewing Go code structure, readability, or maintainability. Also runs golangci-lint for automated style checks.
-allowed-tools: Read, Grep, Glob, Bash
+allowed-tools: Read, Grep, Glob, Bash(go build*), Bash(go vet*), Bash(golangci-lint*), Bash(gofmt*)
 ---
 
 # Go Quality Review

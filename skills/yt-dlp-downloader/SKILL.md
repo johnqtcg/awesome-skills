@@ -4,7 +4,8 @@ description: |
   Generate and run yt-dlp download commands with probe-driven format selection, safe output naming, retry defaults, and structured execution reports.
   Use when users want to download videos, extract audio, fetch playlists, grab subtitles, handle authenticated/age-gated content, or download live streams.
   Covers single videos, playlists, audio extraction, subtitle-inclusive downloads, format-ID / resolution-capped downloads, SponsorBlock integration, live streams, and browser-cookie authentication.
-allowed-tools: Read, Grep, Glob, Bash
+disable-model-invocation: true
+allowed-tools: Read, Bash(yt-dlp*)
 ---
 
 # yt-dlp Downloader

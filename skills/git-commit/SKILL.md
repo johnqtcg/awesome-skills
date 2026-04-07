@@ -1,6 +1,8 @@
 ---
 name: git-commit
 description: Safely create a git commit by validating repository state, staging intended changes, scanning for secrets/conflicts, generating an English Angular (Conventional Commits) message from staged diff, and committing without amend.
+disable-model-invocation: true
+allowed-tools: Read, Grep, Bash(git add*), Bash(git commit*), Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git stash*)
 metadata:
   short-description: Safely commit staged changes with an Angular-style message
 ---

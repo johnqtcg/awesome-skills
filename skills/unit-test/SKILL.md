@@ -1,6 +1,7 @@
 ---
 name: unit-test
 description: 'Use when the user asks for unit tests (e.g, "单元测试", "unit test"), wants to add/fix Go tests, wants table-driven and subtest organization, or wants to enforce a minimum coverage gate (default 80% for logic packages). Prioritize bug discovery (especially boundary, mapping loss, and concurrency defects) over test volume. Do NOT use for benchmarks, fuzz tests, integration tests, E2E tests, load tests, or mock generation.'
+allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go vet*)
 ---
 
 # Go Unit Test

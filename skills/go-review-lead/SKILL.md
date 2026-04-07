@@ -1,6 +1,7 @@
 ---
 name: go-review-lead
 description: Orchestrate a comprehensive Go code review by triaging code changes, dispatching vertical review skills (security, concurrency, error, logic, performance, quality, test) as parallel agents, then consolidating results into a unified report. Use for full Go PR review or comprehensive code review. Replaces the monolithic go-code-reviewer with focused parallel analysis.
+allowed-tools: Read, Grep, Glob, Bash(go build*), Bash(go vet*), Bash(git diff*), Bash(git log*), Agent
 ---
 
 # Go Review Lead — Orchestrator

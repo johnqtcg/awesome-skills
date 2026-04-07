@@ -1,7 +1,7 @@
 ---
 name: go-test-review
 description: Review Go test code for quality including table-driven tests, t.Helper usage, assertion completeness, boundary cases, benchmarks, fuzz tests, and coverage targets. Trigger when PR contains _test.go files, test helpers, httptest usage, testing.B, testing.F, or testdata directories. Use for test-quality focused review.
-allowed-tools: Read, Grep, Glob, Bash
+allowed-tools: Read, Grep, Glob, Bash(go build*), Bash(go vet*), Bash(go test*)
 ---
 
 # Go Test Review

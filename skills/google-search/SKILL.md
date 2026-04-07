@@ -1,7 +1,7 @@
 ---
 name: google-search
 description: Use when the user wants help finding information through Google or Google-style web search and expects more than raw links. Handle current facts, public-information lookups, official documents, tutorials, reports, tools, materials, or source discovery by classifying the search goal, generating precise queries, executing search, ranking sources, cross-checking key claims, and returning a concise conclusion plus reusable search strings. Also use for programmer-specific searches (error debugging, official docs, GitHub code search, Stack Overflow, RFC lookup, benchmarks).
-allowed-tools: Read, Grep, Glob, Bash, WebFetch
+allowed-tools: Read, Grep, Glob, WebFetch
 ---
 
 # Google Search

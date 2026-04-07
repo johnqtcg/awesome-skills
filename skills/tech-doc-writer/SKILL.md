@@ -8,12 +8,12 @@ description: >
   Audience-aware, evidence-based, with quality gates and anti-staleness
   enforcement. Supports concept docs, task docs, reference docs,
   troubleshooting docs, and design docs (RFC/ADR).
-allowed-tools: Read, Write, StrReplace, Grep, Glob, Shell
+allowed-tools: Read, Write, StrReplace, Grep, Glob, Bash(git log*), Bash(git diff*)
 ---
 
 # Tech Doc Writer
 
-Write technical documents that pass one test: **the target reader can complete the task independently without asking anyone.**
+li
 
 ## Quick Reference
 

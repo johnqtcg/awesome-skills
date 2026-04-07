@@ -1,7 +1,7 @@
 ---
 name: go-concurrency-review
 description: Review Go code for concurrency safety and goroutine lifecycle issues including race conditions, deadlocks, goroutine leaks, mutex misuse, and context propagation. Trigger when code contains go func, channels, sync primitives, WaitGroup, errgroup, or goroutine lifecycle management. Use for concurrency-focused review of Go projects.
-allowed-tools: Read, Grep, Glob, Bash
+allowed-tools: Read, Grep, Glob, Bash(go build*), Bash(go vet*), Bash(go test -race*)
 ---
 
 # Go Concurrency Review

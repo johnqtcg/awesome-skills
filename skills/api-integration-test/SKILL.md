@@ -1,7 +1,7 @@
 ---
 name: api-integration-test
 description: "Create, maintain, and run gated Go integration tests for internal APIs and service-to-service clients (HTTP/gRPC). Use for endpoint verification, contract checks with real runtime config, opt-in execution, timeout/retry safety, and integration failure triage in Go services."
-allowed-tools: Read, Grep, Glob, Bash
+allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*)
 ---
 
 # API Integration Test

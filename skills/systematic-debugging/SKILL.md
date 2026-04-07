@@ -1,6 +1,7 @@
 ---
 name: systematic-debugging
 description: Use when debugging, diagnosing, or investigating any bug, test failure, flaky test, race condition, unexpected behavior, build failure, production incident, third-party breakage, root cause analysis, or performance regression before proposing fixes
+allowed-tools: Read, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go run*), Bash(go vet*), Bash(git log*), Bash(git diff*)
 ---
 
 # Systematic Debugging

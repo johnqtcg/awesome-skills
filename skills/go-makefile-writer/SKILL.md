@@ -1,6 +1,8 @@
 ---
 name: go-makefile-writer
 description: Canonical skill for Go Makefiles. Create/refactor root Makefiles for Go repositories with standardized build/test/lint/run targets, self-documenting help outputexample, predictable artifacts, and maintainable target naming.
+disable-model-invocation: true
+allowed-tools: Read, Write, Grep, Glob, Bash(make*), Bash(go version*)
 ---
 
 # Go Makefile Writer

@@ -1,6 +1,8 @@
 ---
 name: thirdparty-api-integration-test
 description: Create and run gated Go integration tests for third-party APIs with real external calls, strict configuration gates, bounded timeouts, and safe runtime controls. Use for vendor/client contract verification and failure triage.
+disable-model-invocation: true
+allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*)
 ---
 
 # Third Party API Integration Test

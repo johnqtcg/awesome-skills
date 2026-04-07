@@ -1,7 +1,7 @@
 ---
 name: go-performance-review
 description: Review Go code for performance issues including slice/map pre-allocation, string concatenation, N+1 queries, connection pool configuration, sync.Pool, memory alignment, lock scope, buffered I/O, and HTTP transport tuning. Trigger when code contains make(), loops, database queries, string building, sync primitives, HTTP clients, or hot-path operations. Use for performance-focused review.
-allowed-tools: Read, Grep, Glob, Bash
+allowed-tools: Read, Grep, Glob, Bash(go build*), Bash(go vet*), Bash(go test -bench*)
 ---
 
 # Go Performance Review
