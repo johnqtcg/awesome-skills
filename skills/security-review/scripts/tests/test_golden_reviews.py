@@ -191,6 +191,18 @@ class GoldenReviewTests(unittest.TestCase):
         self._assert_coverage(f)
         self._assert_reference(f)
 
+    def test_019_ssrf_allowlisted_domain_fp(self) -> None:
+        f = self._load("019_ssrf_allowlisted_domain_fp.json")
+        self.assertFalse(f["expected_finding"])
+        self._assert_anti_example(f)
+        self._assert_coverage(f)
+
+    def test_020_constant_time_compare_correct_fp(self) -> None:
+        f = self._load("020_constant_time_compare_correct_fp.json")
+        self.assertFalse(f["expected_finding"])
+        self._assert_anti_example(f)
+        self._assert_coverage(f)
+
     # ------------------------------------------------------------------
     # Fixture integrity
     # ------------------------------------------------------------------

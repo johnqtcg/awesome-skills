@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-019",
+  "title": "SSRF false positive — URL resolved from server-side allowlist, not user-controlled",
+  "expected_finding": false,
+  "category": "ssrf",
+  "code": "var partnerEndpoints = map[string]string{\n    \"partner-a\": \"https://api.partner-a.com/data\",\n    \"partner-b\": \"https://api.partner-b.com/data\",\n}\n\nfunc (h *Handler) FetchPartnerData(w http.ResponseWriter, r *http.Request) {\n    partnerID := r.URL.Query().Get(\"partner\")\n    endpoint, ok := partnerEndpoints[partnerID]\n    if !ok {\n        http.Error(w, \"unknown partner\", 400)\n        return\n    }\n    resp, err := http.Get(endpoint)\n    if err != nil { http.Error(w, err.Error(), 500); return }\n    defer resp.Body.Close()\n    io.Copy(w, resp.Body)\n}",
+  "anti_example_patterns": [
+    "Input is not attacker-controlled at trust boundary"
+  ],
+  "coverage_rules": [
+    "allowlist",
+    "SSRF"
+  ]
+}

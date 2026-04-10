@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-020",
+  "title": "Crypto false positive — subtle.ConstantTimeCompare already used correctly for token validation",
+  "expected_finding": false,
+  "category": "crypto",
+  "code": "func validateHMACToken(provided, expected []byte) bool {\n    return subtle.ConstantTimeCompare(provided, expected) == 1\n}",
+  "anti_example_patterns": [
+    "Sink is parameterized/safely encoded by framework guarantees"
+  ],
+  "coverage_rules": [
+    "subtle.ConstantTimeCompare",
+    "Timing Attacks"
+  ]
+}

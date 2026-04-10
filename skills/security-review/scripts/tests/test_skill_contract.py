@@ -281,12 +281,22 @@ class SecurityReviewContractTests(unittest.TestCase):
         self.assertIn("OWASP ASVS", self.skill_text)
 
     # ------------------------------------------------------------------
+    # Baseline diff mode
+    # ------------------------------------------------------------------
+
+    def test_baseline_diff_mode_documented(self) -> None:
+        self.assertIn("Baseline Diff Mode", self.skill_text)
+        for status in ("`new`", "`regressed`", "`unchanged`", "`resolved`"):
+            self.assertIn(status, self.skill_text, f"baseline status {status!r} missing")
+        self.assertIn("Baseline not found", self.skill_text)
+
+    # ------------------------------------------------------------------
     # Issue 1: SKILL.md line budget (≤ 600 lines)
     # ------------------------------------------------------------------
 
     def test_skill_md_stays_within_line_budget(self) -> None:
         lines = len(self.skill_text.splitlines())
-        self.assertLessEqual(lines, 600, f"SKILL.md too long: {lines} lines (budget: 600)")
+        self.assertLessEqual(lines, 500, f"SKILL.md too long: {lines} lines (budget: 500)")
 
     # ------------------------------------------------------------------
     # Issue 4: Anti-examples and N/A judgment — contract coverage
