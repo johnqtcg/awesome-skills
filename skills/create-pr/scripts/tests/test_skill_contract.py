@@ -1,4 +1,5 @@
 import re
+import subprocess
 import unittest
 from pathlib import Path
 
@@ -135,7 +136,7 @@ class CreatePRSkillContractTests(unittest.TestCase):
         for phrase in (
             "branch name matches `<type>/<short-description>`",
             "git status --porcelain",
-            "rg -n '^(<<<<<<<|=======|>>>>>>>)' .",
+            "grep -rnE '^(<<<<<<<|=======|>>>>>>>)' .",
             "git fetch origin main",
             "git merge-base --is-ancestor origin/main HEAD",
             "Do NOT auto-rebase",
@@ -329,6 +330,41 @@ class CreatePRSkillContractTests(unittest.TestCase):
         self.assertContainsNormalized("Exit Codes", self.bundled_text)
         for value in ("return 0", "return 1", "return 2"):
             self.assertIn(value, self.script_text)
+
+    def test_gate_c_size_threshold_constants_match_skill(self) -> None:
+        """Verify create_pr.py defines SIZE_THRESHOLD_WARN=400 and SIZE_THRESHOLD_STRONG=800
+        so they stay in sync with the thresholds documented in SKILL.md."""
+        self.assertIn(
+            "SIZE_THRESHOLD_WARN = 400",
+            self.script_text,
+            "create_pr.py must define SIZE_THRESHOLD_WARN = 400",
+        )
+        self.assertIn(
+            "SIZE_THRESHOLD_STRONG = 800",
+            self.script_text,
+            "create_pr.py must define SIZE_THRESHOLD_STRONG = 800",
+        )
+
+    def test_gate_b_conflict_marker_grep_regex_matches_all_three_markers(self) -> None:
+        """Verify the grep command in Gate B actually matches all three conflict markers.
+
+        Guards against BRE vs ERE translation bugs where ( ) and | are literal in BRE,
+        causing <<<<<<< and >>>>>>> to be silently missed.
+        """
+        # Extract the grep command from SKILL.md
+        m = re.search(r"`(grep\s+-\S*E\S*\s+\S+\s+\.)`", self.skill_text)
+        self.assertIsNotNone(m, "SKILL.md must contain an ERE grep command for conflict markers")
+        cmd = m.group(1)  # type: ignore[union-attr]
+        for marker in ("<<<<<<< HEAD", "=======", ">>>>>>> branch"):
+            result = subprocess.run(
+                ["bash", "-c", f"echo '{marker}' | {cmd.replace(' .', '')}"],
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(
+                result.returncode, 0,
+                f"grep command failed to match conflict marker: {marker!r}\ncmd: {cmd}",
+            )
 
 
 if __name__ == "__main__":

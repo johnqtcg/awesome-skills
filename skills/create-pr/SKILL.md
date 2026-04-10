@@ -2,7 +2,7 @@
 name: create-pr
 description: Create evidence-backed pull requests to the GitHub main branch with strict preflight, quality, and security gates. Use when users ask to create/submit/open/update a PR to main (including private repos), decide draft vs ready state, and provide reviewer-ready context for team review.
 disable-model-invocation: true
-allowed-tools: Read, Grep, Glob, Bash(git diff*), Bash(git log*), Bash(git status*), Bash(git push*), Bash(git branch*), Bash(git rev-parse*), Bash(git remote*), Bash(git ls-remote*), Bash(git fetch*), Bash(git merge-base*), Bash(gh pr*), Bash(gh auth*), Bash(gh repo*), Bash(gh api*), Bash(go test*), Bash(golangci-lint*), Bash(make*), Bash(gosec*), Bash(govulncheck*), Bash(python*create_pr.py*), Bash(python3*create_pr.py*), Bash(cp*)
+allowed-tools: Read, Grep, Glob, Bash(git diff*), Bash(git log*), Bash(git status*), Bash(git push*), Bash(git branch*), Bash(git rev-parse*), Bash(git remote*), Bash(git ls-remote*), Bash(git fetch*), Bash(git merge-base*), Bash(gh pr*), Bash(gh auth*), Bash(gh repo*), Bash(gh api*), Bash(go test*), Bash(golangci-lint*), Bash(make test*), Bash(make lint*), Bash(make build*), Bash(make check*), Bash(gosec*), Bash(govulncheck*), Bash(python*create_pr.py*), Bash(python3*create_pr.py*), Bash(cp*), Bash(grep*)
 ---
 
 # Create PR
@@ -105,7 +105,7 @@ If branch protection query fails (404/403), record in Uncovered Risk List and co
   - If the name does not match, report as a **warning** (non-blocking) suggesting the user rename with `git branch -m <new-name>`.
 - Ensure no unresolved conflicts or conflict markers:
   - `git status --porcelain`
-  - `rg -n '^(<<<<<<<|=======|>>>>>>>)' .`
+  - `grep -rnE '^(<<<<<<<|=======|>>>>>>>)' .`
 - Sync with latest main:
   - `git fetch origin main`
   - `git merge-base --is-ancestor origin/main HEAD` to verify branch includes latest main.
@@ -157,15 +157,15 @@ Rules:
 
 ```bash
 # Filename risk scan
-git diff --name-only origin/main...HEAD | rg -i '(\.env(\..*)?|id_rsa|id_dsa|\.pem|\.p12|\.key)$'
+git diff --name-only origin/main...HEAD | grep -Ei '(\.env(\..*)?|id_rsa|id_dsa|\.pem|\.p12|\.key)$'
 # Content risk scan
-git diff origin/main...HEAD | rg -n '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY-----|ghp_[A-Za-z0-9]{36}|gho_[A-Za-z0-9]{36}|xox[baprs]-|AIza[0-9A-Za-z\-_]{35}|password\s*[:=]|secret\s*[:=]|token\s*[:=])'
+git diff origin/main...HEAD | grep -En '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY-----|ghp_[A-Za-z0-9]{36}|gho_[A-Za-z0-9]{36}|xox[baprs]-|AIza[0-9A-Za-z_-]{35}|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|token[[:space:]]*[:=])'
 # Go-specific (when available)
 gosec ./...
 govulncheck ./...
 ```
 
-Any match from the rg scans requires explicit resolution before marking ready. Any unresolved high-confidence issue keeps PR in `draft`.
+Any match from the grep scans requires explicit resolution before marking ready. Any unresolved high-confidence issue keeps PR in `draft`.
 
 ### Gate F: Documentation and Compatibility (Mandatory)
 

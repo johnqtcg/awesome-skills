@@ -26,6 +26,9 @@ FAIL = "FAIL"
 SUPPRESSED = "SUPPRESSED"
 NA = "N/A"
 
+SIZE_THRESHOLD_WARN = 400    # lines: review quality degrades above this
+SIZE_THRESHOLD_STRONG = 800  # lines: strong recommendation to split
+
 CONVENTIONAL_RE = re.compile(
     r"^(feat|fix|chore|docs|refactor|perf|test|build|ci|style|revert)(\([^)]+\))?: .+"
 )
@@ -821,6 +824,27 @@ def gate_c_change_risk(ctx: Context, settings: Settings) -> GateResult:
             changed.append(Path(parts[-1]))
     ctx.changed_files = changed
     ctx.high_risk_areas = detect_high_risk_areas(changed)
+
+    # Parse total changed lines from git diff --stat summary line
+    # e.g. "3 files changed, 120 insertions(+), 45 deletions(-)"
+    size_warning: Optional[str] = None
+    if r2.rc == 0:
+        for line in r2.stdout.splitlines():
+            if "file" in line and "changed" in line:
+                total = sum(int(x) for x in re.findall(r"(\d+) (?:insertion|deletion)", line))
+                if total > SIZE_THRESHOLD_STRONG:
+                    size_warning = (
+                        f"PR is very large ({total} lines changed, >{SIZE_THRESHOLD_STRONG}). "
+                        "Strongly recommend splitting unless change is inherently atomic."
+                    )
+                elif total > SIZE_THRESHOLD_WARN:
+                    size_warning = (
+                        f"PR is large ({total} lines changed, >{SIZE_THRESHOLD_WARN}). "
+                        "Review quality may suffer; consider splitting."
+                    )
+                break
+    if size_warning:
+        details.append(f"size: {size_warning}")
 
     if ctx.high_risk_areas:
         return GateResult("Gate C", PASS, "high-risk areas touched: " + ", ".join(ctx.high_risk_areas), details)
