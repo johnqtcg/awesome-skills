@@ -8,18 +8,16 @@ description: >
   Audience-aware, evidence-based, with quality gates and anti-staleness
   enforcement. Supports concept docs, task docs, reference docs,
   troubleshooting docs, and design docs (RFC/ADR).
-allowed-tools: Read, Write, StrReplace, Grep, Glob, Bash(git log*), Bash(git diff*), Bash(go vet*), Bash(go build*), Bash(go test*), Bash(docker login*), Bash(make deploy*), Bash(make rollback*), Bash(curl*)
+allowed-tools: Read, Write, StrReplace, Grep, Glob, Bash(git log*), Bash(git diff*), Bash(go vet*), Bash(go build*), Bash(go test*)
 ---
 
 # Tech Doc Writer
-
-li
 
 ## Quick Reference
 
 | If you need to… | Go to |
 |---|---|
-| Write a new document from scratch | §Execution Modes → Write + §Workflow Phase 0–5 |
+| Write a new document from scratch | §Execution Modes → Write + §Workflow (Phases 0→5) |
 | Review an existing document for quality | §Execution Modes → Review + §Quality Scorecard |
 | Improve / refactor an existing document | §Execution Modes → Improve (minimal-diff) |
 | Choose the right document type and template | §Gate 2: Classify Type and Audience + Load `references/templates.md` |
@@ -87,13 +85,15 @@ Run after writing/reviewing. Results must be reported in the output. Items marke
 - [ ] Every key step has expected output and verification [task, troubleshooting]
 - [ ] Document has metadata: owner + last_updated + status [all]
 - [ ] Terminology is consistent — zero synonym mixing [all]
+- [ ] Parameter/field tables complete — Type, Required, Default, Description columns all filled; no empty cells or `TBD` [reference]
 
-**Standard (≥ 4/5 pass)**
+**Standard (≥ 4/6 pass)**
 - [ ] Conclusion/core message appears in the first paragraph, not buried at the end [all — especially troubleshooting: root cause upfront]
 - [ ] Prerequisites are complete: permissions, environment, dependencies, inputs [task, troubleshooting]
 - [ ] Rollback/failure path documented with trigger conditions [task]
 - [ ] Title follows SPA principle (Simple ≤20 chars, Profit, Accurate) [all]
 - [ ] Code examples are self-contained with imports, not just fragments [task, troubleshooting, reference]
+- [ ] Error codes / status codes documented with trigger conditions and recommended actions [reference, when API doc]
 
 **Hygiene (≥ 3/5 pass)**
 - [ ] Diagrams have title, legend, and terms consistent with prose [all, when diagrams present]
