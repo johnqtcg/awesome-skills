@@ -167,6 +167,31 @@ class GoldenReviewTests(unittest.TestCase):
         self._assert_coverage(f)
 
     # ------------------------------------------------------------------
+    # New true-positive cases: SSRF, Timing Attack, Integer Overflow
+    # ------------------------------------------------------------------
+
+    def test_016_ssrf_user_controlled_url(self) -> None:
+        f = self._load("016_ssrf_user_controlled_url.json")
+        self.assertTrue(f["expected_finding"])
+        self.assertEqual(f["severity"], "P1")
+        self._assert_coverage(f)
+        self._assert_reference(f)
+
+    def test_017_timing_attack_api_key(self) -> None:
+        f = self._load("017_timing_attack_api_key.json")
+        self.assertTrue(f["expected_finding"])
+        self.assertEqual(f["severity"], "P2")
+        self._assert_coverage(f)
+        self._assert_reference(f)
+
+    def test_018_integer_overflow_financial(self) -> None:
+        f = self._load("018_integer_overflow_financial.json")
+        self.assertTrue(f["expected_finding"])
+        self.assertEqual(f["severity"], "P1")
+        self._assert_coverage(f)
+        self._assert_reference(f)
+
+    # ------------------------------------------------------------------
     # Fixture integrity
     # ------------------------------------------------------------------
 

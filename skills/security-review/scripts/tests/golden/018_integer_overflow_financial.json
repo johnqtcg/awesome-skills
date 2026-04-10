@@ -1,0 +1,15 @@
+{
+  "id": "GOLDEN-018",
+  "title": "Integer overflow in financial calculation — unchecked int64 multiplication",
+  "expected_finding": true,
+  "severity": "P1",
+  "category": "injection",
+  "code": "func CalculateTotal(price int64, quantity int64) int64 {\n    return price * quantity // unchecked: overflows to negative for large values\n}",
+  "finding_pattern": "Integer overflow in payment calculation",
+  "coverage_rules": [
+    "Integer overflow",
+    "integer overflow",
+    "Payment / Financial Transitions"
+  ],
+  "reference": "references/go-secure-coding.md"
+}

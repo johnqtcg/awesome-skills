@@ -1,0 +1,16 @@
+{
+  "id": "GOLDEN-016",
+  "title": "SSRF — http.Client fetches user-supplied URL without allowlist or private-IP block",
+  "expected_finding": true,
+  "severity": "P1",
+  "category": "ssrf",
+  "code": "func (h *Handler) FetchExternal(w http.ResponseWriter, r *http.Request) {\n    targetURL := r.URL.Query().Get(\"url\")\n    resp, err := http.Get(targetURL)\n    if err != nil {\n        http.Error(w, err.Error(), 500)\n        return\n    }\n    defer resp.Body.Close()\n    io.Copy(w, resp.Body)\n}",
+  "finding_pattern": "SSRF",
+  "coverage_rules": [
+    "SSRF",
+    "allowlist",
+    "private IPs",
+    "subtle.ConstantTimeCompare"
+  ],
+  "reference": "references/go-secure-coding.md"
+}

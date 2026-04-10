@@ -280,6 +280,75 @@ class SecurityReviewContractTests(unittest.TestCase):
         self.assertIn("CWE-xxx", self.skill_text)
         self.assertIn("OWASP ASVS", self.skill_text)
 
+    # ------------------------------------------------------------------
+    # Issue 1: SKILL.md line budget (≤ 600 lines)
+    # ------------------------------------------------------------------
+
+    def test_skill_md_stays_within_line_budget(self) -> None:
+        lines = len(self.skill_text.splitlines())
+        self.assertLessEqual(lines, 600, f"SKILL.md too long: {lines} lines (budget: 600)")
+
+    # ------------------------------------------------------------------
+    # Issue 4: Anti-examples and N/A judgment — contract coverage
+    # ------------------------------------------------------------------
+
+    def test_anti_examples_inline_stubs_exist(self) -> None:
+        """SKILL.md must contain the three inline anti-example stubs (AE-1, AE-3, AE-5)."""
+        for ae in ("AE-1", "AE-3", "AE-5"):
+            self.assertIn(ae, self.skill_text, f"{ae} missing from SKILL.md inline stubs")
+
+    def test_anti_examples_reference_has_extended_rules(self) -> None:
+        """anti-examples.md must contain all four extended anti-examples."""
+        anti = self.reference_texts.get("anti-examples.md", "")
+        self.assertNotEqual(anti, "", "anti-examples.md reference missing")
+        for ae in ("AE-2", "AE-4", "AE-6", "AE-7"):
+            self.assertIn(ae, anti, f"{ae} missing from anti-examples.md")
+        self.assertIn("transitive", anti.lower(), "AE-7 transitive call path rule missing")
+
+    def test_na_judgment_examples_section_exists(self) -> None:
+        """N/A Judgment Examples section must be present with a verdict table."""
+        self.assertIn("N/A Judgment Examples", self.skill_text)
+        na_start = self.skill_text.index("N/A Judgment Examples")
+        na_section = self.skill_text[na_start : na_start + 1000]
+        self.assertIn("N/A", na_section)
+        self.assertIn("Rationale", na_section)
+        # At least one row showing a valid N/A domain
+        self.assertIn("Randomness safety", na_section)
+
+    # ------------------------------------------------------------------
+    # Issue 5: Finding Volume Cap
+    # ------------------------------------------------------------------
+
+    def test_finding_volume_cap_documented(self) -> None:
+        self.assertIn("Finding Volume Cap", self.skill_text)
+        self.assertIn("P0/P1", self.skill_text)
+        self.assertIn("P0/P1 findings are never dropped by volume cap", self.skill_text)
+        for depth_cap in ("Lite ≤ 3", "Standard ≤ 5", "Deep ≤ 8"):
+            self.assertIn(depth_cap, self.skill_text, f"Volume cap for {depth_cap!r} missing")
+
+    # ------------------------------------------------------------------
+    # Issue 6: Change Origin Classification
+    # ------------------------------------------------------------------
+
+    def test_change_origin_classification_documented(self) -> None:
+        self.assertIn("Change Origin Classification", self.skill_text)
+        for label in ("`introduced`", "`pre-existing`", "`uncertain`"):
+            self.assertIn(label, self.skill_text, f"Origin label {label!r} missing")
+        self.assertIn("Must fix before merge", self.skill_text)
+        self.assertIn("do NOT block merge", self.skill_text)
+
+    # ------------------------------------------------------------------
+    # Issue 7: Gate C — independent contract test
+    # ------------------------------------------------------------------
+
+    def test_gate_c_lifecycle_contract_rules(self) -> None:
+        """Gate C must document its own specific verification requirements independently."""
+        gate_c_start = self.skill_text.index("Gate C: Third-Party Lifecycle")
+        gate_c_section = self.skill_text[gate_c_start : gate_c_start + 600]
+        self.assertIn("Cite exactly what contract was used", gate_c_section)
+        self.assertIn("suspected", gate_c_section)
+        self.assertIn("Uncovered Risk List", gate_c_section)
+
 
 if __name__ == "__main__":
     unittest.main()

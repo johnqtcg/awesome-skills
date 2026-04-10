@@ -246,6 +246,16 @@ Each item must include:
 - Security impact if the gap hides a defect
 - Recommended follow-up action and owner suggestion
 
+## Change Origin Classification
+
+Classify each finding's origin relative to the current code change:
+
+- **`introduced`**: defect resides in code added or modified by this change. **Must fix before merge.**
+- **`pre-existing`**: defect found in unchanged code that came into scope via call paths. **File a follow-up issue; do NOT block merge.** Pre-existing P0/P1 still require immediate escalation regardless of origin.
+- **`uncertain`**: diff boundaries are ambiguous. Use `git blame` to resolve; treat as `introduced` if unresolvable.
+
+Add `**Origin:**` to each finding's output. Use diff hunks as primary classification signal.
+
 ## Anti-Examples (Common Review Mistakes)
 
 These are structured examples of review mistakes this skill is designed to prevent. Each shows a wrong approach and the correct alternative.
@@ -370,6 +380,7 @@ Each finding includes:
 - Recommended fix
 - Suggested regression/negative test
 - Baseline status (`new/regressed/unchanged`)
+- Origin (`introduced | pre-existing | uncertain`)
 
 #### One-Shot Finding Example
 
@@ -398,6 +409,14 @@ Each finding includes:
 >   Return 404 (not 403) to avoid confirming the order exists.
 > - **Regression test**: Add `TestGetOrder_CrossUser_Returns404` — create order as User A, request as User B, assert 404.
 > - **Baseline status**: new
+> - **Origin**: introduced
+
+#### Finding Volume Cap
+
+- **P0/P1**: Always fully reported. Volume cap does not apply to P0/P1.
+- **P2/P3 soft cap by depth**: Lite ≤ 3, Standard ≤ 5, Deep ≤ 8 lower-severity findings.
+- **Overflow**: move lowest-priority P2/P3 overflow to `§9 Uncovered Risk List` as one-line summaries. Record `counts.overflow` in the JSON block.
+- P0/P1 findings are never dropped by volume cap.
 
 ### 2) Go 10-Domain Coverage (Required for Go repos)
 

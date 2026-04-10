@@ -1,0 +1,15 @@
+{
+  "id": "GOLDEN-017",
+  "title": "Timing attack — API key compared with == instead of subtle.ConstantTimeCompare",
+  "expected_finding": true,
+  "severity": "P2",
+  "category": "crypto",
+  "code": "func validateWebhookKey(provided, stored string) bool {\n    return provided == stored\n}",
+  "finding_pattern": "Timing attack via == on secret",
+  "coverage_rules": [
+    "subtle.ConstantTimeCompare",
+    "Timing Attacks",
+    "HMAC comparisons"
+  ],
+  "reference": "references/go-secure-coding.md"
+}

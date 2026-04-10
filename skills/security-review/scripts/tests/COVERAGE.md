@@ -17,6 +17,7 @@ Maps each core rule/gate in SKILL.md to its golden fixture and contract test. Us
 | Gates A-F exist | `test_all_gates_exist` | ✅ |
 | Gate A constructor-release | `test_gate_a_constructor_release` | ✅ |
 | Gate B resource inventory | `test_gate_b_resource_inventory`, `test_gate_b_references_detail` | ✅ |
+| Gate C lifecycle contract rules (independent) | `test_gate_c_lifecycle_contract_rules` | ✅ |
 | Gate D 10 domains | `test_gate_d_10_domains` | ✅ |
 | Gate E falsification | `test_gate_e_falsification` | ✅ |
 | Gate F uncovered risk | `test_gate_f_uncovered_risk` | ✅ |
@@ -33,8 +34,12 @@ Maps each core rule/gate in SKILL.md to its golden fixture and contract test. Us
 | Automation commands | `test_automation_commands_present` | ✅ |
 | Tool interpretation rules | `test_tool_interpretation_rules` | ✅ |
 | Standards mapping | `test_standards_mapping_present` | ✅ |
-| Anti-examples section | — (no contract test yet) | ⚠️ |
-| N/A judgment examples | — (no contract test yet) | ⚠️ |
+| SKILL.md line budget (≤ 600) | `test_skill_md_stays_within_line_budget` | ✅ |
+| Anti-examples inline stubs (AE-1, AE-3, AE-5) | `test_anti_examples_inline_stubs_exist` | ✅ |
+| Anti-examples reference (AE-2, AE-4, AE-6, AE-7) | `test_anti_examples_reference_has_extended_rules` | ✅ |
+| N/A judgment examples section | `test_na_judgment_examples_section_exists` | ✅ |
+| Finding volume cap (P0/P1 never dropped; P2/P3 soft cap) | `test_finding_volume_cap_documented` | ✅ |
+| Change Origin Classification (introduced/pre-existing/uncertain) | `test_change_origin_classification_documented` | ✅ |
 
 ## Golden Fixtures (`test_golden_reviews.py`)
 
@@ -54,6 +59,9 @@ Maps each core rule/gate in SKILL.md to its golden fixture and contract test. Us
 | GOLDEN-013 | Missing http.MaxBytesReader on endpoint | endpoint | P2 | MaxBytesReader, body size limit |
 | GOLDEN-014 | text/template for HTML rendering (XSS) | injection | P1 | text/template vs html/template, XSS |
 | GOLDEN-015 | Open redirect via http.Redirect with user URL | endpoint | P2 | open redirect, redirect validation |
+| GOLDEN-016 | SSRF via user-controlled URL in http.Client | ssrf | P1 | SSRF, allowlist, private IPs |
+| GOLDEN-017 | Timing attack via == on API key | crypto | P2 | subtle.ConstantTimeCompare, Timing Attacks |
+| GOLDEN-018 | Integer overflow in financial calculation | injection | P1 | Integer overflow, financial calculation |
 
 ### False Positives (should be suppressed)
 
@@ -67,11 +75,12 @@ Maps each core rule/gate in SKILL.md to its golden fixture and contract test. Us
 
 | Metric | Count |
 |--------|-------|
-| Total golden fixtures | 15 |
-| True positives | 12 |
+| Total golden fixtures | 18 |
+| True positives | 15 |
 | False positives | 3 |
-| Categories covered | auth, secrets, injection, concurrency, resource_lifecycle, session, container, endpoint |
-| Contract tests | 36 |
+| Categories covered | auth, secrets, injection, concurrency, resource_lifecycle, session, container, endpoint, ssrf, crypto |
+| Contract tests | 43 |
+| SKILL.md lines | 546 (budget: ≤ 600) |
 
 ## Gap Analysis
 
@@ -85,13 +94,8 @@ When adding a new rule to SKILL.md or references:
 
 | Scenario | Category | Priority |
 |----------|----------|----------|
-| SSRF via user-controlled URL in http.Client | ssrf | Medium |
 | CORS wildcard with credentials | cors | Low |
-| Timing attack via `==` on API key | crypto | Medium |
 | Rate limiting absence on login endpoint | endpoint | Low |
-| Integer overflow in financial calculation | injection | Medium |
 | `template.HTML()` abuse (safe template with unsafe cast) | injection | Low |
 | FP: `InsecureSkipVerify` behind VPN with mTLS | tls | Low |
 | FP: `os/exec.Command` with hardcoded binary | injection | Low |
-| Anti-examples contract test (verify section exists in SKILL.md) | meta | Medium |
-| N/A judgment examples contract test | meta | Medium |
