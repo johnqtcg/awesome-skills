@@ -2,6 +2,7 @@
 
 > Evaluation Framework: [skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator)
 > Evaluation Date: 2026-03-25
+> Regression Addendum: 2026-04-10
 > Subject: `git-commit`
 
 ---
@@ -10,25 +11,28 @@
 
 ## 1. Skill Overview
 
-`git-commit` is a structured commit safety skill defining a mandatory 7-step workflow, Hard Rules, five ecosystem quality gates, secret-scanning regexes, and a scope-discovery mechanism. Its goal: every commit passes complete safety preflight, logical staging, secret scanning, quality verification, and message normalization before execution.
+`git-commit` is a structured commit safety skill defining a mandatory 7-step workflow, Hard Rules, five ecosystem quality gates, secret-scanning regexes, and a scope-discovery mechanism. Its goal: every commit passes complete safety preflight, logical staging, secret scanning, quality verification, and message normalization before execution. The April 2026 addendum extends regression coverage to young-repo scope bootstrap, executable subject guards, and timeout overrides.
 
 **Core Components**:
 
 | File | Lines | Responsibility |
 |------|-------|----------------|
-| `SKILL.md` | 184 | Main skill definition (7-step workflow, Hard Rules, secret regexes, scope discovery) |
+| `SKILL.md` | 169 | Main skill definition (7-step workflow, Hard Rules, secret regexes, scope discovery, subject guard, timeout override) |
 | `references/quality-gate-go.md` | 25 | Go quality gate (go vet + go test, scaled by package count) |
 | `references/quality-gate-node.md` | 40 | Node.js/TS quality gate (package manager detection, lint, tsc, test) |
 | `references/quality-gate-python.md` | 53 | Python quality gate (ruff/flake8, mypy/pyright, pytest) |
 | `references/quality-gate-java.md` | 45 | Java/Kotlin quality gate (Maven/Gradle, multi-module aware) |
 | `references/quality-gate-rust.md` | 32 | Rust quality gate (clippy, cargo test, workspace aware) |
-| `scripts/tests/test_skill_contract.py` | 187 | Contract tests (frontmatter, required sections, key content, reference integrity) |
+| `scripts/tests/test_skill_contract.py` | 261 | Contract tests (frontmatter, required sections, key content, reference integrity, golden coverage hooks) |
+| `scripts/tests/test_golden_scenarios.py` | 227 | Golden scenario tests for scope resolution, subject validation, and timeout selection |
 
 ---
 
 ## 2. Test Design
 
 ### 2.1 Scenario Definitions
+
+Regression addendum: the original 3 evaluated scenarios remain unchanged for comparability. The current repository version adds 7 deterministic golden fixtures that specifically cover commit-message generation failure modes that the original matrix did not isolate well: new-repo scope bootstrap, mixed-root scope omission, executable 50-character guarding, and timeout override precedence.
 
 | # | Scenario | Repo Type | Core Challenge | Expected Outcome |
 |---|----------|-----------|----------------|------------------|
@@ -182,7 +186,7 @@ To remove "workflow-structure bias," 15 additional checks were evaluated indepen
 
 | Component | Lines | Estimated Tokens | Load Timing |
 |-----------|-------|-----------------|-------------|
-| `SKILL.md` | 184 | ~1,150 | Always loaded |
+| `SKILL.md` | 169 | ~1,050 | Always loaded |
 | `quality-gate-go.md` | 25 | ~150 | On-demand for Go projects |
 | `quality-gate-node.md` | 40 | ~240 | On-demand for Node projects |
 | `quality-gate-python.md` | 53 | ~320 | On-demand for Python projects |
@@ -231,7 +235,7 @@ Note: "Context cost" counts only SKILL.md + reference loading; "runtime overhead
 | `go-makefile-writer` | ~1,960–4,300 | +31pp | ~63–139 | — |
 
 `git-commit` leads on context tokens per 1% improvement (~17), for three reasons:
-1. **SKILL.md is extremely lean** (184 lines) — progressive reference loading prevents context bloat
+1. **SKILL.md is extremely lean** (169 lines) — progressive reference loading prevents context bloat while leaving room for executable guardrails
 2. **Per-file quality gate design** is highly efficient — only one ecosystem reference is ever loaded, adding just ~150–320 tokens per commit
 3. **Large pass rate delta** (+77pp) — git commit is a domain where baseline models critically lack structured safety workflows
 
@@ -304,7 +308,7 @@ SKILL.md alone delivers ~85% of the value. The progressive reference loading des
 
 `git-commit` earns the highest overall score of the three skills, primarily because:
 
-1. **Token efficiency is significantly ahead** (~17 tok/1% vs ~48 and ~63): progressive reference loading keeps SKILL.md at just 184 lines while covering 5 ecosystems
+1. **Token efficiency is significantly ahead** (~17 tok/1% vs ~48 and ~63): progressive reference loading keeps SKILL.md at just 169 lines while covering 5 ecosystems
 2. **Largest pass rate delta** (+77pp): git commit is the domain where baseline models are weakest in structured safety workflows — baseline skipped tests in every scenario
 3. **No weak dimensions**: all 6 dimensions scored ≥ 9.0
 
@@ -325,7 +329,7 @@ SKILL.md alone delivers ~85% of the value. The progressive reference loading des
 4. **Progressive reference loading** — 5 ecosystem gates stored in separate files, loaded on demand; typical token cost is just ~1,300 (SKILL.md + 1 gate)
 
 **Design strengths**:
-- SKILL.md strictly held to 184 lines (target ≤ 200) with very high information density
+- SKILL.md strictly held to 169 lines (target ≤ 200) with very high information density
 - Quality gate per-file design achieves "one SKILL.md, five ecosystems" — a model example of progressive loading
 - Hard Rules first + precise thresholds (8 files, 50 chars, 3-commit scope frequency) make rules verifiable and unambiguous
 

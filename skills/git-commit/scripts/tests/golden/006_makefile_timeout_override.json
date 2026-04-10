@@ -1,0 +1,29 @@
+{
+  "id": "006",
+  "description": "Repo wrapper timeout should win over environment overrides so large builds can raise the limit deterministically.",
+  "scenario_type": "timeout_makefile",
+  "history": [
+    "aa11bb2 feat: seed project layout"
+  ],
+  "staged_paths": [
+    "backend/pom.xml"
+  ],
+  "commit_type": "chore",
+  "proposed_subject": "raise maven timeout",
+  "expected_scope": "backend",
+  "expected_scope_source": "bootstrap",
+  "expected_subject_valid": true,
+  "env": {
+    "QUALITY_GATE_TIMEOUT_SECONDS": "600",
+    "SKILL_QUALITY_GATE_TIMEOUT_SECONDS": "300"
+  },
+  "makefile_timeout": "900",
+  "expected_timeout_seconds": 900,
+  "skill_rules_that_must_fire": [
+    "repo wrapper or environment exposes `COMMIT_TEST_TIMEOUT`",
+    "use that override"
+  ],
+  "reference_files": [
+    "SKILL.md"
+  ]
+}

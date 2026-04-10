@@ -1,0 +1,27 @@
+{
+  "id": "002",
+  "description": "A young repo with fewer than 10 conventional commits should bootstrap scope from a stable staged directory.",
+  "scenario_type": "bootstrap_scope",
+  "history": [
+    "1a2b3c4 feat: seed project layout",
+    "2b3c4d5 docs: add getting started",
+    "3c4d5e6 test: add smoke test"
+  ],
+  "staged_paths": [
+    "services/billing/invoice_sync.go",
+    "services/billing/invoice_sync_test.go"
+  ],
+  "commit_type": "feat",
+  "proposed_subject": "add invoice sync job",
+  "expected_scope": "billing",
+  "expected_scope_source": "bootstrap",
+  "expected_subject_valid": true,
+  "expected_timeout_seconds": 120,
+  "skill_rules_that_must_fire": [
+    "fewer than 10 conventional commits total",
+    "bootstrap scope from staged paths"
+  ],
+  "reference_files": [
+    "SKILL.md"
+  ]
+}

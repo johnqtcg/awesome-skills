@@ -1,0 +1,34 @@
+{
+  "id": "007",
+  "description": "Mature repos should not bootstrap a new scope when they already have enough conventional history but no canonical match.",
+  "scenario_type": "mature_repo_omit_scope",
+  "history": [
+    "01aa01a feat(auth): add refresh endpoint",
+    "02aa02a fix(auth): handle expired token",
+    "03aa03a test(auth): add refresh case",
+    "04aa04a feat(api): add health endpoint",
+    "05aa05a fix(api): narrow timeout",
+    "06aa06a test(api): add health test",
+    "07aa07a docs: add API guide",
+    "08aa08a chore(ci): add cache step",
+    "09aa09a refactor(storage): simplify index lookup",
+    "10aa10a test(storage): add index regression"
+  ],
+  "staged_paths": [
+    "workers/email/send.go",
+    "workers/email/send_test.go"
+  ],
+  "commit_type": "feat",
+  "proposed_subject": "add email worker",
+  "expected_scope": null,
+  "expected_scope_source": "omitted",
+  "expected_subject_valid": true,
+  "expected_timeout_seconds": 120,
+  "skill_rules_that_must_fire": [
+    "the repo already has `>= 10` conventional commits without a canonical match, omit scope",
+    "Never invent a scope"
+  ],
+  "reference_files": [
+    "SKILL.md"
+  ]
+}

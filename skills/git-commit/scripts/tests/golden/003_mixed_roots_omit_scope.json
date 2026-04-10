@@ -1,0 +1,27 @@
+{
+  "id": "003",
+  "description": "A young repo with mixed staged roots must omit scope instead of inventing one.",
+  "scenario_type": "mixed_roots",
+  "history": [
+    "11aa22b feat: seed project layout",
+    "22bb33c fix: repair smoke test",
+    "33cc44d docs: add architecture note"
+  ],
+  "staged_paths": [
+    "services/billing/invoice_sync.go",
+    "services/email/send.go"
+  ],
+  "commit_type": "refactor",
+  "proposed_subject": "split payment and email flows",
+  "expected_scope": null,
+  "expected_scope_source": "omitted",
+  "expected_subject_valid": true,
+  "expected_timeout_seconds": 120,
+  "skill_rules_that_must_fire": [
+    "If multiple candidate directories remain",
+    "omit scope"
+  ],
+  "reference_files": [
+    "SKILL.md"
+  ]
+}

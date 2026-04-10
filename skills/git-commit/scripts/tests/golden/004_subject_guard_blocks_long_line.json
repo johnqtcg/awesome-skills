@@ -1,0 +1,26 @@
+{
+  "id": "004",
+  "description": "The post-message guard must reject a subject line longer than 50 characters.",
+  "scenario_type": "subject_guard",
+  "history": [
+    "91aa22b feat(auth): add refresh endpoint",
+    "82bb33c fix(auth): handle expired token",
+    "73cc44d test(auth): add refresh race case"
+  ],
+  "staged_paths": [
+    "src/auth/refresh.go"
+  ],
+  "commit_type": "feat",
+  "proposed_subject": "add token refresh concurrency protections with tests",
+  "expected_scope": "auth",
+  "expected_scope_source": "canonical",
+  "expected_subject_valid": false,
+  "expected_timeout_seconds": 120,
+  "skill_rules_that_must_fire": [
+    "subject too long (${#SUBJECT}/50)",
+    "subject must not end with ."
+  ],
+  "reference_files": [
+    "SKILL.md"
+  ]
+}

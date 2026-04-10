@@ -1,0 +1,27 @@
+{
+  "id": "005",
+  "description": "Quality gate timeout should honor environment override when no repo wrapper value is present.",
+  "scenario_type": "timeout_env",
+  "history": [
+    "aa11bb2 feat: seed project layout"
+  ],
+  "staged_paths": [
+    "src/build.gradle"
+  ],
+  "commit_type": "chore",
+  "proposed_subject": "raise test timeout",
+  "expected_scope": null,
+  "expected_scope_source": "omitted",
+  "expected_subject_valid": true,
+  "env": {
+    "QUALITY_GATE_TIMEOUT_SECONDS": "600"
+  },
+  "expected_timeout_seconds": 600,
+  "skill_rules_that_must_fire": [
+    "QUALITY_GATE_TIMEOUT_SECONDS",
+    "report the chosen timeout before running long tests"
+  ],
+  "reference_files": [
+    "SKILL.md"
+  ]
+}

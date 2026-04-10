@@ -2,7 +2,7 @@
 title: git-commit skill design rationale
 owner: awesome-skills maintainers
 status: active
-last_updated: 2026-03-26
+last_updated: 2026-04-10
 applicable_versions: current repository version
 ---
 
@@ -150,6 +150,21 @@ Each constraint addresses a distinct common failure:
 
 The no-invented-scope rule deserves emphasis. Many tools encourage the model to always fill in a scope. `git-commit` requires the model to mine scope frequency from recent history before deciding whether to use one at all. This is a deliberate rejection of fake-structured output.
 
+The April 2026 revision tightens this further in two places:
+
+- **Bootstrap scope only for young repositories**: if the repository has fewer than 10 conventional commits total, the skill may infer a scope from the deepest stable staged directory after stripping generic path segments such as `src`, `pkg`, `internal`, `service`, `services`, `module`, `package`, `component`, and `testdata`. This fixes the "new repo can never establish a scope" failure mode without allowing free-form scope invention in mature repositories.
+- **Executable subject guard**: the skill now requires a shell-level length and trailing-period check before `git commit` runs. The 50-character limit is therefore enforced by a concrete command path, not by model self-discipline alone.
+
+### 4.6.1 Timeout Overrides Are Explicit
+
+The original 120-second timeout rule was intentionally conservative, but it was too rigid for large Java and multi-module builds. The skill now treats timeout as a deterministic setting with a default and an override chain:
+
+- Default: 120 seconds with no output.
+- Override sources: repository wrapper configuration (`COMMIT_TEST_TIMEOUT`) or environment (`QUALITY_GATE_TIMEOUT_SECONDS`, `SKILL_QUALITY_GATE_TIMEOUT_SECONDS`).
+- Operational rule: report the chosen timeout before starting the long-running quality gate.
+
+This keeps the safety property ("do not hang forever") while removing the false-negative failure mode where a healthy but slow build looks like a gate failure.
+
 ### 4.7 There Is a Post-Commit Report
 
 Many workflows treat a successful `git commit` as the finish line. `git-commit` does not. It requires a post-commit output that includes the short hash, final subject, a summary of changed files, and gate status.
@@ -188,7 +203,7 @@ Cross-referencing `SKILL.md` and the evaluation report, the skill targets these 
 | Bypassing team standards | Refusing default `--no-verify`, requiring error-based adjustment | Keeps hook compliance layer fully effective |
 | No audit trail | Post-commit report | Every commit leaves a structured receipt |
 
-The evaluation data backs this up: `git-commit` passed all 35 assertions across 3 test scenarios (100%), while the same scenarios without the skill had a strict pass rate of only 23%. The value is not prettier formatting — it is a significant reduction in steps that get skipped in real workflows.
+The evaluation data backs this up: `git-commit` passed all 35 assertions across 3 test scenarios (100%), while the same scenarios without the skill had a strict pass rate of only 23%. The April 2026 regression expansion adds 7 golden fixtures for message composition, scope bootstrap, and timeout override behavior. The value is not prettier formatting — it is a significant reduction in steps that get skipped in real workflows.
 
 ## 6. Key Highlights
 

@@ -1,0 +1,28 @@
+{
+  "id": "001",
+  "description": "Established history with three auth-scoped conventional commits should reuse auth when staged files also live under auth.",
+  "scenario_type": "canonical_scope",
+  "history": [
+    "a1b2c3d feat(auth): add refresh endpoint",
+    "b2c3d4e fix(auth): handle expired token",
+    "c3d4e5f test(auth): add refresh race case",
+    "d4e5f6a chore(ci): bump workflow cache"
+  ],
+  "staged_paths": [
+    "src/auth/refresh.go",
+    "src/auth/refresh_test.go"
+  ],
+  "commit_type": "feat",
+  "proposed_subject": "add refresh token guard",
+  "expected_scope": "auth",
+  "expected_scope_source": "canonical",
+  "expected_subject_valid": true,
+  "expected_timeout_seconds": 120,
+  "skill_rules_that_must_fire": [
+    ">= 3 commits with the same scope",
+    "use it only if the scope matches staged paths"
+  ],
+  "reference_files": [
+    "SKILL.md"
+  ]
+}

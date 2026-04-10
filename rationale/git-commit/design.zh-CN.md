@@ -2,7 +2,7 @@
 title: git-commit skill 设计解析
 owner: awesome-skills maintainers
 status: active
-last_updated: 2026-03-26
+last_updated: 2026-04-10
 applicable_versions: current repository version
 ---
 
@@ -150,6 +150,21 @@ flowchart LR
 
 "不要发明 scope"这一点尤其重要。很多工具会鼓励模型总是补一个 scope，但 `git-commit` 明确要求先用历史 commit 频率做发现，再决定是否使用。这种设计本质上是在反对虚假的结构化输出。
 
+2026-04 的修订又把这条规则补强了两处：
+
+- **只在新仓库里做 bootstrap scope**：如果仓库里的 conventional commits 总数少于 10，则允许在剥离 `src`、`pkg`、`internal`、`service`、`services`、`module`、`package`、`component`、`testdata` 等泛化目录后，从 staged 文件的最深稳定共享目录推断 scope。这样修复了"新仓库永远建不出 scope"的问题，同时又不会在成熟仓库里随意发明新 scope。
+- **把 50 字符限制变成可执行 guard**：skill 现在要求在 `git commit` 前先执行 shell 层的长度校验和结尾句号校验。这样 subject 上限不再只依赖模型自觉，而是有明确的命令级防线。
+
+### 4.6.1 Timeout Override 需要显式机制
+
+原始的 120 秒超时规则是保守的，但对大型 Java 或多模块构建过于僵硬。现在 skill 把 timeout 定义成"有默认值 + 可覆盖链"的确定性配置：
+
+- 默认值：无输出 120 秒。
+- 覆盖来源：仓库 wrapper 配置（`COMMIT_TEST_TIMEOUT`）或环境变量（`QUALITY_GATE_TIMEOUT_SECONDS`、`SKILL_QUALITY_GATE_TIMEOUT_SECONDS`）。
+- 操作规则：在长时间质量门禁开始前，先报告最终采用的 timeout。
+
+这样既保留了"不能无限挂起"的安全属性，也去掉了"构建慢但健康，却被误判为失败"的假阳性问题。
+
 ### 4.7 提交后还要有报告
 
 很多流程把 `git commit` 成功当成结束，`git-commit` 没这么做。它要求提交后输出短 hash、最终 subject、变更文件摘要和 gate 状态。
@@ -188,7 +203,7 @@ flowchart LR
 | 绕过团队规范 | 拒绝默认 `--no-verify`，要求根据报错调整 | 保持 hook 合规层的完整约束力 |
 | 流程不可审计 | Post-commit report | 给提交动作留下结构化回执 |
 
-评估报告里的数据也支持这一点：`git-commit` 在 3 个测试场景、35 项断言中达到 `100%` 通过，而不用该 skill 的常规做法严格通过率只有 `23%`。这说明它的价值并不只是在"格式更好看"，而是在真实工作流里显著减少遗漏步骤。
+评估报告里的数据也支持这一点：`git-commit` 在 3 个测试场景、35 项断言中达到 `100%` 通过，而不用该 skill 的常规做法严格通过率只有 `23%`。2026-04 新增的回归层又补了 7 个 golden fixtures，覆盖 message 生成、scope bootstrap 和 timeout override 行为。这说明它的价值并不只是在"格式更好看"，而是在真实工作流里显著减少遗漏步骤。
 
 ## 6. 主要亮点
 

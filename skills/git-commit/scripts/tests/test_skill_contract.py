@@ -126,6 +126,10 @@ class TestKeyContent:
     def test_50_char_subject_rule(self, skill_content):
         assert "<= 50 char" in skill_content or "<= 50 chars" in skill_content
 
+    def test_subject_guard_is_executable(self, skill_content):
+        assert "subject too long (${#SUBJECT}/50)" in skill_content
+        assert "subject must not end with ." in skill_content
+
     def test_heredoc_commit_format(self, skill_content):
         assert "<<'EOF'" in skill_content, "Must use heredoc for multi-line commits"
 
@@ -147,6 +151,10 @@ class TestKeyContent:
     def test_scope_frequency_threshold(self, skill_content):
         assert ">= 3" in skill_content, "Must define scope frequency threshold"
 
+    def test_scope_bootstrap_for_new_repos(self, skill_content):
+        assert "fewer than 10 conventional commits total" in skill_content
+        assert "bootstrap scope from staged paths" in skill_content
+
     def test_staging_file_count_threshold(self, skill_content):
         assert "> 8 files" in skill_content, "Must define staging confirmation threshold"
 
@@ -159,6 +167,11 @@ class TestKeyContent:
 
     def test_allow_empty_documented(self, skill_content):
         assert "--allow-empty" in skill_content
+
+    def test_timeout_override_documented(self, skill_content):
+        assert "COMMIT_TEST_TIMEOUT" in skill_content
+        assert "QUALITY_GATE_TIMEOUT_SECONDS" in skill_content
+        assert "SKILL_QUALITY_GATE_TIMEOUT_SECONDS" in skill_content
 
 
 # --- Reference Files ---
@@ -234,3 +247,15 @@ class TestLineCount:
         assert len(skill_lines) >= 100, (
             f"SKILL.md is {len(skill_lines)} lines; too sparse (< 100)"
         )
+
+
+class TestGoldenCoverage:
+    def test_golden_test_exists(self):
+        path = SKILL_DIR / "scripts" / "tests" / "test_golden_scenarios.py"
+        assert path.is_file(), "Missing golden scenario regression test"
+
+    def test_golden_fixtures_exist(self):
+        golden_dir = SKILL_DIR / "scripts" / "tests" / "golden"
+        assert golden_dir.is_dir(), "Missing golden fixture directory"
+        fixtures = list(golden_dir.glob("*.json"))
+        assert len(fixtures) >= 7, f"Expected >= 7 golden fixtures, got {len(fixtures)}"
