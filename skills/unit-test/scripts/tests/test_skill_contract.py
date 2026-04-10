@@ -7,6 +7,7 @@ SKILL_DIR = Path(__file__).resolve().parents[2]
 SKILL_MD = SKILL_DIR / "SKILL.md"
 CONFIG_EXAMPLE = SKILL_DIR / "references" / "unit-test-config.example.yaml"
 REFERENCE_DIR = SKILL_DIR / "references"
+BOUNDARY_SCORECARD_REF = SKILL_DIR / "references" / "boundary-scorecard.md"
 
 
 class UnitTestSkillContractTests(unittest.TestCase):
@@ -79,15 +80,17 @@ class UnitTestSkillContractTests(unittest.TestCase):
     # --- New: Boundary Checklist ---
 
     def test_boundary_checklist_has_twelve_items(self) -> None:
+        # Full 12-item checklist lives in references/boundary-scorecard.md;
+        # SKILL.md retains a stub with a pointer to that file.
         skill = SKILL_MD.read_text()
         self.assertIn("Fixed Boundary Checklist", skill)
-        checklist_start = skill.index("Fixed Boundary Checklist")
-        checklist_section = skill[checklist_start : checklist_start + 1500]
+        self.assertIn("boundary-scorecard.md", skill)
+        ref = BOUNDARY_SCORECARD_REF.read_text()
         for i in range(1, 13):
             self.assertRegex(
-                checklist_section,
+                ref,
                 rf"\b{i}\.\s+",
-                f"Boundary checklist item {i} not found",
+                f"Boundary checklist item {i} not found in boundary-scorecard.md",
             )
 
     # --- New: Anti-examples ---
@@ -232,10 +235,11 @@ class UnitTestSkillContractTests(unittest.TestCase):
         self.assertIn("**Hygiene**", skill)
 
     def test_scorecard_critical_items(self) -> None:
-        skill = SKILL_MD.read_text()
-        self.assertIn("[Critical]** Assertions are mutation-resistant", skill)
-        self.assertIn("[Critical]** Killer case exists", skill)
-        self.assertIn("[Critical]** Coverage meets gate", skill)
+        # Numbered items live in references/boundary-scorecard.md (table format) after refactor.
+        ref = BOUNDARY_SCORECARD_REF.read_text()
+        self.assertIn("[Critical] | Assertions are mutation-resistant", ref)
+        self.assertIn("[Critical] | Killer case exists", ref)
+        self.assertIn("[Critical] | Coverage meets gate", ref)
 
     # --- New: Test execution hardening ---
 
@@ -523,6 +527,26 @@ class UnitTestSkillContractTests(unittest.TestCase):
     def test_light_description_excludes_collection_transforms(self) -> None:
         skill = SKILL_MD.read_text()
         self.assertIn("NOT for collection/slice/map transforms", skill)
+
+    # --- New: SKILL.md line budget ---
+
+    def test_skill_md_stays_within_line_budget(self) -> None:
+        lines = len(SKILL_MD.read_text().splitlines())
+        self.assertLessEqual(lines, 500, f"SKILL.md too long: {lines} lines (budget: 500)")
+
+    # --- New: boundary-scorecard.md reference integrity ---
+
+    def test_boundary_scorecard_reference_exists(self) -> None:
+        self.assertTrue(
+            BOUNDARY_SCORECARD_REF.exists(),
+            "references/boundary-scorecard.md must exist",
+        )
+
+    def test_boundary_scorecard_has_pass_criteria(self) -> None:
+        ref = BOUNDARY_SCORECARD_REF.read_text()
+        self.assertIn("Final PASS Criteria", ref)
+        self.assertIn("All 3 Critical items", ref)
+        self.assertIn(">= 4/5", ref)
 
 
 if __name__ == "__main__":

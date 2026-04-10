@@ -1,0 +1,18 @@
+{
+  "id": "012_concurrent_map_access",
+  "description": "In-memory cache with concurrent read/write to a shared map — skill must mandate race detection, mutex or channel barrier, and a race-trigger killer case",
+  "code_snippet": "type Cache struct { mu sync.Mutex; data map[string]interface{} }\nfunc (c *Cache) Set(key string, val interface{})\nfunc (c *Cache) Get(key string) (interface{}, bool)",
+  "expect_test_generation": true,
+  "target_type": "Service interface",
+  "expected_mode": "Strict",
+  "expected_techniques": ["Concurrency & Panic Recovery"],
+  "expected_boundary_items": ["concurrent/race behavior"],
+  "expected_killer_hypothesis": "concurrent map writes cause data race panic without mutex protection",
+  "skill_rules_that_must_exist": [
+    "go test -race",
+    "concurrent/race behavior",
+    "channel barrier",
+    "killer case",
+    "Concurrency & Panic Recovery"
+  ]
+}

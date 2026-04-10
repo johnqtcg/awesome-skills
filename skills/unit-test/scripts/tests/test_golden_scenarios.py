@@ -106,12 +106,47 @@ class GoldenScenarioRuleCoverageTests(unittest.TestCase):
         self.assertEqual(f["expected_mode"], "Standard")
         self._assert_rules_covered(f)
 
+    # --- New: Medium-priority gap — concurrent map access ---
+
+    def test_012_concurrent_map_access(self):
+        f = _load_fixture("012_concurrent_map_access.json")
+        self.assertTrue(f["expect_test_generation"])
+        self.assertEqual(f["expected_mode"], "Strict")
+        self.assertIn("concurrent/race behavior", f["expected_boundary_items"])
+        self._assert_rules_covered(f)
+
+    # --- New: Medium-priority gap — scorecard tier weighting ---
+
+    def test_013_scorecard_tier_validation(self):
+        f = _load_fixture("013_scorecard_tier_validation.json")
+        self.assertTrue(f["expect_test_generation"])
+        self.assertEqual(f["expected_mode"], "Standard")
+        self._assert_rules_covered(f)
+
+    # --- New: Strict mode — property-based test required ---
+
+    def test_014_strict_property_required(self):
+        f = _load_fixture("014_strict_property_required.json")
+        self.assertTrue(f["expect_test_generation"])
+        self.assertEqual(f["expected_mode"], "Strict")
+        self.assertIn("property-based testing", f["expected_techniques"])
+        self._assert_rules_covered(f)
+
+    # --- New: Strict mode — complex state machine ---
+
+    def test_015_strict_state_machine(self):
+        f = _load_fixture("015_strict_state_machine.json")
+        self.assertTrue(f["expect_test_generation"])
+        self.assertEqual(f["expected_mode"], "Strict")
+        self.assertIn("context cancellation/deadline propagation", f["expected_boundary_items"])
+        self._assert_rules_covered(f)
+
     # --- Aggregate tests ---
 
     def test_all_fixtures_loaded(self):
         fixtures = sorted(GOLDEN_DIR.glob("*.json"))
         self.assertGreaterEqual(
-            len(fixtures), 11, "Expected at least 11 golden fixtures"
+            len(fixtures), 15, "Expected at least 15 golden fixtures"
         )
 
     def test_all_fixture_rules_covered(self):

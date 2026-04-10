@@ -1,0 +1,19 @@
+{
+  "id": "014_strict_property_required",
+  "description": "Event serializer with Marshal/Unmarshal pair — Strict mode triggers mandatory property-based roundtrip test in addition to table-driven boundary cases",
+  "code_snippet": "func (e *EventEncoder) Marshal(event *Event) ([]byte, error)\nfunc (e *EventEncoder) Unmarshal(data []byte) (*Event, error)",
+  "expect_test_generation": true,
+  "target_type": "Package-level functions",
+  "expected_mode": "Strict",
+  "expected_techniques": ["property-based testing", "Roundtrip"],
+  "expected_boundary_items": ["nil input", "invalid format/type"],
+  "expected_killer_hypothesis": "unmarshal silently drops optional fields present in the original event",
+  "skill_rules_that_must_exist": [
+    "Required",
+    "property",
+    "roundtrip",
+    "decode(encode(x))",
+    "8-15+",
+    "Strict"
+  ]
+}

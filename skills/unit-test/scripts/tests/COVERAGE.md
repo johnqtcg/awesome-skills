@@ -34,6 +34,9 @@ Maps each core rule/section in SKILL.md to its golden fixture and contract test.
 | Output includes mode | `test_output_expectations_include_mode` | ✅ |
 | Light mode output reduction | `test_light_mode_output_reduction` | ✅ |
 | Scorecard weight tiers | `test_scorecard_has_weight_tiers`, `test_scorecard_critical_items` | ✅ |
+| SKILL.md line budget (≤ 500) | `test_skill_md_stays_within_line_budget` | ✅ |
+| boundary-scorecard.md reference exists | `test_boundary_scorecard_reference_exists` | ✅ |
+| boundary-scorecard.md PASS criteria | `test_boundary_scorecard_has_pass_criteria` | ✅ |
 | Shuffle guidance | `test_shuffle_guidance_exists` | ✅ |
 | Fuzzing collaboration | `test_fuzzing_collaboration_guidance` | ✅ |
 | PR-diff scoped testing | `test_pr_diff_scope_section_exists` | ✅ |
@@ -85,6 +88,10 @@ Maps each core rule/section in SKILL.md to its golden fixture and contract test.
 | 009 | Auth middleware pass/block/error | Middleware | Strict | Branch Completeness, Mutation-Resistant |
 | 010 | Simple pure function (Light mode) | Package-level functions | Light | Mutation-Resistant |
 | 011 | Encode/Decode roundtrip (property-based) | Package-level functions | Standard | Property-Based Testing, Roundtrip |
+| 012 | Concurrent map read/write (race trigger) | Service interface | Strict | Concurrency, Race detection |
+| 013 | Payment service (scorecard tier weighting) | Service interface | Standard | Mutation-Resistant, Dependency Error |
+| 014 | Event serializer (Strict, property required) | Package-level functions | Strict | Property-Based Testing, Roundtrip |
+| 015 | Order FSM (Strict state machine) | Service interface | Strict | Branch Completeness, Context cancellation |
 
 ### Exclusions (should NOT produce tests)
 
@@ -97,13 +104,14 @@ Maps each core rule/section in SKILL.md to its golden fixture and contract test.
 
 | Metric | Count |
 |--------|-------|
-| Total golden fixtures | 11 |
-| Test generation (positive) | 9 |
+| Total golden fixtures | 15 |
+| Test generation (positive) | 13 |
 | Exclusions (negative) | 2 |
 | Target types covered | 5/5 (Service, Function, Handler, CLI, Middleware) |
-| Modes covered | 3/3 (Light, Standard, Strict) |
-| Contract tests | 64 |
-| Golden scenario tests | 13 |
+| Modes covered | 3/3 (Light 1, Standard 5, Strict 4+2 excl) |
+| Reference files | 5 |
+| Contract tests | 67 |
+| Golden scenario tests | 17 |
 
 ## Gap Analysis
 
@@ -118,9 +126,7 @@ When adding a new rule to SKILL.md or references:
 | Scenario | Category | Priority |
 |----------|----------|----------|
 | gRPC handler target type | target_type | Low |
-| Concurrent map access test pattern | concurrency | Medium |
 | Golden file / snapshot test anti-example | anti_example | Low |
 | Fuzzing + unit test collaboration example | technique | Low |
 | Shuffle-dependent test detection | technique | Low |
 | PR-diff scope integration test | workflow | Low |
-| Scorecard tier weighting validation | meta | Medium |

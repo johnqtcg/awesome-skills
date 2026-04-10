@@ -1,0 +1,18 @@
+{
+  "id": "013_scorecard_tier_validation",
+  "description": "Payment service with critical dependency — score must use tier-weighted scorecard; any Critical FAIL forces overall FAIL regardless of total score",
+  "code_snippet": "func (s *PaymentService) ProcessPayment(ctx context.Context, req *PaymentRequest) (*Receipt, error)",
+  "expect_test_generation": true,
+  "target_type": "Service interface",
+  "expected_mode": "Standard",
+  "expected_techniques": ["Mutation-Resistant Assertions", "Dependency Error Propagation"],
+  "expected_killer_hypothesis": "payment processed with partial receipt when gateway error is silently swallowed",
+  "skill_rules_that_must_exist": [
+    "Critical",
+    "Standard",
+    "Hygiene",
+    "Any Critical FAIL",
+    "killer case",
+    "Full 13-check scorecard mandatory"
+  ]
+}

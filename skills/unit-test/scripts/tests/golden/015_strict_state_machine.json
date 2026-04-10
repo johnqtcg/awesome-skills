@@ -1,0 +1,18 @@
+{
+  "id": "015_strict_state_machine",
+  "description": "Order FSM with context cancellation and complex state transitions — Strict mode required; 8-15+ cases covering every legal and illegal transition plus context propagation",
+  "code_snippet": "func (fsm *OrderFSM) Transition(ctx context.Context, event OrderEvent) (OrderState, error)",
+  "expect_test_generation": true,
+  "target_type": "Service interface",
+  "expected_mode": "Strict",
+  "expected_techniques": ["Branch Completeness", "Dependency Error Propagation"],
+  "expected_boundary_items": ["context cancellation/deadline propagation", "error from each critical dependency"],
+  "expected_killer_hypothesis": "state machine accepts invalid transition from Cancelled to Completed when context carries a bypass claim",
+  "skill_rules_that_must_exist": [
+    "Complex state machines",
+    "8-15+",
+    "context.Canceled",
+    "killer case",
+    "Strict"
+  ]
+}
