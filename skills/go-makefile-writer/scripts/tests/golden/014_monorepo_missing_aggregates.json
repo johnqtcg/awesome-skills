@@ -1,0 +1,16 @@
+{
+  "id": "GOLDEN-014",
+  "title": "Monorepo layout with no aggregate targets (test-all / lint-all / build-all missing)",
+  "type": "defect",
+  "severity": "medium",
+  "makefile_snippet": "# Project has multiple go.mod files: ./services/api/go.mod and ./services/worker/go.mod\ntest:\n\tgo test -race ./...\nlint:\n\tgolangci-lint run\nbuild-api:\n\tgo build -o bin/api ./services/api/cmd/api",
+  "context": "Multiple go.mod files detected — monorepo layout. The Makefile only has single-module targets; no aggregate test-all / lint-all / build-all targets that iterate over all modules.",
+  "expected_feedback": "monorepo detected: add test-all, lint-all, build-all aggregate targets that loop over each module",
+  "coverage_rules": [
+    "Monorepo Support",
+    "test-all",
+    "lint-all",
+    "build-all"
+  ],
+  "reference": "SKILL.md"
+}

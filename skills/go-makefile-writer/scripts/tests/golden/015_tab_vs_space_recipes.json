@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-015",
+  "title": "Makefile recipes indented with spaces instead of tabs",
+  "type": "defect",
+  "severity": "high",
+  "makefile_snippet": "test: ## Run tests\n    go test -race ./...\n\nbuild-api: ## Build API binary\n    go build -o bin/api ./cmd/api",
+  "context": "Recipe lines use 4 spaces for indentation instead of a hard tab character. Make will refuse to parse these targets and emit 'missing separator' errors.",
+  "expected_feedback": "Makefile recipes must use hard tab characters, not spaces; space-indented recipes cause 'missing separator' parse errors",
+  "coverage_rules": [
+    "Tab-vs-space issues in Makefile recipes",
+    "recipes MUST use tabs"
+  ],
+  "reference": "SKILL.md"
+}

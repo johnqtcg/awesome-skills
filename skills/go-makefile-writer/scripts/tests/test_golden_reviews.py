@@ -196,6 +196,24 @@ class TestMakefileDefectBehavior(unittest.TestCase):
         self.assertEqual(f.get('mode'), 'refactor')
         self._assert_coverage(f)
 
+    def test_014_monorepo_missing_aggregates(self):
+        f = self._load('014_monorepo_missing_aggregates.json')
+        self.assertEqual(f['type'], 'defect')
+        self.assertEqual(f['severity'], 'medium')
+        self._assert_coverage(f)
+
+    def test_015_tab_vs_space_recipes(self):
+        f = self._load('015_tab_vs_space_recipes.json')
+        self.assertEqual(f['type'], 'defect')
+        self.assertEqual(f['severity'], 'high')
+        self._assert_coverage(f)
+
+    def test_016_missing_tidy_target(self):
+        f = self._load('016_missing_tidy_target.json')
+        self.assertEqual(f['type'], 'defect')
+        self.assertEqual(f['severity'], 'low')
+        self._assert_coverage(f)
+
     # ------------------------------------------------------------------
     # False-positive cases (acceptable patterns, no defect expected)
     # ------------------------------------------------------------------

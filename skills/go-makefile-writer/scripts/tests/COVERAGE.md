@@ -81,6 +81,9 @@ Per-scenario behavioral verification (mirrors security-review TP/FP approach).
 | GOLDEN-007 | `007_unpinned_tools.json` | medium | Unpinned tool @latest in CI |
 | GOLDEN-012 | `012_ci_target_diverges.json` | high | **CI parity**: ci target diverges from pipeline |
 | GOLDEN-013 | `013_refactor_rename_no_alias.json` | medium | **Backward compat**: rename without alias (refactor mode) |
+| GOLDEN-014 | `014_monorepo_missing_aggregates.json` | medium | **Monorepo**: multi-module layout missing test-all/lint-all/build-all |
+| GOLDEN-015 | `015_tab_vs_space_recipes.json` | high | **Tab-vs-space**: space-indented recipes fail Make parsing |
+| GOLDEN-016 | `016_missing_tidy_target.json` | low | **Missing tidy**: no `go mod tidy` + `go mod verify` target |
 
 #### False Positives (acceptable patterns, no defect expected)
 
@@ -95,14 +98,13 @@ Per-scenario behavioral verification (mirrors security-review TP/FP approach).
 
 | Metric | Count |
 |--------|-------|
-| Total golden fixtures | 13 (9 TP defects + 4 FP) |
+| Total golden fixtures | 16 (12 TP defects + 4 FP) |
 | Contract tests | 46 (across 6 test classes) |
+| Behavioral tests (`TestMakefileDefectBehavior`) | 16 |
 | SKILL.md lines | 252 (budget: ≤ 400) |
 
 ## Known Coverage Gaps
 
 | Area | Gap | Priority |
 |------|-----|----------|
-| Makefile syntax | No test for tab-vs-space recipe indent | Low |
-| Dependency check | No fixture for missing `tidy` target | Low |
-| Monorepo | No golden fixture for monorepo pattern | Low |
+| Missing `cover` target | No fixture for project without `cover` target | Low |

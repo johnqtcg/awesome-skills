@@ -1,0 +1,13 @@
+{
+  "id": "GOLDEN-016",
+  "title": "Makefile missing tidy target for go mod tidy + go mod verify",
+  "type": "defect",
+  "severity": "low",
+  "makefile_snippet": "fmt: ## Format Go source\n\tgo fmt ./...\ntest: ## Run tests\n\tgo test -race ./...\nlint: ## Lint code\n\tgolangci-lint run\nclean: ## Remove artifacts\n\trm -rf bin/",
+  "expected_feedback": "add tidy target: go mod tidy + go mod verify to keep module dependencies clean and reproducible",
+  "coverage_rules": [
+    "tidy",
+    "go mod tidy"
+  ],
+  "reference": "references/makefile-quality-guide.md"
+}
