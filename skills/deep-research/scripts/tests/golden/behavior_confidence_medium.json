@@ -1,0 +1,14 @@
+{
+  "id": "BEHAVIOR-006",
+  "scenario": "Medium confidence assigned for technology comparison requiring 3+ independent benchmarks",
+  "title": "Technology comparison with multiple independent benchmarks yields Medium confidence",
+  "user_request": "Compare write throughput of PostgreSQL vs MySQL for high-volume OLTP workloads",
+  "expected_confidence": "Medium",
+  "confidence_rationale": "Technology comparison requires 3+ independent benchmarks or reviews for Medium confidence; fewer sources or single vendor benchmark downgrades to Low",
+  "required_keywords": [],
+  "coverage_rules": [
+    "Medium",
+    "3+ independent benchmarks or reviews",
+    "Technology comparison"
+  ]
+}

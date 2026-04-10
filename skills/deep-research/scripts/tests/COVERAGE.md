@@ -8,13 +8,13 @@ Maps each core rule/gate/section in SKILL.md to its golden fixture and contract 
 |----------------|------------|--------|
 | Frontmatter: name, description, allowed-tools | `TestFrontmatter` (7 tests) | ✅ |
 | 8 mandatory gates in serial order | `TestMandatoryGates` (7 tests) | ✅ |
-| Gate names (Scope Classif., Ambiguity, Evidence, Mode, Hallucination, Budget, Extraction, Integrity) | `TestMandatoryGates.test_gate_names_are_correct` | ✅ |
+| Gate names (Scope, Ambiguity, Evidence, Mode, Hallucination, Budget, Extraction, Integrity) | `TestMandatoryGates.test_gate_names` | ✅ |
 | Evidence requirements table (minimum evidence chain per claim type) | `TestMandatoryGates.test_evidence_requirements_table` | ✅ |
 | Hallucination awareness table | `TestMandatoryGates.test_hallucination_awareness_table` | ✅ |
 | 3 execution modes (Quick / Standard / Deep) | `TestExecutionModes` (5 tests) | ✅ |
 | Mode auto-selection table with triggers | `TestExecutionModes.test_mode_auto_selection_table` | ✅ |
-| Budget per mode (5-10, 15-25, 30-50) + hard ceiling 50 | `TestExecutionModes.test_budget_per_mode` | ✅ |
-| User explicit mode override | `TestExecutionModes.test_user_override_capability` | ✅ |
+| Budget per mode (5–10, 15–25, 30–50) + hard ceiling 50 | `TestExecutionModes.test_budget_per_mode` | ✅ |
+| User explicit mode override | `TestExecutionModes.test_user_override` | ✅ |
 | Anti-examples section (≥ 8 BAD/GOOD pairs) | `TestAntiExamples` (3 tests) | ✅ |
 | Honest degradation (Full / Partial / Blocked) | `TestHonestDegradation` (2 tests) | ✅ |
 | 9-section output contract | `TestOutputContract` (5 tests) | ✅ |
@@ -26,7 +26,27 @@ Maps each core rule/gate/section in SKILL.md to its golden fixture and contract 
 | Subcommand table (retrieve, fetch-content, search-codebase, validate, report) | `TestSubcommandTable` (2 tests) | ✅ |
 | SKILL.md line count ≤ 500 | `TestLineCount` (1 test) | ✅ |
 | Progressive disclosure via "→ Load" references | `TestProgressiveDisclosure` (2 tests) | ✅ |
-| **Gate 8: Execution Integrity — specific honesty rules** | **`TestGate8ExecutionIntegrity` (4 tests)** | ✅ |
+| Gate 8: Execution Integrity — hypothetical findings, actual numbers, snippet vs source | `TestGate8ExecutionIntegrity` (4 tests) | ✅ |
+
+## Inline Coverage (`TestCommonScenarios`)
+
+These 13 inline tests verify key rules not covered by fixtures. Documented explicitly to close the transparency gap.
+
+| Test | Rule Verified | Status |
+|------|--------------|--------|
+| `test_cross_validation_mentioned` | Cross-validation protocol present | ✅ |
+| `test_citation_requirement` | URL/citation requirement enforced | ✅ |
+| `test_source_tier_system` | T1–T5 source tier hierarchy | ✅ |
+| `test_perplexity_mentioned` | AI tool selection guidance (Perplexity) | ✅ |
+| `test_duckduckgo_in_script_context` | DDG retrieval strategy documented | ✅ |
+| `test_confidence_levels` | High / Medium / Low confidence levels | ✅ |
+| `test_verification_protocol` | Verification protocol exists | ✅ |
+| `test_content_extraction_mandatory` | Content extraction mandate (Gate 7) | ✅ |
+| `test_fabrication_prohibition` | "never fabricat" safety rule | ✅ |
+| `test_degradation_levels` | Full / Partial / Blocked degradation | ✅ |
+| `test_budget_enforcement` | Hard ceiling of 50 calls enforced | ✅ |
+| `test_ambiguity_stop_and_ask` | Ambiguity Gate STOP-and-ASK rule | ✅ |
+| `test_query_syntax_operators` | `site:`, `filetype:`, `after:` operators | ✅ |
 
 ## Golden Fixtures (`test_golden_scenarios.py`)
 
@@ -52,16 +72,20 @@ Maps each core rule/gate/section in SKILL.md to its golden fixture and contract 
 | `behavior_mode_user_override` | Explicit user override takes precedence | `user_override: true` + Standard mode |
 | `fp_quick_prevents_over_research` | **FP**: trivial fact should NOT trigger Deep | `is_deep_research_needed: false` |
 | `fp_codebase_no_web_retrieval` | **FP**: internal codebase question should NOT trigger web retrieval | `is_web_research_needed: false` |
+| `behavior_degradation_blocked` | **Degradation**: budget exhaustion → Blocked | `expected_degradation: Blocked` |
+| `behavior_confidence_high` | **Confidence**: official source + verified content → High | `expected_confidence: High` |
+| `behavior_confidence_medium` | **Confidence**: technology comparison with 3+ benchmarks → Medium | `expected_confidence: Medium` |
 
 ## Coverage Summary
 
 | Metric | Count |
 |--------|-------|
-| Total golden fixtures | 13 (8 keyword + 5 behavioral) |
+| Total golden fixtures | 16 (8 keyword + 8 behavioral) |
 | Keyword coverage fixtures | 8 |
-| Behavioral scenario fixtures (mode + FP) | 5 |
-| Contract tests (classes) | 13 classes |
-| Contract test methods (approx) | ~60 |
+| Behavioral scenario fixtures (mode + FP + degradation + confidence) | 8 |
+| Contract tests (classes) | 14 classes |
+| Contract test methods (approx) | ~65 |
+| Inline tests (`TestCommonScenarios`) | 13 (all documented above) |
 | SKILL.md lines | 287 (budget: ≤ 500) |
 
 ## Gap Analysis
@@ -76,7 +100,6 @@ When adding a new gate, mode, or decision rule to SKILL.md:
 
 | Scenario | Category | Priority |
 |----------|----------|----------|
-| Ambiguity Resolution Gate (Gate 2) stop-and-ask behavior fixture | behavioral | Low |
-| Budget exhaustion → Blocked degradation fixture | behavioral | Low |
 | Multi-round retrieval (Standard Round 1→2) workflow fixture | workflow | Low |
-| Inline `TestCommonScenarios` tests have no corresponding fixture | meta | Low |
+| Low confidence scenario fixture (disputed/fast-moving topic) | behavioral | Low |
+| Partial degradation fixture (some subtopics lack sources) | behavioral | Low |

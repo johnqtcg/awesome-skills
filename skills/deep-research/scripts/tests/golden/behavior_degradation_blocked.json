@@ -1,0 +1,14 @@
+{
+  "id": "BEHAVIOR-004",
+  "scenario": "Budget exhaustion forces Blocked degradation — skill must state what was not found",
+  "title": "Paywalled / non-indexed topic exhausts budget — degrades to Blocked",
+  "user_request": "Research unpublished internal performance benchmarks from the three major cloud vendors",
+  "expected_degradation": "Blocked",
+  "block_reason": "Critical sources unreachable (paywalled/non-indexed), budget exhausted without core evidence chain satisfied",
+  "required_keywords": [],
+  "coverage_rules": [
+    "Blocked",
+    "Critical sources unreachable",
+    "budget exhausted without core evidence"
+  ]
+}

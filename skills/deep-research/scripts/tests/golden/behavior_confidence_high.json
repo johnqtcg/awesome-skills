@@ -1,0 +1,14 @@
+{
+  "id": "BEHAVIOR-005",
+  "scenario": "High confidence assigned when single official source is retrieved and content extracted",
+  "title": "Official primary source + content extraction yields High confidence",
+  "user_request": "What does the Go standard library's context.WithTimeout function return?",
+  "expected_confidence": "High",
+  "confidence_rationale": "Single factual claim with 1 official or primary source + content verified → High confidence per evidence requirements table",
+  "required_keywords": [],
+  "coverage_rules": [
+    "High",
+    "1 official or primary source + content verified",
+    "Single factual claim"
+  ]
+}

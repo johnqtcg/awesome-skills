@@ -207,6 +207,32 @@ class TestBehavioralScenarios(unittest.TestCase):
         )
         self._assert_coverage(f)
 
+    # ------------------------------------------------------------------
+    # Degradation decision
+    # ------------------------------------------------------------------
+
+    def test_behavior_004_blocked_degradation(self) -> None:
+        """Budget exhaustion / unreachable sources must produce Blocked degradation."""
+        f = self._load("behavior_degradation_blocked.json")
+        self.assertEqual(f["expected_degradation"], "Blocked")
+        self._assert_coverage(f)
+
+    # ------------------------------------------------------------------
+    # Confidence assignment
+    # ------------------------------------------------------------------
+
+    def test_behavior_005_confidence_high(self) -> None:
+        """Official source + verified content must yield High confidence."""
+        f = self._load("behavior_confidence_high.json")
+        self.assertEqual(f["expected_confidence"], "High")
+        self._assert_coverage(f)
+
+    def test_behavior_006_confidence_medium(self) -> None:
+        """Technology comparison requiring 3+ independent benchmarks yields Medium."""
+        f = self._load("behavior_confidence_medium.json")
+        self.assertEqual(f["expected_confidence"], "Medium")
+        self._assert_coverage(f)
+
 
 if __name__ == "__main__":
     unittest.main()
