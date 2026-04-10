@@ -278,6 +278,43 @@ class TestResearchPatterns(unittest.TestCase):
             self.assertIn(op, self.text)
 
 
+class TestGate8ExecutionIntegrity(unittest.TestCase):
+    """Gate 8 is the skill's honesty guarantee: everything claimed must have
+    actually happened. Tests verify the three key integrity rules are present
+    as explicit constraints in SKILL.md — not just implied by context."""
+
+    def setUp(self):
+        self.text = _read(SKILL_MD)
+
+    def test_gate_8_named_section_exists(self) -> None:
+        """Gate 8 must be identifiable by its canonical name."""
+        self.assertIn("Execution Integrity Gate", self.text)
+
+    def test_gate_8_forbids_hypothetical_findings(self) -> None:
+        """Must explicitly forbid presenting findings if retrieval never ran."""
+        self.assertIn(
+            "hypothetical findings",
+            self.text,
+            "Gate 8 must ban hypothetical findings when retrieval did not run",
+        )
+
+    def test_gate_8_requires_actual_numbers_reporting(self) -> None:
+        """Must require reporting the actual counts of retrieved/extracted/cited sources."""
+        self.assertIn(
+            "actual number",
+            self.text,
+            "Gate 8 must require reporting actual source counts",
+        )
+
+    def test_gate_8_distinguishes_source_vs_snippet_claims(self) -> None:
+        """Must distinguish 'source says X' from 'snippet mentions X'."""
+        self.assertIn(
+            "snippet mentions",
+            self.text,
+            "Gate 8 must require distinguishing source-says from snippet-mentions",
+        )
+
+
 class TestSubcommandTable(unittest.TestCase):
     def setUp(self):
         self.text = _read(SKILL_MD)

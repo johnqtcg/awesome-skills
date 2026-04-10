@@ -1,0 +1,16 @@
+{
+  "id": "FP-001",
+  "scenario": "False positive — Deep mode would over-research a trivial single-fact lookup",
+  "title": "Quick mode prevents over-research for trivial single-fact questions",
+  "user_request": "What is the current stable version of Go?",
+  "is_deep_research_needed": false,
+  "correct_mode": "Quick",
+  "suppression_reason": "Single version-lookup claim. Triggering Deep mode (30-50 calls, 15-40 sources) would be a false positive — excessive for a single verifiable fact.",
+  "required_keywords": [],
+  "coverage_rules": [
+    "Quick",
+    "single claim",
+    "5–10",
+    "one factual question"
+  ]
+}

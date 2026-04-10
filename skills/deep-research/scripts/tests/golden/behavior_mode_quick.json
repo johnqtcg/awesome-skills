@@ -1,0 +1,14 @@
+{
+  "id": "BEHAVIOR-001",
+  "scenario": "Auto-selecting Quick mode for a single factual claim",
+  "title": "Single factual question auto-selects Quick mode",
+  "user_request": "What HTTP status code does http.StatusOK represent in Go?",
+  "expected_mode": "Quick",
+  "decision_rationale": "Single factual claim with no comparison dimensions or security risk → Quick mode (5-10 calls max). Deep mode would be wasteful.",
+  "required_keywords": [],
+  "coverage_rules": [
+    "Quick",
+    "single claim",
+    "5–10"
+  ]
+}

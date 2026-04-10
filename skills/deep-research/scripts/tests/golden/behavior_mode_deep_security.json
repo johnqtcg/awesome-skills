@@ -1,0 +1,14 @@
+{
+  "id": "BEHAVIOR-002",
+  "scenario": "Auto-selecting Deep mode for a security-sensitive production decision",
+  "title": "Security-sensitive multi-vendor decision triggers Deep mode",
+  "user_request": "We are selecting a TLS library for our payment processor. What are the security trade-offs between using crypto/tls defaults vs custom configurations?",
+  "expected_mode": "Deep",
+  "decision_rationale": "Security-sensitive decision with multi-vendor comparison in a production payment context → Deep mode (30-50 calls). Standard would under-cover the security surface.",
+  "required_keywords": [],
+  "coverage_rules": [
+    "Deep",
+    "Security-sensitive or production-impacting decision",
+    "30–50"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "BEHAVIOR-003",
+  "scenario": "User explicit mode override takes precedence over auto-selection",
+  "title": "Explicit 'Standard' keyword overrides auto-selection logic",
+  "user_request": "Standard research: compare Redis vs Valkey for our caching layer",
+  "expected_mode": "Standard",
+  "user_override": true,
+  "decision_rationale": "User specified 'Standard' explicitly. Auto-selection would evaluate the comparison and might choose Deep, but the explicit override pins it to Standard (15-25 calls).",
+  "required_keywords": [],
+  "coverage_rules": [
+    "Standard",
+    "user explicitly requests a specific mode",
+    "15–25"
+  ]
+}

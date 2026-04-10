@@ -130,5 +130,83 @@ class TestCommonScenarios(unittest.TestCase):
             self.assertIn(op, self.all_text)
 
 
+class TestBehavioralScenarios(unittest.TestCase):
+    """Behavioral regression tests that verify SKILL.md contains the decision
+    rules needed to produce correct mode selection, false-positive prevention,
+    and suppression decisions — not just that keywords exist.
+
+    Schema for behavioral fixtures:
+      expected_mode       Quick | Standard | Deep
+      user_override       bool — user explicitly specified a mode
+      is_deep_research_needed  bool — false = Deep would be over-research
+      is_web_research_needed   bool — false = web retrieval not needed
+      coverage_rules      list[str] — must appear in all_text (SKILL + refs)
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.skill_text = _read(SKILL_MD)
+        cls.all_text = _all_skill_text()
+
+    def _load(self, filename: str) -> dict:
+        path = GOLDEN_DIR / filename
+        if not path.exists():
+            self.skipTest(f"fixture not found: {filename}")
+        return json.loads(path.read_text())
+
+    def _assert_coverage(self, fixture: dict) -> None:
+        for rule in fixture.get("coverage_rules", []):
+            self.assertIn(
+                rule,
+                self.all_text,
+                f"[{fixture['id']}] coverage rule missing: {rule!r}",
+            )
+
+    # ------------------------------------------------------------------
+    # Mode auto-selection
+    # ------------------------------------------------------------------
+
+    def test_behavior_001_quick_mode_single_fact(self) -> None:
+        """Single factual question should trigger Quick mode, not over-research."""
+        f = self._load("behavior_mode_quick.json")
+        self.assertEqual(f["expected_mode"], "Quick")
+        self._assert_coverage(f)
+
+    def test_behavior_002_deep_mode_security_decision(self) -> None:
+        """Security-sensitive multi-vendor decision should trigger Deep mode."""
+        f = self._load("behavior_mode_deep_security.json")
+        self.assertEqual(f["expected_mode"], "Deep")
+        self._assert_coverage(f)
+
+    def test_behavior_003_user_override_standard(self) -> None:
+        """Explicit user mode specification overrides auto-selection."""
+        f = self._load("behavior_mode_user_override.json")
+        self.assertTrue(f.get("user_override"), "fixture must declare user_override=true")
+        self._assert_coverage(f)
+
+    # ------------------------------------------------------------------
+    # False-positive prevention
+    # ------------------------------------------------------------------
+
+    def test_fp_001_quick_prevents_over_research(self) -> None:
+        """Trivial single-fact lookup must NOT trigger Deep mode."""
+        f = self._load("fp_quick_prevents_over_research.json")
+        self.assertFalse(
+            f.get("is_deep_research_needed", True),
+            "fixture must declare is_deep_research_needed=false",
+        )
+        self.assertEqual(f.get("correct_mode"), "Quick")
+        self._assert_coverage(f)
+
+    def test_fp_002_codebase_no_web_retrieval(self) -> None:
+        """Internal codebase question must not trigger external web retrieval."""
+        f = self._load("fp_codebase_no_web_retrieval.json")
+        self.assertFalse(
+            f.get("is_web_research_needed", True),
+            "fixture must declare is_web_research_needed=false",
+        )
+        self._assert_coverage(f)
+
+
 if __name__ == "__main__":
     unittest.main()

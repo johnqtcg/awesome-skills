@@ -1,0 +1,14 @@
+{
+  "id": "FP-002",
+  "scenario": "False positive — internal codebase question does not need external web retrieval",
+  "title": "Pure codebase question suppresses web retrieval — search-codebase is sufficient",
+  "user_request": "How is authentication implemented in our internal repository?",
+  "is_web_research_needed": false,
+  "suppression_reason": "Internal codebase question. Triggering external web retrieval would be a false positive — search-codebase subcommand addresses this; external retrieval would return irrelevant public content.",
+  "required_keywords": [],
+  "coverage_rules": [
+    "search-codebase",
+    "Codebase Research",
+    "Hybrid research"
+  ]
+}
