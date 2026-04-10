@@ -1,0 +1,14 @@
+{
+  "id": "022",
+  "title": "Volume-cap overflow — Standard mode displaces lowest-priority Medium findings to Residual Risk",
+  "expected_finding": true,
+  "severity": "Medium",
+  "category": "performance",
+  "code": "// Introduced in PR diff — one of many Medium-severity findings in a busy change:\nfunc buildReport(entries []string) string {\n\tresult := \"\"\n\tfor i, entry := range entries {\n\t\tresult += fmt.Sprintf(\"%d: %s\\n\", i+1, entry)\n\t}\n\treturn result\n}",
+  "coverage_rules": [
+    "severity-tiered strategy",
+    "4 High + 8 Medium found → report 4 High + 6 Medium as findings, move 2 Medium to Residual Risk",
+    "Volume-cap overflow",
+    "no validated issue is silently dropped"
+  ]
+}

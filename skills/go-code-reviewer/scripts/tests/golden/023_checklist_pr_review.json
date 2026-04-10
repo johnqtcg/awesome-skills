@@ -1,0 +1,17 @@
+{
+  "id": "023",
+  "title": "PR review exercises all four checklist meta-sections (Change Origin, Baseline Continuity, False-Positive Suppression, Review Output Quality)",
+  "expected_finding": true,
+  "severity": "Medium",
+  "category": "checklist",
+  "reference": "pr-review-quick-checklist.md",
+  "code": "// New function added in PR diff:\nfunc MigrateUserData(db *sql.DB) error {\n\t_, err := db.Exec(`ALTER TABLE users ADD COLUMN migrated_at TIMESTAMP`)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"add column: %w\", err)\n\t}\n\t_, err = db.Exec(`UPDATE users SET migrated_at = NOW() WHERE migrated_at IS NULL`)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"backfill: %w\", err)\n\t}\n\treturn nil\n}",
+  "coverage_rules": [
+    "pr-review-quick-checklist.md",
+    "Any PR or diff review",
+    "Change Origin",
+    "Baseline Continuity",
+    "False-Positive Suppression",
+    "Review Output Quality"
+  ]
+}

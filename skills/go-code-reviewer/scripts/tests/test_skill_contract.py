@@ -7,6 +7,7 @@ SKILL_DIR = Path(__file__).resolve().parents[2]
 SKILL_MD = SKILL_DIR / "SKILL.md"
 API_REF = SKILL_DIR / "references" / "go-api-http-checklist.md"
 EXAMPLE_OUTPUT_REF = SKILL_DIR / "references" / "example-output.md"
+CHECKLIST_REF = SKILL_DIR / "references" / "pr-review-quick-checklist.md"
 
 
 def frontmatter(text: str) -> str:
@@ -337,6 +338,38 @@ class GoCodeReviewerSkillContractTests(unittest.TestCase):
             "**This is a mandatory gate**",
             self.skill_text,
         )
+
+    # ------------------------------------------------------------------
+    # Volume cap — concrete overflow example
+    # ------------------------------------------------------------------
+
+    def test_volume_cap_overflow_concrete_example_documented(self) -> None:
+        self.assertIn(
+            "4 High + 8 Medium found → report 4 High + 6 Medium as findings, move 2 Medium to Residual Risk",
+            self.skill_text,
+        )
+
+    # ------------------------------------------------------------------
+    # PR review checklist reference integrity
+    # ------------------------------------------------------------------
+
+    def test_pr_review_checklist_has_key_sections(self) -> None:
+        checklist = CHECKLIST_REF.read_text()
+        for section in (
+            "Change Origin",
+            "Baseline Continuity",
+            "False-Positive Suppression",
+            "Review Output Quality",
+        ):
+            self.assertIn(
+                section,
+                checklist,
+                f"pr-review-quick-checklist.md missing section: {section!r}",
+            )
+
+    def test_pr_review_checklist_trigger_declared(self) -> None:
+        self.assertIn("pr-review-quick-checklist.md", self.skill_text)
+        self.assertIn("Any PR or diff review", self.skill_text)
 
 
 if __name__ == "__main__":

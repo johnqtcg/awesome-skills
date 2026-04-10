@@ -1,0 +1,14 @@
+{
+  "id": "021",
+  "title": "Pre-existing Medium defect NOT promoted to Findings — goes to Residual Risk",
+  "expected_finding": false,
+  "category": "performance",
+  "origin": "pre-existing",
+  "code": "// NOT in diff (unchanged code in an impact-radius file):\nfunc buildLabels(tags []string) string {\n\tresult := \"\"\n\tfor _, tag := range tags {\n\t\tresult += tag + \",\"\n\t}\n\treturn result\n}",
+  "coverage_rules": [
+    "Pre-existing issues (non-High)",
+    "Low/Medium-severity pre-existing defects found in impact-radius files",
+    "go here with a one-line summary each"
+  ],
+  "gate": "Change Origin Classification Gate"
+}

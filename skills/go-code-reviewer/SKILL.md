@@ -328,15 +328,9 @@ Use the checklist below. Skip categories that are not applicable to the change u
 11. Add risk acceptance/SLA recommendations.
 
 ## Severity Rubric
-### High
-Likely functional breakage, data loss/corruption, security risk,
-race/deadlock, or significant production instability.
-
-### Medium
-Meaningful maintainability or reliability risk that is not immediate critical failure.
-
-### Low
-Clarity/readability improvement or non-critical consistency gap.
+- **High**: functional breakage, data loss/corruption, security risk, race/deadlock, production instability
+- **Medium**: maintainability or reliability risk without immediate failure
+- **Low**: clarity, readability, or non-critical consistency gap
 
 ## Evidence Rules
 - Do not report speculative findings as confirmed defects.

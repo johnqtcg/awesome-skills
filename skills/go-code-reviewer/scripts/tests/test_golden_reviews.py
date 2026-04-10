@@ -215,6 +215,35 @@ class GoldenReviewTests(unittest.TestCase):
         self._assert_gate(f)
 
     # ------------------------------------------------------------------
+    # Change Origin — complement: Medium pre-existing → Residual Risk
+    # ------------------------------------------------------------------
+
+    def test_021_preexisting_medium_residual_risk(self) -> None:
+        f = self._load("021_preexisting_medium_residual_risk.json")
+        self.assertFalse(f["expected_finding"])
+        self.assertEqual(f.get("origin"), "pre-existing")
+        self._assert_coverage(f)
+        self._assert_gate(f)
+
+    # ------------------------------------------------------------------
+    # Volume-cap overflow
+    # ------------------------------------------------------------------
+
+    def test_022_volume_cap_overflow(self) -> None:
+        f = self._load("022_volume_cap_overflow.json")
+        self.assertTrue(f["expected_finding"])
+        self._assert_coverage(f)
+
+    # ------------------------------------------------------------------
+    # PR review checklist meta-sections
+    # ------------------------------------------------------------------
+
+    def test_023_checklist_pr_review_coverage(self) -> None:
+        f = self._load("023_checklist_pr_review.json")
+        self.assertTrue(f["expected_finding"])
+        self._assert_coverage(f)
+
+    # ------------------------------------------------------------------
     # Fixture integrity
     # ------------------------------------------------------------------
 
