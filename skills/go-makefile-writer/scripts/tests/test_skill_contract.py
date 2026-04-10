@@ -190,5 +190,81 @@ class TestPrChecklistExists(unittest.TestCase):
                         'references/pr-checklist.md should exist')
 
 
+class TestSkillMdSections(unittest.TestCase):
+    """Verify all key SKILL.md sections exist and contain critical rules.
+
+    These tests guard against silent deletion of the 6 sections that previously
+    had no independent contract coverage.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.text = _read(SKILL_MD)
+
+    # Issue 2: line budget
+    def test_skill_md_under_line_budget(self) -> None:
+        lines = cls = self.text.count('\n') + 1
+        self.assertLessEqual(lines, 400,
+                             f'SKILL.md too long: {lines} lines (budget: 400)')
+
+    # Issue 3a: Anti-Patterns section
+    def test_anti_patterns_section_exists(self) -> None:
+        self.assertIn('## Anti-Patterns', self.text)
+
+    def test_anti_patterns_ci_parity_rule(self) -> None:
+        """Anti-pattern 8: ci target must mirror CI pipeline exactly."""
+        self.assertIn('mirror CI exactly', self.text)
+        self.assertIn('diverges from the actual CI pipeline', self.text)
+
+    def test_anti_patterns_cgo_rule(self) -> None:
+        """Anti-pattern 10: cross-compile without CGO_ENABLED=0."""
+        self.assertIn('CGO_ENABLED=0', self.text)
+
+    # Issue 3b: Go Version Awareness section
+    def test_go_version_awareness_section_exists(self) -> None:
+        self.assertIn('## Go Version Awareness', self.text)
+        self.assertIn('Go version: X.Y', self.text)
+
+    def test_go_version_awareness_has_table(self) -> None:
+        """Version gate table must cover at least 1.18 and 1.21."""
+        self.assertIn('1.18', self.text)
+        self.assertIn('1.21', self.text)
+
+    # Issue 3c: Execution Modes section
+    def test_execution_modes_section_exists(self) -> None:
+        self.assertIn('## Execution Modes', self.text)
+        self.assertIn('Create', self.text)
+        self.assertIn('Refactor', self.text)
+
+    def test_execution_modes_refactor_requires_minimal_diff(self) -> None:
+        """Refactor mode must mandate minimal-diff edits."""
+        self.assertIn('Minimal-diff edits', self.text)
+
+    def test_execution_modes_refactor_backward_compat(self) -> None:
+        """Refactor mode must require backward-compat aliases."""
+        self.assertIn('keep aliases', self.text)
+        self.assertIn('transition period', self.text)
+
+    # Issue 3d: Monorepo Support section
+    def test_monorepo_support_section_exists(self) -> None:
+        self.assertIn('## Monorepo Support', self.text)
+
+    def test_monorepo_support_has_aggregate_targets(self) -> None:
+        """Monorepo section must document test-all, lint-all, build-all."""
+        for target in ('test-all', 'lint-all', 'build-all'):
+            self.assertIn(target, self.text, f'Monorepo aggregate target missing: {target}')
+
+    # Issue 3e: Load References Selectively section
+    def test_load_references_section_exists(self) -> None:
+        self.assertIn('## Load References Selectively', self.text)
+        self.assertIn('makefile-quality-guide.md', self.text)
+        self.assertIn('pr-checklist.md', self.text)
+
+    # Issue 3f: disable-model-invocation frontmatter field
+    def test_disable_model_invocation_in_frontmatter(self) -> None:
+        """Frontmatter must declare disable-model-invocation: true."""
+        self.assertIn('disable-model-invocation: true', self.text)
+
+
 if __name__ == '__main__':
     unittest.main()

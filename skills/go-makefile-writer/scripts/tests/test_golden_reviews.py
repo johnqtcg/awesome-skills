@@ -106,5 +106,128 @@ class TestRuleCoverage(unittest.TestCase):
                             f'{fix["id"]}: reference {ref} does not exist')
 
 
+class TestMakefileDefectBehavior(unittest.TestCase):
+    """Per-scenario behavioral verification — upgrade from bulk keyword loop.
+
+    Each test method maps to one fixture and explicitly asserts:
+    - Correct type (defect vs false_positive)
+    - Correct severity for defects
+    - Coverage rules present in docs
+    - Anti-example patterns present for false-positives
+
+    This mirrors security-review's TP/FP code-scenario approach.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.all_docs = _normalize(_load_all_docs())
+
+    def _load(self, filename):
+        path = os.path.join(GOLDEN_DIR, filename)
+        with open(path, 'r', encoding='utf-8') as f:
+            return json.load(f)
+
+    def _assert_coverage(self, fix):
+        for rule in fix.get('coverage_rules', []):
+            self.assertIn(_normalize(rule), self.all_docs,
+                          f'[{fix["id"]}] coverage rule not found: {rule!r}')
+
+    def _assert_anti_patterns(self, fix):
+        for pattern in fix.get('anti_example_patterns', []):
+            self.assertIn(_normalize(pattern), self.all_docs,
+                          f'[{fix["id"]}] anti-example pattern not found: {pattern!r}')
+
+    # ------------------------------------------------------------------
+    # True-positive (defect) cases
+    # ------------------------------------------------------------------
+
+    def test_001_missing_help_target(self):
+        f = self._load('001_missing_help.json')
+        self.assertEqual(f['type'], 'defect')
+        self.assertEqual(f['severity'], 'high')
+        self._assert_coverage(f)
+
+    def test_002_test_missing_race(self):
+        f = self._load('002_missing_race.json')
+        self.assertEqual(f['type'], 'defect')
+        self.assertEqual(f['severity'], 'high')
+        self._assert_coverage(f)
+
+    def test_003_build_without_ldflags(self):
+        f = self._load('003_missing_ldflags.json')
+        self.assertEqual(f['type'], 'defect')
+        self.assertEqual(f['severity'], 'medium')
+        self._assert_coverage(f)
+
+    def test_004_missing_phony(self):
+        f = self._load('004_no_phony.json')
+        self.assertEqual(f['type'], 'defect')
+        self.assertEqual(f['severity'], 'medium')
+        self._assert_coverage(f)
+
+    def test_005_cross_compile_no_cgo(self):
+        f = self._load('005_cross_compile_with_cgo.json')
+        self.assertEqual(f['type'], 'defect')
+        self.assertEqual(f['severity'], 'high')
+        self._assert_coverage(f)
+
+    def test_006_target_name_mismatch(self):
+        f = self._load('006_target_name_mismatch.json')
+        self.assertEqual(f['type'], 'defect')
+        self.assertEqual(f['severity'], 'low')
+        self._assert_coverage(f)
+
+    def test_007_unpinned_tool_versions(self):
+        f = self._load('007_unpinned_tools.json')
+        self.assertEqual(f['type'], 'defect')
+        self.assertEqual(f['severity'], 'medium')
+        self._assert_coverage(f)
+
+    def test_012_ci_target_diverges(self):
+        f = self._load('012_ci_target_diverges.json')
+        self.assertEqual(f['type'], 'defect')
+        self.assertEqual(f['severity'], 'high')
+        self._assert_coverage(f)
+
+    def test_013_refactor_rename_no_alias(self):
+        f = self._load('013_refactor_rename_no_alias.json')
+        self.assertEqual(f['type'], 'defect')
+        self.assertEqual(f['severity'], 'medium')
+        self.assertEqual(f.get('mode'), 'refactor')
+        self._assert_coverage(f)
+
+    # ------------------------------------------------------------------
+    # False-positive cases (acceptable patterns, no defect expected)
+    # ------------------------------------------------------------------
+
+    def test_008_well_formed_makefile_fp(self):
+        """Well-formed Makefile: skill must NOT report defects."""
+        f = self._load('008_good_makefile.json')
+        self.assertEqual(f['type'], 'false_positive')
+        self.assertEqual(f['severity'], 'none')
+        self._assert_coverage(f)  # coverage_rules confirm why each pattern is correct
+
+    def test_009_custom_help_format_fp(self):
+        """Custom echo-based help is acceptable — must not flag as missing help."""
+        f = self._load('009_custom_help_format_fp.json')
+        self.assertEqual(f['type'], 'false_positive')
+        self.assertEqual(f['severity'], 'none')
+        self._assert_coverage(f)
+
+    def test_010_gofmt_variant_fp(self):
+        """gofmt -w is an acceptable fmt variant — must not flag as wrong."""
+        f = self._load('010_gofmt_variant_fp.json')
+        self.assertEqual(f['type'], 'false_positive')
+        self.assertEqual(f['severity'], 'none')
+        self._assert_coverage(f)
+
+    def test_011_no_docker_targets_fp(self):
+        """Absence of Docker targets without a Dockerfile is correct — must not flag."""
+        f = self._load('011_no_docker_targets_fp.json')
+        self.assertEqual(f['type'], 'false_positive')
+        self.assertEqual(f['severity'], 'none')
+        self._assert_coverage(f)
+
+
 if __name__ == '__main__':
     unittest.main()

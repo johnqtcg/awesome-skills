@@ -2,65 +2,107 @@
 
 ## Contract Tests (`test_skill_contract.py`)
 
-| Test Class | Test | Verifies |
-|---|---|---|
-| TestSkillMdStructure | test_has_workflow_section | SKILL.md has `## Workflow` |
-| TestSkillMdStructure | test_workflow_has_four_steps | 4-step workflow: Inspect → Plan → Compose → Validate |
-| TestSkillMdStructure | test_has_rules_section | SKILL.md has `## Rules` |
-| TestSkillMdStructure | test_has_output_contract | SKILL.md has `## Output Contract` |
-| TestSkillMdStructure | test_output_contract_items | 5 required output items present |
-| TestSkillMdStructure | test_references_quality_guide | Quality guide referenced |
-| TestSkillMdStructure | test_references_pr_checklist | PR checklist referenced |
-| TestSkillMdStructure | test_references_discovery_script | Discovery script referenced |
-| TestSkillMdStructure | test_references_golden_examples | Golden examples referenced |
-| TestSkillMdStructure | test_core_targets_listed | 7 core targets: help, fmt, tidy, test, cover, lint, clean |
-| TestSkillMdStructure | test_version_injection_mentioned | `-ldflags` mentioned |
-| TestSkillMdStructure | test_ci_target_mentioned | `ci` target mentioned |
-| TestQualityGuideStructure | test_has_all_sections | All 15 guide sections present |
-| TestQualityGuideStructure | test_has_help_pattern | awk + MAKEFILE_LIST help pattern |
-| TestQualityGuideStructure | test_has_version_template | VERSION, COMMIT, BUILD_TIME, LDFLAGS |
-| TestQualityGuideStructure | test_has_antipatterns | Anti-patterns section exists |
-| TestQualityGuideStructure | test_has_validation_matrix | Validation matrix section exists |
-| TestQualityGuideStructure | test_has_backward_compatibility | Backward compatibility section exists |
-| TestQualityGuideStructure | test_cover_check_not_fragile | Fragile gsub pattern removed |
-| TestQualityGuideStructure | test_fmt_not_git_only | `go fmt ./...` as primary fmt approach |
-| TestQualityGuideStructure | test_cross_compile_not_hardcoded | Multi-binary cross-compile covered |
-| TestQualityGuideStructure | test_compatibility_notes_present | Portability notes for CI environments |
-| TestGoldenExamplesExist | test_simple_golden | Simple golden: DEFAULT_GOAL, LDFLAGS, PHONY, help, build, test, clean, -race, version |
-| TestGoldenExamplesExist | test_complex_golden | Complex golden: same + multi-binary, Docker, generate, cross-compile |
-| TestGoldenExamplesExist | test_complex_has_multi_binary | build-all, build-consumer-*, build-cron-* |
-| TestGoldenExamplesExist | test_complex_has_docker | docker-build target |
-| TestGoldenExamplesExist | test_complex_has_generate | generate + generate-check targets |
-| TestGoldenExamplesExist | test_complex_has_cross_compile | CGO_ENABLED=0, GOOS=linux |
-| TestDiscoveryScriptExists | test_file_exists | Script exists |
-| TestDiscoveryScriptExists | test_is_executable | Script is executable |
-| TestDiscoveryScriptExists | test_outputs_target_name | Outputs target_name column |
-| TestDiscoveryScriptExists | test_supports_json_mode | --json flag supported |
-| TestDiscoveryScriptExists | test_handles_known_kinds | api, consumer, cron, worker, migrate |
-| TestPrChecklistExists | test_file_exists | PR checklist file exists |
+### `TestSkillMdStructure` (12 tests)
+
+| Test | Verifies |
+|------|----------|
+| `test_has_workflow_section` | SKILL.md has `## Workflow` |
+| `test_workflow_has_four_steps` | 4-step workflow: Inspect → Plan → Compose → Validate |
+| `test_has_rules_section` | SKILL.md has `## Rules` |
+| `test_has_output_contract` | SKILL.md has `## Output Contract` |
+| `test_output_contract_items` | 5 required output items present |
+| `test_references_quality_guide` | Quality guide referenced |
+| `test_references_pr_checklist` | PR checklist referenced |
+| `test_references_discovery_script` | Discovery script referenced |
+| `test_references_golden_examples` | Golden examples referenced |
+| `test_core_targets_listed` | 7 core targets: help, fmt, tidy, test, cover, lint, clean |
+| `test_version_injection_mentioned` | `-ldflags` mentioned |
+| `test_ci_target_mentioned` | `ci` target mentioned |
+
+### `TestQualityGuideStructure` (9 tests)
+
+| Test | Verifies |
+|------|----------|
+| `test_has_all_sections` | All 15 guide sections present |
+| `test_has_help_pattern` | awk + MAKEFILE_LIST help pattern |
+| `test_has_version_template` | VERSION, COMMIT, BUILD_TIME, LDFLAGS |
+| `test_has_antipatterns` | Anti-patterns section exists |
+| `test_has_validation_matrix` | Validation matrix section exists |
+| `test_has_backward_compatibility` | Backward compatibility section exists |
+| `test_cover_check_not_fragile` | Fragile gsub pattern removed |
+| `test_fmt_not_git_only` | `go fmt ./...` as primary fmt approach |
+| `test_compatibility_notes_present` | Portability notes for CI environments |
+
+### `TestGoldenExamplesExist` (6 tests) + `TestDiscoveryScriptExists` (5 tests) + `TestPrChecklistExists` (1 test)
+
+| Test | Verifies |
+|------|----------|
+| `test_simple_golden` / `test_complex_golden` | Golden Makefiles: DEFAULT_GOAL, LDFLAGS, PHONY, help, build, test, clean, -race, version |
+| `test_complex_has_*` (3 tests) | multi-binary, Docker, generate, cross-compile targets |
+| `test_discovery_*` (5 tests) | script exists, executable, target_name output, --json, kind coverage |
+| `test_file_exists` (PR checklist) | PR checklist file exists |
+
+### `TestSkillMdSections` — NEW (13 tests)
+
+Covers the 6 SKILL.md sections that previously had no independent contract tests.
+
+| Test | Section | Verifies |
+|------|---------|----------|
+| `test_skill_md_under_line_budget` | — | SKILL.md ≤ 400 lines |
+| `test_anti_patterns_section_exists` | `## Anti-Patterns` | Section header exists |
+| `test_anti_patterns_ci_parity_rule` | `## Anti-Patterns` | "mirror CI exactly" + "diverges from the actual CI pipeline" |
+| `test_anti_patterns_cgo_rule` | `## Anti-Patterns` | "CGO_ENABLED=0" rule documented |
+| `test_go_version_awareness_section_exists` | `## Go Version Awareness` | Section + "Go version: X.Y" output format |
+| `test_go_version_awareness_has_table` | `## Go Version Awareness` | 1.18 and 1.21 version entries present |
+| `test_execution_modes_section_exists` | `## Execution Modes` | Create + Refactor modes documented |
+| `test_execution_modes_refactor_requires_minimal_diff` | `## Execution Modes` | "Minimal-diff edits" rule |
+| `test_execution_modes_refactor_backward_compat` | `## Execution Modes` | "keep aliases" + "transition period" rules |
+| `test_monorepo_support_section_exists` | `## Monorepo Support` | Section header exists |
+| `test_monorepo_support_has_aggregate_targets` | `## Monorepo Support` | test-all, lint-all, build-all documented |
+| `test_load_references_section_exists` | `## Load References Selectively` | Section + both reference files mentioned |
+| `test_disable_model_invocation_in_frontmatter` | frontmatter | `disable-model-invocation: true` |
 
 ## Golden Fixtures (`golden/*.json`)
 
-| ID | Title | Type | Severity | Covered Rules |
-|---|---|---|---|---|
-| GOLDEN-001 | Missing help target | defect | high | help, .DEFAULT_GOAL, self-documenting |
-| GOLDEN-002 | Test missing -race | defect | high | -race, race detection |
-| GOLDEN-003 | Build without ldflags | defect | medium | -ldflags, VERSION, COMMIT, BUILD_TIME |
-| GOLDEN-004 | Missing .PHONY | defect | medium | .PHONY |
-| GOLDEN-005 | Cross-compile without CGO_ENABLED=0 | defect | high | CGO_ENABLED=0, static binaries |
-| GOLDEN-006 | Target name mismatch | defect | low | Map target names, path semantics, build-<kind>-<name> |
-| GOLDEN-007 | Unpinned tool versions | defect | medium | Pin versions, reproducib(ility) |
-| GOLDEN-008 | Well-formed Makefile (FP) | false_positive | none | .DEFAULT_GOAL, -race, -ldflags, .PHONY |
-| GOLDEN-009 | Custom help format (FP) | false_positive | none | help output self-documenting |
-| GOLDEN-010 | gofmt -w variant (FP) | false_positive | none | quality targets |
-| GOLDEN-011 | No Docker targets without Dockerfile (FP) | false_positive | none | container targets |
+### Behavioral Tests (`TestMakefileDefectBehavior`) — NEW
+
+Per-scenario behavioral verification (mirrors security-review TP/FP approach).
+
+#### True Positives (defects)
+
+| ID | File | Severity | Decision Tested |
+|----|------|----------|-----------------|
+| GOLDEN-001 | `001_missing_help.json` | high | Missing help target |
+| GOLDEN-002 | `002_missing_race.json` | high | Test missing -race flag |
+| GOLDEN-003 | `003_missing_ldflags.json` | medium | Build without version injection |
+| GOLDEN-004 | `004_no_phony.json` | medium | Missing .PHONY declarations |
+| GOLDEN-005 | `005_cross_compile_with_cgo.json` | high | Cross-compile without CGO_ENABLED=0 |
+| GOLDEN-006 | `006_target_name_mismatch.json` | low | Target name mismatches cmd/ layout |
+| GOLDEN-007 | `007_unpinned_tools.json` | medium | Unpinned tool @latest in CI |
+| GOLDEN-012 | `012_ci_target_diverges.json` | high | **CI parity**: ci target diverges from pipeline |
+| GOLDEN-013 | `013_refactor_rename_no_alias.json` | medium | **Backward compat**: rename without alias (refactor mode) |
+
+#### False Positives (acceptable patterns, no defect expected)
+
+| ID | File | Decision Tested |
+|----|------|-----------------|
+| GOLDEN-008 | `008_good_makefile.json` | Well-formed Makefile — skill must not report defects |
+| GOLDEN-009 | `009_custom_help_format_fp.json` | Custom echo help is acceptable |
+| GOLDEN-010 | `010_gofmt_variant_fp.json` | `gofmt -w` is an acceptable variant |
+| GOLDEN-011 | `011_no_docker_targets_fp.json` | No Docker targets without Dockerfile is correct |
+
+## Coverage Summary
+
+| Metric | Count |
+|--------|-------|
+| Total golden fixtures | 13 (9 TP defects + 4 FP) |
+| Contract tests | 46 (across 6 test classes) |
+| SKILL.md lines | 252 (budget: ≤ 400) |
 
 ## Known Coverage Gaps
 
 | Area | Gap | Priority |
-|---|---|---|
+|------|-----|----------|
 | Makefile syntax | No test for tab-vs-space recipe indent | Low |
-| CI parity | No test verifying `ci` target mirrors actual pipeline | Medium |
 | Dependency check | No fixture for missing `tidy` target | Low |
-| Backward compat | No fixture for renamed target without alias | Medium |
-| Monorepo | SKILL.md now has monorepo section but no golden fixture yet | Low |
+| Monorepo | No golden fixture for monorepo pattern | Low |

@@ -1,0 +1,16 @@
+{
+  "id": "GOLDEN-013",
+  "title": "Refactor renames 'build' to 'build-api' without backward-compat alias",
+  "type": "defect",
+  "severity": "medium",
+  "mode": "refactor",
+  "makefile_snippet": "# After refactoring: 'build' renamed to 'build-api', no alias left behind\nbuild-api: ## Build API binary\n\t$(GO) build -o $(BIN_DIR)/api ./cmd/api",
+  "context": "Previous Makefile had a 'build' target used by CI scripts and developer muscle memory. After rename, no 'build' alias was provided for the transition period.",
+  "expected_feedback": "backward compatibility: rename must keep alias 'build' for at least one transition period",
+  "coverage_rules": [
+    "keep aliases",
+    "transition period",
+    "Backward compatibility"
+  ],
+  "reference": "SKILL.md"
+}

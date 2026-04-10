@@ -1,0 +1,14 @@
+{
+  "id": "GOLDEN-012",
+  "title": "ci target diverges from actual CI pipeline — missing fmt-check and cover-check",
+  "type": "defect",
+  "severity": "high",
+  "makefile_snippet": "ci:\n\t$(MAKE) lint test",
+  "context": "Actual CI pipeline runs: fmt-check lint test cover-check. The local ci target skips fmt-check and cover-check, so developers can push code that will fail CI.",
+  "expected_feedback": "ci target must mirror CI pipeline exactly; add fmt-check and cover-check to match actual pipeline",
+  "coverage_rules": [
+    "mirror CI exactly",
+    "diverges from the actual CI pipeline"
+  ],
+  "reference": "SKILL.md"
+}
