@@ -34,12 +34,13 @@ Maps each core rule/gate in SKILL.md to its golden fixture and contract test. Us
 | Automation commands | `test_automation_commands_present` | ✅ |
 | Tool interpretation rules | `test_tool_interpretation_rules` | ✅ |
 | Standards mapping | `test_standards_mapping_present` | ✅ |
-| SKILL.md line budget (≤ 600) | `test_skill_md_stays_within_line_budget` | ✅ |
+| SKILL.md line budget (≤ 500) | `test_skill_md_stays_within_line_budget` | ✅ |
 | Anti-examples inline stubs (AE-1, AE-3, AE-5) | `test_anti_examples_inline_stubs_exist` | ✅ |
 | Anti-examples reference (AE-2, AE-4, AE-6, AE-7) | `test_anti_examples_reference_has_extended_rules` | ✅ |
 | N/A judgment examples section | `test_na_judgment_examples_section_exists` | ✅ |
 | Finding volume cap (P0/P1 never dropped; P2/P3 soft cap) | `test_finding_volume_cap_documented` | ✅ |
 | Change Origin Classification (introduced/pre-existing/uncertain) | `test_change_origin_classification_documented` | ✅ |
+| Baseline Diff Mode (new/regressed/unchanged/resolved + "Baseline not found") | `test_baseline_diff_mode_documented` | ✅ |
 
 ## Golden Fixtures (`test_golden_reviews.py`)
 
@@ -70,17 +71,19 @@ Maps each core rule/gate in SKILL.md to its golden fixture and contract test. Us
 | GOLDEN-002 | Parameterized SQL (not injection) | injection | Rule 3: framework guarantees |
 | GOLDEN-004 | InsecureSkipVerify in test-only code | tls | Rule 4: environment-only risk |
 | GOLDEN-006 | math/rand for display shuffle (non-security) | randomness | Rule 2: not attacker-controlled |
+| GOLDEN-019 | SSRF suppressed by server-side allowlist | ssrf | Rule 2: not attacker-controlled |
+| GOLDEN-020 | ConstantTimeCompare already used correctly | crypto | Rule 3: framework guarantees |
 
 ## Coverage Summary
 
 | Metric | Count |
 |--------|-------|
-| Total golden fixtures | 18 |
+| Total golden fixtures | 20 |
 | True positives | 15 |
-| False positives | 3 |
+| False positives | 5 |
 | Categories covered | auth, secrets, injection, concurrency, resource_lifecycle, session, container, endpoint, ssrf, crypto |
-| Contract tests | 43 |
-| SKILL.md lines | 546 (budget: ≤ 600) |
+| Contract tests | 44 |
+| SKILL.md lines | 494 (budget: ≤ 500) |
 
 ## Gap Analysis
 
