@@ -1,6 +1,6 @@
 ---
 name: go-review-lead
-description: Orchestrate a comprehensive Go code review by triaging code changes, dispatching vertical review skills (security, concurrency, error, logic, performance, quality, test) as parallel agents, then consolidating results into a unified report. Use for full Go PR review or comprehensive code review. Replaces the monolithic go-code-reviewer with focused parallel analysis.
+description: Orchestrate a comprehensive Go code review by triaging code changes, dispatching vertical review skills (security, concurrency, error, logic, performance, quality, test, observability) as parallel agents, then consolidating results into a unified report. Use for full Go PR review or comprehensive code review. Replaces the monolithic go-code-reviewer with focused parallel analysis.
 allowed-tools: Read, Grep, Glob, Bash(go build*), Bash(go vet*), Bash(git diff*), Bash(git log*), Agent
 ---
 
@@ -142,6 +142,7 @@ grep -l '_test\.go' <file_list>
 | go-security-reviewer | `"database/sql"`, `"os/exec"`, `http\.Handle`, `Sprintf.*SELECT` |
 | go-error-reviewer | `\.Close\(\)`, `tx\.`, `resp\.Body`, `sql\.Rows`, `panic\(` |
 | go-test-reviewer | `_test\.go` in changed file list |
+| go-observability-reviewer | `"go.uber.org/zap"`, `"log/slog"`, `"go.opentelemetry.io/`, `prometheus\.New` |
 
 **Override rule**: If validation grep hits but Phases 1-4 did not trigger the skill, add it with rationale: `"Dispatch-validation grep override: {pattern} found in {file}"`.
 
@@ -163,6 +164,7 @@ Scan `import` blocks across ALL changed files (not just diff lines):
 ```bash
 grep -n '"database/sql"\|"os/exec"\|"net/http"\|"sync"\|"crypto/\|"math/rand"\|"text/template"\|"html/template"' <changed_files>
 grep -n 'errgroup\|singleflight\|semaphore' <changed_files>
+grep -n '"go.uber.org/zap"\|"log/slog"\|"go.opentelemetry.io/\|"github.com/prometheus/client_golang/\|"github.com/rs/zerolog"' <changed_files>
 ```
 
 | Import present | → Dispatch |
@@ -175,6 +177,8 @@ grep -n 'errgroup\|singleflight\|semaphore' <changed_files>
 | `"sync"`, `"sync/atomic"` | concurrency |
 | `"golang.org/x/sync/..."`, `errgroup`, `singleflight` | concurrency |
 | `"html/template"`, `"text/template"` with user input context | security |
+| `"go.uber.org/zap"`, `"log/slog"`, `"go.opentelemetry.io/..."` | observability |
+| `"github.com/prometheus/client_golang/"`, `"github.com/rs/zerolog"` | observability |
 
 ---
 
@@ -199,6 +203,9 @@ git diff HEAD~1 | grep '^+[^+]'
 | hardcoded string matching `[A-Za-z0-9+/]{20,}=` or `sk-`, `pk-`, `secret` | security |
 | `filepath\.Join.*r\.`, `os\.Open.*r\.`, user input flowing into file paths | security |
 | `tls\.Config{`, `InsecureSkipVerify` | security |
+| `tracer\.Start`, `span\.End`, `span\.RecordError`, `span\.SetStatus` | observability |
+| `prometheus\.NewCounter`, `prometheus\.NewGauge`, `prometheus\.NewHistogram`, `prometheus\.NewSummary` | observability |
+| `WithLabelValues(`, `zap\.L()`, `slog\.Info(`, `slog\.Error(` | observability |
 
 ---
 
@@ -213,6 +220,7 @@ Check the paths of changed files — certain packages indicate domain risk regar
 | `worker/`, `pool/`, `queue/`, `scheduler/`, `job/`, `pipeline/` | concurrency |
 | `repo/`, `store/`, `dao/`, `repository/`, `db/` | error + performance |
 | `cache/`, `redis/`, `memcache/` | performance |
+| `observability/`, `telemetry/`, `instrumentation/`, `metrics/`, `tracing/`, `logging/` | observability |
 
 ---
 
@@ -327,7 +335,7 @@ Then merge their reports:
    - `introduced`: finding on code added/modified in this PR
    - `pre-existing`: finding on unchanged code (discovered via impact radius)
 
-5. **Assign unified IDs**: Renumber findings sequentially (REV-001, REV-002...) in severity-descending order, preserving the original skill prefix (SEC/CONC/ERR/LOGIC/PERF/QUAL/TEST) for traceability. REV-001 is always the highest-severity finding.
+5. **Assign unified IDs**: Renumber findings sequentially (REV-001, REV-002...) in severity-descending order, preserving the original skill prefix (SEC/CONC/ERR/LOGIC/PERF/QUAL/TEST/OBS) for traceability. REV-001 is always the highest-severity finding.
 
 ## Output Format
 
@@ -383,6 +391,7 @@ Execution Status
   - go-performance-reviewer: Grep pre-scan X/Y hit, Z confirmed
   - go-quality-reviewer: Grep pre-scan X/Y hit, Z confirmed | golangci-lint PASS|FAIL|Not available
   - go-test-reviewer: Grep pre-scan X/Y hit, Z confirmed
+  - go-observability-reviewer: Grep pre-scan X/12 hit, Z confirmed (2 semantic-only)
   - go-logic-reviewer: Semantic-only (no grep patterns)
   - [only list dispatched agents]
 - Excluded (generated): list or None
