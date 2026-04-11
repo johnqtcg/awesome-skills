@@ -1,0 +1,16 @@
+{
+  "id": "BENCH-002",
+  "title": "Setup inside loop — expensive one-time setup measured on every iteration",
+  "type": "defect",
+  "severity": "critical",
+  "benchmark_snippet": "var sinkResult Result\n\nfunc BenchmarkQuery(b *testing.B) {\n    for i := 0; i < b.N; i++ {\n        db := connectDB()\n        sinkResult = db.Query(\"SELECT * FROM users\")\n    }\n}",
+  "violated_rule": "Timer discipline",
+  "expected_feedback": "move connectDB() before b.ResetTimer(); only the hot path (db.Query) should run inside the loop",
+  "coverage_rules": [
+    "Timer discipline",
+    "b.ResetTimer()",
+    "setup runs inside the loop",
+    "one-time setup"
+  ],
+  "reference": "SKILL.md"
+}

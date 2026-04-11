@@ -1,0 +1,15 @@
+{
+  "id": "BENCH-008",
+  "title": "Run command missing -benchmem flag — alloc information will be absent",
+  "type": "defect",
+  "severity": "critical",
+  "benchmark_snippet": "# User provides this run command:\n$ go test -bench=BenchmarkEncode -count=10 ./...\n# Missing -benchmem flag",
+  "violated_rule": "Always -benchmem",
+  "expected_feedback": "add -benchmem to the run command: go test -bench=BenchmarkEncode -benchmem -count=10 ./...; without it allocs/op and B/op columns are missing",
+  "coverage_rules": [
+    "Always `-benchmem`",
+    "-benchmem",
+    "allocation counts matter"
+  ],
+  "reference": "SKILL.md"
+}

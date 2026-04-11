@@ -1,0 +1,16 @@
+{
+  "id": "BENCH-005",
+  "title": "Good sub-benchmark with input size sweep — well-formed O(n) benchmark",
+  "type": "good_practice",
+  "severity": "none",
+  "benchmark_snippet": "var sinkBytes []byte\n\nfunc BenchmarkEncode(b *testing.B) {\n    for _, size := range []int{64, 1024, 65536} {\n        b.Run(fmt.Sprintf(\"%dB\", size), func(b *testing.B) {\n            data := makeData(size)\n            b.SetBytes(int64(size))\n            b.ResetTimer()\n            for i := 0; i < b.N; i++ {\n                sinkBytes = encode(data)\n            }\n        })\n    }\n}",
+  "expected_feedback": "no violations; correctly uses sub-benchmarks across 3 sizes, sinks result, uses b.SetBytes for MB/s, calls b.ResetTimer after setup",
+  "coverage_rules": [
+    "sub-benchmark",
+    "b.Run",
+    "b.SetBytes",
+    "b.ResetTimer()",
+    "var sink"
+  ],
+  "reference": "references/benchmark-patterns.md"
+}

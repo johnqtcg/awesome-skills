@@ -1,0 +1,16 @@
+{
+  "id": "BENCH-004",
+  "title": "Comparing implementations with -count=1 — single run is statistically meaningless",
+  "type": "defect",
+  "severity": "standard",
+  "benchmark_snippet": "# Running comparison with default count (1 run each)\n$ go test -bench=BenchmarkConcat -benchmem ./...\nBenchmarkConcat/plus-operator-8     3000000    450 ns/op   1024 B/op   10 allocs/op\nBenchmarkConcat/strings-builder-8   5000000    280 ns/op    512 B/op    2 allocs/op\n# Conclusion: strings.Builder is 38% faster — but this is based on a single run",
+  "violated_rule": "-count=10 for comparisons",
+  "expected_feedback": "use -count=10 with benchstat for statistical validity; a single run can have ±30% variance; p-value cannot be computed from 1 sample",
+  "coverage_rules": [
+    "-count=10",
+    "statistically meaningless",
+    "benchstat",
+    "variance can easily be"
+  ],
+  "reference": "SKILL.md"
+}

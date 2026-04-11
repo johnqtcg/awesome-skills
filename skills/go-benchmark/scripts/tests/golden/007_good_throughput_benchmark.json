@@ -1,0 +1,16 @@
+{
+  "id": "BENCH-007",
+  "title": "Good throughput benchmark with b.SetBytes — reports MB/s",
+  "type": "good_practice",
+  "severity": "none",
+  "benchmark_snippet": "var sinkBytes []byte\nvar sinkErr   error\n\nfunc BenchmarkCompress(b *testing.B) {\n    data := makePayload(64 * 1024)\n    b.SetBytes(int64(len(data)))\n    b.ResetTimer()\n    for i := 0; i < b.N; i++ {\n        sinkBytes, sinkErr = compress(data)\n    }\n}",
+  "expected_feedback": "no violations; sinks both return values (bytes + error), uses b.SetBytes for MB/s output, correct timer placement",
+  "coverage_rules": [
+    "b.SetBytes",
+    "MB/s",
+    "throughput",
+    "var sinkBytes",
+    "var sinkErr"
+  ],
+  "reference": "references/benchmark-patterns.md"
+}

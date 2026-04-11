@@ -1,0 +1,16 @@
+{
+  "id": "BENCH-001",
+  "title": "Missing sink — _ = discards result, compiler may eliminate the entire call",
+  "type": "defect",
+  "severity": "critical",
+  "benchmark_snippet": "func BenchmarkEncode(b *testing.B) {\n    input := makeInput(1024)\n    b.ResetTimer()\n    for i := 0; i < b.N; i++ {\n        _ = encode(input)\n    }\n}",
+  "violated_rule": "Sink every result",
+  "expected_feedback": "assign result to a package-level var sink; replace _ = with sinkString = (or appropriate type)",
+  "coverage_rules": [
+    "Sink every result",
+    "var sink",
+    "Dead Code",
+    "measures nothing"
+  ],
+  "reference": "SKILL.md"
+}

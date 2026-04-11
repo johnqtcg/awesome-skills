@@ -1,0 +1,15 @@
+{
+  "id": "BENCH-006",
+  "title": "Good parallel benchmark for concurrent-safe cache — well-formed b.RunParallel",
+  "type": "good_practice",
+  "severity": "none",
+  "benchmark_snippet": "var sinkAny any\n\nfunc BenchmarkCacheGet(b *testing.B) {\n    cache := NewCache(1000)\n    populateCache(cache)\n    b.ResetTimer()\n    b.RunParallel(func(pb *testing.PB) {\n        for pb.Next() {\n            sinkAny, _ = cache.Get(\"key-42\")\n        }\n    })\n}",
+  "expected_feedback": "no violations; correctly uses RunParallel, sinks result, ResetTimer before parallel block",
+  "coverage_rules": [
+    "b.RunParallel",
+    "pb.Next()",
+    "parallel benchmark",
+    "var sink"
+  ],
+  "reference": "references/benchmark-patterns.md"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "BENCH-003",
+  "title": "b.ResetTimer() inside loop — timer reset on every iteration destroys measurement",
+  "type": "defect",
+  "severity": "critical",
+  "benchmark_snippet": "var sinkBytes []byte\n\nfunc BenchmarkCompress(b *testing.B) {\n    data := makeData(1024)\n    for i := 0; i < b.N; i++ {\n        b.ResetTimer()  // WRONG: inside loop\n        sinkBytes = compress(data)\n    }\n}",
+  "violated_rule": "Timer discipline",
+  "expected_feedback": "b.ResetTimer() must be called once before the loop, not inside it; move it between setup and the for loop",
+  "coverage_rules": [
+    "b.ResetTimer()",
+    "placed correctly",
+    "not inside loop",
+    "Timer discipline"
+  ],
+  "reference": "SKILL.md"
+}
