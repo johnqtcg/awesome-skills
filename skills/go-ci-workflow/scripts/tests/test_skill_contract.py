@@ -23,35 +23,39 @@ def frontmatter(text: str) -> str:
     return match.group(1)
 
 
-class GoCIWorkflowSkillContractTests(unittest.TestCase):
+def _count_heading(text: str, title: str) -> int:
+    pattern = r"^#{2,3}\s+" + re.escape(title) + r"\s*$"
+    return len(re.findall(pattern, text, re.MULTILINE))
+
+
+# ------------------------------------------------------------------
+# TestFrontmatter
+# ------------------------------------------------------------------
+
+class TestFrontmatter(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.skill_text = SKILL_MD.read_text()
-        cls.wqg_text = WORKFLOW_GUIDE.read_text()
-        cls.pr_text = PR_CHECKLIST.read_text()
-        cls.rs_text = REPO_SHAPES.read_text()
-        cls.gap_text = ADVANCED.read_text()
-        cls.fb_text = FALLBACK.read_text()
-        cls.ge_text = GOLDEN_EXAMPLES.read_text()
-        cls.ge_monorepo_text = GOLDEN_MONOREPO.read_text()
-        cls.ge_service_containers_text = GOLDEN_SERVICE_CONTAINERS.read_text()
-
-    @staticmethod
-    def count_heading(text: str, title: str) -> int:
-        pattern = r"^#{2,3}\s+" + re.escape(title) + r"\s*$"
-        return len(re.findall(pattern, text, re.MULTILINE))
-
-    # ------------------------------------------------------------------
-    # Frontmatter
-    # ------------------------------------------------------------------
 
     def test_frontmatter_name_and_description(self) -> None:
         fm = frontmatter(self.skill_text)
         self.assertIn("name: go-ci-workflow", fm)
         self.assertIn("GitHub Actions", fm)
 
-    # SKILL.md structure
-    # ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# TestSkillMdStructure
+# ------------------------------------------------------------------
+
+class TestSkillMdStructure(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.skill_text = SKILL_MD.read_text()
+
+    def test_skill_md_under_line_budget(self) -> None:
+        """SKILL.md must stay within the 350-line maintenance budget."""
+        lines = len(self.skill_text.splitlines())
+        self.assertLessEqual(lines, 350, f"SKILL.md too long: {lines} lines (budget: 350)")
 
     def test_priority_and_fallback_exist(self) -> None:
         self.assertIn("## Execution Priority", self.skill_text)
@@ -131,10 +135,12 @@ class GoCIWorkflowSkillContractTests(unittest.TestCase):
     def test_skill_cross_references_go_makefile_writer(self) -> None:
         self.assertIn("$go-makefile-writer", self.skill_text)
 
-    # ------------------------------------------------------------------
-    # Reference files exist
-    # ------------------------------------------------------------------
 
+# ------------------------------------------------------------------
+# TestReferenceFiles
+# ------------------------------------------------------------------
+
+class TestReferenceFiles(unittest.TestCase):
     def test_all_references_and_scripts_exist(self) -> None:
         for path in (
             WORKFLOW_GUIDE, PR_CHECKLIST, REPO_SHAPES,
@@ -144,9 +150,15 @@ class GoCIWorkflowSkillContractTests(unittest.TestCase):
         ):
             self.assertTrue(path.exists(), f"missing {path.name}")
 
-    # ------------------------------------------------------------------
-    # workflow-quality-guide.md (15 sections)
-    # ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# TestWorkflowQualityGuide
+# ------------------------------------------------------------------
+
+class TestWorkflowQualityGuide(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.wqg_text = WORKFLOW_GUIDE.read_text()
 
     def test_wqg_has_toc(self) -> None:
         self.assertIn("## Table of Contents", self.wqg_text)
@@ -197,9 +209,15 @@ class GoCIWorkflowSkillContractTests(unittest.TestCase):
     def test_wqg_mentions_monorepo(self) -> None:
         self.assertIn("monorepo", self.wqg_text.lower())
 
-    # ------------------------------------------------------------------
-    # github-actions-advanced-patterns.md (9 sections)
-    # ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# TestAdvancedPatterns
+# ------------------------------------------------------------------
+
+class TestAdvancedPatterns(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.gap_text = ADVANCED.read_text()
 
     def test_gap_has_all_9_sections(self) -> None:
         for section in (
@@ -252,9 +270,17 @@ class GoCIWorkflowSkillContractTests(unittest.TestCase):
         self.assertIn("20 min", self.gap_text)
         self.assertIn("30 min", self.gap_text)
 
-    # ------------------------------------------------------------------
-    # golden examples (2 inline + 2 specialized reference files)
-    # ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# TestGoldenExamples
+# ------------------------------------------------------------------
+
+class TestGoldenExamples(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.ge_text = GOLDEN_EXAMPLES.read_text()
+        cls.ge_monorepo_text = GOLDEN_MONOREPO.read_text()
+        cls.ge_service_containers_text = GOLDEN_SERVICE_CONTAINERS.read_text()
 
     def test_ge_has_toc(self) -> None:
         self.assertIn("## Table of Contents", self.ge_text)
@@ -275,11 +301,11 @@ class GoCIWorkflowSkillContractTests(unittest.TestCase):
 
     def test_ge_each_has_complete_workflow_and_output_summary(self) -> None:
         workflow_count = sum(
-            self.count_heading(text, "Complete Workflow")
+            _count_heading(text, "Complete Workflow")
             for text in (self.ge_text, self.ge_monorepo_text, self.ge_service_containers_text)
         )
         summary_count = sum(
-            self.count_heading(text, "Output Summary")
+            _count_heading(text, "Output Summary")
             for text in (self.ge_text, self.ge_monorepo_text, self.ge_service_containers_text)
         )
         self.assertEqual(workflow_count, 4, f"expected 4 Complete Workflow sections, got {workflow_count}")
@@ -294,9 +320,15 @@ class GoCIWorkflowSkillContractTests(unittest.TestCase):
         self.assertIn("mysql:", self.ge_service_containers_text)
         self.assertIn("redis:", self.ge_service_containers_text)
 
-    # ------------------------------------------------------------------
-    # repository-shapes.md (6 shapes)
-    # ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# TestRepositoryShapes
+# ------------------------------------------------------------------
+
+class TestRepositoryShapes(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.rs_text = REPO_SHAPES.read_text()
 
     def test_rs_has_all_6_shapes(self) -> None:
         for heading in (
@@ -325,9 +357,15 @@ class GoCIWorkflowSkillContractTests(unittest.TestCase):
     def test_rs_no_makefile_has_fallback_marking(self) -> None:
         self.assertIn("# INLINE FALLBACK", self.rs_text)
 
-    # ------------------------------------------------------------------
-    # pr-checklist.md
-    # ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# TestChecklist
+# ------------------------------------------------------------------
+
+class TestChecklist(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.pr_text = PR_CHECKLIST.read_text()
 
     def test_pr_checklist_has_10_sections(self) -> None:
         for n in range(1, 11):
@@ -338,29 +376,39 @@ class GoCIWorkflowSkillContractTests(unittest.TestCase):
         self.assertIn("permissions", content)
         self.assertIn("fallback", content)
 
-    # ------------------------------------------------------------------
-    # fallback-and-scaffolding.md
-    # ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# TestFallback
+# ------------------------------------------------------------------
+
+class TestFallback(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.fb_text = FALLBACK.read_text()
 
     def test_fb_has_3_fallback_levels(self) -> None:
         for level in ("Level A: Full parity", "Level B: Partial parity", "Level C: Scaffold only"):
             self.assertIn(level, self.fb_text, f"missing fallback level: {level}")
 
-    # ------------------------------------------------------------------
-    # discover_ci_needs.sh
-    # ------------------------------------------------------------------
+
+# ------------------------------------------------------------------
+# TestDiscoveryScript
+# ------------------------------------------------------------------
+
+class TestDiscoveryScript(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.content = DISCOVER_SCRIPT.read_text()
 
     def test_discover_script_has_8_categories(self) -> None:
-        content = DISCOVER_SCRIPT.read_text()
         for category in ("makefile-target", "repo-task", "container", "test-type",
                          "config", "shape", "workflow", "tool"):
-            self.assertIn(category, content, f"missing category: {category}")
+            self.assertIn(category, self.content, f"missing category: {category}")
 
     def test_discover_script_handles_shapes(self) -> None:
-        content = DISCOVER_SCRIPT.read_text()
-        self.assertIn("find . -name go.mod", content)
-        self.assertIn("single-root-module", content)
-        self.assertIn("multi-module", content)
+        self.assertIn("find . -name go.mod", self.content)
+        self.assertIn("single-root-module", self.content)
+        self.assertIn("multi-module", self.content)
 
 
 if __name__ == "__main__":

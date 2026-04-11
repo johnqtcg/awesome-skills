@@ -86,6 +86,11 @@ class GoldenMultiModuleTests(unittest.TestCase):
         for rule in data["skill_rules_that_must_fire"]:
             self.assertIn(rule, text, f"rule missing from skill text: {rule}")
 
+    def test_003_expects_multi_module_shape(self) -> None:
+        data = load_fixture("003_multi_module_repo.json")
+        self.assertEqual(data["expected_shape"], "multi-module repository")
+        self.assertIn("Repository Shape Gate", data["expected_gates"])
+
 
 class GoldenMonorepoTests(unittest.TestCase):
     def test_004_rules_coverage(self) -> None:
@@ -105,6 +110,11 @@ class GoldenDockerHeavyTests(unittest.TestCase):
         text = combined_text()
         for rule in data["skill_rules_that_must_fire"]:
             self.assertIn(rule, text, f"rule missing from skill text: {rule}")
+
+    def test_005_expects_docker_heavy_shape_and_separate_jobs(self) -> None:
+        data = load_fixture("005_docker_heavy_repo.json")
+        self.assertEqual(data["expected_shape"], "Docker-heavy repository")
+        self.assertIn("separate jobs", data["skill_rules_that_must_fire"])
 
 
 class GoldenNoMakefileTests(unittest.TestCase):
@@ -138,6 +148,40 @@ class GoldenServiceContainerTests(unittest.TestCase):
         text = combined_text()
         for rule in data["skill_rules_that_must_fire"]:
             self.assertIn(rule, text, f"rule missing from skill text: {rule}")
+
+    def test_008_expects_integration_job_and_service_containers(self) -> None:
+        data = load_fixture("008_service_containers_integration.json")
+        self.assertIn("api-integration", data["expected_jobs"])
+        self.assertIn("service container", data["skill_rules_that_must_fire"])
+
+
+class GoldenE2EJobTests(unittest.TestCase):
+    def test_009_rules_coverage(self) -> None:
+        data = load_fixture("009_e2e_job.json")
+        text = combined_text()
+        for rule in data["skill_rules_that_must_fire"]:
+            self.assertIn(rule, text, f"rule missing from skill text: {rule}")
+
+    def test_009_e2e_triggers_on_push_and_schedule_not_pr(self) -> None:
+        data = load_fixture("009_e2e_job.json")
+        self.assertIn("ci", data["expected_jobs"])
+        self.assertIn("e2e", data["expected_jobs"])
+        self.assertIn("schedule", data["skill_rules_that_must_fire"])
+        self.assertIn("30 min", data["skill_rules_that_must_fire"])
+
+
+class GoldenStaticAnalysisTests(unittest.TestCase):
+    def test_010_rules_coverage(self) -> None:
+        data = load_fixture("010_static_analysis_job.json")
+        text = combined_text()
+        for rule in data["skill_rules_that_must_fire"]:
+            self.assertIn(rule, text, f"rule missing from skill text: {rule}")
+
+    def test_010_expects_vulnerability_scanning_job(self) -> None:
+        data = load_fixture("010_static_analysis_job.json")
+        self.assertIn("govulncheck", data["expected_jobs"])
+        self.assertIn("Vulnerability Scanning", data["skill_rules_that_must_fire"])
+        self.assertIn("Static Analysis Extras", data["skill_rules_that_must_fire"])
 
 
 if __name__ == "__main__":

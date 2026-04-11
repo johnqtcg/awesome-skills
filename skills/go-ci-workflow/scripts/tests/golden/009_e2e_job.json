@@ -1,0 +1,31 @@
+{
+  "id": "009_e2e_job",
+  "description": "Go service with a full E2E test suite — skill should create a separate e2e job triggered only on push/schedule (not on PRs), with 30-minute timeout to keep the core gate fast",
+  "scenario_type": "e2e_test",
+  "context": {
+    "go_mod_count": 1,
+    "has_makefile": true,
+    "makefile_targets": ["ci", "ci-e2e"],
+    "has_dockerfile": true,
+    "has_golangci_lint_config": true,
+    "test_types": ["unit", "e2e"],
+    "e2e_target": "ci-e2e",
+    "existing_workflows": []
+  },
+  "expected_gates": [
+    "Repository Shape Gate",
+    "Local Parity Gate",
+    "Security and Permissions Gate",
+    "Execution Integrity Gate"
+  ],
+  "expected_jobs": ["ci", "e2e"],
+  "expected_shape": "single-module application",
+  "skill_rules_that_must_fire": [
+    "E2E Test Job",
+    "schedule",
+    "push",
+    "30 min",
+    "permissions",
+    "concurrency"
+  ]
+}
