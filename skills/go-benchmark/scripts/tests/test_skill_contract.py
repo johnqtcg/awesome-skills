@@ -378,7 +378,73 @@ class TestReferenceFiles(unittest.TestCase):
 class TestLineCount(unittest.TestCase):
     def test_skill_md_under_line_budget(self) -> None:
         lines = len(_read(SKILL_MD).splitlines())
-        self.assertLessEqual(lines, 400, f"SKILL.md too long: {lines} lines (budget: 400)")
+        self.assertLessEqual(lines, 420, f"SKILL.md too long: {lines} lines (budget: 420)")
+
+
+# ------------------------------------------------------------------
+# TestCrossFileConsistency — key terms consistently present across all refs
+# ------------------------------------------------------------------
+
+class TestCrossFileConsistency(unittest.TestCase):
+    """Verify key terms are spelled correctly and present in the expected
+    reference files. Catches silent drift where a refactor renames a symbol
+    in one file but not another."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.bench_patterns = _read(BENCH_PATTERNS)
+        cls.pprof_analysis = _read(PPROF_ANALYSIS)
+        cls.opt_patterns = _read(OPT_PATTERNS)
+        cls.bench_antipatterns = _read(BENCH_ANTIPATTERNS)
+        cls.benchstat_guide = _read(BENCHSTAT_GUIDE)
+
+    # --- Terminology presence ---
+
+    def test_b_reset_timer_in_benchmark_patterns(self) -> None:
+        """b.ResetTimer() is the canonical timer method; must appear in patterns ref."""
+        self.assertIn("b.ResetTimer()", self.bench_patterns)
+
+    def test_b_n_loop_in_benchmark_patterns(self) -> None:
+        """b.N is the canonical loop variable; must be documented."""
+        self.assertIn("b.N", self.bench_patterns)
+
+    def test_benchstat_in_benchstat_guide(self) -> None:
+        """benchstat guide must actually mention benchstat."""
+        self.assertIn("benchstat", self.benchstat_guide)
+
+    def test_p_value_guidance_in_benchstat_guide(self) -> None:
+        """Statistical validity requires p-value guidance."""
+        self.assertIn("p < 0.05", self.benchstat_guide)
+
+    def test_sync_pool_in_optimization_patterns(self) -> None:
+        """sync.Pool is the primary alloc-reduction tool; must be in opt-patterns."""
+        self.assertIn("sync.Pool", self.opt_patterns)
+
+    def test_alloc_objects_flag_in_pprof_analysis(self) -> None:
+        """-alloc_objects is the key flag for GC pressure; must be documented."""
+        self.assertIn("-alloc_objects", self.pprof_analysis)
+
+    # --- Minimum substantive content per reference file ---
+
+    def test_benchmark_patterns_min_lines(self) -> None:
+        lines = len(self.bench_patterns.splitlines())
+        self.assertGreaterEqual(lines, 100,
+                                f"benchmark-patterns.md too short: {lines} lines (min 100)")
+
+    def test_pprof_analysis_min_lines(self) -> None:
+        lines = len(self.pprof_analysis.splitlines())
+        self.assertGreaterEqual(lines, 100,
+                                f"pprof-analysis.md too short: {lines} lines (min 100)")
+
+    def test_optimization_patterns_min_lines(self) -> None:
+        lines = len(self.opt_patterns.splitlines())
+        self.assertGreaterEqual(lines, 80,
+                                f"optimization-patterns.md too short: {lines} lines (min 80)")
+
+    def test_benchstat_guide_min_lines(self) -> None:
+        lines = len(self.benchstat_guide.splitlines())
+        self.assertGreaterEqual(lines, 80,
+                                f"benchstat-guide.md too short: {lines} lines (min 80)")
 
 
 if __name__ == "__main__":

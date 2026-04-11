@@ -1,0 +1,15 @@
+{
+  "id": "BENCH-009",
+  "title": "Degraded output — user has neither code nor benchmark data; skill must ask, not fabricate",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "benchmark_snippet": "# User message: 'My service is slow, can you tell me where the bottleneck is?'\n# No code, no benchmark output, no pprof profile provided.",
+  "expected_feedback": "skill must explain the three-phase workflow and ask what the user has; must NOT invent ns/op numbers or fabricate a pprof analysis",
+  "coverage_rules": [
+    "Neither code nor data",
+    "Explain the workflow",
+    "ask what they have",
+    "Never invent benchmark numbers"
+  ],
+  "reference": "SKILL.md"
+}

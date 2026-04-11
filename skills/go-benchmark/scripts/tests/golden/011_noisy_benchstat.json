@@ -1,0 +1,16 @@
+{
+  "id": "BENCH-011",
+  "title": "Noisy benchstat output (± > 5%) — skill must recommend -benchtime=2s or -count=20",
+  "type": "defect",
+  "severity": "standard",
+  "benchmark_snippet": "name           old time/op    new time/op    delta\nEncode/1KB     840ns ± 12%    780ns ± 9%    -7.1%  (p=0.082 n=5+5)\n\n# CV exceeds 5%; p-value 0.082 > 0.05 — not statistically significant",
+  "violated_rule": "-count=10 for comparisons",
+  "expected_feedback": "benchmark results are too noisy to trust (± > 5%); recommend -benchtime=2s or -count=20; p=0.082 means the result is not statistically significant",
+  "coverage_rules": [
+    "-benchtime=2s",
+    "-count=20",
+    "> 5%",
+    "the benchmark is noisy"
+  ],
+  "reference": "SKILL.md"
+}

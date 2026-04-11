@@ -1,0 +1,15 @@
+{
+  "id": "BENCH-010",
+  "title": "Profile-guided workflow — pprof shows mallocgc hotspot, skill writes targeted benchmark",
+  "type": "workflow",
+  "severity": "none",
+  "benchmark_snippet": "# User provides CPU pprof output showing:\n# runtime.mallocgc  45%  45%\n# encodeToken        30%  75%\n# User asks: 'What benchmark should I write?'",
+  "expected_feedback": "confirm hotspot from pprof (mallocgc in encodeToken), write BenchmarkEncodeToken with -memprofile flag, note data_basis=pprof profile",
+  "coverage_rules": [
+    "Run pprof first",
+    "identify top-3 hotspots",
+    "-cpuprofile",
+    "runtime.mallocgc"
+  ],
+  "reference": "references/pprof-analysis.md"
+}
