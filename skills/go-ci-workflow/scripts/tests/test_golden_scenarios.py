@@ -184,5 +184,33 @@ class GoldenStaticAnalysisTests(unittest.TestCase):
         self.assertIn("Static Analysis Extras", data["skill_rules_that_must_fire"])
 
 
+class GoldenReusableWorkflowTests(unittest.TestCase):
+    def test_011_rules_coverage(self) -> None:
+        data = load_fixture("011_reusable_workflow.json")
+        text = combined_text()
+        for rule in data["skill_rules_that_must_fire"]:
+            self.assertIn(rule, text, f"rule missing from skill text: {rule}")
+
+    def test_011_expects_reusable_workflow_shape_and_workflow_call(self) -> None:
+        data = load_fixture("011_reusable_workflow.json")
+        self.assertEqual(data["expected_shape"], "reusable-workflow candidate")
+        self.assertIn("workflow_call", data["skill_rules_that_must_fire"])
+        self.assertIn("Composite Action", data["skill_rules_that_must_fire"])
+
+
+class GoldenSelfHostedRunnerTests(unittest.TestCase):
+    def test_012_rules_coverage(self) -> None:
+        data = load_fixture("012_self_hosted_runner.json")
+        text = combined_text()
+        for rule in data["skill_rules_that_must_fire"]:
+            self.assertIn(rule, text, f"rule missing from skill text: {rule}")
+
+    def test_012_expects_security_gate_and_assumption_notes(self) -> None:
+        data = load_fixture("012_self_hosted_runner.json")
+        self.assertIn("Security and Permissions Gate", data["expected_gates"])
+        self.assertIn("self-hosted", data["skill_rules_that_must_fire"])
+        self.assertIn("Do not silently reuse GitHub-hosted assumptions", data["skill_rules_that_must_fire"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,7 @@ Use these as shape references for final output. Each example includes full conte
 
 1. [Standard Service Repository (Full Parity)](#1-standard-service-repository-full-parity)
 2. [No Makefile Fallback (Scaffold)](#2-no-makefile-fallback-scaffold)
+3. [Fork PR Security (Guarded Secrets)](#3-fork-pr-security-guarded-secrets)
 
 Additional examples (load only when needed):
 - `golden-example-monorepo.md` — monorepo with multiple modules and matrix jobs
@@ -182,3 +183,67 @@ jobs:
 | Local parity | partial |
 | Missing targets | `make ci`, `make lint`, `make test` |
 | Recommended follow-up | add root `Makefile` with `ci` target; move golangci-lint version into `install-tools` target |
+
+## 3) Fork PR Security (Guarded Secrets)
+
+- **Repository shape**: single-module service
+- **Security challenge**: external contributors submit PRs from forks; `pull_request` events CANNOT access repository secrets
+- **Jobs**: `ci` (always runs) — secret-dependent upload step guarded by `if:` condition
+- **Trigger**: `pull_request` only
+- **Permissions**: `contents: read` (minimum required; no escalation)
+- **Local parity**: full for core gate; partial for fork contributors (secret steps skipped automatically)
+- **Assumptions**: `make ci` runs full gate without secrets; `CODECOV_TOKEN` needed only for coverage upload
+
+### Complete Workflow
+
+```yaml
+name: CI — Fork PR Safe
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Core Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run CI
+        run: make ci COVER_MIN=80
+
+      # Only runs on non-fork PRs — forks cannot access repository secrets
+      - name: Upload Coverage
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        env:
+          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+        run: make coverage-upload
+```
+
+### Output Summary
+
+| Field | Value |
+|-------|-------|
+| Repository shape | single-module service |
+| Jobs | `ci` |
+| `ci` execution path | `make target` (full parity) |
+| Trigger | `pull_request` |
+| Permissions | `contents: read` |
+| Fork PR guard | `if: github.event.pull_request.head.repo.full_name == github.repository` |
+| Local parity | full (core gate); partial (secret steps skipped for fork contributors) |
+| Missing targets | none |
+| Recommended follow-up | never use `pull_request_target` for CI; see `advanced-patterns.md` § 2) Fork PR Safety |

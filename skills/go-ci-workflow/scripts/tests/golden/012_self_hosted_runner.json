@@ -1,0 +1,29 @@
+{
+  "id": "012_self_hosted_runner",
+  "description": "Repository deployed on self-hosted runners — skill should use explicit runner labels, note trust-boundary differences from GitHub-hosted runners, apply conservative permissions posture, and document assumptions that cannot be verified without runner access.",
+  "scenario_type": "self_hosted_runner",
+  "context": {
+    "go_mod_count": 1,
+    "has_makefile": true,
+    "makefile_targets": ["ci"],
+    "has_dockerfile": false,
+    "runner_type": "self-hosted",
+    "runner_labels": ["self-hosted", "linux", "x64"],
+    "air_gapped": false,
+    "existing_workflows": []
+  },
+  "expected_gates": [
+    "Repository Shape Gate",
+    "Local Parity Gate",
+    "Security and Permissions Gate",
+    "Execution Integrity Gate"
+  ],
+  "expected_shape": "single-module application",
+  "expected_jobs": ["ci"],
+  "skill_rules_that_must_fire": [
+    "Self-Hosted Runners",
+    "self-hosted",
+    "permissions",
+    "Do not silently reuse GitHub-hosted assumptions"
+  ]
+}

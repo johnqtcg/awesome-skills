@@ -1,0 +1,29 @@
+{
+  "id": "011_reusable_workflow",
+  "description": "Repository identified as reusable-workflow candidate — shared CI steps used by multiple consumer repos. Skill should extract common Go setup + lint + test steps into a reusable workflow callable via workflow_call, and document the Composite Action vs Reusable Workflow decision.",
+  "scenario_type": "reusable_workflow",
+  "context": {
+    "go_mod_count": 1,
+    "has_makefile": true,
+    "makefile_targets": ["ci"],
+    "has_dockerfile": false,
+    "consumer_repo_count": 4,
+    "shared_workflow_steps": ["go-setup", "lint", "test"],
+    "existing_workflows": ["ci.yml"]
+  },
+  "expected_gates": [
+    "Repository Shape Gate",
+    "Local Parity Gate",
+    "Security and Permissions Gate",
+    "Execution Integrity Gate"
+  ],
+  "expected_shape": "reusable-workflow candidate",
+  "expected_jobs": ["ci"],
+  "skill_rules_that_must_fire": [
+    "reusable-workflow candidate",
+    "workflow_call",
+    "Reusable Workflows",
+    "Composite Action",
+    "Step-level sharing"
+  ]
+}

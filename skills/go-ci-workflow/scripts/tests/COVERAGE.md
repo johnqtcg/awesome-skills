@@ -62,7 +62,7 @@ Reorganized into 10 focused test classes (previously: 1 monolithic class with 43
 
 _(unchanged from prior version — see individual test files for details)_
 
-**Contract test count: 44** (43 original + 1 line-budget test, split into 10 classes)
+**Contract test count: 46** (43 original + 1 line-budget test + 2 new golden-examples tests, split into 10 classes)
 
 ## Golden Fixture Tests (`test_golden_scenarios.py`)
 
@@ -80,9 +80,11 @@ _(unchanged from prior version — see individual test files for details)_
 | `008_service_containers_integration.json` | `service_containers` | ✅ | ✅ **api-integration in expected_jobs + service container** |
 | `009_e2e_job.json` | `e2e_test` | ✅ | ✅ **ci+e2e jobs + schedule trigger + 30min timeout** |
 | `010_static_analysis_job.json` | `static_analysis` | ✅ | ✅ **govulncheck job + Vulnerability Scanning + Static Analysis** |
+| `011_reusable_workflow.json` | `reusable_workflow` | ✅ | ✅ **reusable-workflow shape + workflow_call + Composite vs Reusable decision** |
+| `012_self_hosted_runner.json` | `self_hosted_runner` | ✅ | ✅ **Security Gate + self-hosted label + no silent GitHub-hosted assumptions** |
 
-**Golden fixture count: 10**
-**Golden test count: 24** (10 rules-coverage + 4 integrity + 10 behavioral assertions)
+**Golden fixture count: 12**
+**Golden test count: 28** (12 rules-coverage + 4 integrity + 12 behavioral assertions)
 
 ## Coverage Summary
 
@@ -101,17 +103,14 @@ _(unchanged from prior version — see individual test files for details)_
 | PR checklist sections (10) | 10 | 10 | 100% |
 | Fallback levels (3) | 3 | 3 | 100% |
 | Discover script categories (8) | 8 | 8 | 100% |
-| Golden fixtures: scenario types (10) | 10 | 10 | 100% |
-| Behavioral assertions per fixture | 10 | 10 | 100% |
+| Golden fixtures: scenario types (12) | 12 | 12 | 100% |
+| Behavioral assertions per fixture | 12 | 12 | 100% |
 
-**Total tests: 68** (44 contract + 24 golden)
+**Total tests: 73** (46 contract + 27 golden)
 
 ## Known Gaps
 
 | Gap | Priority |
 |-----|----------|
-| Golden fixture for reusable workflow extraction scenario | Medium |
-| Golden fixture for self-hosted runner scenario | Medium |
-| Golden example for fork PR security in golden-examples.md | Medium |
 | Integration test: run discover_ci_needs.sh against mock repo | Low |
 | Golden fixture for tag-triggered release workflow | Low |

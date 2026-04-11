@@ -308,8 +308,8 @@ class TestGoldenExamples(unittest.TestCase):
             _count_heading(text, "Output Summary")
             for text in (self.ge_text, self.ge_monorepo_text, self.ge_service_containers_text)
         )
-        self.assertEqual(workflow_count, 4, f"expected 4 Complete Workflow sections, got {workflow_count}")
-        self.assertEqual(summary_count, 4, f"expected 4 Output Summary sections, got {summary_count}")
+        self.assertEqual(workflow_count, 5, f"expected 5 Complete Workflow sections, got {workflow_count}")
+        self.assertEqual(summary_count, 5, f"expected 5 Output Summary sections, got {summary_count}")
 
     def test_ge_fallback_has_inline_markers(self) -> None:
         self.assertIn("# INLINE FALLBACK", self.ge_text)
@@ -319,6 +319,14 @@ class TestGoldenExamples(unittest.TestCase):
         self.assertIn("services:", self.ge_service_containers_text)
         self.assertIn("mysql:", self.ge_service_containers_text)
         self.assertIn("redis:", self.ge_service_containers_text)
+
+    def test_ge_fork_pr_security_example_exists(self) -> None:
+        """Fork PR Security section must be present with the correct if: guard YAML."""
+        self.assertIn("## 3) Fork PR Security", self.ge_text)
+        self.assertIn(
+            "github.event.pull_request.head.repo.full_name == github.repository",
+            self.ge_text,
+        )
 
 
 # ------------------------------------------------------------------
