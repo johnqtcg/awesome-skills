@@ -10,8 +10,8 @@
 
 - **22** 个生产级 Claude Code Skills：覆盖 Go、测试、安全、CI/CD、调研、文档、规划
 - **29** 个可安装 skill：其中 22 个为生产级 skill，另外 8 个为 Multi-Agent Go 评审编排组件
-- **42** 份设计说明文档（中英双语），每个 skill 都有对应的说明链路
-- **42** 份量化评审报告（中英双语），含可追溯指标
+- **44** 份设计说明文档（中英双语），每个 skill 都有对应的说明链路
+- **44** 份量化评审报告（中英双语），含可追溯指标
 - **169** 个 golden JSON 场景 + **40** 个 Python 测试文件，确定性回归保障
 - 测试 skills：`unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
 - 交付管线：`go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`

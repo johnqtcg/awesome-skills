@@ -10,8 +10,8 @@ A curated system for **AI skill engineering** — not just a prompt collection. 
 
 - **22** production-ready Claude Code skills: Go, testing, security, CI/CD, research, docs, planning
 - **29** installable skills in total: 22 production-ready skills + 8 multi-agent Go review components used by the orchestration architecture
-- **42** paired design rationale docs (EN + ZH), one explanation track for each skill
-- **42** paired evaluation reports (EN + ZH) with quantitative metrics
+- **44** paired design rationale docs (EN + ZH), one explanation track for each skill
+- **44** paired evaluation reports (EN + ZH) with quantitative metrics
 - **169** golden test fixtures + **40** Python test files for deterministic regression
 - Testing skills: `unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
 - Delivery pipeline: `go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`
