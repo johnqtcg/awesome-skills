@@ -8,8 +8,8 @@
 
 A curated system for **AI skill engineering** — not just a prompt collection. Built for Claude Code and applicable to any AI coding assistant, this project covers the full loop from reusable skill methodology to skill-specific design rationale to quantitative evaluation and real software engineering workflow integration.
 
-- **21** production-ready Claude Code skills: Go, testing, security, CI/CD, research, docs, planning
-- **29** installable skills in total: 21 production-ready skills + 8 multi-agent Go review components used by the orchestration architecture
+- **22** production-ready Claude Code skills: Go, testing, security, CI/CD, research, docs, planning
+- **29** installable skills in total: 22 production-ready skills + 8 multi-agent Go review components used by the orchestration architecture
 - **42** paired design rationale docs (EN + ZH), one explanation track for each skill
 - **42** paired evaluation reports (EN + ZH) with quantitative metrics
 - **169** golden test fixtures + **40** Python test files for deterministic regression
@@ -30,7 +30,7 @@ npx skills add johnqtcg/awesome-skills --skill <skill-name> -g
 # Install a curated set
 npx skills add johnqtcg/awesome-skills --skill go-review-lead systematic-debugging unit-test -g
 
-# Install all 29 skills at once (21 production-ready + 8 multi-agent review components)
+# Install all 29 skills at once (22 production-ready + 8 multi-agent review components)
 npx skills add johnqtcg/awesome-skills --all -g
 ```
 
@@ -43,7 +43,7 @@ npx skills find
 Install scope note:
 
 - The repository exposes **29** installable skills in total.
-- The **21 production-ready skills** are the fully documented set with rationale, evaluation, and output examples.
+- The **22 production-ready skills** are the fully documented set with rationale, evaluation, and output examples.
 - The additional **8 skills** are reusable Go review orchestration components for the multi-agent review architecture. They are installable and regression-tested, but are not counted as standalone production-ready skills yet.
 
 ### Option 2 — Install manually
@@ -292,6 +292,7 @@ These skills move code from “written” to “verified.” Together they cover
 | `thirdparty-api-integration-test` | Build and run real integration tests for third-party APIs | Uses explicit run gates, timeout controls, and safe execution constraints for external contract validation |
 | `e2e-test`                        | Design, maintain, and run E2E tests for key user journeys | Balances exploration, regression coverage, CI integration, and artifact retention with a focus on reliability |
 | `fuzzing-test`                    | Generate Go fuzz tests | Runs an applicability gate first and refuses unsuitable targets, avoiding low-value fuzz cases |
+| `go-benchmark`                    | Write, review, and analyze Go performance benchmarks and pprof profiles | Hard Rules prevent silent benchmark corruption (compiler dead-code elimination, timer misplacement); Evidence Gate blocks fabricating ns/op numbers without runtime data |
 | `systematic-debugging`            | Investigate bugs, failures, and unexpected behavior systematically | Requires root-cause analysis before fixes, avoiding guess-driven debugging |
 
 For a full example, see: https://github.com/johnqtcg/issue2md (`.github/workflows/ci.yml`)

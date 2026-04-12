@@ -8,8 +8,8 @@
 
 一个围绕高质量 **Claude Code Skill** 方法论、设计说明、评审、验证与工作流落地构建的开源项目。
 
-- **21** 个生产级 Claude Code Skills：覆盖 Go、测试、安全、CI/CD、调研、文档、规划
-- **29** 个可安装 skill：其中 21 个为生产级 skill，另外 8 个为 Multi-Agent Go 评审编排组件
+- **22** 个生产级 Claude Code Skills：覆盖 Go、测试、安全、CI/CD、调研、文档、规划
+- **29** 个可安装 skill：其中 22 个为生产级 skill，另外 8 个为 Multi-Agent Go 评审编排组件
 - **42** 份设计说明文档（中英双语），每个 skill 都有对应的说明链路
 - **42** 份量化评审报告（中英双语），含可追溯指标
 - **169** 个 golden JSON 场景 + **40** 个 Python 测试文件，确定性回归保障
@@ -30,7 +30,7 @@ npx skills add johnqtcg/awesome-skills --skill <skill-名称> -g
 # 安装多个 skill
 npx skills add johnqtcg/awesome-skills --skill go-review-lead systematic-debugging unit-test -g
 
-# 一键安装全部 29 个 skill（21 个生产级 + 8 个编排组件）
+# 一键安装全部 29 个 skill（22 个生产级 + 8 个编排组件）
 npx skills add johnqtcg/awesome-skills --all -g
 ```
 
@@ -43,7 +43,7 @@ npx skills find
 安装范围说明：
 
 - 仓库总计提供 **29** 个可安装 skill。
-- 其中 **21 个生产级 skill** 是完整的闭环集合，具备 rationale、evaluation 和 output examples。
+- 其中 **22 个生产级 skill** 是完整的闭环集合，具备 rationale、evaluation 和 output examples。
 - 额外的 **8 个 skill** 是供 Multi-Agent Go 评审架构复用的编排组件；它们可安装、可回归测试，但暂不单独计入“生产级 skill”统计。
 
 ### 方式二 — 手动安装
@@ -297,6 +297,7 @@ CI 触发
 | `thirdparty-api-integration-test` | 为第三方 API 编写和运行真实调用的集成测试        | 带显式运行门禁、超时控制和安全约束，适合验证外部依赖契约 |
 | `e2e-test`                        | 设计、维护和执行关键用户行为的 E2E 测试         | 兼顾探索、回归、CI 落地和产物留存，强调稳定性与可维护性 |
 | `fuzzing-test`                    | 为 Go 代码生成模糊测试                  | 先做适用性门禁，不适合的目标会明确拒绝，避免产出低价值 fuzz case |
+| `go-benchmark`                    | 为 Go 代码编写、审查基准测试并分析 pprof profile | Hard Rules 防止静默基准腐化（编译器消除调用、timer 错放）；Evidence Gate 确保无运行时数据时不伪造 ns/op 数字 |
 | `systematic-debugging`            | 对 bug、异常行为和失败场景做系统化排查          | 明确要求先找根因再修复，避免拍脑袋试错式修 bug |
 
 

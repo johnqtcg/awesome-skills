@@ -13,14 +13,14 @@ bestpractice/  →  rationale/  →  skills/  →  evaluate/  →  outputexample
 
 - **`bestpractice/`** — skill design methodology docs (`Fundamentals.md`, `Advanced.md`, `Evaluation.md`, `Iteration.md`, `Integration.md`, `Architecture.md`), bilingual (EN + ZH)
 - **`rationale/`** — per-skill design rationale docs explaining the *why* behind each skill's structure and decisions; each skill has `design.md` + `design.zh-CN.md`
-- **`skills/`** — 29 installable Claude Code skills in total: 21 production-ready skills plus 8 multi-agent Go review components, each centered on a `SKILL.md` with optional `scripts/`, `references/`, and `agents/` subdirs
+- **`skills/`** — 29 installable Claude Code skills in total: 22 production-ready skills plus 8 multi-agent Go review components, each centered on a `SKILL.md` with optional `scripts/`, `references/`, and `agents/` subdirs
 - **`evaluate/`** — formal review reports paired EN/ZH (`<skill-name>-skill-eval-report.md` / `.zh-CN.md`)
 - **`outputexample/`** — real task outputs (PDFs, test code, CI configs, screenshots)
 - **`docs/`** — MkDocs Material site source; served at GitHub Pages
 
 Important scope note:
 
-- The **21 production-ready skills** are the set with full five-layer coverage (`rationale/`, `skills/`, `evaluate/`, `outputexample/`).
+- The **22 production-ready skills** are the set with full five-layer coverage (`rationale/`, `skills/`, `evaluate/`, `outputexample/`).
 - The additional **8 Go review components** exist to support the multi-agent review architecture (`go-review-lead` + vertical review skills). They are installable and regression-tested, but they do not yet have standalone `rationale/`, `evaluate/`, or `outputexample/` tracks.
 
 ## Skill Structure Convention
