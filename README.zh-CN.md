@@ -8,11 +8,11 @@
 
 一个围绕高质量 **Claude Code Skill** 方法论、设计说明、评审、验证与工作流落地构建的开源项目。
 
-- **22** 个生产级 Claude Code Skills：覆盖 Go、测试、安全、CI/CD、调研、文档、规划
-- **29** 个可安装 skill：其中 22 个为生产级 skill，另外 8 个为 Multi-Agent Go 评审编排组件
-- **44** 份设计说明文档（中英双语），每个 skill 都有对应的说明链路
-- **44** 份量化评审报告（中英双语），含可追溯指标
-- **169** 个 golden JSON 场景 + **40** 个 Python 测试文件，确定性回归保障
+- **33** 个生产级 Claude Code Skills：覆盖 Go、测试、安全、CI/CD、数据库、缓存、基础设施、调研、文档、规划
+- **41** 个可安装 skill：其中 33 个为生产级 skill，另外 8 个为 Multi-Agent Go 评审编排组件
+- **46** 份设计说明文档（中英双语），每个 skill 都有对应的说明链路
+- **64** 份量化评审报告（中英双语），含可追溯指标
+- **364** 个 golden JSON 场景 + **65** 个 Python 测试文件，确定性回归保障
 - 测试 skills：`unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
 - 交付管线：`go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`
 
@@ -30,7 +30,7 @@ npx skills add johnqtcg/awesome-skills --skill <skill-名称> -g
 # 安装多个 skill
 npx skills add johnqtcg/awesome-skills --skill go-review-lead systematic-debugging unit-test -g
 
-# 一键安装全部 29 个 skill（22 个生产级 + 8 个编排组件）
+# 一键安装全部 41 个 skill（33 个生产级 + 8 个编排组件）
 npx skills add johnqtcg/awesome-skills --all -g
 ```
 
@@ -43,7 +43,7 @@ npx skills find
 安装范围说明：
 
 - 仓库总计提供 **29** 个可安装 skill。
-- 其中 **22 个生产级 skill** 是完整的闭环集合，具备 rationale、evaluation 和 output examples。
+- 其中 **33 个生产级 skill** 是完整的闭环集合，具备 rationale、evaluation 和 output examples。
 - 额外的 **8 个 skill** 是供 Multi-Agent Go 评审架构复用的编排组件；它们可安装、可回归测试，但暂不单独计入“生产级 skill”统计。
 
 ### 方式二 — 手动安装
@@ -141,7 +141,7 @@ npx skills find
 这个项目没有把“让一个 LLM 去评价另一个 LLM”当成主要守护手段，而是优先采用确定性验证：
 
 - `132` 个 golden JSON 场景
-- `29` 个 Python 测试文件
+- `65` 个 Python 测试文件
 - 合约测试守护门禁、输出契约和结构规则
 - 黄金场景测试守护真实任务覆盖
 
@@ -283,7 +283,9 @@ CI 触发
 | `create-pr` | 提交后到评审前 | 为 GitHub 主分支创建高质量 PR | 强调预检、质量门禁和结构化 PR 内容，降低 reviewer 理解成本 |
 | `go-ci-workflow` | CI 编排 | 创建或重构 Go 项目的 GitHub Actions CI | 强调 Make 驱动、本地与 CI 一致、缓存与 job 设计、门禁分层 |
 | `go-code-reviewer` | 自动审查 | 对 Go 代码做缺陷优先评审 | 聚焦真实 bug、回归和风险，不把代码审查退化成风格检查 |
-| `security-review` | 安全审查 | 对代码变更做 exploitability-first 安全评审 | 以“是否可利用”为优先级，覆盖认证、输入、依赖、并发和容器风险 |
+| `security-review` | 安全审查 | 对代码变更做 exploitability-first 安全评审 | 以”是否可利用”为优先级，覆盖认证、输入、依赖、并发和容器风险 |
+| `api-design` | API 合约设计 | 设计或审查 REST API 合约：资源建模、状态码、错误模型、分页、幂等键、IDOR 防护、向后兼容性 | Gate 驱动：破坏性变更在上线前被强制拦截，强制 machine-parseable 错误信封和 IDOR-safe 404 模式 |
+| `kafka-event-driven-design` | Kafka 事件架构设计 | 设计和审查 Kafka 事件系统：topic 设计、分区策略、消费者组、schema 兼容、DLQ、outbox 模式 | 覆盖 acks=all、幂等消费者、schema 演进、以及生产端和消费端两侧的失效模式防御 |
 
 ### 测试与验证
 
@@ -299,10 +301,25 @@ CI 触发
 | `fuzzing-test`                    | 为 Go 代码生成模糊测试                  | 先做适用性门禁，不适合的目标会明确拒绝，避免产出低价值 fuzz case |
 | `go-benchmark`                    | 为 Go 代码编写、审查基准测试并分析 pprof profile | Hard Rules 防止静默基准腐化（编译器消除调用、timer 错放）；Evidence Gate 确保无运行时数据时不伪造 ns/op 数字 |
 | `systematic-debugging`            | 对 bug、异常行为和失败场景做系统化排查          | 明确要求先找根因再修复，避免拍脑袋试错式修 bug |
+| `load-test`                       | 编写 k6/vegeta/wrk 负载测试脚本、定义 SLO、建模压测场景并分析结果 | 强制场景驱动设计（不只看 QPS）、统计正确性（p95/p99 而非均值）和瓶颈归因 |
+| `go-dependency-audit`             | 审查 Go 模块依赖的 CVE、许可证合规和供应链风险 | 用 govulncheck 做可达性 CVE 检测、检查许可证兼容性、标记 go.sum 完整性问题 |
 
 
 完整的示例可参考: https://github.com/johnqtcg/issue2md (.github/workflows/ci.yml)
 
+
+### 数据库、缓存与基础设施
+
+这一类 skill 覆盖多种数据库的生产安全迁移、缓存策略设计和监控告警配置。
+
+| Skill 名称 | 功能用途 | 主要亮点 / 优势 |
+|---|---|---|
+| `pg-migration` | 审查或生成 PostgreSQL 迁移脚本 | 强制锁级别分析（AccessExclusiveLock vs CONCURRENTLY）、NOT VALID 两步约束模式、大表 pg_repack 重写，以及事务性 DDL 回滚规划 |
+| `mysql-migration` | 审查或生成 MySQL 迁移脚本 | 覆盖 ALGORITHM={INSTANT,INPLACE,COPY} 选择、gh-ost 大表操作、online DDL 版本门控（5.7 vs 8.0+）和 utf8mb4 边界陷阱 |
+| `mongo-migration` | 审查或生成 MongoDB 迁移脚本 | 强制 `_id`-range 分批更新、write concern 显式设置、validator `moderate→strict` 渐进，以及字段类型迁移新字段模式 |
+| `oracle-migration` | 审查或生成 Oracle DDL 迁移脚本 | 覆盖 DDL_LOCK_TIMEOUT、NOVALIDATE 约束模式、DBMS_REDEFINITION 在线表重定义和分区 DDL 安全规范 |
+| `redis-cache-strategy` | 设计或审查 Redis 缓存层 | 解决 stampede（singleflight）、穿透（null-value caching）、雪崩（TTL jitter）、热点 key（L1 + sharding），以及金融数据 write-behind 禁用守则 |
+| `monitoring-alerting` | 设计 Prometheus 告警规则、Grafana 仪表盘和 SLI/SLO 定义 | 强制告警可操作性、SLO 错误预算燃耗告警、告警抑制规则和 Cardinality 纪律 |
 
 ### 搜索、调研与报告
 
@@ -323,6 +340,7 @@ CI 触发
 | `update-doc` | 让项目文档与最新代码保持同步 | 强调按作用域更新文档、docs drift 检查、项目类型路由，以及基于证据同步 README 和相关文档 |
 | `readme-generator` | 基于项目证据生成或重构项目 `README.md` | 强调项目形态识别、证据驱动的结构组织、可维护 README 模式，以及对 service、library、CLI、monorepo 等项目的适配 |
 | `tech-doc-writer` | 编写、审查和改进技术文档，如 runbook、故障排查文档、API 文档和 RFC/ADR 风格设计文档 | 强调文档类型分类、受众分析、质量门禁和防陈旧机制，产出更清晰、可维护的技术文档 |
+| `incident-postmortem` | 编写免责事后复盘，并审查现有复盘文档 | 四道串行强制门控执行免责重写、有来源的时间线、系统性 5-Why 根因分析和有追踪的行动项——Gate 2 归咎语言重写对照表让每一项免责决策对协作者完全透明可审计 |
 
 ### 工具执行与任务自动化
 

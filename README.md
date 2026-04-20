@@ -8,11 +8,11 @@
 
 A curated system for **AI skill engineering** — not just a prompt collection. Built for Claude Code and applicable to any AI coding assistant, this project covers the full loop from reusable skill methodology to skill-specific design rationale to quantitative evaluation and real software engineering workflow integration.
 
-- **22** production-ready Claude Code skills: Go, testing, security, CI/CD, research, docs, planning
-- **29** installable skills in total: 22 production-ready skills + 8 multi-agent Go review components used by the orchestration architecture
-- **44** paired design rationale docs (EN + ZH), one explanation track for each skill
-- **44** paired evaluation reports (EN + ZH) with quantitative metrics
-- **169** golden test fixtures + **40** Python test files for deterministic regression
+- **33** production-ready Claude Code skills: Go, testing, security, CI/CD, database, cache, infrastructure, research, docs, planning
+- **41** installable skills in total: 33 production-ready skills + 8 multi-agent Go review components used by the orchestration architecture
+- **46** paired design rationale docs (EN + ZH), one explanation track for each skill
+- **64** paired evaluation reports (EN + ZH) with quantitative metrics
+- **364** golden test fixtures + **65** Python test files for deterministic regression
 - Testing skills: `unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
 - Delivery pipeline: `go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`
 
@@ -30,7 +30,7 @@ npx skills add johnqtcg/awesome-skills --skill <skill-name> -g
 # Install a curated set
 npx skills add johnqtcg/awesome-skills --skill go-review-lead systematic-debugging unit-test -g
 
-# Install all 29 skills at once (22 production-ready + 8 multi-agent review components)
+# Install all 41 skills at once (33 production-ready + 8 multi-agent review components)
 npx skills add johnqtcg/awesome-skills --all -g
 ```
 
@@ -43,7 +43,7 @@ npx skills find
 Install scope note:
 
 - The repository exposes **29** installable skills in total.
-- The **22 production-ready skills** are the fully documented set with rationale, evaluation, and output examples.
+- The **33 production-ready skills** are the fully documented set with rationale, evaluation, and output examples.
 - The additional **8 skills** are reusable Go review orchestration components for the multi-agent review architecture. They are installable and regression-tested, but are not counted as standalone production-ready skills yet.
 
 ### Option 2 — Install manually
@@ -279,6 +279,8 @@ The key skills in that pipeline are:
 | `go-ci-workflow` | CI orchestration | Create or refactor GitHub Actions CI for Go repos | Emphasizes Make-driven CI, local/CI consistency, caching, job design, and layered gates |
 | `go-code-reviewer` | Automated review | Review Go code with a defect-first mindset | Focuses on real bugs, regressions, and risk instead of reducing review to style comments |
 | `security-review` | Security review | Perform exploitability-first security review on code changes | Prioritizes exploitable risk across auth, input, dependencies, concurrency, and container issues |
+| `api-design` | API contract design | Design or review REST API contracts: resource modeling, status codes, error models, pagination, idempotency, IDOR prevention, backward compatibility | Gate-driven: flags breaking changes before they ship, enforces machine-parseable error envelopes and IDOR-safe 404 patterns |
+| `kafka-event-driven-design` | Kafka event architecture | Design and review Kafka-based event systems: topic design, partition strategy, consumer groups, schema compatibility, DLQ, outbox pattern | Covers acks=all, idempotent consumers, schema evolution, and failure mode defenses across producer and consumer sides |
 
 ### Testing and Validation
 
@@ -294,8 +296,23 @@ These skills move code from “written” to “verified.” Together they cover
 | `fuzzing-test`                    | Generate Go fuzz tests | Runs an applicability gate first and refuses unsuitable targets, avoiding low-value fuzz cases |
 | `go-benchmark`                    | Write, review, and analyze Go performance benchmarks and pprof profiles | Hard Rules prevent silent benchmark corruption (compiler dead-code elimination, timer misplacement); Evidence Gate blocks fabricating ns/op numbers without runtime data |
 | `systematic-debugging`            | Investigate bugs, failures, and unexpected behavior systematically | Requires root-cause analysis before fixes, avoiding guess-driven debugging |
+| `load-test`                       | Write k6/vegeta/wrk load test scripts, define SLOs, model spike/soak/stress scenarios, and interpret results | Enforces scenario-driven design (not just raw QPS), statistical correctness (p95/p99 not averages), and bottleneck attribution |
+| `go-dependency-audit`             | Audit Go module dependencies for CVEs, license compliance, and supply-chain risks | Runs govulncheck for reachability-based CVE detection, checks license compatibility, and flags go.sum integrity issues |
 
 For a full example, see: https://github.com/johnqtcg/issue2md (`.github/workflows/ci.yml`)
+
+### Database, Cache & Infrastructure
+
+These skills cover production-safe schema migrations across multiple databases, caching strategy design, monitoring and alerting setup.
+
+| Skill Name | Purpose | Main strengths / advantages |
+|---|---|---|
+| `pg-migration` | Review or generate PostgreSQL schema migrations | Enforces lock-level analysis (AccessExclusiveLock vs CONCURRENTLY), NOT VALID two-step constraint pattern, pg_repack for large-table rewrites, and transactional DDL rollback planning |
+| `mysql-migration` | Review or generate MySQL schema migrations | Covers ALGORITHM={INSTANT,INPLACE,COPY} selection, gh-ost integration for large tables, online DDL version gating (5.7 vs 8.0+), and utf8mb4 boundary traps |
+| `mongo-migration` | Review or generate MongoDB schema migrations | Enforces `_id`-range batched updates, write concern, validator `moderate→strict` progression, and the new-field pattern for type migrations |
+| `oracle-migration` | Review or generate Oracle DDL migrations | Covers DDL_LOCK_TIMEOUT, NOVALIDATE constraint pattern, DBMS_REDEFINITION for online table rewrites, and partition DDL safety |
+| `redis-cache-strategy` | Design or review Redis caching layers | Addresses stampede (singleflight), penetration (null-value caching), avalanche (TTL jitter), hot key mitigation (L1 + sharding), and write-behind guardrails for financial data |
+| `monitoring-alerting` | Design Prometheus alerting rules, Grafana dashboards, and SLI/SLO definitions | Enforces alert actionability, SLO error budget burn-rate alerting, inhibition rules, and cardinality discipline |
 
 ### Search, Research, and Reports
 
@@ -316,6 +333,7 @@ These skills focus on turning engineering knowledge into maintainable documents 
 | `update-doc` | Keep project documentation aligned with the latest code | Focuses on scoped doc patches, docs-drift checks, project-type routing, and evidence-backed synchronization of README and related docs |
 | `readme-generator` | Generate or refactor project `README.md` files using project evidence | Emphasizes project-shape detection, evidence-based structure, maintainable README patterns, and adaptation across service, library, CLI, and monorepo projects |
 | `tech-doc-writer` | Write, review, and improve technical documents such as runbooks, troubleshooting guides, API docs, and RFC/ADR-style design docs | Uses type classification, audience analysis, quality gates, and anti-staleness rules to produce clearer, more maintainable technical documentation |
+| `incident-postmortem` | Write blameless postmortems and review existing ones | Four mandatory gates enforce blameless reframing, sourced timelines, systemic 5-Why root cause analysis, and tracked action items — the Gate 2 blame-rewrite table makes every reframing decision auditable |
 
 ### Tool Execution and Task Automation
 

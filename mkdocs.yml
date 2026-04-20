@@ -122,6 +122,7 @@ nav:
       - go-makefile-writer: rationale/go-makefile-writer/design.md
       - google-search: rationale/google-search/design.md
       - local-transcript: rationale/local-transcript/design.md
+      - mysql-migration: rationale/mysql-migration/design.md
       - readme-generator: rationale/readme-generator/design.md
       - security-review: rationale/security-review/design.md
       - systematic-debugging: rationale/systematic-debugging/design.md
@@ -146,6 +147,7 @@ nav:
       - go-makefile-writer: rationale/go-makefile-writer/design.zh-CN.md
       - google-search: rationale/google-search/design.zh-CN.md
       - local-transcript: rationale/local-transcript/design.zh-CN.md
+      - mysql-migration: rationale/mysql-migration/design.zh-CN.md
       - readme-generator: rationale/readme-generator/design.zh-CN.md
       - security-review: rationale/security-review/design.zh-CN.md
       - systematic-debugging: rationale/systematic-debugging/design.zh-CN.md
@@ -160,18 +162,30 @@ nav:
   - Skills:
       - Overview: skills/index.md
       - Production-Ready Skills:
+          - api-design: skills/api-design/SKILL.md
           - api-integration-test: skills/api-integration-test/SKILL.md
           - create-pr: skills/create-pr/SKILL.md
           - deep-research: skills/deep-research/SKILL.md
           - e2e-test: skills/e2e-test/SKILL.md
           - fuzzing-test: skills/fuzzing-test/SKILL.md
           - git-commit: skills/git-commit/SKILL.md
+          - go-benchmark: skills/go-benchmark/SKILL.md
           - go-ci-workflow: skills/go-ci-workflow/SKILL.md
           - go-code-reviewer: skills/go-code-reviewer/SKILL.md
+          - go-dependency-audit: skills/go-dependency-audit/SKILL.md
           - go-makefile-writer: skills/go-makefile-writer/SKILL.md
           - google-search: skills/google-search/SKILL.md
+          - incident-postmortem: skills/incident-postmortem/SKILL.md
+          - kafka-event-driven-design: skills/kafka-event-driven-design/SKILL.md
+          - load-test: skills/load-test/SKILL.md
           - local-transcript: skills/local-transcript/SKILL.md
+          - mongo-migration: skills/mongo-migration/SKILL.md
+          - monitoring-alerting: skills/monitoring-alerting/SKILL.md
+          - mysql-migration: skills/mysql-migration/SKILL.md
+          - oracle-migration: skills/oracle-migration/SKILL.md
+          - pg-migration: skills/pg-migration/SKILL.md
           - readme-generator: skills/readme-generator/SKILL.md
+          - redis-cache-strategy: skills/redis-cache-strategy/SKILL.md
           - security-review: skills/security-review/SKILL.md
           - systematic-debugging: skills/systematic-debugging/SKILL.md
           - tdd-workflow: skills/tdd-workflow/SKILL.md
@@ -194,18 +208,29 @@ nav:
   - Evaluation Reports:
       - Overview: evaluate/index.md
       - English:
+          - api-design: evaluate/api-design-skill-eval-report.md
           - api-integration-test: evaluate/api-integration-test-skill-eval-report.md
           - create-pr: evaluate/create-pr-skill-eval-report.md
           - deep-research: evaluate/deep-research-skill-eval-report.md
           - e2e-test: evaluate/e2e-test-skill-eval-report.md
           - fuzzing-test: evaluate/fuzzing-test-skill-eval-report.md
           - git-commit: evaluate/git-commit-skill-eval-report.md
+          - go-benchmark: evaluate/go-benchmark-skill-eval-report.md
           - go-ci-workflow: evaluate/go-ci-workflow-skill-eval-report.md
           - go-code-reviewer: evaluate/go-code-reviewer-skill-eval-report.md
           - go-makefile-writer: evaluate/go-makefile-writer-skill-eval-report.md
           - google-search: evaluate/google-search-skill-eval-report.md
+          - incident-postmortem: evaluate/incident-postmortem-skill-eval-report.md
+          - kafka-event-driven-design: evaluate/kafka-event-driven-design-skill-eval-report.md
+          - load-test: evaluate/load-test-skill-eval-report.md
           - local-transcript: evaluate/local-transcript-skill-eval-report.md
+          - mongo-migration: evaluate/mongo-migration-skill-eval-report.md
+          - monitoring-alerting: evaluate/monitoring-alerting-skill-eval-report.md
+          - mysql-migration: evaluate/mysql-migration-skill-eval-report.md
+          - oracle-migration: evaluate/oracle-migration-skill-eval-report.md
+          - pg-migration: evaluate/pg-migration-skill-eval-report.md
           - readme-generator: evaluate/readme-generator-skill-eval-report.md
+          - redis-cache-strategy: evaluate/redis-cache-strategy-skill-eval-report.md
           - security-review: evaluate/security-review-skill-eval-report.md
           - systematic-debugging: evaluate/systematic-debugging-skill-eval-report.md
           - tdd-workflow: evaluate/tdd-workflow-skill-eval-report.md
@@ -216,18 +241,29 @@ nav:
           - writing-plans: evaluate/writing-plans-skill-eval-report.md
           - yt-dlp-downloader: evaluate/yt-dlp-downloader-skill-eval-report.md
       - 中文:
+          - api-design: evaluate/api-design-skill-eval-report.zh-CN.md
           - api-integration-test: evaluate/api-integration-test-skill-eval-report.zh-CN.md
           - create-pr: evaluate/create-pr-skill-eval-report.zh-CN.md
           - deep-research: evaluate/deep-research-skill-eval-report.zh-CN.md
           - e2e-test: evaluate/e2e-test-skill-eval-report.zh-CN.md
           - fuzzing-test: evaluate/fuzzing-test-skill-eval-report.zh-CN.md
           - git-commit: evaluate/git-commit-skill-eval-report.zh-CN.md
+          - go-benchmark: evaluate/go-benchmark-skill-eval-report.zh-CN.md
           - go-ci-workflow: evaluate/go-ci-workflow-skill-eval-report.zh-CN.md
           - go-code-reviewer: evaluate/go-code-reviewer-skill-eval-report.zh-CN.md
           - go-makefile-writer: evaluate/go-makefile-writer-skill-eval-report.zh-CN.md
           - google-search: evaluate/google-search-skill-eval-report.zh-CN.md
+          - incident-postmortem: evaluate/incident-postmortem-skill-eval-report.zh-CN.md
+          - kafka-event-driven-design: evaluate/kafka-event-driven-design-skill-eval-report.zh-CN.md
+          - load-test: evaluate/load-test-skill-eval-report.zh-CN.md
           - local-transcript: evaluate/local-transcript-skill-eval-report.zh-CN.md
+          - mongo-migration: evaluate/mongo-migration-skill-eval-report.zh-CN.md
+          - monitoring-alerting: evaluate/monitoring-alerting-skill-eval-report.zh-CN.md
+          - mysql-migration: evaluate/mysql-migration-skill-eval-report.zh-CN.md
+          - oracle-migration: evaluate/oracle-migration-skill-eval-report.zh-CN.md
+          - pg-migration: evaluate/pg-migration-skill-eval-report.zh-CN.md
           - readme-generator: evaluate/readme-generator-skill-eval-report.zh-CN.md
+          - redis-cache-strategy: evaluate/redis-cache-strategy-skill-eval-report.zh-CN.md
           - security-review: evaluate/security-review-skill-eval-report.zh-CN.md
           - systematic-debugging: evaluate/systematic-debugging-skill-eval-report.zh-CN.md
           - tdd-workflow: evaluate/tdd-workflow-skill-eval-report.zh-CN.md
