@@ -1,0 +1,25 @@
+{
+  "id": "014_iframe_embedded_content",
+  "description": "Test embedded Stripe payment iframe on checkout page — skill should use frameLocator for cross-frame interaction, contentFrame for element-to-frame conversion, and apply Side-Effect Gate for payment flows",
+  "scenario_type": "new_journey_coverage",
+  "context": {
+    "task": "Add E2E tests for checkout flow with embedded cross-origin Stripe payment iframe",
+    "environment": "local",
+    "base_url_available": true,
+    "playwright_version": "1.40",
+    "iframe_type": "cross-origin payment provider",
+    "payment_sandbox_available": true
+  },
+  "expected_runner": "Playwright",
+  "expected_gates": ["Configuration Gate", "Environment Gate", "Side-Effect Gate"],
+  "expected_code_patterns": [
+    "frameLocator",
+    "contentFrame"
+  ],
+  "skill_rules_that_must_fire": [
+    "Configuration Gate",
+    "Playwright-First Engineering Rules",
+    "frameLocator",
+    "Side-Effect Gate"
+  ]
+}

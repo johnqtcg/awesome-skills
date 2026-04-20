@@ -1,0 +1,21 @@
+{
+  "id": "012_native_mobile_rejection",
+  "description": "Request E2E tests for a native iOS React Native app — skill must correctly defer to Detox or Maestro and explain the Playwright scope boundary",
+  "scenario_type": "stop_condition",
+  "context": {
+    "task": "Write E2E tests for a React Native iOS app; team currently uses Detox",
+    "environment": "local",
+    "platform": "native iOS",
+    "playwright_version": "1.40"
+  },
+  "expected_runner": "none",
+  "expected_gates": ["Version and Platform Gate"],
+  "expected_deferral_tools": ["Detox", "Maestro"],
+  "skill_rules_that_must_fire": [
+    "Version and Platform Gate",
+    "Platform Decision Matrix",
+    "Detox",
+    "Maestro",
+    "Out of Playwright scope"
+  ]
+}

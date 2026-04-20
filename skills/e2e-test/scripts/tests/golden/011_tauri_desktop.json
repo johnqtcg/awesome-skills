@@ -1,0 +1,26 @@
+{
+  "id": "011_tauri_desktop",
+  "description": "Add E2E tests for a Tauri 2.0 desktop app — skill should configure Playwright to connect to the Tauri WebView port, reference the Electron-style API, and apply platform constraints",
+  "scenario_type": "version_constrained",
+  "context": {
+    "task": "Write E2E tests for a Tauri 2.0 desktop app with embedded WebView UI",
+    "environment": "local",
+    "platform": "Tauri desktop app",
+    "playwright_version": "1.40",
+    "webview_debug_port_available": true
+  },
+  "expected_runner": "Playwright",
+  "expected_gates": ["Version and Platform Gate", "Configuration Gate"],
+  "expected_platform_notes": [
+    "Connect to WebView port",
+    "Playwright WebView debugging"
+  ],
+  "skill_rules_that_must_fire": [
+    "Version and Platform Gate",
+    "Platform Decision Matrix",
+    "Tauri",
+    "Playwright WebView debugging",
+    "Connect to WebView port",
+    "_electron"
+  ]
+}

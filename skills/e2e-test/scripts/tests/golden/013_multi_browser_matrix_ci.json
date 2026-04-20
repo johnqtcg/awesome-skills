@@ -1,0 +1,21 @@
+{
+  "id": "013_multi_browser_matrix_ci",
+  "description": "Set up cross-browser GitHub Actions CI with chromium + firefox + webkit matrix and parallel sharding — skill should configure the matrix strategy, shard config, and per-browser artifact upload",
+  "scenario_type": "ci_gate_design",
+  "context": {
+    "task": "Add cross-browser E2E coverage in GitHub Actions for critical user flows",
+    "environment": "ci",
+    "ci_system": "GitHub Actions",
+    "playwright_version": "1.40",
+    "browsers": ["chromium", "firefox", "webkit"]
+  },
+  "expected_runner": "Playwright",
+  "expected_gates": ["Configuration Gate", "CI Strategy"],
+  "expected_ci_elements": ["shard", "upload-artifact", "retries"],
+  "skill_rules_that_must_fire": [
+    "CI Strategy",
+    "shard",
+    "upload-artifact",
+    "retries"
+  ]
+}
