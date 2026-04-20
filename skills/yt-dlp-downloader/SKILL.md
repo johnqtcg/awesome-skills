@@ -4,7 +4,7 @@ description: |
   Generate and run yt-dlp download commands with probe-driven format selection, safe output naming, retry defaults, and structured execution reports.
   Use when users want to download videos, extract audio, fetch playlists, grab subtitles, handle authenticated/age-gated content, or download live streams.
   Covers single videos, playlists, audio extraction, subtitle-inclusive downloads, format-ID / resolution-capped downloads, SponsorBlock integration, live streams, and browser-cookie authentication.
-disable-model-invocation: true
+disable-model-invocation: false
 allowed-tools: Read, Bash(yt-dlp*), Bash(ffmpeg*)
 ---
 
@@ -159,6 +159,8 @@ For the full set of 8 anti-examples, read `references/anti-examples.md`. The thr
    ```
 
 5. **Claiming download success without running the command** — if you did not execute it, say so.
+
+6. **Re-starting from scratch when YouTube throttles mid-download** — the `.part` file is preserved; re-run with `--continue --limit-rate 2M --concurrent-fragments 1` to resume, not restart. See `references/safety-and-recovery.md § YouTube throttling mid-download`.
 
 ## Honest Degradation
 

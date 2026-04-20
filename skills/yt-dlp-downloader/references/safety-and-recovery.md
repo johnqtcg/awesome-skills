@@ -99,6 +99,37 @@ pip install yt-dlp-ejs
 yt-dlp --retries 20 --fragment-retries 20 --concurrent-fragments 1 "<url>"
 ```
 
+### YouTube throttling mid-download (stalls or repeated connection resets near end of large video)
+
+**Symptom**: Download reaches 90–99%, then repeatedly fails with `Got error: N bytes read, M more expected. Retrying (X/10)...` until giving up. Commonly affects high-quality formats (1080p+) on long videos.
+
+**Root cause**: YouTube's CDN aggressively throttles downloads that exceed an undisclosed burst budget. High parallelism and full-speed requests trigger this most reliably.
+
+**Fix**: Re-run the same command with rate limiting — `--continue` will resume from the partial `.part` file:
+
+```bash
+yt-dlp \
+  --no-playlist \
+  --download-archive "<dir>/.yt-dlp-archive.txt" \
+  --continue \
+  --no-overwrites \
+  --retries 20 --fragment-retries 20 \
+  --concurrent-fragments 1 \
+  --limit-rate 2M \
+  --sleep-requests 1 \
+  -o "%(title).200s [%(id)s].%(ext)s" \
+  -P "<dir>" \
+  "<url>"
+```
+
+Key flags:
+- `--limit-rate 2M` — caps throughput to stay under YouTube's throttle trigger
+- `--concurrent-fragments 1` — serializes fragment requests, reducing burst pressure
+- `--sleep-requests 1` — adds 1 s between API requests during extraction
+- `--continue` — resumes from the existing `.part` file (no re-download needed)
+
+**Verified**: resolved a 2.89 GiB YouTube video stalled at 96% (format f401 + f251).
+
 ### Geo-restricted content (user has legal access)
 
 ```bash
