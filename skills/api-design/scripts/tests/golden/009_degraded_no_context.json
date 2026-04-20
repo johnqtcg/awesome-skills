@@ -1,0 +1,11 @@
+{
+  "id": "API-009",
+  "title": "Degraded mode — API review with no consumer or public/internal classification",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "code_snippet": "// Someone shared this endpoint spec without context\nPOST /api/v1/payments\n{\"amount\": 100, \"currency\": \"USD\"}",
+  "context": {"api_type": "unknown", "consumers": "unknown"},
+  "expected_feedback": "Degraded mode: no consumer type or public/internal classification provided. Cannot assess versioning requirements, rate-limit strategy, or deprecation policy without knowing who calls this API. Flag: payment endpoint without Idempotency-Key (Critical for financial operations), no error model visible, no auth model specified. All recommendations conditional on unknown consumer context. Must NOT claim API design is complete without knowing who the consumers are. Uncovered Risks must list all unknowns.",
+  "coverage_rules": ["Degraded", "never claim", "Uncovered Risk"],
+  "reference": "SKILL.md"
+}

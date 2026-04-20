@@ -1,0 +1,12 @@
+{
+  "id": "KAFKA-002",
+  "title": "Consumer without idempotency — duplicate delivery causes double processing",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "func handleOrderCreated(msg *sarama.ConsumerMessage) error {\n    var event OrderCreated\n    json.Unmarshal(msg.Value, &event)\n    // Direct insert — duplicate delivery causes constraint violation or double charge\n    _, err := db.Exec(\"INSERT INTO orders (id, amount) VALUES ($1, $2)\",\n        event.OrderID, event.Amount)\n    return err\n}",
+  "context": {"kafka_version": "3.0", "schema": "JSON", "delivery": "at-least-once", "throughput": "500/s"},
+  "expected_feedback": "Critical: Consumer does not handle duplicate delivery. Kafka's at-least-once semantics guarantee that after a consumer rebalance, crash, or producer retry, the same message WILL be delivered again. This INSERT will either fail with a constraint violation (if order_id is unique) or create a duplicate record (if not unique). Fix: use idempotent database operations — INSERT ... ON CONFLICT (id) DO NOTHING — or deduplicate by event_id before processing. Every Kafka consumer must be designed to handle duplicates.",
+  "violated_rule": "Consumer handles duplicate delivery",
+  "coverage_rules": ["idempotent", "duplicate", "at-least-once"],
+  "reference": "SKILL.md"
+}

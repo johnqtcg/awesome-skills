@@ -1,0 +1,15 @@
+{
+  "id": "PM-013",
+  "title": "Workflow — review existing post-mortem for quality and completeness",
+  "type": "workflow",
+  "severity": "none",
+  "code_snippet": "# User provides an existing post-mortem document and says:\n# 'Review this post-mortem. Is it good enough to publish?'\n# Document has timeline, root cause, action items, but missing\n# 'what went well' and action items lack JIRA tickets.",
+  "expected_feedback": "Workflow: Review mode + Standard depth. Score against §8 scorecard. Findings: (1) Hygiene: 'what went well' section missing — add positive response patterns. (2) Hygiene: action items lack tracking tickets — link to JIRA/Linear. (3) Verify blameless language throughout. (4) Check 5-Why depth >= 3. (5) Confirm impact is quantified. Scorecard: likely Critical 3/3, Standard 4/5, Hygiene 2/4 = FAIL (hygiene).",
+  "coverage_rules": [
+    "Review",
+    "Scorecard",
+    "Quality findings",
+    "What went well"
+  ],
+  "reference": "SKILL.md"
+}

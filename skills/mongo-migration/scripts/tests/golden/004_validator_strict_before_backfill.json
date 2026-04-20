@@ -1,0 +1,12 @@
+{
+  "id": "MONGO-004",
+  "title": "Schema validator set to strict before backfill — blocks updates on non-compliant docs",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "db.runCommand({\n  collMod: 'orders',\n  validator: {$jsonSchema: {\n    required: ['customer_id', 'amount', 'status', 'created_at']\n  }},\n  validationLevel: 'strict'\n})",
+  "context": {"mongo_version": "6.0", "deployment": "replica_set", "doc_count": "3000000", "sharded": false},
+  "expected_feedback": "Standard: Setting validationLevel 'strict' before backfill means ANY update to a document missing the required fields will be rejected — even if the update itself is valid and doesn't touch the missing fields. With 3M documents potentially missing 'created_at', this blocks normal application updates. Use 'moderate' first (only validates inserts and updates to new documents), backfill missing fields, then switch to 'strict' after verifying all documents comply.",
+  "violated_rule": "Schema validator uses moderate → strict progression",
+  "coverage_rules": ["validationLevel", "moderate", "strict", "collMod", "backfill"],
+  "reference": "SKILL.md"
+}

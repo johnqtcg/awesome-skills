@@ -1,0 +1,16 @@
+{
+  "id": "PM-007",
+  "title": "Action items with no tracking tickets or follow-up mechanism",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "## Action Items\n\n- [Prevent] Add config validation to CI pipeline (owner: @platform, deadline: Apr 1)\n- [Detect] Add missing Redis alert (owner: @sre, deadline: Mar 22)\n- [Mitigate] Add circuit breaker (owner: @backend, deadline: Apr 15)\n\n// Good items but no JIRA tickets, no review date, no tracking mechanism",
+  "violated_rule": "Follow-up tracking mechanism defined — JIRA/Linear tickets, review date",
+  "expected_feedback": "Standard: action items are well-formed (owned, deadlined, categorized) but lack tracking tickets and a follow-up mechanism. Without JIRA/Linear tickets and a scheduled review date, action items are forgotten. Link each item to a ticket and define a review cadence.",
+  "coverage_rules": [
+    "Follow-up tracking mechanism defined",
+    "No follow-up tracking",
+    "JIRA",
+    "Status: Reviewed"
+  ],
+  "reference": "SKILL.md"
+}

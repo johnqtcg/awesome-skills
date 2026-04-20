@@ -1,0 +1,11 @@
+{
+  "id": "KAFKA-008",
+  "title": "Good outbox pattern — transactional event publishing with DB atomicity",
+  "type": "good_practice",
+  "severity": "none",
+  "code_snippet": "// Within single DB transaction:\ntx := db.Begin()\ntx.Exec(\"INSERT INTO orders (id, ...) VALUES (...)\")\ntx.Exec(\"INSERT INTO outbox (event_id, topic, key, payload) VALUES (uuid, 'order.events', order_id, ?)\")\ntx.Commit()\n// Separate outbox relay process polls outbox, publishes to Kafka, marks as sent",
+  "context": {"kafka_version": "3.0", "schema": "Avro", "delivery": "at-least-once"},
+  "expected_feedback": "No violations. Correctly implements the outbox pattern for atomic event publishing. DB write and event record are in a single transaction — if either fails, both roll back. The outbox relay publishes asynchronously with at-least-once guarantee (re-reads unsent rows on restart). This avoids the dual-write problem (db.Save + kafka.Produce is NOT atomic).",
+  "coverage_rules": ["outbox", "transaction", "at-least-once", "atomic"],
+  "reference": "references/event-schema-patterns.md"
+}

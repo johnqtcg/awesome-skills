@@ -1,0 +1,11 @@
+{
+  "id": "CACHE-009",
+  "title": "Degraded mode — cache review with no Redis config or consistency requirement",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "code_snippet": "// Someone shared this caching code without architecture context\nrdb.Set(ctx, key, value, 5*time.Minute)\nval, _ := rdb.Get(ctx, key).Result()",
+  "context": {"redis_version": "unknown", "deployment": "unknown", "eviction": "unknown", "consistency": "unknown"},
+  "expected_feedback": "Degraded mode: no Redis version, deployment mode, eviction policy, or consistency requirement provided. Cannot evaluate pattern suitability or failure mode risk without knowing the consistency SLA. Flag: consistency requirement undefined (Critical — must clarify before design), eviction policy unknown (Hygiene). All recommendations are conditional. Must NOT claim the caching strategy is correct without knowing what 'correct' means for this use case. Uncovered Risks must list all unknowns.",
+  "coverage_rules": ["Degraded", "never claim", "Uncovered Risk", "consistency", "staleness"],
+  "reference": "SKILL.md"
+}

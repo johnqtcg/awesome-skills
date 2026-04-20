@@ -1,0 +1,16 @@
+{
+  "id": "DEP-004",
+  "title": "Transitive dependency with CVE but no reachable path — suppressed to P3",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "// go.mod\nrequire github.com/foo/bar v1.5.0\n// bar depends on golang.org/x/crypto v0.13.0 (CVE-2023-48795)\n\n// govulncheck output:\n// Vulnerability GO-2023-2153 (CVE-2023-48795)\n// Found in: golang.org/x/crypto@v0.13.0\n// Your code is NOT affected.\n// The vulnerable symbol ssh.ServerConfig.SetDefaults is not called.",
+  "violated_rule": "No reachable P1 CVEs — all CVSS >= 7.0 reachable vulns addressed or waived",
+  "expected_feedback": "P3 Low: CVE-2023-48795 in transitive dependency golang.org/x/crypto@v0.13.0. govulncheck source mode confirms no reachable path — the vulnerable ssh.ServerConfig function is not called. Track for next upgrade cycle. Not urgent.",
+  "coverage_rules": [
+    "Transitive CVEs need triage",
+    "CVSS score alone is insufficient",
+    "Source mode confirms reachability",
+    "not called"
+  ],
+  "reference": "references/govulncheck-patterns.md"
+}

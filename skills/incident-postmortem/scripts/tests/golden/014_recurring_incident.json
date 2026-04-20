@@ -1,0 +1,16 @@
+{
+  "id": "PM-014",
+  "title": "Recurring incident — same root cause, prior action items incomplete",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "# Post-mortem: Redis Connection Pool Exhaustion INC-2024-0203\n\n## Summary\nOn 2024-06-10, order-service experienced connection timeouts for 38 min.\n\n## Timeline (UTC)\n09:12 [DETECTION] Connection pool alerts firing (PagerDuty #5102)\n09:15 [RESPONSE] On-call @dave acknowledged (PagerDuty)\n09:28 [MITIGATION] Restarted order-service pods (kubectl)\n09:50 [RECOVERY] Connection pool healthy (Grafana)\n\n## Root Cause (5-Why, depth 4)\n1. Why timeouts? -> Connection pool exhausted\n2. Why exhausted? -> Connections not released on error path\n3. Why not released? -> Error handler missing pool.release() call\n4. Why missing? -> No code review checklist for connection lifecycle\n\nRoot Cause: Missing connection lifecycle checklist in code review.\n\n## Contributing Factors\n- Alert routed to wrong team initially (10 min delay)\n- No auto-scaling for connection pool\n\n## Impact\n38 min degradation, ~8K affected orders, 12% error rate on order-service.\n\n## What Went Well\n- Alert fired within 2 minutes of first timeout\n- Pod restart was effective mitigation\n\n## Action Items\n- [Prevent] Add connection lifecycle lint rule (owner: @platform, deadline: Jul 1, JIRA-5201)\n- [Detect] Add pool utilization alert at 80% (owner: @sre, deadline: Jun 20, JIRA-5202)\n- [Mitigate] Auto-scale connection pool on threshold (owner: @infra, deadline: Jul 15, JIRA-5203)",
+  "violated_rule": "Related incidents linked — cross-reference to past similar incidents",
+  "expected_feedback": "Standard: This is the third Redis connection pool incident (see INC-2024-0098, INC-2024-0112 from the same codebase). Post-mortem does not link to previous related incidents. Prior action items from INC-2024-0112 (add pool monitoring, enforce release-on-error pattern) were never completed — the same root cause class recurred because follow-up tracking failed. Must link related incidents per §5.5 item 18 and verify prior action items were executed. Scorecard Hygiene #11 fails.",
+  "coverage_rules": [
+    "Link to previous related incidents",
+    "Related incidents linked",
+    "Follow-up tracking mechanism defined",
+    "pattern recognition across incidents"
+  ],
+  "reference": "SKILL.md"
+}

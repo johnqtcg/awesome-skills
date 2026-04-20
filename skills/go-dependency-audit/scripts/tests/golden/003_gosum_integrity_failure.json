@@ -1,0 +1,16 @@
+{
+  "id": "DEP-003",
+  "title": "go.sum integrity verification failure — checksum mismatch",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "// go mod verify output:\n// github.com/foo/bar v1.2.3: dir has been modified\n// github.com/foo/bar v1.2.3: zip has been modified\n// SECURITY ERROR\n// This download does NOT match the expected hash.",
+  "violated_rule": "go.mod/go.sum integrity verified — go mod verify passes",
+  "expected_feedback": "P1 Critical: go.sum integrity failure — cached module content does not match recorded checksums. This could indicate supply chain tampering. Clear module cache (go clean -modcache), re-download, and re-verify. If mismatch persists, investigate the module source.",
+  "coverage_rules": [
+    "go.mod/go.sum integrity verified",
+    "go mod verify",
+    "go.sum is your integrity anchor",
+    "checksum mismatch"
+  ],
+  "reference": "references/supply-chain-security.md"
+}

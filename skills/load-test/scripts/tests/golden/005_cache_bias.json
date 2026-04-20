@@ -1,0 +1,16 @@
+{
+  "id": "LT-005",
+  "title": "Single user ID every request — 100% cache hit rate hides real DB performance",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "import http from 'k6/http';\nimport { check } from 'k6';\n\nexport const options = {\n  scenarios: {\n    warmup: { executor: 'constant-vus', vus: 5, duration: '30s',\n              tags: { phase: 'warmup' } },\n    test: { executor: 'ramping-vus', startTime: '30s',\n            stages: [{ duration: '1m', target: 100 }, { duration: '3m', target: 100 }, { duration: '30s', target: 0 }],\n            tags: { phase: 'test' } },\n  },\n  thresholds: {\n    'http_req_duration{phase:test}': ['p(99)<200'],\n    'http_req_failed{phase:test}': ['rate<0.001'],\n  },\n};\n\nexport default function() {\n  http.get('http://api.example.com/users/1');\n}",
+  "violated_rule": "Test data parameterized — not single-value cache-hit bias",
+  "expected_feedback": "Standard: same user ID (users/1) every request. Cache hit rate = 100%, so actual DB path is never tested. Production has unique user IDs with 40-60% cache miss rate. Use SharedArray with parameterized data feeds and realistic distribution.",
+  "coverage_rules": [
+    "Test data is representative",
+    "Test data parameterized",
+    "Same request every time",
+    "parameterized data feeds"
+  ],
+  "reference": "SKILL.md"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "PG-004",
+  "title": "Missing rollback plan — DROP COLUMN without data backup",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V8__cleanup.sql\nALTER TABLE users DROP COLUMN legacy_email;\nALTER TABLE users DROP COLUMN temp_flag;",
+  "context": {
+    "pg_version": "15.4",
+    "table_rows": "1500000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "Critical: DROP COLUMN is irreversible after COMMIT — even though PostgreSQL supports transactional DDL, once committed the data cannot be recovered. No rollback plan provided. Back up column data before dropping. Classify both as 'irreversible' and check for dependent views/functions.",
+  "violated_rule": "Rollback path provided",
+  "coverage_rules": ["rollback", "irreversible", "DROP COLUMN", "transactional DDL"],
+  "reference": "SKILL.md"
+}

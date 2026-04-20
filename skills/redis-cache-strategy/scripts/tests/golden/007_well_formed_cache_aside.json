@@ -1,0 +1,11 @@
+{
+  "id": "CACHE-007",
+  "title": "Well-formed cache-aside with singleflight + TTL jitter + null caching",
+  "type": "good_practice",
+  "severity": "none",
+  "code_snippet": "var sfGroup singleflight.Group\n\nfunc GetUser(ctx context.Context, id string) (*User, error) {\n    cached, err := rdb.Get(ctx, \"user:\"+id).Bytes()\n    if err == nil {\n        if string(cached) == \"__NULL__\" { return nil, ErrNotFound }\n        var u User\n        json.Unmarshal(cached, &u)\n        return &u, nil\n    }\n    if err != redis.Nil {\n        // Redis error: degrade to DB\n        return db.QueryUser(ctx, id)\n    }\n    val, err, _ := sfGroup.Do(\"user:\"+id, func() (interface{}, error) {\n        u, err := db.QueryUser(ctx, id)\n        if err == sql.ErrNoRows {\n            rdb.Set(ctx, \"user:\"+id, \"__NULL__\", 60*time.Second)\n            return nil, ErrNotFound\n        }\n        ttl := 30*time.Minute + time.Duration(rand.Intn(300))*time.Second\n        rdb.Set(ctx, \"user:\"+id, marshal(u), ttl)\n        return u, nil\n    })\n    return val.(*User), err\n}",
+  "context": {"redis_version": "7.0", "deployment": "cluster", "eviction": "allkeys-lru", "consistency": "eventual"},
+  "expected_feedback": "No violations. Correctly implements production-grade cache-aside: (1) singleflight prevents stampede on hot key miss, (2) TTL with jitter prevents avalanche, (3) null-value caching prevents penetration from non-existent IDs, (4) Redis error falls through to DB (degradation path), (5) key naming follows namespace convention.",
+  "coverage_rules": ["singleflight", "TTL", "jitter", "null", "penetration", "degradation", "cache-aside"],
+  "reference": "SKILL.md"
+}

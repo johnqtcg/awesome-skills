@@ -1,0 +1,15 @@
+{
+  "id": "LT-010",
+  "title": "Degraded mode — results provided without SLO targets",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "code_snippet": "# User provides k6 output:\n# Requests: 150000, Rate: 2500/s\n# http_req_duration: avg=42ms p50=18ms p95=85ms p99=312ms p99.9=1.2s max=3.5s\n# http_req_failed: 0.03%\n# Checks: 99.97%\n#\n# User says: 'Here are the results, is the service healthy?'",
+  "expected_feedback": "Degraded: Partial mode — results available but no SLOs defined. Can deliver statistical summary and anomaly flags (p99/p50 ratio = 17x suggests bimodal behavior; p99.9=1.2s tail latency). Cannot claim pass/fail or make capacity conclusions without SLO targets. Must NOT fabricate SLO compliance.",
+  "coverage_rules": [
+    "Results only, no SLOs",
+    "Statistical summary",
+    "Cannot Claim",
+    "Never fabricate performance numbers"
+  ],
+  "reference": "SKILL.md"
+}

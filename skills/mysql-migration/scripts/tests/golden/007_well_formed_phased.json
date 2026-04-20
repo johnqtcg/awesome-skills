@@ -1,0 +1,15 @@
+{
+  "id": "MIG-007",
+  "title": "Well-formed phased migration — correct 5-phase zero-downtime pattern",
+  "type": "good_practice",
+  "severity": "none",
+  "migration_snippet": "-- Phase 1: V10__add_total_usd.sql\nSET SESSION lock_wait_timeout = 3;\nSET SESSION innodb_lock_wait_timeout = 3;\nALTER TABLE orders ADD COLUMN total_usd DECIMAL(12,2) DEFAULT NULL, ALGORITHM=INSTANT;\n\n-- Phase 2: backfill.sql (run via app or script)\n-- UPDATE orders SET total_usd = total_amount * exchange_rate WHERE id > ? AND id <= ? AND total_usd IS NULL;\n\n-- Phase 3: app deploy with dual-write\n-- Phase 4: V11__enforce_not_null.sql\nSET SESSION lock_wait_timeout = 3;\nALTER TABLE orders MODIFY COLUMN total_usd DECIMAL(12,2) NOT NULL DEFAULT 0.00, ALGORITHM=INPLACE, LOCK=NONE;\n\n-- Phase 5 (next release): V12__drop_old_columns.sql",
+  "context": {
+    "mysql_version": "8.0.32",
+    "table_rows": "5000000",
+    "replication": "source-replica"
+  },
+  "expected_feedback": "No violations. Correctly implements the 5-phase zero-downtime pattern: (1) additive nullable column with INSTANT, (2) PK-range backfill, (3) app dual-write deploy, (4) constraint enforcement with INPLACE, (5) cleanup in separate release. Session guards present on all DDL statements.",
+  "coverage_rules": ["phased", "ALGORITHM=INSTANT", "ALGORITHM=INPLACE", "session guards", "lock_wait_timeout", "backfill", "zero-downtime"],
+  "reference": "SKILL.md"
+}

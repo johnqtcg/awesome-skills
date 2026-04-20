@@ -1,0 +1,11 @@
+{
+  "id": "API-010",
+  "title": "Workflow — design REST API for order management from scratch",
+  "type": "workflow",
+  "severity": "none",
+  "code_snippet": "# Goal: design REST API for order management\n# Consumers: frontend (React) + mobile (iOS/Android) + partner webhooks\n# Entities: orders, order items, payments\n# Requirements: create/read/update/cancel orders, list with filtering, pagination\n# Auth: JWT for frontend/mobile, API key for partners\n# Volume: ~200 orders/sec peak",
+  "context": {"api_type": "public + internal", "consumers": "frontend, mobile, partners"},
+  "expected_feedback": "Workflow: multi-consumer order management API design. (1) Resources: /api/v1/orders, /api/v1/orders/{id}, /api/v1/orders/{id}/items, /api/v1/orders/{id}/cancel (action). (2) Status codes: 201 for POST, 200 for GET/PATCH, 204 for DELETE, 202 for cancel (async). (3) Error model: standard envelope with codes (validation_error, not_found, conflict, etc.). (4) Idempotency-Key for POST /orders (financial — Critical). (5) Cursor pagination for list, allowlisted filters (status, customer_id, date range). (6) ETag/If-Match for PUT/PATCH. (7) Object-level authz: user sees only own orders; partner sees only own tenant's orders. (8) Rate limits: 100/min for public, 1000/min for internal. (9) Versioning: /api/v1 with Sunset headers for future breaking changes.",
+  "coverage_rules": ["resource naming", "status codes", "error model", "idempotency", "pagination", "IDOR", "rate limit", "compatibility"],
+  "reference": "SKILL.md"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "DEP-009",
+  "title": "Well-executed targeted dependency upgrade with verification",
+  "type": "good_practice",
+  "severity": "none",
+  "code_snippet": "# Targeted CVE fix:\n$ go get golang.org/x/net@v0.17.0\n$ go mod tidy\n$ go mod verify  # all modules verified\n$ govulncheck ./...  # No vulnerabilities found\n$ go test ./...  # All tests pass\n$ git diff go.mod go.sum  # Review changes",
+  "expected_feedback": "No violations. Correctly executes targeted upgrade: (1) specific version pinned, not go get -u, (2) go mod tidy after upgrade, (3) integrity verified, (4) govulncheck confirms CVE resolved, (5) tests pass, (6) changes reviewed before commit.",
+  "coverage_rules": [
+    "go get pkg@version",
+    "go mod tidy",
+    "go mod verify",
+    "govulncheck"
+  ],
+  "reference": "references/upgrade-planning.md"
+}

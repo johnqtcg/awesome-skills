@@ -1,0 +1,11 @@
+{
+  "id": "MONGO-007",
+  "title": "Well-formed phased migration — additive + batched backfill + validator progression",
+  "type": "good_practice",
+  "severity": "none",
+  "migration_snippet": "// Phase 1: Add optional field (no validator)\ndb.orders.createIndex({customer_id: 1, _id: 1})\n\n// Phase 2: Batched backfill by _id range with w:majority\n// ... _id-range batched updateMany with sleep(100) ...\n\n// Phase 3: App deploy with dual-write\n\n// Phase 4: Enforce validator (moderate first)\ndb.runCommand({collMod: 'orders', validator: {$jsonSchema: {\n  required: ['customer_id', 'status']\n}}, validationLevel: 'moderate'})\n// Verify all docs comply, then:\ndb.runCommand({collMod: 'orders', validationLevel: 'strict'})\n\n// Phase 5: Cleanup old fields in batched $unset",
+  "context": {"mongo_version": "6.0", "deployment": "replica_set", "doc_count": "5000000", "sharded": false},
+  "expected_feedback": "No violations. Correctly implements the 5-phase MongoDB migration pattern: (1) additive index and field creation, (2) _id-range batched backfill with explicit write concern, (3) application dual-write, (4) validator progression from moderate to strict, (5) batched cleanup in separate release. Each phase is independently rollback-able.",
+  "coverage_rules": ["_id-range", "batch", "validationLevel", "moderate", "strict", "phased", "write concern"],
+  "reference": "SKILL.md"
+}

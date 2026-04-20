@@ -1,0 +1,15 @@
+{
+  "id": "PM-009",
+  "title": "Well-executed 5-Why analysis reaching systemic root cause at depth 5",
+  "type": "good_practice",
+  "severity": "none",
+  "code_snippet": "## Root Cause Analysis\n\n1. Why did payment fail? -> Redis connection string was empty in config\n2. Why was connection string empty? -> Config file had wrong format after template change\n3. Why was wrong format accepted? -> No schema validation in deploy pipeline\n4. Why is there no schema validation? -> Pipeline was built before config complexity grew\n5. Why wasn't validation added when config grew? -> No process to review pipeline gates as services evolve\n\nRoot Cause: Missing process for periodic pipeline capability reviews as services evolve.\n\nContributing Factors:\n- Outdated runbook (delayed recovery by ~10 min)\n- No automated rollback trigger on error rate spike\n- Alert fatigue: 42 false positives in 24h diluted attention",
+  "expected_feedback": "No violations. 5-Why analysis correctly reaches depth 5 with systemic root cause (missing process for pipeline reviews). Each level is non-trivial. Root cause is process-level, not individual. Contributing factors are properly separated and specific with evidence. Analysis would prevent recurrence if addressed.",
+  "coverage_rules": [
+    "5-Why",
+    "depth",
+    "systemic",
+    "Contributing Factors"
+  ],
+  "reference": "references/rca-techniques.md"
+}

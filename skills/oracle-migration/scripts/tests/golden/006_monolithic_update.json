@@ -1,0 +1,12 @@
+{
+  "id": "ORA-006",
+  "title": "Monolithic UPDATE on large table — UNDO exhaustion and long lock",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- backfill_script.sql\nUPDATE orders SET total_usd = total_amount * exchange_rate WHERE total_usd IS NULL;\nCOMMIT;",
+  "context": {"oracle_version": "19c", "edition": "EE", "table_rows": "20000000", "rac": "no"},
+  "expected_feedback": "Standard: Monolithic UPDATE on 20M rows creates several problems: (1) holds row locks on all 20M rows for the entire transaction duration, blocking concurrent DML on overlapping rows; (2) generates a massive UNDO segment, risking ORA-30036 (unable to extend undo segment) if UNDO tablespace is insufficient; (3) a single failure rolls back all 20M rows of work. Use PK-range or ROWID-range batching with COMMIT every 1000–10000 rows. This limits UNDO consumption, releases locks incrementally, and allows resume from the last committed batch on failure. Monitor V$UNDOSTAT during the backfill.",
+  "violated_rule": "Batch operations use ROWID/PK-range",
+  "coverage_rules": ["ROWID", "batch", "COMMIT", "UNDO"],
+  "reference": "SKILL.md"
+}

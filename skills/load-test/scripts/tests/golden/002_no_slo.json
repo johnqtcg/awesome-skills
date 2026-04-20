@@ -1,0 +1,16 @@
+{
+  "id": "LT-002",
+  "title": "No SLO thresholds — test results are meaningless numbers",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "// 'Let's see how fast it is'\nimport http from 'k6/http';\n\nexport const options = {\n  vus: 100,\n  duration: '30s',\n};\n\nexport default function() {\n  const res = http.get('http://api.example.com/endpoint');\n  console.log(`status: ${res.status}`);\n}\n// Output: avg=45ms, p99=312ms, 4500 RPS\n// ...so? Is this good? Bad? No one knows.",
+  "violated_rule": "SLO defined before test — thresholds exist, not post-hoc",
+  "expected_feedback": "Critical: no SLOs defined. Without SLOs, test results are meaningless numbers — no decision can be made. Define thresholds first: latency (p50, p99), throughput (RPS), error rate. SLOs drive everything: scenario selection, pass/fail criteria, analysis focus.",
+  "coverage_rules": [
+    "SLOs MUST exist before writing test scripts",
+    "SLO defined before test",
+    "No SLO",
+    "SLOs drive everything"
+  ],
+  "reference": "SKILL.md"
+}

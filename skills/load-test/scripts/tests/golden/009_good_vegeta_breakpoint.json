@@ -1,0 +1,15 @@
+{
+  "id": "LT-009",
+  "title": "Well-formed vegeta breakpoint test — step-increase rate, p99 SLO check, warmup",
+  "type": "good_practice",
+  "severity": "none",
+  "code_snippet": "#!/bin/bash\n# breakpoint.sh — find service ceiling via vegeta\nSLO_P99_MS=200\n\n# Warmup (discard)\necho \"GET http://api/endpoint\" | vegeta attack -rate=50/s -duration=15s > /dev/null\n\nfor rate in 100 200 500 1000 2000 5000; do\n  echo \"Testing at ${rate} RPS...\"\n  p99=$(echo \"GET http://api/endpoint\" | \\\n    vegeta attack -rate=${rate}/s -duration=30s | \\\n    vegeta report -type=json | \\\n    jq '.latencies.\"99th\"' | \\\n    awk '{printf \"%.0f\", $1/1000000}')\n  echo \"  p99 = ${p99}ms (SLO: ${SLO_P99_MS}ms)\"\n  if [ \"$p99\" -gt \"$SLO_P99_MS\" ]; then\n    echo \"BREAKPOINT: p99 exceeded SLO at ${rate} RPS\"\n    break\n  fi\ndone",
+  "expected_feedback": "No violations. Correctly implements vegeta breakpoint test: (1) warmup phase discarded, (2) step-increase rate pattern, (3) p99 SLO threshold check per step, (4) stops at breakpoint, (5) uses constant-rate attack for precise RPS control.",
+  "coverage_rules": [
+    "Breakpoint",
+    "saturation point",
+    "vegeta",
+    "warmup separation"
+  ],
+  "reference": "references/vegeta-patterns.md"
+}

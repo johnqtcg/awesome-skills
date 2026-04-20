@@ -1,0 +1,15 @@
+{
+  "id": "LT-008",
+  "title": "Well-formed k6 load test — warmup, SLO thresholds, ramp-up, parameterized data",
+  "type": "good_practice",
+  "severity": "none",
+  "code_snippet": "import http from 'k6/http';\nimport { check, sleep } from 'k6';\nimport { SharedArray } from 'k6/data';\nimport { Rate } from 'k6/metrics';\n\nconst errorRate = new Rate('errors');\nconst users = new SharedArray('users', function() {\n  return JSON.parse(open('./testdata/users.json'));\n});\n\nexport const options = {\n  scenarios: {\n    warmup: {\n      executor: 'constant-vus', vus: 10, duration: '30s',\n      gracefulStop: '0s', tags: { phase: 'warmup' },\n    },\n    load_test: {\n      executor: 'ramping-vus', startTime: '30s',\n      stages: [\n        { duration: '1m', target: 50 },\n        { duration: '3m', target: 50 },\n        { duration: '30s', target: 0 },\n      ],\n      tags: { phase: 'test' },\n    },\n  },\n  thresholds: {\n    'http_req_duration{phase:test}': ['p(99)<200', 'p(50)<50'],\n    'http_req_failed{phase:test}': ['rate<0.001'],\n    'errors{phase:test}': ['rate<0.01'],\n  },\n};\n\nexport default function() {\n  const user = users[Math.floor(Math.random() * users.length)];\n  const res = http.get(`http://api.example.com/users/${user.id}`);\n  check(res, { 'status is 200': r => r.status === 200 }) || errorRate.add(1);\n  sleep(Math.random() * 3 + 1);\n}",
+  "expected_feedback": "No violations. Correctly implements: (1) warmup phase excluded from thresholds via tags, (2) SLO thresholds for p99, p50, error rate, (3) gradual ramp-up with 3-min steady state, (4) parameterized user data via SharedArray, (5) think time between requests, (6) custom error rate metric.",
+  "coverage_rules": [
+    "Warmup phase precedes measurement",
+    "Ramp-up is gradual",
+    "Test data is representative",
+    "thresholds"
+  ],
+  "reference": "references/k6-patterns.md"
+}

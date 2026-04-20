@@ -1,0 +1,16 @@
+{
+  "id": "LT-003",
+  "title": "30-second test declared comprehensive — misses GC, pool exhaustion, leaks",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "import http from 'k6/http';\nimport { check } from 'k6';\n\nexport const options = {\n  scenarios: {\n    warmup: { executor: 'constant-vus', vus: 5, duration: '10s',\n              tags: { phase: 'warmup' } },\n    test: { executor: 'constant-vus', vus: 50, duration: '30s',\n            startTime: '10s', tags: { phase: 'test' } },\n  },\n  thresholds: {\n    'http_req_duration{phase:test}': ['p(99)<200'],\n    'http_req_failed{phase:test}': ['rate<0.001'],\n  },\n};\n\nexport default function() {\n  check(http.get('http://api/orders'), { 'is 200': r => r.status === 200 });\n}",
+  "violated_rule": "Steady state duration sufficient — >= 1 min smoke, >= 3 min load/stress",
+  "expected_feedback": "Critical: 30-second steady state is insufficient for a load test. Misses GC major collections (every 2-3 min), connection pool exhaustion, memory leaks. Minimum 3-5 minutes for standard load tests, 15+ minutes for soak. This is a smoke test at best.",
+  "coverage_rules": [
+    "Steady state duration is sufficient",
+    "Steady state duration sufficient",
+    "30-second test declared",
+    "connection pool exhaustion"
+  ],
+  "reference": "SKILL.md"
+}

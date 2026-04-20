@@ -1,0 +1,16 @@
+{
+  "id": "MIG-002",
+  "title": "Implicit algorithm — ALTER without ALGORITHM= risks silent COPY on large table",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V5__add_column.sql\nALTER TABLE events ADD COLUMN source VARCHAR(100);",
+  "context": {
+    "mysql_version": "8.0.28",
+    "table_rows": "80000000",
+    "replication": "source-2-replica"
+  },
+  "expected_feedback": "Critical: ALTER TABLE without explicit ALGORITHM specification. On an 80M-row table, if the server silently chooses COPY, it will lock the table for hours. Specify ALGORITHM=INSTANT (supported for ADD COLUMN on 8.0.12+) and add session guards.",
+  "violated_rule": "Algorithm explicitly specified",
+  "coverage_rules": ["algorithm", "explicit", "ALGORITHM=INSTANT", "never rely on server default"],
+  "reference": "SKILL.md"
+}

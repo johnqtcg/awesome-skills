@@ -1,0 +1,12 @@
+{
+  "id": "API-001",
+  "title": "Verb in URL — POST /createUser violates REST resource naming",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "POST /api/v1/createUser\n{\n  \"name\": \"Alice\",\n  \"email\": \"alice@example.com\"\n}\n→ 200 OK {\"id\": \"123\", \"name\": \"Alice\"}",
+  "context": {"api_type": "internal", "consumers": "frontend"},
+  "expected_feedback": "Critical: URL contains a verb ('createUser'). REST resources are nouns — the HTTP method IS the verb. POST /api/v1/createUser should be POST /api/v1/users. This breaks REST conventions, makes the API unpredictable (is it /getUser, /fetchUser, /retrieveUser?), and complicates OpenAPI tooling that expects resource-based paths. Additionally: response returns 200 instead of 201 Created, and is missing a Location header pointing to the created resource.",
+  "violated_rule": "Resource naming follows REST conventions",
+  "coverage_rules": ["resource naming", "plural nouns", "kebab-case"],
+  "reference": "SKILL.md"
+}

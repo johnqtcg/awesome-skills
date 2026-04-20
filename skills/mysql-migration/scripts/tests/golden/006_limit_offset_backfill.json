@@ -1,0 +1,16 @@
+{
+  "id": "MIG-006",
+  "title": "LIMIT/OFFSET backfill — O(n²) degradation on large table backfill",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- backfill_script.sql\nSET @offset = 0;\nREPEAT\n  UPDATE orders SET total_usd = total * rate\n  WHERE total_usd IS NULL\n  LIMIT 1000 OFFSET @offset;\n  SET @offset = @offset + 1000;\nUNTIL ROW_COUNT() = 0 END REPEAT;",
+  "context": {
+    "mysql_version": "8.0.32",
+    "table_rows": "15000000",
+    "replication": "source-2-replica"
+  },
+  "expected_feedback": "Standard: LIMIT/OFFSET backfill degrades to O(n²) on large tables. At offset 10M, MySQL scans and discards 10M rows per batch. Use PK-range batching instead: WHERE id > @last_id AND id <= @last_id + @batch_size.",
+  "violated_rule": "Backfill uses PK-range batching",
+  "coverage_rules": ["PK-range", "LIMIT/OFFSET", "backfill", "batch"],
+  "reference": "SKILL.md"
+}

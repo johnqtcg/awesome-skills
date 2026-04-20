@@ -1,0 +1,15 @@
+{
+  "id": "PM-008",
+  "title": "Well-formed blameless post-mortem with all required sections",
+  "type": "good_practice",
+  "severity": "none",
+  "code_snippet": "# Post-mortem: Payment API Outage INC-2024-0142\n\n## Summary\nOn 2024-03-15, payment-api experienced 15% error rate for 47 min.\n\n## Timeline (UTC, all sourced)\n14:18 [TRIGGER] Config deploy (GitHub PR #4521)\n14:23 [DETECTION] Error rate spike (Grafana)\n14:26 [DETECTION] PagerDuty alert (PD #4821)\n14:28 [RESPONSE] On-call acknowledged\n14:45 [MITIGATION] Config rolled back (ArgoCD)\n15:10 [RECOVERY] All transactions processed\n\n## Root Cause (5-Why, depth 5, systemic)\nEmpty connection string -> no schema validation -> no pipeline gate review process\n\n## Contributing Factors\nOutdated runbook, no auto-rollback, alert went to wrong channel\n\n## Impact: 47 min, ~12K users, 15.2% error rate, ~$48K revenue\n\n## What Went Well\nAlert fired in 3 min, correct escalation to DB team\n\n## Action Items (owned, deadlined, tracked)\nAI-1 [Prevent] Config validation (JIRA-4521, @platform, Apr 1)\nAI-2 [Detect] Redis health check (JIRA-4522, @sre, Mar 22)\nAI-3 [Mitigate] Auto-rollback (JIRA-4523, @platform, Apr 15)\n\n## Related: INC-2024-0098, INC-2024-0112",
+  "expected_feedback": "No violations. Post-mortem demonstrates all quality criteria: (1) blameless language throughout, (2) UTC-sourced timeline with detection/response/recovery phases, (3) 5-Why root cause at depth 5 reaching systemic cause, (4) contributing factors separated from root cause, (5) quantified impact, (6) 'what went well' section, (7) action items with owners, deadlines, categories, and JIRA tickets, (8) related incidents linked.",
+  "coverage_rules": [
+    "Blameless Framing",
+    "Timestamps are UTC and sequential",
+    "Use 5-Why analysis as minimum",
+    "Every action item has an owner and deadline"
+  ],
+  "reference": "SKILL.md"
+}

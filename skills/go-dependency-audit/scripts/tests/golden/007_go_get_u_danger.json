@@ -1,0 +1,16 @@
+{
+  "id": "DEP-007",
+  "title": "Using go get -u to fix single CVE — upgrades everything dangerously",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "# Developer response to CVE in golang.org/x/net:\n$ go get -u ./...\n# Result: 47 transitive dependencies upgraded\n# Three of them have breaking changes\n# CI pipeline fails on unrelated tests",
+  "violated_rule": "Gradual ramp-up — not instant full load",
+  "expected_feedback": "Standard: go get -u upgrades ALL transitive dependencies, not just the target. Use targeted upgrade: go get golang.org/x/net@v0.17.0 instead. Batch upgrades across 47 modules introduce uncontrolled risk.",
+  "coverage_rules": [
+    "go get -u",
+    "is dangerous",
+    "for precise control",
+    "targeted upgrade"
+  ],
+  "reference": "references/upgrade-planning.md"
+}

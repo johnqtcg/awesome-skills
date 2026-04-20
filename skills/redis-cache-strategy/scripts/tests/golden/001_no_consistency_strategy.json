@@ -1,0 +1,12 @@
+{
+  "id": "CACHE-001",
+  "title": "No consistency strategy — DB and cache both written without invalidation logic",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "func UpdateUser(ctx context.Context, u *User) error {\n    db.Save(u)\n    rdb.Set(ctx, \"user:\"+u.ID, marshal(u), 0)\n    return nil\n}\n// No invalidation on other write paths that modify user data\n// Other services also write to DB but don't know about this cache",
+  "context": {"redis_version": "7.0", "deployment": "cluster", "eviction": "allkeys-lru", "consistency": "undefined"},
+  "expected_feedback": "Critical: Cache and DB are both written directly but no explicit consistency strategy is defined. Other write paths (other services, DB triggers, admin tools) bypass the cache entirely, causing divergence. This is 'write both and hope' — the most common cache consistency anti-pattern. Define a source of truth (DB), choose a pattern (cache-aside with invalidation, or write-through), and ensure ALL write paths invalidate or update the cache. Also: TTL is 0 (immortal key) — stale data persists indefinitely.",
+  "violated_rule": "Cache-DB consistency strategy explicitly defined",
+  "coverage_rules": ["consistency", "source of truth", "invalidation", "cache-aside"],
+  "reference": "SKILL.md"
+}

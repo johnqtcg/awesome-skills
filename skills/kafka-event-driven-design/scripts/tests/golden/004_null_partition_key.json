@@ -1,0 +1,12 @@
+{
+  "id": "KAFKA-004",
+  "title": "Null partition key — events for same entity scattered across partitions",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "producer.SendMessage(&sarama.ProducerMessage{\n    Topic: \"order.events\",\n    Value: sarama.ByteEncoder(eventData),\n    // Key is nil → round-robin across partitions\n})",
+  "context": {"kafka_version": "3.0", "schema": "JSON", "delivery": "at-least-once", "ordering": "per-order"},
+  "expected_feedback": "Standard: Partition key is null — Kafka will round-robin messages across partitions. With per-order ordering requirement, events for the same order will land in different partitions, processed by different consumers at different speeds. Result: order.created may be processed AFTER order.shipped. Fix: set partition key to the entity ID (order_id) so all events for the same order go to the same partition and are consumed in order.",
+  "violated_rule": "Partition key matches ordering requirement",
+  "coverage_rules": ["partition key", "ordering", "round-robin"],
+  "reference": "SKILL.md"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "MONGO-006",
+  "title": "In-place field type change — breaks old application code reading the field",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "// Before: amount is string '99.50'\n// This changes it to double 99.5 in-place\ndb.orders.updateMany({}, [{$set: {amount: {$toDouble: '$amount'}}}])",
+  "context": {"mongo_version": "6.0", "deployment": "replica_set", "doc_count": "5000000", "sharded": false},
+  "expected_feedback": "Standard: In-place type change from string to double means old application code expecting strings will break immediately when encountering already-migrated documents. During rolling deployment, some app instances read old type while others read new type — causing intermittent failures. Use the new-field pattern: add amount_v2 as double, dual-read in application (prefer amount_v2, fallback to amount), then cleanup old field in a separate release.",
+  "violated_rule": "Field type changes use new-field + dual-read pattern",
+  "coverage_rules": ["field type", "dual-read", "new-field", "additive"],
+  "reference": "SKILL.md"
+}

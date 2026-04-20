@@ -1,0 +1,12 @@
+{
+  "id": "CACHE-012",
+  "title": "Write-behind for financial transactions — async DB write risks silent data loss",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "func ProcessPayment(ctx context.Context, p *Payment) error {\n    data, _ := json.Marshal(p)\n    // Write to cache first, then async DB write\n    rdb.Set(ctx, \"payment:\"+p.ID, data, 1*time.Hour)\n    go func() {\n        // fire-and-forget: no ACK, no retry, no durable queue\n        _ = db.SavePayment(context.Background(), p)\n    }()\n    return nil // caller thinks payment is persisted\n}",
+  "context": {"redis_version": "7.0", "deployment": "sentinel", "eviction": "allkeys-lru", "consistency": "strong", "domain": "financial"},
+  "expected_feedback": "Critical: Write-behind pattern is used for financial transaction persistence, but the async DB write is a fire-and-forget goroutine with no delivery guarantee. If the process crashes, the goroutine is killed, or the DB call fails transiently, the payment record is lost — the caller already received success. This violates the fundamental rule: never use write-behind for financial or audit-critical data (cache-patterns.md section 3). The goroutine uses context.Background(), losing the parent's deadline and trace context. Fix: (1) switch to write-through for financial data — write to DB first, then update cache on success; or (2) if async write is required for throughput, use a durable queue (Kafka, Redis Streams with ACK) between cache and DB so writes survive process crashes. Add idempotency keys to prevent duplicate processing on retry.",
+  "violated_rule": "Cache pattern identified and justified",
+  "coverage_rules": ["write-behind", "financial", "data loss", "durable queue", "fire-and-forget"],
+  "reference": "references/cache-patterns.md"
+}

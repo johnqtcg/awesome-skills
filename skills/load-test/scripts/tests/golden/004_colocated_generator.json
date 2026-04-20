@@ -1,0 +1,16 @@
+{
+  "id": "LT-004",
+  "title": "Load generator on same machine as target — results reflect resource contention",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "# Run command:\n# k6 run --vus 500 load_test.js\n# targeting http://localhost:8080/api/orders\n#\n# Both k6 and the API server running on same 4-core dev laptop.\n# Observed: p99=850ms at 200 RPS, CPU at 100%",
+  "violated_rule": "Load generator not co-located — separate from target",
+  "expected_feedback": "Standard: load generator and target are on the same machine. k6 and the server compete for CPU. Results reflect OS scheduling and resource contention, not service performance. Run k6 on a separate machine or in a separate container with resource limits.",
+  "coverage_rules": [
+    "Load generator runs separately from target",
+    "Load generator not co-located",
+    "Load generator on same machine as target",
+    "never on the same machine"
+  ],
+  "reference": "SKILL.md"
+}

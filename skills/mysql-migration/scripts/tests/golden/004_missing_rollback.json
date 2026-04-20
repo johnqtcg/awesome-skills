@@ -1,0 +1,16 @@
+{
+  "id": "MIG-004",
+  "title": "Missing rollback plan — DROP COLUMN without data backup or rollback SQL",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V8__cleanup.sql\nALTER TABLE users DROP COLUMN legacy_email;\nALTER TABLE users DROP COLUMN temp_flag;",
+  "context": {
+    "mysql_version": "8.0.32",
+    "table_rows": "1200000",
+    "replication": "source-replica"
+  },
+  "expected_feedback": "Critical: DROP COLUMN is irreversible — once executed, the data is gone. No rollback SQL is provided. Before dropping, create a backup table for affected columns. Classify both statements as 'irreversible' and include a data recovery path.",
+  "violated_rule": "Rollback SQL provided",
+  "coverage_rules": ["rollback", "irreversible", "DROP COLUMN", "backup"],
+  "reference": "SKILL.md"
+}

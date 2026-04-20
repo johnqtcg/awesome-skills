@@ -1,0 +1,12 @@
+{
+  "id": "CACHE-003",
+  "title": "No cache-down degradation — Redis failure causes service 500",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "func GetOrder(ctx context.Context, id string) (*Order, error) {\n    data, err := rdb.Get(ctx, \"order:\"+id).Bytes()\n    if err != nil {\n        return nil, fmt.Errorf(\"cache error: %w\", err)  // Redis down = 500 to user\n    }\n    var order Order\n    json.Unmarshal(data, &order)\n    return &order, nil\n}",
+  "context": {"redis_version": "7.0", "deployment": "sentinel", "eviction": "allkeys-lru", "consistency": "eventual"},
+  "expected_feedback": "Critical: When Redis is unreachable, this function returns an error directly — meaning a Redis outage takes down the order service entirely. Redis is a cache, not the source of truth. Degradation path must exist: (1) on cache error, fall through to database query (with rate limiting to prevent DB overload), (2) optionally serve from local in-process cache if available, (3) return a degraded but functional response rather than 500. Cache unavailability should degrade performance, not availability.",
+  "violated_rule": "Cache-down degradation path exists",
+  "coverage_rules": ["degradation", "cache-down", "fallback", "Redis unavailable"],
+  "reference": "SKILL.md"
+}

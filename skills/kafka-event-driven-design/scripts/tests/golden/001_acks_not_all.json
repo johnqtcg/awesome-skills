@@ -1,0 +1,12 @@
+{
+  "id": "KAFKA-001",
+  "title": "Producer with acks=1 for critical business events — data loss on leader failure",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "config := sarama.NewConfig()\nconfig.Producer.RequiredAcks = sarama.WaitForLocal  // acks=1\nconfig.Producer.Return.Successes = true\nproducer, _ := sarama.NewSyncProducer(brokers, config)\nproducer.SendMessage(&sarama.ProducerMessage{\n    Topic: \"order.events\",\n    Key:   sarama.StringEncoder(orderID),\n    Value: sarama.ByteEncoder(eventData),\n})",
+  "context": {"kafka_version": "3.0", "schema": "JSON", "delivery": "at-least-once", "throughput": "1000/s"},
+  "expected_feedback": "Critical: Producer configured with acks=1 (WaitForLocal) — the leader acknowledges the write before any replica has received it. If the leader broker fails immediately after acknowledging, the event is permanently lost. For non-ephemeral business events, use acks=all (WaitForAll) combined with enable.idempotence=true to prevent both data loss and duplicate writes from retries. Also set min.insync.replicas=2 on the topic to ensure at least 2 replicas acknowledge.",
+  "violated_rule": "Producer uses acks=all + enable.idempotence=true",
+  "coverage_rules": ["acks", "idempotence", "data loss"],
+  "reference": "SKILL.md"
+}

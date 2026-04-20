@@ -1,0 +1,11 @@
+{
+  "id": "CACHE-008",
+  "title": "Good write-through with degradation and TTL safety net",
+  "type": "good_practice",
+  "severity": "none",
+  "code_snippet": "func UpdateInventory(ctx context.Context, sku string, qty int) error {\n    // 1. Write to DB (source of truth)\n    if err := db.UpdateInventory(ctx, sku, qty); err != nil {\n        return err\n    }\n    // 2. Update cache synchronously (write-through)\n    data, _ := json.Marshal(Inventory{SKU: sku, Qty: qty})\n    ttl := 1*time.Hour + time.Duration(rand.Intn(600))*time.Second\n    if err := rdb.Set(ctx, \"inv:\"+sku, data, ttl).Err(); err != nil {\n        // Cache write failed: invalidate to prevent stale read\n        rdb.Del(ctx, \"inv:\"+sku)\n        log.Warn(\"cache write failed, invalidated\", \"sku\", sku, \"err\", err)\n    }\n    return nil\n}",
+  "context": {"redis_version": "7.0", "deployment": "sentinel", "eviction": "allkeys-lru", "consistency": "strong"},
+  "expected_feedback": "No violations. Correct write-through pattern: (1) DB is source of truth, written first, (2) cache updated synchronously with TTL safety net, (3) on cache write failure, key is invalidated (DEL) rather than leaving stale data, (4) TTL with jitter even on write-through as defense against edge-case drift, (5) logging for observability of cache failures.",
+  "coverage_rules": ["write-through", "source of truth", "TTL", "invalidation", "degradation"],
+  "reference": "references/cache-patterns.md"
+}

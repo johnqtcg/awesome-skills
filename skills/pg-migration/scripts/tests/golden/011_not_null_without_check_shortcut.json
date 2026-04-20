@@ -1,0 +1,16 @@
+{
+  "id": "PG-011",
+  "title": "NOT NULL addition without CHECK constraint shortcut — unnecessary full-table scan on PG 12+",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V9__enforce_not_null.sql\nSET LOCAL lock_timeout = '3s';\nALTER TABLE orders ALTER COLUMN status SET NOT NULL;",
+  "context": {
+    "pg_version": "15.4",
+    "table_rows": "10000000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "Standard: On PG 12+, SET NOT NULL performs a full-table scan while holding AccessExclusiveLock unless a CHECK constraint already proves non-null values. On 10M rows this scan could take significant time. Use the three-step pattern: ADD CHECK (status IS NOT NULL) NOT VALID → VALIDATE CONSTRAINT → SET NOT NULL (scan skipped).",
+  "violated_rule": "FK/CHECK constraints use NOT VALID",
+  "coverage_rules": ["NOT NULL", "NOT VALID", "VALIDATE CONSTRAINT", "CHECK", "AccessExclusiveLock"],
+  "reference": "references/migration-anti-examples.md"
+}

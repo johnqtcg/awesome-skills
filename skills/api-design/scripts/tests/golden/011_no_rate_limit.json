@@ -1,0 +1,12 @@
+{
+  "id": "API-011",
+  "title": "No rate limiting — public API without abuse protection",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "// Public API endpoints — no rate limit mentioned in spec\nGET /api/v1/products\nGET /api/v1/products/{id}\nPOST /api/v1/orders\n// Auth: API key required\n// Rate limit: not defined",
+  "context": {"api_type": "public", "consumers": "partner integrations"},
+  "expected_feedback": "Standard: Public API with partner consumers has no rate limiting defined. Without rate limits, a single partner (intentionally or accidentally) can overwhelm the service with requests, degrading performance for all consumers. Fix: define per-API-key rate limits (e.g., 1000 requests/min), return 429 Too Many Requests with Retry-After header when exceeded. Consider different tiers for different partner plans. Document limits in API documentation and OpenAPI spec.",
+  "violated_rule": "Rate limiting defined per actor type",
+  "coverage_rules": ["rate limit", "429", "Retry-After"],
+  "reference": "SKILL.md"
+}

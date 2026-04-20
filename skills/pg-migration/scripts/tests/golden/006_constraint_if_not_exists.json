@@ -1,0 +1,16 @@
+{
+  "id": "PG-006",
+  "title": "ADD CONSTRAINT IF NOT EXISTS — invalid PostgreSQL syntax",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V5__add_fk_safe.sql\nALTER TABLE orders ADD CONSTRAINT IF NOT EXISTS fk_user\n  FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID;",
+  "context": {
+    "pg_version": "15.4",
+    "table_rows": "3000000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "Standard: PostgreSQL does NOT support ADD CONSTRAINT IF NOT EXISTS — this is a syntax error. Use a DO block checking pg_constraint instead. This is a common mistake from developers used to MySQL's IF NOT EXISTS syntax.",
+  "violated_rule": "Constraint additions use idempotent DO blocks",
+  "coverage_rules": ["IF NOT EXISTS", "DO block", "pg_constraint", "idempotent"],
+  "reference": "SKILL.md"
+}

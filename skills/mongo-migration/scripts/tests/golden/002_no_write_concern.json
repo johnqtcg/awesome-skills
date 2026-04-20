@@ -1,0 +1,12 @@
+{
+  "id": "MONGO-002",
+  "title": "Migration without explicit write concern — data safety risk on failover",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "// add_email_verified.js\nlet lastId = ObjectId('000000000000000000000000');\nwhile (true) {\n  const result = db.users.updateMany(\n    {_id: {$gt: lastId}, email_verified: {$exists: false}},\n    {$set: {email_verified: false}}\n  );\n  // ... batch logic ...\n}",
+  "context": {"mongo_version": "6.0", "deployment": "replica_set", "doc_count": "5000000", "sharded": false},
+  "expected_feedback": "Critical: Migration uses _id-range batching (good), but no write concern is specified. If the cluster default is w:1 and the primary fails during migration, acknowledged writes that haven't replicated to secondaries are lost — leaving the migration in an inconsistent partial state. Specify writeConcern: {w: 'majority'} explicitly for each batch, or document why w:1 is acceptable (re-runnable idempotent migration).",
+  "violated_rule": "Write concern explicitly set for migration",
+  "coverage_rules": ["write concern", "w: \"majority\"", "replica"],
+  "reference": "SKILL.md"
+}

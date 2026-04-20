@@ -1,0 +1,12 @@
+{
+  "id": "CACHE-002",
+  "title": "No TTL on hot cached data — immortal keys with no expiration",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "// Cache product catalog — hot data, frequently read\nfunc CacheProduct(ctx context.Context, p *Product) {\n    data, _ := json.Marshal(p)\n    rdb.Set(ctx, \"product:\"+p.ID, data, 0)  // TTL = 0, never expires\n}",
+  "context": {"redis_version": "7.0", "deployment": "standalone", "eviction": "allkeys-lru", "consistency": "eventual"},
+  "expected_feedback": "Critical: TTL is 0 — this key never expires. If the product is updated in the database, the cache will serve stale data indefinitely until the process explicitly invalidates it. Even with explicit invalidation, edge cases (missed events, service restarts, network partitions) mean TTL is the safety net. Set a TTL with jitter: e.g., 30 minutes ± random 0-5 minutes to prevent synchronized mass expiration (cache avalanche).",
+  "violated_rule": "TTL set on all cached keys with jitter",
+  "coverage_rules": ["TTL", "jitter", "immortal", "cache avalanche"],
+  "reference": "SKILL.md"
+}

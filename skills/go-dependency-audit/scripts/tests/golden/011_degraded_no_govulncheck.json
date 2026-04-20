@@ -1,0 +1,15 @@
+{
+  "id": "DEP-011",
+  "title": "Degraded mode — govulncheck not installed, partial audit only",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "code_snippet": "# govulncheck -version -> command not found\n# go.mod exists and is valid\n# go mod verify -> all modules verified",
+  "expected_feedback": "Degraded: Partial mode — govulncheck unavailable. Can deliver license check, outdated dependency report, module hygiene review, and supply chain posture. Cannot deliver CVE scan results or make vulnerability claims. Must NOT claim 'no vulnerabilities' without govulncheck. Install: go install golang.org/x/vuln/cmd/govulncheck@latest",
+  "coverage_rules": [
+    "govulncheck unavailable",
+    "License + outdated + hygiene checks",
+    "CVE scan results",
+    "Never claim \"no vulnerabilities\" without scanning"
+  ],
+  "reference": "SKILL.md"
+}

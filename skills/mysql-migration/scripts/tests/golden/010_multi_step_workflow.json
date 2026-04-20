@@ -1,0 +1,15 @@
+{
+  "id": "MIG-010",
+  "title": "Multi-step workflow — zero-downtime column rename requiring dual-write",
+  "type": "workflow",
+  "severity": "none",
+  "migration_snippet": "# Goal: rename orders.total_price to orders.total_amount without downtime\n# Current: application reads and writes orders.total_price\n# Target: application reads and writes orders.total_amount",
+  "context": {
+    "mysql_version": "8.0.32",
+    "table_rows": "3000000",
+    "replication": "source-replica"
+  },
+  "expected_feedback": "Workflow: column rename requires multi-step plan. (1) ADD COLUMN total_amount with same type, nullable, ALGORITHM=INSTANT. (2) Backfill total_amount = total_price in PK-range batches. (3) Deploy app writing to both columns. (4) Deploy app reading from total_amount. (5) MODIFY total_amount to NOT NULL. (6) Separate release: DROP COLUMN total_price. Each phase has pre-condition, validation, and rollback.",
+  "coverage_rules": ["rename", "dual-write", "phased", "deployment order", "additive", "cleanup"],
+  "reference": "SKILL.md"
+}

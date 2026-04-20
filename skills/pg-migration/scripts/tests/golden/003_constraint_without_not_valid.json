@@ -1,0 +1,16 @@
+{
+  "id": "PG-003",
+  "title": "ADD CONSTRAINT without NOT VALID — holds AccessExclusiveLock during full validation",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V4__add_fk.sql\nSET LOCAL lock_timeout = '3s';\nALTER TABLE orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id);",
+  "context": {
+    "pg_version": "15.4",
+    "table_rows": "8000000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "Critical: Adding FK constraint without NOT VALID holds AccessExclusiveLock while scanning all 8M rows for validation. Use the two-step pattern: ADD CONSTRAINT ... NOT VALID (brief lock) then VALIDATE CONSTRAINT (non-blocking ShareUpdateExclusiveLock).",
+  "violated_rule": "Rollback path provided",
+  "coverage_rules": ["NOT VALID", "VALIDATE CONSTRAINT", "AccessExclusiveLock", "two-step"],
+  "reference": "SKILL.md"
+}

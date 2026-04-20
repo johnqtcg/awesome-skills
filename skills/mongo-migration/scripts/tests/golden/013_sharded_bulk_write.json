@@ -1,0 +1,12 @@
+{
+  "id": "MONGO-013",
+  "title": "Bulk write on sharded collection without chunk migration awareness",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "// backfill_on_sharded.js — runs during peak hours\ndb.orders.updateMany(\n  {status: null},\n  {$set: {status: 'active'}},\n  {writeConcern: {w: 'majority'}}\n)\n// 30M docs across 4 shards, no batching, no balancer consideration",
+  "context": {"mongo_version": "6.0", "deployment": "sharded_cluster", "doc_count": "30000000", "sharded": true},
+  "expected_feedback": "Standard: Unbounded updateMany on a 30M-document sharded collection during peak hours. Two problems: (1) the update fans out to all shards simultaneously, consuming write tickets on every shard — reducing capacity for application writes cluster-wide. (2) No consideration for chunk balancer — if the balancer is active during this bulk write, chunk migrations compete with the update for I/O and locks, causing unpredictable latency. Fix: batch by _id range, pause balancer during bulk operations (sh.stopBalancer()), and resume after completion. Monitor per-shard replication lag during the backfill.",
+  "violated_rule": "Backfill uses _id-range batching",
+  "coverage_rules": ["batch", "shard", "_id-range", "WiredTiger"],
+  "reference": "SKILL.md"
+}

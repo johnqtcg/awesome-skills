@@ -1,0 +1,16 @@
+{
+  "id": "LT-006",
+  "title": "Average latency reported as verdict — hides p99 tail latency problems",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "# Load Test Results Summary\n# Target: http://api.example.com/orders\n# VUs: 100, Duration: 5m\n#\n# Results:\n#   Average latency: 45ms\n#   Total requests: 150,000\n#   Error rate: 0.02%\n#\n# Verdict: PASS — average latency well within acceptable range",
+  "violated_rule": "Percentile latency reported — p50/p95/p99 minimum, not just average",
+  "expected_feedback": "Standard: verdict based on average latency, which is meaningless for performance. Average hides bimodal distribution (cache hit=5ms, miss=500ms) and tail latency (p99 could be 2s+). Report p50, p95, p99, p99.9, max. Judge SLO pass/fail on percentiles.",
+  "coverage_rules": [
+    "Report percentiles, not averages",
+    "Percentile latency reported",
+    "Reporting averages as performance verdict",
+    "meaningless for latency"
+  ],
+  "reference": "SKILL.md"
+}

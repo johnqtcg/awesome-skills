@@ -1,0 +1,15 @@
+{
+  "id": "LT-014",
+  "title": "Workflow — review existing load test script for methodology issues",
+  "type": "workflow",
+  "severity": "none",
+  "code_snippet": "# User provides script for review:\nimport http from 'k6/http';\nimport { check } from 'k6';\n\nexport const options = {\n  scenarios: {\n    warmup: { executor: 'constant-vus', vus: 5, duration: '30s',\n              tags: { phase: 'warmup' } },\n    test: { executor: 'ramping-vus', startTime: '30s',\n            stages: [{ duration: '1m', target: 100 }, { duration: '3m', target: 100 }],\n            tags: { phase: 'test' } },\n  },\n  thresholds: {\n    'http_req_duration{phase:test}': ['p(99)<200'],\n  },\n};\n\nexport default function() {\n  http.get('http://api.example.com/users/1');\n}",
+  "expected_feedback": "Review mode + Standard depth. Findings: (1) Standard: single user ID — cache bias (use SharedArray with realistic data). (2) Standard: no error rate threshold — add http_req_failed SLO. (3) Hygiene: no think time between requests — not modeling real user behavior. (4) Hygiene: no ramp-down stage — connection cleanup issues may be hidden. Good: warmup excluded from thresholds, 3-min steady state, gradual ramp-up.",
+  "coverage_rules": [
+    "Review",
+    "Test data is representative",
+    "Checks & Assertions",
+    "Virtual users model real behavior"
+  ],
+  "reference": "SKILL.md"
+}

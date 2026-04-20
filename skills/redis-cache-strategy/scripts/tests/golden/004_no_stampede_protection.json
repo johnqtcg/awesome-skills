@@ -1,0 +1,12 @@
+{
+  "id": "CACHE-004",
+  "title": "Cache-aside without stampede protection — hot key miss causes DB overload",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "func GetProduct(ctx context.Context, id string) (*Product, error) {\n    val, err := rdb.Get(ctx, \"product:\"+id).Bytes()\n    if err == redis.Nil {\n        // Cache miss: every concurrent request hits DB simultaneously\n        p, err := db.QueryProduct(ctx, id)\n        if err != nil { return nil, err }\n        data, _ := json.Marshal(p)\n        rdb.Set(ctx, \"product:\"+id, data, 30*time.Minute)\n        return p, nil\n    }\n    // ...\n}",
+  "context": {"redis_version": "7.0", "deployment": "cluster", "eviction": "allkeys-lru", "peak_qps": "5000"},
+  "expected_feedback": "Standard: When the hot product key expires, all 5000 concurrent requests miss the cache simultaneously and query the database — a cache stampede (thundering herd). At 5K QPS, this can exhaust DB connection pools and cause cascading timeouts. Use singleflight (golang.org/x/sync/singleflight) to ensure only one goroutine fetches from DB while others wait for the result. Alternative: stale-while-revalidate pattern or probabilistic early expiration.",
+  "violated_rule": "Stampede protection for hot keys",
+  "coverage_rules": ["stampede", "singleflight", "thundering herd", "hot key"],
+  "reference": "SKILL.md"
+}

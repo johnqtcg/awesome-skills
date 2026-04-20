@@ -1,0 +1,12 @@
+{
+  "id": "KAFKA-005",
+  "title": "Event missing metadata — no event_id, timestamp, or source for debugging",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "// Event payload — just the business data, no metadata\nevent := map[string]interface{}{\n    \"order_id\": order.ID,\n    \"amount\":   order.Amount,\n    \"status\":   \"created\",\n}\ndata, _ := json.Marshal(event)\nproducer.SendMessage(&sarama.ProducerMessage{\n    Topic: \"order.events\",\n    Key:   sarama.StringEncoder(order.ID),\n    Value: sarama.ByteEncoder(data),\n})",
+  "context": {"kafka_version": "3.0", "schema": "JSON", "delivery": "at-least-once"},
+  "expected_feedback": "Standard: Event payload lacks mandatory metadata fields. Without event_id, consumer deduplication is impossible (no unique key to check 'already processed'). Without timestamp, event ordering and debugging across services requires Kafka's internal timestamp (which reflects produce-time, not business-event-time). Without source and correlation_id, distributed tracing is blind. Add: event_id (UUID), event_type, timestamp (ISO-8601), source (service name), correlation_id (trace ID), schema_version.",
+  "violated_rule": "Schema includes event metadata",
+  "coverage_rules": ["event_id", "event_type", "timestamp", "source"],
+  "reference": "SKILL.md"
+}

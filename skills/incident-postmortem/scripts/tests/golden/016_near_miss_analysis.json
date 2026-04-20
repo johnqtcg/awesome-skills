@@ -1,0 +1,15 @@
+{
+  "id": "PM-016",
+  "title": "Workflow — real near-miss with monitoring data and close-call evidence",
+  "type": "workflow",
+  "severity": "none",
+  "code_snippet": "# User provides: Grafana alert showing Redis connection pool hit 95% capacity\n# at 03:22 UTC during traffic spike. Auto-scaler kicked in at 03:24 and\n# resolved before customer impact. PagerDuty alert fired but auto-resolved.\n# Logs show 3 connection timeouts (internal retries succeeded). No customer\n# errors, no SLO budget consumed.\n#\n# User says: 'We almost had another Redis incident last night. Pool hit 95%\n# and auto-scaler barely saved us. Can you write up a near-miss analysis?\n# Here are the Grafana alerts and logs.'",
+  "expected_feedback": "Workflow: Draft mode + Quick depth (SEV-4 near-miss, caught before customer impact). (1) Gate 1 passes: incident data present (alerts, logs, metrics). (2) Classify as SEV-4 Informational — near-miss, no customer impact. (3) Timeline: construct from Grafana + PagerDuty + logs, even though brief. (4) Root cause: apply 5-Why — why did pool approach exhaustion? Same root cause class as actual incidents. (5) Near-miss framing: treat with same rigor as real incident per rca-techniques.md — a near-miss has the same root cause as an actual incident. (6) Action items: prevent the near-miss from becoming an actual incident next time. (7) Brief write-up appropriate per SEV-4 requirements.",
+  "coverage_rules": [
+    "Near-miss",
+    "SEV-4",
+    "caught before customer impact",
+    "learning opportunities"
+  ],
+  "reference": "SKILL.md"
+}

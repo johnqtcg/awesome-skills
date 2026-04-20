@@ -1,0 +1,11 @@
+{
+  "id": "ORA-010",
+  "title": "Multi-step workflow — zero-downtime column type change on large table",
+  "type": "workflow",
+  "severity": "none",
+  "migration_snippet": "# Goal: change orders.amount from NUMBER(10,2) to NUMBER(12,4) on 20M-row table\n# Current: app reads and writes orders.amount as NUMBER(10,2)\n# Target: orders.amount as NUMBER(12,4) for higher precision",
+  "context": {"oracle_version": "19c", "edition": "EE", "table_rows": "20000000", "rac": "no"},
+  "expected_feedback": "Workflow: column type change requires DBMS_REDEFINITION on EE (direct ALTER MODIFY would rewrite table with exclusive lock). Steps: (1) CAN_REDEF_TABLE check, (2) create interim table with new schema, (3) START_REDEF_TABLE with col_mapping CAST, (4) COPY_TABLE_DEPENDENTS, (5) SYNC_INTERIM_TABLE, (6) FINISH_REDEF_TABLE (brief lock), (7) cleanup + DBMS_STATS. Each phase has rollback via ABORT_REDEF_TABLE.",
+  "coverage_rules": ["DBMS_REDEFINITION", "column type", "phased", "ABORT_REDEF_TABLE", "DBMS_STATS"],
+  "reference": "references/large-table-migration.md"
+}

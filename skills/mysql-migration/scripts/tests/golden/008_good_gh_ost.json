@@ -1,0 +1,15 @@
+{
+  "id": "MIG-008",
+  "title": "Good gh-ost invocation — correct tool usage for large table type change",
+  "type": "good_practice",
+  "severity": "none",
+  "migration_snippet": "# Migration plan for changing user_id INT → BIGINT on events table (80M rows)\n# Step 1: dry-run\ngh-ost --host=replica-host --allow-on-master \\\n  --database=app --table=events \\\n  --alter='MODIFY COLUMN user_id BIGINT NOT NULL' \\\n  --chunk-size=1000 --max-lag-millis=1500 \\\n  --throttle-control-replicas='replica1:3306,replica2:3306' \\\n  --exact-rowcount --concurrent-rowcount \\\n  --initially-drop-ghost-table --initially-drop-old-table\n\n# Step 2: execute (add --execute)\n# Step 3: verify\n# SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_NAME='events' AND COLUMN_NAME='user_id';",
+  "context": {
+    "mysql_version": "5.7.40",
+    "table_rows": "80000000",
+    "replication": "source-2-replica"
+  },
+  "expected_feedback": "No violations. Correct use of gh-ost for a COPY-requiring operation (INT→BIGINT) on a large table. Dry-run first, replica-based binlog reading, throttle controls, exact row count for ETA. Type change requires COPY which is unsafe at 80M rows — gh-ost is the right tool choice.",
+  "coverage_rules": ["gh-ost", "COPY", "large table", "replica", "throttle", "dry-run"],
+  "reference": "references/large-table-migration.md"
+}

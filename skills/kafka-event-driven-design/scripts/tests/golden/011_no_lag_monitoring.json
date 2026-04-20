@@ -1,0 +1,12 @@
+{
+  "id": "KAFKA-011",
+  "title": "No consumer lag monitoring — silent event processing delay undetected",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "// Consumer group running in production for 6 months\n// No consumer lag metric exported\n// No alert configured\n// Team discovers 2-hour event processing delay during incident investigation",
+  "context": {"kafka_version": "3.0", "schema": "Avro", "delivery": "at-least-once", "throughput": "1000/s"},
+  "expected_feedback": "Standard: No consumer lag monitoring configured. Consumer lag (latest offset minus committed offset) is the primary health metric for any Kafka consumer. Without monitoring, a consumer that falls behind (due to slow processing, resource exhaustion, or partial failure) creates a growing delay between event production and processing — invisible until it causes a business incident. Fix: export consumer_lag metric per partition via JMX or kafka-consumer-groups.sh, set alert threshold (e.g., >5000 messages for >5 minutes), and integrate into the service dashboard.",
+  "violated_rule": "Consumer lag monitoring with alert threshold defined",
+  "coverage_rules": ["consumer lag", "monitoring", "alert"],
+  "reference": "SKILL.md"
+}

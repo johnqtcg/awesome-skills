@@ -1,0 +1,11 @@
+{
+  "id": "ORA-009",
+  "title": "Degraded mode — migration review with no version or edition information",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "migration_snippet": "-- Someone shared this migration without context\nALTER TABLE products ADD (weight NUMBER(8,2));\nCREATE INDEX idx_products_weight ON products (weight);",
+  "context": {"oracle_version": "unknown", "edition": "unknown", "table_rows": "unknown", "rac": "unknown"},
+  "expected_feedback": "Degraded mode: no Oracle version or edition provided. Assume 12c SE (most restrictive — no ONLINE DDL). Flag: CREATE INDEX without ONLINE (Critical if EE), missing DDL_LOCK_TIMEOUT (Critical). All recommendations marked with assumptions. Must NOT claim definitive safety without evidence.",
+  "coverage_rules": ["Degraded", "conservative", "never claim", "Uncovered Risk", "assumptions"],
+  "reference": "SKILL.md"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "API-004",
+  "title": "POST create without Idempotency-Key — network retry creates duplicate",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "POST /api/v1/orders\nContent-Type: application/json\n{\n  \"items\": [{\"sku\": \"WIDGET-1\", \"qty\": 2}],\n  \"total\": 49.99\n}\n→ 201 Created\n// No Idempotency-Key support — client retry creates duplicate order",
+  "context": {"api_type": "public", "consumers": "mobile app"},
+  "expected_feedback": "Standard: POST /orders (create) has no idempotency mechanism. Mobile clients frequently retry requests (network timeout, app backgrounded, user double-tap). Without Idempotency-Key support, each retry creates a new order — leading to duplicate charges. Fix: support Idempotency-Key header. On first request: process normally, store response keyed by idempotency key. On retry (same key, same body): return cached response. On conflict (same key, different body): return 409.",
+  "violated_rule": "Idempotency strategy exists for create/action mutations",
+  "coverage_rules": ["idempotency", "Idempotency-Key", "retry"],
+  "reference": "SKILL.md"
+}

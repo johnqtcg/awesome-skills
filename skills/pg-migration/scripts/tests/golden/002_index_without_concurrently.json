@@ -1,0 +1,16 @@
+{
+  "id": "PG-002",
+  "title": "CREATE INDEX without CONCURRENTLY — blocks all writes during build",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V3__add_user_index.sql\nSET LOCAL lock_timeout = '3s';\nCREATE INDEX idx_orders_user ON orders (user_id);",
+  "context": {
+    "pg_version": "15.4",
+    "table_rows": "12000000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "Critical: Plain CREATE INDEX acquires ShareLock, blocking all writes for the entire index build on a 12M-row table. Use CREATE INDEX CONCURRENTLY which takes ShareUpdateExclusiveLock and allows concurrent DML. Remember: CONCURRENTLY cannot run inside a transaction block.",
+  "violated_rule": "Indexes use CONCURRENTLY",
+  "coverage_rules": ["CONCURRENTLY", "ShareLock", "CREATE INDEX"],
+  "reference": "SKILL.md"
+}

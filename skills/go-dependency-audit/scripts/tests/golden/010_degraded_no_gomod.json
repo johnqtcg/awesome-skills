@@ -1,0 +1,15 @@
+{
+  "id": "DEP-010",
+  "title": "Degraded mode — no go.mod found in project",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "code_snippet": "# User says: 'audit our Go dependencies'\n# Project root has no go.mod file\n# Possibly a GOPATH-era project or wrong directory",
+  "expected_feedback": "Degraded: Planning mode — no go.mod found. Cannot perform any dependency audit without go.mod. Must stop at Gate 1 (Module Discovery). Recommend: (1) check if go.mod exists in a subdirectory, (2) if GOPATH project, migrate to Go modules with go mod init, (3) provide Go module setup guidance.",
+  "coverage_rules": [
+    "STOP if no go.mod found",
+    "No go.mod found",
+    "Go module setup guidance",
+    "Module Discovery"
+  ],
+  "reference": "SKILL.md"
+}

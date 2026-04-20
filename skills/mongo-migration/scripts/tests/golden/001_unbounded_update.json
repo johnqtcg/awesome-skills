@@ -1,0 +1,12 @@
+{
+  "id": "MONGO-001",
+  "title": "Unbounded updateMany on large collection — WiredTiger ticket exhaustion",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "// backfill_status.js\ndb.orders.updateMany(\n  {status: null},\n  {$set: {status: 'pending'}}\n)\n// 20M documents, no batching, no write concern specified",
+  "context": {"mongo_version": "6.0", "deployment": "replica_set", "doc_count": "20000000", "sharded": false},
+  "expected_feedback": "Critical: Unbounded updateMany on 20M documents holds WiredTiger write tickets for the entire operation, starving all other write operations. Additionally, no write concern is specified — relying on cluster default. Fix: batch by _id range with 1000–5000 documents per batch, explicit w:'majority' write concern, and 100ms sleep between batches. Track lastId for resume capability.",
+  "violated_rule": "Backfill uses _id-range batching",
+  "coverage_rules": ["_id-range", "batch", "WiredTiger", "write concern"],
+  "reference": "SKILL.md"
+}

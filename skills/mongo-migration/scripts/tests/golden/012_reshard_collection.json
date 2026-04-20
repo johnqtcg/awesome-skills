@@ -1,0 +1,11 @@
+{
+  "id": "MONGO-012",
+  "title": "reshardCollection workflow — online shard key change on large sharded collection",
+  "type": "workflow",
+  "severity": "none",
+  "migration_snippet": "# Goal: change shard key of orders collection from {region: 1} to {customer_id: 1, _id: 1}\n# Current: orders sharded by region, causing hot shard on 'us-east'\n# Target: distribute by customer_id for even load\n# Collection: 80M documents across 4 shards, MongoDB 6.0",
+  "context": {"mongo_version": "6.0", "deployment": "sharded_cluster", "doc_count": "80000000", "sharded": true},
+  "expected_feedback": "Workflow: reshardCollection (5.0+) performs an online shard key change. Steps: (1) Verify no other resharding in progress via sh.status(). (2) Run db.adminCommand({reshardCollection: 'mydb.orders', key: {customer_id: 1, _id: 1}}). (3) Monitor progress via sh.status() and currentOp — resharding creates a temporary collection and streams data. (4) Duration is proportional to collection size (80M docs may take hours). (5) Brief exclusive lock at final cutover moment. (6) Post-reshard: verify chunk distribution with db.orders.getShardDistribution(). (7) Rollback: can abort during resharding; data stays on original shard key. Write concern w:majority recommended during the process.",
+  "coverage_rules": ["reshardCollection", "shard key", "write concern"],
+  "reference": "references/large-collection-migration.md"
+}

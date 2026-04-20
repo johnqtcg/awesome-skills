@@ -1,0 +1,16 @@
+{
+  "id": "DEP-005",
+  "title": "GPL transitive dependency in proprietary project — license violation",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "// Project license: MIT (proprietary distribution intended)\n// go.mod:\nrequire github.com/foo/bar v2.1.0  // MIT license\n\n// But bar's go.mod:\nrequire github.com/baz/qux v1.0.0  // GPL-3.0 license\n\n// go-licenses report shows:\n// github.com/baz/qux  GPL-3.0\n// All other deps: MIT, Apache-2.0, BSD-3-Clause",
+  "violated_rule": "License compliance checked — no copyleft violations in proprietary projects",
+  "expected_feedback": "P1 High: GPL-3.0 transitive dependency detected (github.com/baz/qux via github.com/foo/bar). Go statically links all dependencies — GPL propagates to your binary. Replace github.com/foo/bar with an alternative that does not pull in GPL code, or obtain legal approval.",
+  "coverage_rules": [
+    "Transitive licenses propagate",
+    "Categorize licenses by risk",
+    "License compliance checked",
+    "GPL"
+  ],
+  "reference": "references/license-compliance.md"
+}

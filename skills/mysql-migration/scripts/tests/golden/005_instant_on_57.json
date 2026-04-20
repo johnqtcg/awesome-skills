@@ -1,0 +1,16 @@
+{
+  "id": "MIG-005",
+  "title": "INSTANT on MySQL 5.7 — version mismatch, ALGORITHM=INSTANT not supported",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V4__add_avatar.sql\nSET SESSION lock_wait_timeout = 3;\nALTER TABLE users ADD COLUMN avatar_url VARCHAR(255) DEFAULT NULL, ALGORITHM=INSTANT;",
+  "context": {
+    "mysql_version": "5.7.40",
+    "table_rows": "500000",
+    "replication": "source-replica"
+  },
+  "expected_feedback": "Standard: ALGORITHM=INSTANT is not available on MySQL 5.7. This ALTER will fail with an error. Use ALGORITHM=INPLACE, LOCK=NONE instead, which is supported for ADD COLUMN on 5.7.",
+  "violated_rule": "DDL algorithm matches version",
+  "coverage_rules": ["algorithm", "version", "5.7", "INPLACE", "LOCK=NONE"],
+  "reference": "references/ddl-algorithm-matrix.md"
+}

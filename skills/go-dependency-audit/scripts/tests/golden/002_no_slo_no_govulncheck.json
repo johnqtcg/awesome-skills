@@ -1,0 +1,16 @@
+{
+  "id": "DEP-002",
+  "title": "Claiming no vulnerabilities without running govulncheck",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "// Developer says: 'I checked go.mod, all versions look recent, we are safe'\n// No govulncheck scan performed\n// go.mod shows:\nrequire (\n    github.com/gin-gonic/gin v1.9.1\n    golang.org/x/net v0.15.0\n    google.golang.org/grpc v1.58.0\n)",
+  "violated_rule": "govulncheck executed — source mode scan completed without error",
+  "expected_feedback": "Critical: no govulncheck scan was executed. Manual version inspection cannot assess CVE status. Cannot claim 'no vulnerabilities' without running govulncheck. A recent version can still have known CVEs. Run: govulncheck ./...",
+  "coverage_rules": [
+    "govulncheck executed",
+    "Claiming \"no vulnerabilities\" without running govulncheck",
+    "Never claim \"no vulnerabilities\" without scanning",
+    "Only govulncheck"
+  ],
+  "reference": "SKILL.md"
+}

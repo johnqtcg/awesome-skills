@@ -1,0 +1,12 @@
+{
+  "id": "API-006",
+  "title": "Breaking field removal without version bump or deprecation",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "// Before: GET /api/v1/users/123\n{\"id\": \"123\", \"name\": \"Alice\", \"email\": \"alice@example.com\", \"phone\": \"+1234567890\"}\n\n// After: phone field removed from response\n{\"id\": \"123\", \"name\": \"Alice\", \"email\": \"alice@example.com\"}\n// No version bump, no deprecation notice, no Sunset header",
+  "context": {"api_type": "public", "consumers": "partner integrations"},
+  "expected_feedback": "Standard: Removing a response field ('phone') is a breaking change — partner integrations that read this field will get null/undefined. Deployed without version bump or deprecation window. For public APIs with partner consumers, breaking changes require: (1) deprecation announcement with Sunset header, (2) minimum 6-month window, (3) migration guide for affected consumers, (4) version bump (/api/v2) or a new field to replace the old one. Never silently remove fields from public API responses.",
+  "violated_rule": "Backward compatibility impact assessed",
+  "coverage_rules": ["compatibility", "breaking change", "deprecation"],
+  "reference": "SKILL.md"
+}

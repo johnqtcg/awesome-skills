@@ -1,0 +1,12 @@
+{
+  "id": "CACHE-013",
+  "title": "Redis L2 cache without L1 — no avalanche protection when Redis goes down",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "func GetProduct(ctx context.Context, id string) (*Product, error) {\n    val, err := rdb.Get(ctx, \"product:\"+id).Bytes()\n    if err == redis.Nil {\n        p, err := db.QueryProduct(ctx, id)\n        if err != nil {\n            return nil, err\n        }\n        rdb.Set(ctx, \"product:\"+id, marshal(p), 30*time.Minute)\n        return p, nil\n    }\n    if err != nil {\n        // Redis error — no fallback, caller gets error\n        return nil, fmt.Errorf(\"redis error: %w\", err)\n    }\n    var p Product\n    json.Unmarshal(val, &p)\n    return &p, nil\n}",
+  "context": {"redis_version": "7.0", "deployment": "cluster", "eviction": "allkeys-lru", "peak_qps": "15000"},
+  "expected_feedback": "Standard: Service relies exclusively on Redis (L2) with no in-process cache layer. When Redis becomes unavailable (outage, network partition) or keys mass-expire at the same TTL boundary, all 15K QPS hit the database directly — a classic cache avalanche. Additional issues: (1) TTL is fixed at 30 minutes with no jitter, so keys inserted in bursts expire simultaneously; (2) Redis errors return immediately with no degradation path — every client gets an error. Fix: add an L1 in-process cache (ristretto, groupcache, or sync.Map for simple cases) with short TTL (5-10s) in front of Redis — L1 absorbs load during Redis outages and smooths expiry spikes. Add TTL jitter (30min +/- 10-20%). Add a circuit breaker on the Redis path so that when Redis is down, requests fall through to DB with rate limiting rather than returning errors.",
+  "violated_rule": "Avalanche protection",
+  "coverage_rules": ["avalanche", "L1", "L2", "multi-level", "in-process", "circuit breaker"],
+  "reference": "references/cache-failure-modes.md"
+}

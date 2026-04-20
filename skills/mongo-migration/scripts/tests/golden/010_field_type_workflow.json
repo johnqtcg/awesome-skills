@@ -1,0 +1,11 @@
+{
+  "id": "MONGO-010",
+  "title": "Workflow — safe field type migration from string amount to double",
+  "type": "workflow",
+  "severity": "none",
+  "migration_snippet": "# Goal: migrate orders.amount from string ('99.50') to double (99.5)\n# Current: 8M documents, all have amount as string\n# Application parses string to float on every read\n# Target: amount_v2 as double, validated by schema validator",
+  "context": {"mongo_version": "6.0", "deployment": "replica_set", "doc_count": "8000000", "sharded": false},
+  "expected_feedback": "Workflow: field type migration requires new-field pattern. (1) Add amount_v2 field via _id-range batched update with aggregation pipeline: [{$set: {amount_v2: {$toDouble: '$amount'}}}]. (2) Deploy app with dual-read (prefer amount_v2, fallback to amount). (3) Deploy app writing amount_v2 on all new orders. (4) Add validator with validationLevel 'moderate' requiring amount_v2. (5) Verify all docs have amount_v2: db.orders.countDocuments({amount_v2: {$exists: false}}). (6) Switch validator to 'strict'. (7) Separate release: batch $unset of old amount field.",
+  "coverage_rules": ["field type", "new-field", "dual-read", "validationLevel", "_id-range", "batch"],
+  "reference": "SKILL.md"
+}

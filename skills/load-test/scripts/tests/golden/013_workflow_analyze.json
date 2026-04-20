@@ -1,0 +1,15 @@
+{
+  "id": "LT-013",
+  "title": "Workflow — analyze load test results with SLO verdict and bottleneck identification",
+  "type": "workflow",
+  "severity": "none",
+  "code_snippet": "# User provides k6 results + monitoring data:\n# SLOs: p99 < 200ms, error < 0.1%, throughput > 5000 RPS\n# Results: p50=12ms p95=45ms p99=285ms p99.9=1.8s, 5231 RPS, error=0.08%\n# CPU: 78% sustained, Memory: growing 12%/5min, DB connections: 48/50 max\n# Goroutines: 1200 (climbing)",
+  "expected_feedback": "Workflow: Analyze mode + Standard depth. SLO Verdict: FAIL — p99=285ms exceeds 200ms target. Bottleneck: DB connection pool near saturation (48/50) correlates with p99 spike. Memory growth suggests possible leak (needs soak test). Goroutine climb indicates slow I/O blocking. Recommendations: (1) increase DB pool size, (2) run soak test for leak confirmation, (3) profile with pprof for goroutine analysis.",
+  "coverage_rules": [
+    "SLO Verdict",
+    "Bottleneck Taxonomy",
+    "Identifying Saturation",
+    "Resource Correlation"
+  ],
+  "reference": "references/analysis-guide.md"
+}

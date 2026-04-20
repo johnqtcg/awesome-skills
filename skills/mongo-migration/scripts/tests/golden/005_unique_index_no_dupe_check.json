@@ -1,0 +1,12 @@
+{
+  "id": "MONGO-005",
+  "title": "Unique index without duplicate check — build fails after long scan",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "// add_unique_email_index.js\ndb.users.createIndex({email: 1}, {unique: true})",
+  "context": {"mongo_version": "6.0", "deployment": "replica_set", "doc_count": "15000000", "sharded": false},
+  "expected_feedback": "Standard: Creating a unique index on 15M documents without first checking for duplicates. If ANY duplicates exist, the entire index build fails after scanning all documents — wasting potentially minutes of work. On 4.2+, the optimized build may have already consumed significant I/O before discovering the conflict. Pre-check duplicates: db.users.aggregate([{$group:{_id:'$email',count:{$sum:1}}},{$match:{count:{$gt:1}}}]). Fix duplicates first, then create the index.",
+  "violated_rule": "Unique index preceded by duplicate check",
+  "coverage_rules": ["unique index", "duplicate", "createIndex"],
+  "reference": "SKILL.md"
+}

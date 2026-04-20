@@ -1,0 +1,15 @@
+{
+  "id": "PG-007",
+  "title": "Well-formed phased migration — correct NOT VALID + CONCURRENTLY + backfill pattern",
+  "type": "good_practice",
+  "severity": "none",
+  "migration_snippet": "-- Phase 1: V10__add_total_usd.sql\nSET LOCAL lock_timeout = '3s';\nALTER TABLE orders ADD COLUMN total_usd numeric(12,2);\n\n-- Phase 2: backfill (app-driven, cursor-based batches)\n-- Phase 3: V11__add_constraint.sql\nDO $$ BEGIN\n  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orders_total_usd_not_null') THEN\n    ALTER TABLE orders ADD CONSTRAINT orders_total_usd_not_null CHECK (total_usd IS NOT NULL) NOT VALID;\n  END IF;\nEND $$;\nALTER TABLE orders VALIDATE CONSTRAINT orders_total_usd_not_null;\n\n-- Phase 4: V12__set_not_null.sql (PG 12+)\nSET LOCAL lock_timeout = '3s';\nALTER TABLE orders ALTER COLUMN total_usd SET NOT NULL;\nALTER TABLE orders DROP CONSTRAINT orders_total_usd_not_null;",
+  "context": {
+    "pg_version": "15.4",
+    "table_rows": "5000000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "No violations. Correctly implements phased migration: (1) add nullable column with lock_timeout, (2) cursor-based backfill, (3) idempotent CHECK constraint with NOT VALID + VALIDATE (non-blocking), (4) SET NOT NULL leveraging PG 12+ CHECK shortcut. All DDL has lock_timeout set.",
+  "coverage_rules": ["NOT VALID", "VALIDATE CONSTRAINT", "lock_timeout", "DO block", "idempotent", "phased", "SET NOT NULL"],
+  "reference": "SKILL.md"
+}

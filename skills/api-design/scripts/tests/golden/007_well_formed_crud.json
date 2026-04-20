@@ -1,0 +1,11 @@
+{
+  "id": "API-007",
+  "title": "Well-formed CRUD API — correct naming, status codes, error model, ETag",
+  "type": "good_practice",
+  "severity": "none",
+  "code_snippet": "GET    /api/v1/users         → 200 {data: [...], meta: {total, cursor}}\nGET    /api/v1/users/{id}    → 200 {data: {...}} + ETag\nPOST   /api/v1/users         → 201 + Location + Idempotency-Key support\nPUT    /api/v1/users/{id}    → 200 + If-Match required\nPATCH  /api/v1/users/{id}    → 200\nDELETE /api/v1/users/{id}    → 204\n\nErrors: {error: {code, message, details[], trace_id}}\nAuth: JWT per endpoint, object-level authz check\nRate limit: 429 + Retry-After",
+  "context": {"api_type": "internal", "consumers": "frontend"},
+  "expected_feedback": "No violations. Correctly implements REST API conventions: (1) plural noun resources, (2) semantic HTTP methods, (3) correct status codes (201 Created, 204 No Content), (4) structured error model with stable codes, (5) ETag/If-Match for concurrency, (6) Idempotency-Key for POST, (7) cursor pagination, (8) object-level authorization, (9) rate limiting with 429 + Retry-After.",
+  "coverage_rules": ["resource naming", "status codes", "error model", "idempotency", "ETag", "IDOR", "rate limit"],
+  "reference": "SKILL.md"
+}

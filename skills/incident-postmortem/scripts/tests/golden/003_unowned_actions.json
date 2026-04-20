@@ -1,0 +1,16 @@
+{
+  "id": "PM-003",
+  "title": "Action items without owners, deadlines, or tracking tickets",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "## Action Items\n\n- Improve monitoring\n- Be more careful with deploys\n- Add more tests\n- Fix the pipeline",
+  "violated_rule": "Action items have owners and deadlines — every item concrete and tracked",
+  "expected_feedback": "Critical: action items are vague with no owners or deadlines. 'Improve monitoring' is not actionable — who does it, by when, how do you verify it's done? Each item needs: specific description, owner (@person or @team), deadline (date), tracking ticket (JIRA/Linear). Categorize as prevent/detect/mitigate.",
+  "coverage_rules": [
+    "Every action item has an owner and deadline",
+    "Action items must be concrete and verifiable",
+    "as an action item",
+    "Categorize actions: prevent, detect, mitigate"
+  ],
+  "reference": "SKILL.md"
+}

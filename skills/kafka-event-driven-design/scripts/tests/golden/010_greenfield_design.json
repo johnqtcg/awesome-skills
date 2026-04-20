@@ -1,0 +1,11 @@
+{
+  "id": "KAFKA-010",
+  "title": "Workflow — design event-driven order processing system from scratch",
+  "type": "workflow",
+  "severity": "none",
+  "code_snippet": "# Goal: build event-driven order processing\n# Services: order-service (producer), payment-service (consumer), notification-service (consumer)\n# Events: order.created, order.paid, order.shipped\n# Requirement: per-order ordering, at-least-once, schema evolution support\n# Throughput: ~500 orders/sec peak\n# Kafka 3.4 with Confluent Schema Registry",
+  "context": {"kafka_version": "3.4", "schema": "Avro", "delivery": "at-least-once", "throughput": "500/s"},
+  "expected_feedback": "Workflow: event-driven order processing design. (1) Topics: order.events (all order lifecycle events), 12 partitions (2x peak consumer count), RF=3, min.insync.replicas=2, 7-day retention. (2) Partition key: order_id (per-order ordering guaranteed). (3) Schema: Avro with envelope pattern (event_id, event_type, timestamp, source, correlation_id, payload), BACKWARD_TRANSITIVE compatibility in Schema Registry. (4) Producer: acks=all, enable.idempotence=true, outbox pattern for DB+event atomicity. (5) Consumers: payment-service and notification-service in separate consumer groups (fan-out), manual commit, idempotent processing, DLQ per consumer group. (6) Monitoring: consumer lag per partition, DLQ rate, producer error rate.",
+  "coverage_rules": ["partition key", "acks", "idempotent", "Schema Registry", "DLQ", "consumer lag", "outbox"],
+  "reference": "SKILL.md"
+}

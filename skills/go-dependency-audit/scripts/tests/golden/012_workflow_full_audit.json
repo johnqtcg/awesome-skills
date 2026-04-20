@@ -1,0 +1,15 @@
+{
+  "id": "DEP-012",
+  "title": "Workflow — full pre-release dependency audit with upgrade plan",
+  "type": "workflow",
+  "severity": "none",
+  "code_snippet": "# User request: 'We are releasing v2.0 next week. Run a full dependency audit.'\n# go.mod: 15 direct deps, 62 indirect deps\n# Go version: 1.21\n# govulncheck, go-licenses available",
+  "expected_feedback": "Workflow: Standard depth — pre-release audit. (1) Gate 1: go.mod parsed, 15 direct + 62 indirect modules. (2) Gate 2: govulncheck and go-licenses available. (3) Gate 3: go mod verify passes, go mod tidy clean. (4) CVE scan: govulncheck ./... (5) License scan: go-licenses check (6) Outdated report: go list -m -u all (7) Supply chain: GOPROXY + GOPRIVATE config review. (8) Scorecard: Critical 3/3, Standard 4/5, Hygiene 3/4 = PASS. (9) Upgrade plan: prioritized by severity.",
+  "coverage_rules": [
+    "Standard",
+    "pre-release",
+    "govulncheck executed",
+    "License compliance checked"
+  ],
+  "reference": "SKILL.md"
+}

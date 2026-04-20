@@ -1,0 +1,12 @@
+{
+  "id": "ORA-001",
+  "title": "Missing DDL_LOCK_TIMEOUT — DDL fails with ORA-00054 if lock unavailable",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V2__add_column.sql\nALTER TABLE orders ADD (tracking_id VARCHAR2(50));",
+  "context": {"oracle_version": "19c", "edition": "EE", "table_rows": "5000000", "rac": "no"},
+  "expected_feedback": "Critical: DDL executed without DDL_LOCK_TIMEOUT. Without this setting, Oracle does not wait for locks — if any session holds even a brief lock on the table, the ALTER fails immediately with ORA-00054 (resource busy, acquire with NOWAIT specified). This is especially dangerous during peak hours when transient row locks are frequent. Fix: add ALTER SESSION SET DDL_LOCK_TIMEOUT = 3; before the DDL, which instructs Oracle to retry acquiring the exclusive DDL lock for up to 3 seconds instead of failing instantly.",
+  "violated_rule": "DDL_LOCK_TIMEOUT set before every DDL",
+  "coverage_rules": ["DDL_LOCK_TIMEOUT", "ORA-00054"],
+  "reference": "SKILL.md"
+}

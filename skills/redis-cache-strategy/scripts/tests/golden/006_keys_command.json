@@ -1,0 +1,12 @@
+{
+  "id": "CACHE-006",
+  "title": "KEYS command for batch invalidation — blocks Redis for entire scan",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "func InvalidateUserCache(ctx context.Context, userID string) error {\n    keys, _ := rdb.Keys(ctx, \"user:\"+userID+\":*\").Result()\n    if len(keys) > 0 {\n        rdb.Del(ctx, keys...)\n    }\n    return nil\n}",
+  "context": {"redis_version": "7.0", "deployment": "standalone", "total_keys": "5000000"},
+  "expected_feedback": "Standard: Invalidation strategy relies on KEYS pattern-matching, which scans the entire keyspace (5M keys) in a single blocking O(N) operation — Redis cannot serve other requests during the scan. This is a fundamentally broken invalidation approach that causes latency spikes for all clients. Even SCAN (the non-blocking cursor alternative) adds 10-100ms of unpredictable latency per iteration and is not suitable for real-time invalidation in hot paths. Fix: redesign so invalidation targets exact known keys — maintain an auxiliary Redis Set tracking related keys (SADD on write, SMEMBERS+DEL on invalidate), use Hash structure where one DEL removes all fields, or adopt structured key naming with explicit DEL of deterministic key lists.",
+  "violated_rule": "Invalidation strategy defined",
+  "coverage_rules": ["KEYS", "SCAN", "invalidation", "key naming"],
+  "reference": "SKILL.md"
+}

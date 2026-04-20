@@ -1,0 +1,12 @@
+{
+  "id": "CACHE-011",
+  "title": "Cache penetration — non-existent IDs bypass cache and always hit DB",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "func GetUserProfile(ctx context.Context, id string) (*Profile, error) {\n    val, err := rdb.Get(ctx, \"profile:\"+id).Bytes()\n    if err == redis.Nil {\n        p, err := db.QueryProfile(ctx, id)\n        if err == sql.ErrNoRows {\n            return nil, ErrNotFound  // not cached — next request hits DB again\n        }\n        rdb.Set(ctx, \"profile:\"+id, marshal(p), 30*time.Minute)\n        return p, nil\n    }\n    // ...\n}",
+  "context": {"redis_version": "7.0", "deployment": "cluster", "eviction": "allkeys-lru", "consistency": "eventual"},
+  "expected_feedback": "Standard: When a non-existent ID is requested, the cache always misses and the DB always returns no rows — but this 'not found' result is never cached. An attacker or misbehaving client can enumerate random IDs to bypass the cache layer entirely and overload the database (cache penetration). Defense: cache the null/not-found result with a short TTL (30-60 seconds): rdb.Set(ctx, key, '__NULL__', 60*time.Second). For APIs with user-supplied IDs, also consider a bloom filter as a first-line defense.",
+  "violated_rule": "Penetration protection",
+  "coverage_rules": ["penetration", "null", "bloom filter", "cache miss"],
+  "reference": "references/cache-failure-modes.md"
+}

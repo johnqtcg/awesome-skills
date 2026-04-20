@@ -1,0 +1,12 @@
+{
+  "id": "ORA-003",
+  "title": "Missing rollback plan — DDL auto-commits, making every change permanent immediately",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V8__cleanup.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE users DROP COLUMN legacy_email;\nALTER TABLE users DROP COLUMN temp_flag;",
+  "context": {"oracle_version": "19c", "edition": "EE", "table_rows": "1500000", "rac": "no"},
+  "expected_feedback": "Critical: Two DROP COLUMN statements with no rollback plan. Oracle DDL issues an implicit COMMIT before and after each statement, so once either DROP executes, the data is permanently lost — there is no ROLLBACK. Both columns must be classified as 'irreversible'. Recommended approach: (1) Back up column data via CTAS before dropping: CREATE TABLE _backup_users_legacy AS SELECT id, legacy_email, temp_flag FROM users; (2) Use SET UNUSED COLUMN instead of DROP for immediate functional removal without physical I/O cost. (3) Schedule DROP UNUSED COLUMNS during maintenance window. (4) Consider enabling Flashback Table as a safety net for catastrophic errors.",
+  "violated_rule": "Rollback SQL provided",
+  "coverage_rules": ["rollback", "DDL auto-commit", "SET UNUSED", "irreversible"],
+  "reference": "SKILL.md"
+}

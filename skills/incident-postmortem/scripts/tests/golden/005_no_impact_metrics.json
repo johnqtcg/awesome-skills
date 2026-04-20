@@ -1,0 +1,16 @@
+{
+  "id": "PM-005",
+  "title": "Impact section uses vague language instead of metrics",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "## Impact Assessment\n\nThe service was down for a while. Some users were affected.\nIt was pretty bad. We lost some revenue probably.",
+  "violated_rule": "Impact quantified with metrics — duration, users affected, error rates",
+  "expected_feedback": "Standard: impact section contains no quantified metrics. 'A while' and 'some users' are not actionable. Specify: exact duration (e.g., 47 minutes), affected users (e.g., ~12,000), error rate (e.g., 15.2% 5xx), SLO budget consumed, revenue impact if measurable. Mark unknowns as 'UNKNOWN' rather than guessing.",
+  "coverage_rules": [
+    "Quantify impact with metrics",
+    "Impact quantified with metrics",
+    "duration, affected users/requests, error rate",
+    "SLO budget consumed"
+  ],
+  "reference": "SKILL.md"
+}

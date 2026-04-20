@@ -1,0 +1,15 @@
+{
+  "id": "PM-010",
+  "title": "Degraded mode — verbal description only, no logs or data",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "code_snippet": "# User says: 'We had a payment outage last Friday around 2pm for about\n# an hour. Something with Redis I think. Can you write a post-mortem?'\n# No logs, no alerts, no timeline, no metrics provided.",
+  "expected_feedback": "Degraded: Sketch mode — verbal description only. Can deliver a post-mortem skeleton with placeholders and targeted questions to fill gaps. Cannot deliver definitive root cause, precise timeline, or quantified impact. Must ask for: incident ID, exact timestamps, monitoring data sources, affected services list. Must NOT fabricate timeline entries or invent metrics.",
+  "coverage_rules": [
+    "Verbal description only",
+    "Draft post-mortem skeleton",
+    "Definitive root cause",
+    "Never fabricate timeline entries"
+  ],
+  "reference": "SKILL.md"
+}

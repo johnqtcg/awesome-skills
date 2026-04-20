@@ -1,0 +1,15 @@
+{
+  "id": "PG-008",
+  "title": "Good CONCURRENTLY index build — correct non-blocking pattern outside transaction",
+  "type": "good_practice",
+  "severity": "none",
+  "migration_snippet": "-- V7__add_search_index.sql\n-- flyway:executeInTransaction=false\nSET statement_timeout = '0';  -- CONCURRENTLY can take time, don't timeout\nSET lock_timeout = '10s';     -- but don't wait forever for initial lock\nCREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_search ON orders USING gin (search_vector);",
+  "context": {
+    "pg_version": "15.4",
+    "table_rows": "20000000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "No violations. Correct CONCURRENTLY usage: (1) flyway directive to run outside transaction, (2) statement_timeout disabled for long-running build, (3) lock_timeout set for initial lock acquisition, (4) IF NOT EXISTS for idempotency, (5) appropriate GIN index type for tsvector.",
+  "coverage_rules": ["CONCURRENTLY", "lock_timeout", "statement_timeout", "transaction", "IF NOT EXISTS"],
+  "reference": "SKILL.md"
+}

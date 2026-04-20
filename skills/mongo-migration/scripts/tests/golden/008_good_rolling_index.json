@@ -1,0 +1,11 @@
+{
+  "id": "MONGO-008",
+  "title": "Good rolling index build — one secondary at a time with lag monitoring",
+  "type": "good_practice",
+  "severity": "none",
+  "migration_snippet": "// Rolling index build for 50M-doc collection\n// Step 1: Build on each secondary individually\n// Connect to secondary: db.orders.createIndex({status: 1, created_at: -1})\n// Monitor: rs.printSecondaryReplicationInfo()\n// Step 2: Step down primary: rs.stepDown(60)\n// Step 3: Build on stepped-down member\n// Step 4: Verify all members have index: db.orders.getIndexes()",
+  "context": {"mongo_version": "6.0", "deployment": "replica_set", "doc_count": "50000000", "sharded": false},
+  "expected_feedback": "No violations. Correct rolling index build pattern for a 50M-document collection: build on each secondary individually to avoid cluster-wide performance impact, monitor replication lag between each build, step down primary for final build, verify all members have the index. This avoids any replication lag impact on the serving primary.",
+  "coverage_rules": ["rolling build", "replication lag", "createIndex", "secondary"],
+  "reference": "references/large-collection-migration.md"
+}

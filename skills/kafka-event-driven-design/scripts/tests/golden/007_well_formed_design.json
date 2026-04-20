@@ -1,0 +1,11 @@
+{
+  "id": "KAFKA-007",
+  "title": "Well-formed event-driven design — acks=all, idempotent consumer, DLQ, schema evolution",
+  "type": "good_practice",
+  "severity": "none",
+  "code_snippet": "// Producer: acks=all, idempotent\nconfig.Producer.RequiredAcks = sarama.WaitForAll\nconfig.Producer.Idempotent = true\n// Consumer: manual commit, idempotent DB ops, DLQ\nfunc handle(msg) {\n    if retries >= 3 { routeToDLQ(msg); commit(msg); return }\n    db.Exec(\"INSERT ... ON CONFLICT DO NOTHING\", ...)\n    commit(msg)\n}\n// Schema: Avro with Schema Registry BACKWARD_TRANSITIVE\n// Topic: order.events, 12 partitions, RF=3, min.insync=2\n// Key: order_id (per-order ordering)\n// Monitoring: consumer_lag alert at 5000 messages",
+  "context": {"kafka_version": "3.0", "schema": "Avro", "delivery": "at-least-once", "throughput": "2000/s"},
+  "expected_feedback": "No violations. Correctly implements production-grade Kafka event design: (1) acks=all + idempotent producer prevents data loss and duplicate writes, (2) manual commit + idempotent DB operations handle at-least-once delivery, (3) DLQ after 3 retries prevents poison message blocking, (4) Avro with BACKWARD_TRANSITIVE compatibility in Schema Registry, (5) partition key=order_id for per-order ordering, (6) RF=3 with min.insync.replicas=2, (7) consumer lag monitoring with alert threshold.",
+  "coverage_rules": ["acks", "idempotent", "DLQ", "Schema Registry", "partition key", "consumer lag"],
+  "reference": "SKILL.md"
+}

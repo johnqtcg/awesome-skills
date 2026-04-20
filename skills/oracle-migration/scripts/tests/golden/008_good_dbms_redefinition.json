@@ -1,0 +1,11 @@
+{
+  "id": "ORA-008",
+  "title": "Good DBMS_REDEFINITION usage — online table restructuring for column type change",
+  "type": "good_practice",
+  "severity": "none",
+  "migration_snippet": "-- Online column type change using DBMS_REDEFINITION\nBEGIN DBMS_REDEFINITION.CAN_REDEF_TABLE('APP', 'ORDERS'); END;\n/\nCREATE TABLE orders_interim AS SELECT id, user_id, CAST(amount AS NUMBER(12,4)) AS amount FROM orders WHERE 1=0;\nBEGIN\n  DBMS_REDEFINITION.START_REDEF_TABLE('APP','ORDERS','ORDERS_INTERIM',\n    'id id, user_id user_id, CAST(amount AS NUMBER(12,4)) amount');\nEND;\n/\n-- COPY_TABLE_DEPENDENTS, SYNC, FINISH, cleanup",
+  "context": {"oracle_version": "19c", "edition": "EE", "table_rows": "50000000", "rac": "no"},
+  "expected_feedback": "No violations. Correct use of DBMS_REDEFINITION for online column type change on 50M-row table. Avoids extended exclusive lock by using materialized view log-based sync. Brief exclusive lock only at FINISH step. Requires Enterprise Edition.",
+  "coverage_rules": ["DBMS_REDEFINITION", "online", "Enterprise Edition", "exclusive lock"],
+  "reference": "references/large-table-migration.md"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "ORA-011",
+  "title": "Column type change via direct ALTER on large table — full rewrite with exclusive lock",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V6__change_amount_type.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 5;\nALTER TABLE orders MODIFY (amount NUMBER(12,4));",
+  "context": {"oracle_version": "19c", "edition": "EE", "table_rows": "25000000", "rac": "no"},
+  "expected_feedback": "Standard: ALTER TABLE MODIFY column type from NUMBER(10,2) to NUMBER(12,4) on 25M rows requires a full table rewrite with exclusive lock. This blocks all DML for the duration. On Enterprise Edition, use DBMS_REDEFINITION for online restructuring instead.",
+  "violated_rule": "Large table restructuring uses DBMS_REDEFINITION or CTAS",
+  "coverage_rules": ["DBMS_REDEFINITION", "CTAS", "rewrite", "exclusive lock", "MODIFY"],
+  "reference": "SKILL.md"
+}

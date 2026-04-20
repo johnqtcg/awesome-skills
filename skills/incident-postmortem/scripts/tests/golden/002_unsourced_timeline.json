@@ -1,0 +1,16 @@
+{
+  "id": "PM-002",
+  "title": "Timeline entries without sources or UTC timestamps",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "## Timeline\n\n14:23 Something went wrong\n14:30 Someone noticed the problem\n2:45pm Fixed it\n\n// No sources, mixed time formats, vague descriptions",
+  "violated_rule": "Timeline present with UTC timestamps — sequential, sourced entries",
+  "expected_feedback": "Critical: timeline lacks sources and has inconsistent timestamps. Every entry must cite its source (PagerDuty, Grafana, Slack, etc.) and use UTC. '14:23 Something went wrong' is not actionable — specify what monitoring/log showed what signal. Convert '2:45pm' to UTC format.",
+  "coverage_rules": [
+    "Timestamps are UTC and sequential",
+    "Every entry has a source",
+    "Timeline without sources",
+    "detection, response, and recovery phases"
+  ],
+  "reference": "SKILL.md"
+}

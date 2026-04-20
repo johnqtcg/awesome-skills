@@ -1,0 +1,16 @@
+{
+  "id": "MIG-003",
+  "title": "NOT NULL without phased approach — ADD COLUMN NOT NULL on populated table fails or risks",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V3__add_status.sql\nALTER TABLE orders ADD COLUMN status VARCHAR(20) NOT NULL;",
+  "context": {
+    "mysql_version": "5.7.40",
+    "table_rows": "2000000",
+    "replication": "source-replica"
+  },
+  "expected_feedback": "Critical: Adding NOT NULL column without DEFAULT on a populated table. If any existing row has no value for this column, MySQL will either fail the ALTER or assign an implicit default depending on sql_mode. Use phased approach: (1) ADD COLUMN nullable, (2) backfill in PK-range batches, (3) MODIFY to NOT NULL with explicit DEFAULT.",
+  "violated_rule": "Rollback SQL provided",
+  "coverage_rules": ["NOT NULL", "phased approach", "backfill", "PK-range"],
+  "reference": "SKILL.md"
+}

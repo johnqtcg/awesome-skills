@@ -1,0 +1,11 @@
+{
+  "id": "MONGO-009",
+  "title": "Degraded mode — migration review with no version or deployment info",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "migration_snippet": "// Someone shared this script without context\ndb.products.updateMany({weight: null}, {$set: {weight: 0}})\ndb.products.createIndex({category: 1, weight: 1})",
+  "context": {"mongo_version": "unknown", "deployment": "unknown", "doc_count": "unknown", "sharded": "unknown"},
+  "expected_feedback": "Degraded mode: no MongoDB version, deployment type, or collection size provided. Assume 4.4 replica set (most restrictive for index build behavior). Flag: unbounded updateMany without batching (Critical), no write concern specified (Critical), index build without lag monitoring (Standard). All recommendations conditional on unknown collection size. Must NOT claim migration is safe without knowing document count. Uncovered Risks must list all unknowns.",
+  "coverage_rules": ["Degraded", "never claim", "Uncovered Risk"],
+  "reference": "SKILL.md"
+}

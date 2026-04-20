@@ -1,0 +1,12 @@
+{
+  "id": "ORA-005",
+  "title": "Partition DDL without UPDATE INDEXES — global indexes become UNUSABLE",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V7__drop_old_partition.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE logs DROP PARTITION logs_2023_q1;",
+  "context": {"oracle_version": "19c", "edition": "EE", "table_rows": "100000000", "rac": "no"},
+  "expected_feedback": "Standard: DROP PARTITION without the UPDATE INDEXES clause causes all global indexes on the partitioned table to become UNUSABLE. Any subsequent query that uses a global index path will fail with ORA-01502 (index or partition of such index is in unusable state). On a 100M-row table with multiple global indexes, this creates an immediate production outage. Fix: ALTER TABLE logs DROP PARTITION logs_2023_q1 UPDATE INDEXES; — this maintains global indexes inline during the partition drop, adding modest overhead but preventing index invalidation.",
+  "violated_rule": "Global index impact assessed",
+  "coverage_rules": ["UPDATE INDEXES", "global index", "UNUSABLE", "partition"],
+  "reference": "references/oracle-ddl-lock-matrix.md"
+}

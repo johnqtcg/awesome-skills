@@ -1,0 +1,15 @@
+{
+  "id": "LT-007",
+  "title": "No ramp-up — instant full load hides connection establishment issues",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "import http from 'k6/http';\n\nexport const options = {\n  scenarios: {\n    warmup: { executor: 'constant-vus', vus: 5, duration: '30s',\n              tags: { phase: 'warmup' } },\n    test: { executor: 'constant-vus', vus: 500, duration: '5m',\n            startTime: '30s', tags: { phase: 'test' } },\n  },\n  thresholds: {\n    'http_req_duration{phase:test}': ['p(99)<200', 'p(50)<50'],\n    'http_req_failed{phase:test}': ['rate<0.001'],\n  },\n};\n\nexport default function() {\n  http.get('http://api.example.com/orders');\n}",
+  "violated_rule": "Gradual ramp-up — not instant full load",
+  "expected_feedback": "Standard: test jumps to 500 VUs instantly after warmup. Sudden full-load hides connection establishment issues and may trigger rate limiters. Use ramping-vus executor with linear ramp over 30s-2min to expose problems gradually.",
+  "coverage_rules": [
+    "Ramp-up is gradual",
+    "Gradual ramp-up",
+    "sudden full-load hides connection establishment"
+  ],
+  "reference": "SKILL.md"
+}

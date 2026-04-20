@@ -1,0 +1,15 @@
+{
+  "id": "PG-009",
+  "title": "Degraded mode — migration review with no version or table size information",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "migration_snippet": "-- Someone shared this migration without context\nALTER TABLE products ADD COLUMN weight numeric(8,2);\nCREATE INDEX idx_products_weight ON products (weight);",
+  "context": {
+    "pg_version": "unknown",
+    "table_rows": "unknown",
+    "replication": "unknown"
+  },
+  "expected_feedback": "Degraded mode: no PostgreSQL version or table size provided. Assume PG 12 (conservative). Flag: CREATE INDEX without CONCURRENTLY (Critical), missing lock_timeout (Critical). All recommendations marked with assumptions. Uncovered Risks must list all unknowns. Must NOT claim definitive safety without evidence.",
+  "coverage_rules": ["Degraded", "conservative", "never claim", "Uncovered Risk", "assumptions"],
+  "reference": "SKILL.md"
+}

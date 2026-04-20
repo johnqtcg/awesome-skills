@@ -1,0 +1,12 @@
+{
+  "id": "ORA-002",
+  "title": "ADD CONSTRAINT without NOVALIDATE — validates all rows with exclusive lock",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V4__add_fk.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id);",
+  "context": {"oracle_version": "19c", "edition": "EE", "table_rows": "8000000", "rac": "no"},
+  "expected_feedback": "Critical: Adding FK constraint without ENABLE NOVALIDATE holds an exclusive lock while scanning all 8M rows for validation — this can block DML for minutes. Oracle's safe pattern is two-step: (1) ADD CONSTRAINT ... ENABLE NOVALIDATE takes only a brief exclusive lock and skips row validation, enforcing the constraint only for new DML. (2) MODIFY CONSTRAINT ... VALIDATE performs the row scan with a Row Exclusive lock that does not block concurrent DML. Always pair these for production tables >100K rows.",
+  "violated_rule": "Constraints use ENABLE NOVALIDATE + VALIDATE two-step",
+  "coverage_rules": ["ENABLE NOVALIDATE", "VALIDATE", "two-step", "exclusive lock"],
+  "reference": "SKILL.md"
+}

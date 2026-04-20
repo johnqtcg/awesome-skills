@@ -1,0 +1,15 @@
+{
+  "id": "LT-011",
+  "title": "Degraded mode — vague request with no service context or data",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "code_snippet": "# User message: 'My API is slow, can you write a load test?'\n# No endpoint, no protocol, no SLOs, no existing results.",
+  "expected_feedback": "Degraded: Planning mode — no service info. Cannot write a specific test script. Must stop at Gate 1 (Context Collection) and ask for: service endpoint, protocol, deployment info. Then stop at Gate 2 (SLO-First) and help define SLOs. Can provide generic scenario template and SLO questionnaire. Must NOT produce a test targeting a fabricated endpoint.",
+  "coverage_rules": [
+    "No service info, vague request",
+    "Generic scenario template",
+    "STOP if target service is unknown",
+    "Anything specific"
+  ],
+  "reference": "SKILL.md"
+}

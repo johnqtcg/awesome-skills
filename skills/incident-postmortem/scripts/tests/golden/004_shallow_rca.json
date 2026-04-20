@@ -1,0 +1,16 @@
+{
+  "id": "PM-004",
+  "title": "Shallow 5-Why analysis stops at human action (depth 2)",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "## Root Cause Analysis\n\nWhy did payment fail? -> Bad config was deployed\nWhy was bad config deployed? -> Engineer didn't test it\n\nRoot Cause: Engineer error — insufficient testing before deploy.",
+  "violated_rule": "5-Why analysis depth >= 3 — not stopping at superficial cause",
+  "expected_feedback": "Standard: 5-Why analysis stops at depth 2 with 'engineer didn't test it' — this is blame, not root cause. Continue asking why: Why was untested config accepted by the pipeline? Why is there no validation gate? Root cause must reach a process or design gap, not a human action. Minimum depth is 3, typically 4-5.",
+  "coverage_rules": [
+    "Use 5-Why analysis as minimum",
+    "Shallow 5-Why analysis",
+    "5-Why analysis depth >= 3",
+    "Stop when you reach a process or design decision"
+  ],
+  "reference": "SKILL.md"
+}

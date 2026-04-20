@@ -1,0 +1,16 @@
+{
+  "id": "PG-005",
+  "title": "ALTER COLUMN TYPE on large table — full rewrite with AccessExclusiveLock",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V6__change_type.sql\nSET LOCAL lock_timeout = '3s';\nALTER TABLE events ALTER COLUMN payload TYPE jsonb USING payload::jsonb;",
+  "context": {
+    "pg_version": "15.4",
+    "table_rows": "50000000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "Standard: ALTER COLUMN TYPE from text to jsonb requires a full table rewrite with AccessExclusiveLock. On a 50M-row table this will take minutes to hours and block all queries. Use pg_repack or the create-swap-rename pattern instead.",
+  "violated_rule": "lock_timeout set before every DDL",
+  "coverage_rules": ["ALTER COLUMN TYPE", "rewrite", "pg_repack", "AccessExclusiveLock"],
+  "reference": "references/pg-ddl-lock-matrix.md"
+}

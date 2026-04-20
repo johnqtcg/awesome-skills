@@ -1,0 +1,15 @@
+{
+  "id": "DEP-013",
+  "title": "Workflow — deep supply chain review after security incident",
+  "type": "workflow",
+  "severity": "none",
+  "code_snippet": "# User request: 'We had a supply chain incident. Full review of our dependency\n# provenance, proxy configuration, and integrity posture needed.'\n# Context: competitor was hit by dependency confusion attack",
+  "expected_feedback": "Workflow: Deep depth — supply chain review. (1) GOPROXY configuration audit — verify trusted proxy, no direct fallback for sensitive modules. (2) GOPRIVATE covers all internal domains. (3) go.sum committed and verified. (4) GONOSUMCHECK not set (no bypass). (5) All replace directives documented with justification. (6) SBOM generated for compliance. (7) Dependency confusion check: internal module names don't conflict with public modules. (8) Load all four references.",
+  "coverage_rules": [
+    "Deep",
+    "supply chain",
+    "GOPROXY configuration",
+    "GOPRIVATE"
+  ],
+  "reference": "references/supply-chain-security.md"
+}

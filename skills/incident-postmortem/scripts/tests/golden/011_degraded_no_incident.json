@@ -1,0 +1,15 @@
+{
+  "id": "PM-011",
+  "title": "Degraded mode — no incident identified, just wants template",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "code_snippet": "# User says: 'Can you help me set up a post-mortem process for our team?'\n# No specific incident. Wants a template and process guide.",
+  "expected_feedback": "Degraded: Planning mode — no incident data. Cannot produce any incident-specific content. Can provide post-mortem template, process guide, severity framework, and review checklist. Must stop at Gate 1 (Incident Context Collection) for any incident-specific work.",
+  "coverage_rules": [
+    "No incident data",
+    "Post-mortem template",
+    "STOP if no incident is identified",
+    "Any incident-specific content"
+  ],
+  "reference": "SKILL.md"
+}

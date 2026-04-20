@@ -1,0 +1,16 @@
+{
+  "id": "DEP-001",
+  "title": "Direct dependency with reachable critical CVE (CVSS 9.8)",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "// go.mod\nrequire golang.org/x/net v0.15.0\n\n// server.go\npackage main\nimport \"golang.org/x/net/http2\"\nfunc main() {\n    http2.ConfigureServer(srv, nil)\n}\n\n// govulncheck output:\n// Vulnerability GO-2023-2102 (CVE-2023-44487)\n// Your code is affected.\n// Found in: golang.org/x/net@v0.15.0\n// Fixed in: golang.org/x/net@v0.17.0",
+  "violated_rule": "No reachable P0 CVEs — all CVSS >= 9.0 reachable vulns addressed",
+  "expected_feedback": "P0 Critical: reachable CVE-2023-44487 (CVSS 9.8) in golang.org/x/net@v0.15.0. govulncheck confirms call-graph reachability via http2.ConfigureServer. Fix: go get golang.org/x/net@v0.17.0. Merge-blocking — patch immediately.",
+  "coverage_rules": [
+    "govulncheck in source mode is primary",
+    "Source mode confirms reachability",
+    "No reachable P0 CVEs",
+    "CVSS >= 9.0"
+  ],
+  "reference": "SKILL.md"
+}

@@ -1,0 +1,12 @@
+{
+  "id": "KAFKA-006",
+  "title": "Schema evolution without compatibility mode — breaking change deployed",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "// v1 schema: {order_id, amount, currency}\n// v2 schema: {order_id, amount}  -- removed 'currency' field\n// No Schema Registry configured — producer just sends JSON\n// Existing consumers that read 'currency' field → null/crash",
+  "context": {"kafka_version": "3.0", "schema": "JSON", "delivery": "at-least-once", "schema_registry": "none"},
+  "expected_feedback": "Standard: Removed a field (currency) from the event schema without a Schema Registry compatibility check. This is a backward-incompatible change — existing consumers expecting the 'currency' field will receive null or fail to deserialize. Without Schema Registry, there's no automated compatibility gate. Fix: (1) configure Schema Registry with BACKWARD compatibility mode, (2) never remove required fields — add new optional fields instead, (3) for breaking changes, create a new topic (order.events.v2) and migrate consumers.",
+  "violated_rule": "Schema compatibility mode configured",
+  "coverage_rules": ["Schema Registry", "compatibility", "BACKWARD"],
+  "reference": "SKILL.md"
+}

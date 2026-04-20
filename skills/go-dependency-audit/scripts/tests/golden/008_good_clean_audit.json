@@ -1,0 +1,15 @@
+{
+  "id": "DEP-008",
+  "title": "Well-maintained project — all checks pass, no vulnerabilities",
+  "type": "good_practice",
+  "severity": "none",
+  "code_snippet": "// go.mod is tidy, go.sum committed\n// govulncheck ./... -> No vulnerabilities found\n// go mod verify -> all modules verified\n// go-licenses check -> all MIT/Apache-2.0/BSD\n// No +incompatible versions\n// GOPRIVATE set for company modules\n// No replace directives\n// All direct deps within 1 minor version of latest",
+  "expected_feedback": "No violations. Project demonstrates clean dependency hygiene: (1) govulncheck shows no reachable CVEs, (2) go.sum integrity verified, (3) all licenses permissive, (4) no +incompatible versions, (5) GOPRIVATE configured, (6) go.mod is tidy with no unnecessary replace directives.",
+  "coverage_rules": [
+    "govulncheck executed",
+    "go.mod/go.sum integrity verified",
+    "License compliance checked",
+    "GOPROXY and GOPRIVATE configured"
+  ],
+  "reference": "SKILL.md"
+}

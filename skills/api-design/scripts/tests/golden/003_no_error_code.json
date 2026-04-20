@@ -1,0 +1,12 @@
+{
+  "id": "API-003",
+  "title": "Unstructured error — string message only, no machine-parseable code",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "POST /api/v1/users\n→ 400 Bad Request\n{\n  \"message\": \"Something went wrong with your request\"\n}",
+  "context": {"api_type": "internal", "consumers": "frontend + mobile"},
+  "expected_feedback": "Critical: Error response has only a human-readable message — no machine-parseable error code. Clients must string-match on 'message' to determine the error type, which breaks when wording changes. Every error response needs a stable 'code' field (e.g., 'validation_error', 'not_found') that clients can switch on programmatically. The message should complement the code, not replace it. Full envelope: {error: {code: 'validation_error', message: '...', details: [...], trace_id: '...'}}.",
+  "violated_rule": "Error model is consistent and machine-parseable",
+  "coverage_rules": ["error model", "code", "machine-parseable", "trace_id"],
+  "reference": "SKILL.md"
+}

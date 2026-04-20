@@ -1,0 +1,15 @@
+{
+  "id": "PM-015",
+  "title": "Workflow — cross-team SEV-1 with multi-service timeline and escalation",
+  "type": "workflow",
+  "severity": "none",
+  "code_snippet": "# User provides: PagerDuty alerts from 3 teams (payments, orders, infrastructure),\n# Grafana dashboards showing cascading failures across payment-api, order-service,\n# and Redis cluster. Slack threads from #incident-0203, #infra-escalation,\n# #payments-oncall. Total outage: 62 minutes. Data: customer-facing 503s,\n# order queue backup, Redis master failover. 3 teams responded independently\n# with conflicting mitigation attempts.\n#\n# User says: 'Write a deep post-mortem for yesterday's SEV-1. Multiple teams\n# were involved — payments, orders, and infra. 62 min total outage, cascading\n# failure from Redis to everything downstream.'",
+  "expected_feedback": "Workflow: Draft mode + Deep depth (SEV-1, multi-team). (1) Force Deep per §3: SEV-1 + multi-team involvement. (2) Timeline: merge parallel entries from 3 team sources into single UTC timeline, mark which team performed each action. (3) Root cause: 5-Why to systemic level — why did failure cascade across service boundaries? (4) Contributing factors: unclear escalation ownership between teams, conflicting mitigation attempts, no unified incident commander. (5) Action items must span all 3 teams with cross-team owners. (6) SEV-1 requires: action items within 48 hours, exec review, Deep post-mortem.",
+  "coverage_rules": [
+    "Force Deep if",
+    "multi-team involvement",
+    "SEV-1",
+    "Deep post-mortem"
+  ],
+  "reference": "SKILL.md"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "PM-001",
+  "title": "Blame-focused post-mortem names individual as root cause",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "# Post-mortem: Payment API Outage 2024-03-15\n\nRoot Cause: John deployed a bad configuration file at 14:23 without\ntesting it first.\n\nAction Item: Ensure John reviews configs more carefully next time.",
+  "violated_rule": "Root cause identified (systemic, not individual) — blameless, depth >= 3",
+  "expected_feedback": "Critical: post-mortem contains blame language — names an individual as root cause. A blameless post-mortem examines systems, not people. Reframe: 'The deployment pipeline accepted an invalid configuration because config validation was not enforced.' Root cause must be systemic (process/design gap), not individual action.",
+  "coverage_rules": [
+    "Blameless Framing",
+    "Root cause must be systemic, not individual",
+    "Blame-focused post-mortem",
+    "systems and processes, not individuals"
+  ],
+  "reference": "SKILL.md"
+}

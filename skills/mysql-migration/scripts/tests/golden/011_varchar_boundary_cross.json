@@ -1,0 +1,17 @@
+{
+  "id": "MIG-011",
+  "title": "VARCHAR extension crossing 255-byte boundary — silent COPY instead of INSTANT",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V6__extend_name.sql\nSET SESSION lock_wait_timeout = 3;\nSET SESSION innodb_lock_wait_timeout = 3;\nALTER TABLE users MODIFY COLUMN display_name VARCHAR(100) DEFAULT NULL, ALGORITHM=INSTANT;",
+  "context": {
+    "mysql_version": "8.0.32",
+    "table_rows": "8000000",
+    "charset": "utf8mb4",
+    "original_column": "display_name VARCHAR(60)"
+  },
+  "expected_feedback": "Standard: VARCHAR(60) → VARCHAR(100) in utf8mb4 crosses the 255-byte boundary (60×4=240 bytes → 100×4=400 bytes). This changes the internal length prefix from 1 byte to 2 bytes, forcing COPY algorithm — ALGORITHM=INSTANT will be rejected. On an 8M-row table, use ALGORITHM=INPLACE, LOCK=NONE, or consider gh-ost.",
+  "violated_rule": "DDL algorithm matches version",
+  "coverage_rules": ["VARCHAR", "255", "boundary", "utf8mb4", "COPY", "length prefix"],
+  "reference": "references/ddl-algorithm-matrix.md"
+}

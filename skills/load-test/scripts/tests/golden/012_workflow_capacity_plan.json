@@ -1,0 +1,15 @@
+{
+  "id": "LT-012",
+  "title": "Workflow — capacity planning with multi-scenario suite for e-commerce API",
+  "type": "workflow",
+  "severity": "none",
+  "code_snippet": "# User request: 'We need capacity planning for Black Friday. Our API handles\n# 2000 RPS normally, we expect 10x spike. Current SLOs: p99 < 200ms, error < 0.1%.\n# Stack: Go service, 3 k8s replicas (2 CPU / 4Gi), PostgreSQL, Redis cache.\n# Endpoints: GET /products (60%), GET /cart (25%), POST /orders (15%)'",
+  "expected_feedback": "Workflow: Deep depth — multi-scenario capacity planning. (1) SLOs confirmed: p99<200ms, error<0.1%, target 20K RPS. (2) Scenarios: smoke (5 VUs, 1 min) -> load (2K RPS, 5 min) -> stress (ramp to 10K RPS) -> breakpoint (step to 20K+) -> spike (instant 10x burst). (3) Tool: k6 with constant-arrival-rate for precise RPS + ramping-vus for stress. (4) Per-endpoint thresholds with weighted traffic mix. (5) Resource correlation: CPU, memory, DB connections, goroutines. (6) Load all three references.",
+  "coverage_rules": [
+    "Deep",
+    "smoke",
+    "breakpoint",
+    "Multi-Scenario Composition"
+  ],
+  "reference": "references/k6-patterns.md"
+}

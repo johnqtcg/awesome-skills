@@ -1,0 +1,11 @@
+{
+  "id": "KAFKA-009",
+  "title": "Degraded mode — Kafka design review with no version or delivery requirement info",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "code_snippet": "// Someone shared this producer code without context\nproducer.SendMessage(&sarama.ProducerMessage{\n    Topic: \"events\",\n    Value: sarama.ByteEncoder(data),\n})",
+  "context": {"kafka_version": "unknown", "schema": "unknown", "delivery": "unknown", "ordering": "unknown"},
+  "expected_feedback": "Degraded mode: no Kafka version, schema format, delivery guarantee, or ordering requirement provided. Cannot evaluate design correctness without knowing the delivery guarantee (at-least-once requires idempotent consumers; exactly-once requires transactional setup). Flag: null partition key (Standard — no ordering), generic topic name 'events' (Hygiene), no schema metadata visible. All recommendations are conditional on unknown requirements. Must NOT claim the design is correct without knowing what 'correct' means for this use case. Uncovered Risks must list all unknowns.",
+  "coverage_rules": ["Degraded", "never claim", "Uncovered Risk"],
+  "reference": "SKILL.md"
+}

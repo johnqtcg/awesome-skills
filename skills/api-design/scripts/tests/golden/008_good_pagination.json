@@ -1,0 +1,11 @@
+{
+  "id": "API-008",
+  "title": "Good cursor pagination with allowlisted filters and sorting",
+  "type": "good_practice",
+  "severity": "none",
+  "code_snippet": "GET /api/v1/orders?cursor=eyJpZCI6MTIzfQ&limit=20&status=active&sort=created_at:desc\n→ 200 OK\n{\n  \"data\": [...],\n  \"meta\": {\n    \"next_cursor\": \"eyJpZCI6MTQzfQ\",\n    \"has_more\": true,\n    \"limit\": 20\n  }\n}\n// Allowed filters: status, customer_id\n// Allowed sorts: created_at, total\n// Unknown filter → 400 {error: {code: 'invalid_filter'}}",
+  "context": {"api_type": "internal", "consumers": "frontend"},
+  "expected_feedback": "No violations. Correct pagination and filtering design: (1) cursor-based pagination for consistent results in high-churn data, (2) server-enforced limit with max cap, (3) explicitly allowlisted filter and sort fields, (4) unknown filters rejected with structured error code, (5) meta block provides cursor and has_more for client navigation.",
+  "coverage_rules": ["pagination", "cursor", "filtering", "sorting", "allowlisted"],
+  "reference": "SKILL.md"
+}

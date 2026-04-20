@@ -1,0 +1,16 @@
+{
+  "id": "PG-001",
+  "title": "Missing lock_timeout — DDL without lock_timeout risks indefinite blocking",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V2__add_index.sql\nCREATE INDEX CONCURRENTLY idx_orders_date ON orders (created_at);",
+  "context": {
+    "pg_version": "15.4",
+    "table_rows": "5000000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "Critical: DDL missing lock_timeout. Even CONCURRENTLY operations can stall if they cannot acquire ShareUpdateExclusiveLock. Add SET LOCAL lock_timeout = '3s'; before DDL. Note: CONCURRENTLY cannot run inside a transaction, so use SET statement_timeout instead for this specific case.",
+  "violated_rule": "lock_timeout set before every DDL",
+  "coverage_rules": ["lock_timeout", "statement_timeout", "SET LOCAL"],
+  "reference": "SKILL.md"
+}

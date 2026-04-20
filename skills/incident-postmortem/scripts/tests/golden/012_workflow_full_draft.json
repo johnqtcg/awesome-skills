@@ -1,0 +1,15 @@
+{
+  "id": "PM-012",
+  "title": "Workflow — draft complete post-mortem from incident data",
+  "type": "workflow",
+  "severity": "none",
+  "code_snippet": "# User provides: PagerDuty alerts, Grafana screenshots, Slack thread,\n# git log showing the deploy, and says:\n# 'Write a post-mortem for the payment outage yesterday. SEV-2.\n# Duration was about 47 minutes. ~12K users affected.'",
+  "expected_feedback": "Workflow: Draft mode + Standard depth (SEV-2). (1) Gate 1: incident context collected from PagerDuty + Grafana + Slack + git. (2) Gate 2: verify blameless framing. (3) Timeline: extract UTC entries from all sources, mark DETECTION/RESPONSE/RECOVERY phases. (4) Root cause: 5-Why analysis to systemic level. (5) Impact: quantify from provided data. (6) Action items: categorized (prevent/detect/mitigate), owned, deadlined. (7) Scorecard: Critical 3/3, Standard 4/5, Hygiene 3/4.",
+  "coverage_rules": [
+    "Draft",
+    "Standard",
+    "Timeline",
+    "5-Why"
+  ],
+  "reference": "SKILL.md"
+}

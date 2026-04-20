@@ -1,0 +1,15 @@
+{
+  "id": "MIG-009",
+  "title": "Degraded mode — migration review with no version or table size information",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "migration_snippet": "-- Someone shared this migration file without context\nALTER TABLE products ADD COLUMN weight DECIMAL(8,2);\nALTER TABLE products ADD INDEX idx_weight (weight);",
+  "context": {
+    "mysql_version": "unknown",
+    "table_rows": "unknown",
+    "replication": "unknown"
+  },
+  "expected_feedback": "Degraded mode: no MySQL version or table size provided. Assume MySQL 5.7 (most restrictive) and high-traffic table. Flag missing session guards and implicit algorithm as Critical. All recommendations marked 'SAFE (assumed — verify against production)'. Uncovered Risks section must list all unknowns. Must NOT claim definitive safety without evidence.",
+  "coverage_rules": ["Degraded", "conservative", "never claim", "Uncovered Risk", "assumptions"],
+  "reference": "SKILL.md"
+}

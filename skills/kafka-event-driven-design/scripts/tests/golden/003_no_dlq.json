@@ -1,0 +1,12 @@
+{
+  "id": "KAFKA-003",
+  "title": "No dead letter queue — poison message blocks entire partition",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "func consume(session sarama.ConsumerGroupSession, msg *sarama.ConsumerMessage) {\n    if err := processMessage(msg); err != nil {\n        log.Error(\"failed to process\", \"err\", err, \"offset\", msg.Offset)\n        // No commit → message redelivered → infinite retry loop\n        // All messages behind this one in the partition are blocked\n    }\n    session.MarkMessage(msg, \"\")\n}",
+  "context": {"kafka_version": "3.0", "schema": "Avro", "delivery": "at-least-once", "throughput": "2000/s"},
+  "expected_feedback": "Critical: No dead letter queue (DLQ) configured. When processMessage fails, the message is not committed (good for at-least-once), but there's no escape hatch — if the message is permanently unprocessable (malformed schema, invalid data, bug in handler), it will be retried forever, blocking ALL subsequent messages in that partition. This is the 'poison message' problem. Fix: implement retry counter (via headers or external store); after N retries (e.g., 3), route the message to a DLQ topic (e.g., order.events.dlq), commit the offset, and continue processing. Monitor DLQ message rate.",
+  "violated_rule": "Dead letter queue exists for poison messages",
+  "coverage_rules": ["dead letter", "DLQ", "poison", "retry"],
+  "reference": "SKILL.md"
+}

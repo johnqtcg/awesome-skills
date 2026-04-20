@@ -1,0 +1,12 @@
+{
+  "id": "CACHE-005",
+  "title": "Distributed lock without TTL or safe release — deadlock risk",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "// Acquire lock\nrdb.SetNX(ctx, \"lock:payment:\"+orderID, \"1\", 0)  // no TTL!\n// ... process payment ...\nrdb.Del(ctx, \"lock:payment:\"+orderID)  // unsafe release — may delete other holder's lock",
+  "context": {"redis_version": "7.0", "deployment": "sentinel", "consistency": "strong"},
+  "expected_feedback": "Standard: Two problems — (1) lock has no TTL (expiration=0), so if the holder crashes or hangs, the lock is held forever, permanently blocking all subsequent payment processing for this order. (2) DEL without ownership check: if the lock expired and another process acquired it, this DEL releases someone else's lock, causing concurrent execution. Fix: set TTL (e.g., 10s), use a unique token as lock value, and release with Lua CAS script that checks token before deleting.",
+  "violated_rule": "Distributed locks have TTL and safe CAS release",
+  "coverage_rules": ["distributed lock", "TTL", "SETNX", "Lua", "deadlock"],
+  "reference": "SKILL.md"
+}

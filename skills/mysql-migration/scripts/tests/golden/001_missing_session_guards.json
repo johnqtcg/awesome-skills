@@ -1,0 +1,16 @@
+{
+  "id": "MIG-001",
+  "title": "Missing session guards — DDL without lock_wait_timeout risks cascading MDL block",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V2__add_index.sql\nALTER TABLE orders ADD INDEX idx_created_at (created_at), ALGORITHM=INPLACE, LOCK=NONE;",
+  "context": {
+    "mysql_version": "8.0.32",
+    "table_rows": "5000000",
+    "replication": "source-replica"
+  },
+  "expected_feedback": "Critical: DDL missing session guards. If a long-running transaction holds a metadata lock, this ALTER will block indefinitely — and every subsequent query queues behind it. Add SET SESSION lock_wait_timeout = 3; and SET SESSION innodb_lock_wait_timeout = 3; before the ALTER.",
+  "violated_rule": "Session guards",
+  "coverage_rules": ["session guards", "lock_wait_timeout", "innodb_lock_wait_timeout", "MDL"],
+  "reference": "SKILL.md"
+}

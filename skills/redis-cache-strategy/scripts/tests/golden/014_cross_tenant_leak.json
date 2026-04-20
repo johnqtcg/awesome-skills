@@ -1,0 +1,12 @@
+{
+  "id": "CACHE-014",
+  "title": "Multi-tenant shared cache without tenant prefix — cross-tenant data leak",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "func GetTenantUser(ctx context.Context, tenantID, userID string) (*User, error) {\n    key := \"user:\" + userID  // no tenant prefix\n    val, err := rdb.Get(ctx, key).Bytes()\n    if err == redis.Nil {\n        u, err := db.QueryUser(ctx, tenantID, userID)\n        if err != nil {\n            return nil, err\n        }\n        rdb.Set(ctx, key, marshal(u), 30*time.Minute)\n        return u, nil\n    }\n    if err != nil {\n        return nil, err\n    }\n    var u User\n    json.Unmarshal(val, &u)\n    return &u, nil\n}",
+  "context": {"redis_version": "7.0", "deployment": "cluster", "eviction": "allkeys-lru", "consistency": "eventual", "architecture": "multi-tenant SaaS"},
+  "expected_feedback": "Critical: Cache key `user:{userID}` lacks a tenant namespace prefix. In a multi-tenant SaaS application, if user IDs overlap across tenants (common with sequential integer IDs), tenant A reads tenant B's cached profile — a cross-tenant data leak. Even with UUIDs, a shared keyspace violates tenant data segmentation because any service with Redis access can read any tenant's data. Fix: adopt the `{tenant}:{domain}:{version}:{id}` key naming convention from the checklist (e.g., `tenant:{tenantID}:user:v1:{userID}`). For stricter access control, use separate Redis databases or keyspaces per tenant, and apply Redis ACL rules to restrict which services can access which tenant prefix. Audit all existing cache keys for missing tenant prefixes — this is a data exposure vulnerability, not just a naming convention issue.",
+  "violated_rule": "Key naming follows namespace convention",
+  "coverage_rules": ["tenant", "namespace", "key naming", "access control", "segmentation"],
+  "reference": "references/cache-anti-examples.md"
+}

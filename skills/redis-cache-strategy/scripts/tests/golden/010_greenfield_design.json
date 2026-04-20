@@ -1,0 +1,11 @@
+{
+  "id": "CACHE-010",
+  "title": "Workflow — design cache layer from scratch for e-commerce product catalog",
+  "type": "workflow",
+  "severity": "none",
+  "code_snippet": "# Goal: add Redis caching to product catalog service\n# Current: all reads hit PostgreSQL directly, ~3000 QPS, p99 latency 150ms\n# Target: reduce p99 to <20ms for product reads\n# Products updated ~100 times/day via admin panel\n# 50K products total, top 1000 products get 80% of traffic",
+  "context": {"redis_version": "7.0", "deployment": "sentinel", "eviction": "allkeys-lru", "consistency": "eventual (30s OK)"},
+  "expected_feedback": "Workflow: cache-aside is the right pattern for this scenario (read-heavy 3000 QPS, ~100 writes/day, 30s staleness OK). Design: (1) Key schema: product:{id}, TTL 30min with jitter. (2) Singleflight for top-1000 hot products to prevent stampede. (3) Null-value caching for non-existent product IDs (penetration defense). (4) On product update via admin panel: invalidate cache key immediately. (5) Degradation: on Redis failure, fall through to PostgreSQL with circuit breaker. (6) Warmup: eager-load top-1000 products on deploy. (7) Monitor: cache hit rate target >95%, alert if <90%.",
+  "coverage_rules": ["cache-aside", "singleflight", "TTL", "jitter", "penetration", "degradation", "warmup", "hit rate"],
+  "reference": "SKILL.md"
+}

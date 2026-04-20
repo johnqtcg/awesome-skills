@@ -1,0 +1,12 @@
+{
+  "id": "ORA-004",
+  "title": "ALTER TABLE MOVE without ONLINE — exclusive lock for entire table reorganization",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V6__reorganize.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 5;\nALTER TABLE events MOVE TABLESPACE new_ts;",
+  "context": {"oracle_version": "19c", "edition": "EE", "table_rows": "30000000", "rac": "no"},
+  "expected_feedback": "Critical: ALTER TABLE MOVE without ONLINE holds an exclusive lock for the entire table rewrite on 30M rows — blocking all DML for the full duration, which could be minutes to hours. DDL_LOCK_TIMEOUT is set (good), but the real problem is the operation itself: on 19c EE, ALTER TABLE MOVE ONLINE is available and holds only a brief exclusive lock at start and end, allowing concurrent DML during the rewrite. Additionally, non-online MOVE renders all indexes UNUSABLE (ORA-01502 on subsequent queries), whereas ONLINE MOVE maintains indexes automatically. For Standard Edition without ONLINE, use DBMS_REDEFINITION or CTAS+swap instead.",
+  "violated_rule": "Large table restructuring uses DBMS_REDEFINITION or CTAS",
+  "coverage_rules": ["MOVE ONLINE", "exclusive lock", "UNUSABLE", "index"],
+  "reference": "references/oracle-ddl-lock-matrix.md"
+}

@@ -1,0 +1,16 @@
+{
+  "id": "PM-006",
+  "title": "Post-mortem has no 'what went well' section",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "# Post-mortem: API Outage\n\n## Summary\nEverything went wrong.\n\n## Timeline\n[...]\n\n## Root Cause\n[...]\n\n## What Needs Improvement\nEverything.\n\n## Action Items\n[...]\n\n// No 'What Went Well' section anywhere in the document",
+  "violated_rule": "\"What went well\" section present — positive patterns documented",
+  "expected_feedback": "Standard: post-mortem has no 'What Went Well' section. Blameless post-mortems must celebrate good response patterns — fast detection, effective communication, correct escalation. A purely negative document is demoralizing and misses learning opportunities from what worked.",
+  "coverage_rules": [
+    "Document what went well",
+    "What went well",
+    "Missing \"what went well\"",
+    "celebrating good response"
+  ],
+  "reference": "SKILL.md"
+}

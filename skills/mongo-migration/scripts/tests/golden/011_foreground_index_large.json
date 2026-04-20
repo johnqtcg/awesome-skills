@@ -1,0 +1,12 @@
+{
+  "id": "MONGO-011",
+  "title": "Index build on large collection without monitoring — replication lag risk",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "// create_search_index.js\ndb.orders.createIndex({customer_id: 1, status: 1, created_at: -1})",
+  "context": {"mongo_version": "6.0", "deployment": "replica_set", "doc_count": "30000000", "sharded": false},
+  "expected_feedback": "Standard: Index build on 30M documents without monitoring replication lag. On MongoDB 6.0, the optimized index build allows concurrent DML, but the build still generates significant I/O that can cause secondaries to fall behind. If replication lag exceeds threshold, secondary reads return stale data or secondaries may enter RECOVERING state. Monitor rs.printSecondaryReplicationInfo() during build. For collections this size, consider the rolling build pattern (build on each secondary individually).",
+  "violated_rule": "Index builds monitored for replication lag",
+  "coverage_rules": ["replication lag", "createIndex", "rolling build", "secondary"],
+  "reference": "SKILL.md"
+}
