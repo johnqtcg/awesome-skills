@@ -1,0 +1,21 @@
+{
+  "id": "014_corpus_management_degradation",
+  "description": "Developer asks whether to commit all 2000 auto-generated corpus entries after a 30-minute nightly fuzz run",
+  "code_snippet": "// testdata/fuzz/FuzzParseConfig/ has 2000 entries after nightly run\n// PR lane corpus replay now takes 45s\nfunc FuzzParseConfig(f *testing.F)",
+  "context": "Extended fuzz run accumulated 2000 corpus entries. Developer wants to know which to commit to git.",
+  "applicability_verdict": "suitable",
+  "expected_fuzz_mode": "parser robustness",
+  "expected_template": "Template A",
+  "workflow_type": "corpus_management",
+  "expected_corpus_actions": {
+    "commit_crashing": true,
+    "commit_fuzz_cache": false,
+    "commit_all_auto_generated": false
+  },
+  "skill_rules_that_must_fire": [
+    "Corpus Management",
+    "Always commit",
+    "Do not commit",
+    "Selectively commit"
+  ]
+}

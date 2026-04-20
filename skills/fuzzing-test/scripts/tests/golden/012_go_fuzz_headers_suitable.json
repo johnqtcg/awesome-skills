@@ -1,0 +1,15 @@
+{
+  "id": "012_go_fuzz_headers_suitable",
+  "description": "Order processor with complex nested struct — json.Unmarshal skip rate >80%, use go-fuzz-headers bridge for lower skip rate",
+  "code_snippet": "func ProcessOrder(order Order) (*Receipt, error)",
+  "context": "Order struct has []LineItem, map[string]Discount, *ShippingAddress. json.Unmarshal skip rate was >80%. User wants lower skip rate.",
+  "applicability_verdict": "suitable",
+  "expected_fuzz_mode": "multi-parameter",
+  "expected_template": "Template D",
+  "deserialization_method": "go-fuzz-headers",
+  "skill_rules_that_must_fire": [
+    "Template D: Struct-Aware",
+    "go-fuzz-headers",
+    "GenerateStruct"
+  ]
+}

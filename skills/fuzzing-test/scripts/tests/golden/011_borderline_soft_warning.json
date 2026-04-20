@@ -1,0 +1,21 @@
+{
+  "id": "011_borderline_soft_warning",
+  "description": "Token generator with time.Now() and rand.Int63() — borderline case, Check 4 is a soft warning not a hard stop",
+  "code_snippet": "func GenerateToken(userID string) Token {\n    return Token{\n        UserID:    userID,\n        ExpiresAt: time.Now().Add(24 * time.Hour),\n        Random:    rand.Int63(),\n    }\n}",
+  "context": "User asks whether to fuzz this. Function depends on time.Now() and rand.Int63(). It could be made deterministic by injecting a clock and seeded random.",
+  "applicability_verdict": "suitable",
+  "expected_fuzz_mode": "parser robustness",
+  "expected_template": "Template A",
+  "expected_checks": {
+    "meaningful_input_space": "Pass",
+    "fuzz_compatible_types": "Pass",
+    "clear_oracle": "Pass",
+    "deterministic_local": "Warn",
+    "fast_per_call": "Pass"
+  },
+  "expected_warnings": ["Check 4: soft warning — non-deterministic but stubbable"],
+  "skill_rules_that_must_fire": [
+    "Soft Warnings (proceed with caution)",
+    "Applicability Gate"
+  ]
+}

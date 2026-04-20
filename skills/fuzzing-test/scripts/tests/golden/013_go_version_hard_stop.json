@@ -1,0 +1,13 @@
+{
+  "id": "013_go_version_hard_stop",
+  "description": "Parser function in a module constrained to Go 1.16 — hard stop at Go Version Gate",
+  "code_snippet": "// go.mod: module example.com/legacy\n// go 1.16\nfunc DecodePacket(data []byte) (*Packet, error)",
+  "context": "User asks to write a fuzz test. The go.mod specifies go 1.16.",
+  "applicability_verdict": "not_suitable",
+  "failed_hard_stop": "Go Version Gate",
+  "expected_alternative": "property tests with gopter/rapid or legacy go-fuzz with explicit justification",
+  "skill_rules_that_must_fire": [
+    "Go Version Gate",
+    "< 1.18"
+  ]
+}

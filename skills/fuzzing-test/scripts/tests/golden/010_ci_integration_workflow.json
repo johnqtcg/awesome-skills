@@ -1,0 +1,16 @@
+{
+  "id": "010_ci_integration_workflow",
+  "description": "CI integration request for two existing fuzz targets — demonstrates two-lane strategy recommendation",
+  "code_snippet": "func FuzzParseConfig(f *testing.F)\nfunc FuzzRoundTripEvent(f *testing.F)",
+  "context": "User asks: 'How do I add these fuzz tests to GitHub Actions?' Both targets are written and passing locally.",
+  "applicability_verdict": "suitable",
+  "expected_fuzz_mode": "parser robustness",
+  "expected_template": "Template A",
+  "workflow_type": "ci_integration",
+  "expected_ci_lanes": ["PR Lane", "Scheduled Lane"],
+  "skill_rules_that_must_fire": [
+    "CI Strategy",
+    "two-lane strategy",
+    "PR lane"
+  ]
+}

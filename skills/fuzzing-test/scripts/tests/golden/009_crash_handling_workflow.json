@@ -1,0 +1,16 @@
+{
+  "id": "009_crash_handling_workflow",
+  "description": "Parser crash discovered by fuzzer — demonstrates mandatory crash handling workflow after fuzz finds a panic",
+  "code_snippet": "func ParseFrame(data []byte) (*Frame, error)",
+  "context": "Fuzzer produced crashing input at testdata/fuzz/FuzzParseFrame/abc1234. Panic: 'index out of range [3] with length 2'. Fix adds a length check before indexing.",
+  "applicability_verdict": "suitable",
+  "expected_fuzz_mode": "parser robustness",
+  "expected_template": "Template A",
+  "workflow_type": "crash_handling",
+  "expected_crash_steps": ["retain_corpus", "record_failure_type", "fix_minimal", "rerun_regression", "report_root_cause"],
+  "skill_rules_that_must_fire": [
+    "Crash Handling (Mandatory)",
+    "retain corpus under",
+    "Always commit"
+  ]
+}
