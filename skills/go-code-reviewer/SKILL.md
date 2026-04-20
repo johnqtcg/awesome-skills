@@ -193,19 +193,13 @@ This gate exists so that developers are never blocked by legacy issues they did 
 - Include tool output in Execution Status section.
 - If no tools are installed, state `Not available` and continue.
 - Dedup rule: same location + same issue = report once. Prefer tool output as Evidence when available.
-- Mode-specific minimum:
-  - Lite mode: one static tool minimum.
-  - Standard mode: config-aware tool strategy.
-  - Strict mode: `golangci-lint` plus direct `staticcheck`/`go vet` when not explicitly covered.
+- Mode-specific tool minimum: see §Execution Modes.
 
 5. Run targeted verification when feasible.
 - `go test` for impacted package(s)
 - `go test -race` when concurrency/shared state risk exists
 - If execution is not feasible, apply Execution Integrity Gate.
-- Mode-specific minimum:
-  - Lite mode: impacted-package `go test`; `-race` only for concurrency risk.
-  - Standard mode: impacted-package `go test`; `-race` for concurrency risk.
-  - Strict mode: run `go test ./...` and `go test -race ./...`.
+- Mode-specific test minimum: see §Execution Modes.
 
 6. Evaluate defect-first.
 Use the checklist below. Skip categories that are not applicable to the change under review. For detailed patterns and code examples, see linked reference files.
@@ -342,27 +336,8 @@ Use the checklist below. Skip categories that are not applicable to the change u
 - Clearly label inference vs directly observed behavior.
 
 ### Anti-examples (DO NOT report these)
-Load `references/go-review-anti-examples.md` for the full list (this file is always loaded for any review — see Appendix trigger table). Before suppressing a finding using an anti-example, you **MUST** quote specific code evidence satisfying the anti-example's stated precondition. Category match alone is not sufficient — if you cannot cite evidence, the finding must be reported.
-- "This function could panic if nil is passed" — when the caller is internal and always passes non-nil
-- "Missing error handling on json.Marshal" — when marshaling a known-safe struct with no interface fields
-- "Missing error wrapping with %w" — when the caller already wraps the error; adding another layer would produce redundant context like `"create user: insert user: insert row: ..."`
-- "Potential race condition on this map" — when the map is only accessed within a single goroutine or is created and consumed within a single function scope
-- "Should use errgroup instead of WaitGroup" — when no error propagation is needed and goroutine count is small and fixed
-- "Should use sync.Pool" — when the object is small and allocated infrequently
-- "Should pre-allocate slice" — when the slice is small (< 16 elements) or size is truly unknown
-- "Struct fields should be reordered for alignment" — when the struct has < 4 fields or savings < 8 bytes
-- "Should use strings.Clone for substring" — when both the substring and parent string are short-lived locals eligible for GC at the same scope
-- "Should use slog instead of log" — when the project's `go.mod` targets Go < 1.21
-- "Should use atomic.Int64 instead of atomic.AddInt64" — when the project's `go.mod` targets Go < 1.19
-- "Missing context propagation" — when the function is synchronous, short-lived, performs no I/O, and has no cancellable work
-- "Should use generics here" — when only one concrete type is used throughout the codebase
-- "Exported function missing godoc" — when the symbol is in an `internal/` package not intended for external consumers
-- "Function too long (>50 lines)" — when the body is a straightforward table-driven switch, a sequential pipeline with no nesting, or a single select/case block
-Grey-area guidance:
-- `errors.Is` vs `==`: direct `==` against a sentinel from the same package is acceptable; cross-package must use `errors.Is`
-- `context.TODO()` vs `context.Background()`: in `main()` or top-level initialization, `context.Background()` is correct; `TODO()` is only appropriate when context propagation is planned but not yet implemented
-- `interface{}` → `any`: pure alias rename is cosmetic; report only if part of a broader modernization effort, never as a standalone finding
-- `defer f.Close()` ignoring error: acceptable for **read-only** file opens; flag only for **write** operations where close flushes buffered data
+See `references/go-review-anti-examples.md` (always loaded — see Appendix).
+Before suppressing a finding using an anti-example, you **MUST** quote specific code evidence satisfying the anti-example's stated precondition. Category match alone is not sufficient — if you cannot cite evidence, the finding must be reported.
 
 ## Output Format (Required)
 ### Review Mode

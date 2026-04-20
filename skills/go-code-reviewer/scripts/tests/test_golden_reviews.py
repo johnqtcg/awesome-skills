@@ -43,12 +43,12 @@ class GoldenReviewTests(unittest.TestCase):
             )
 
     def _assert_anti_example(self, fixture: dict) -> None:
-        """Every anti_example_pattern string must appear in SKILL.md."""
+        """Every anti_example_pattern string must appear in SKILL.md or a reference file (always loaded)."""
         for pattern in fixture.get("anti_example_patterns", []):
             self.assertIn(
                 pattern,
-                self.skill_text,
-                f"[{fixture['id']}] anti-example missing in SKILL.md: {pattern!r}",
+                self.all_text,
+                f"[{fixture['id']}] anti-example missing in skill + references: {pattern!r}",
             )
 
     def _assert_gate(self, fixture: dict) -> None:

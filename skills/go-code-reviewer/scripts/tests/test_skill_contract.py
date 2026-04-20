@@ -8,6 +8,7 @@ SKILL_MD = SKILL_DIR / "SKILL.md"
 API_REF = SKILL_DIR / "references" / "go-api-http-checklist.md"
 EXAMPLE_OUTPUT_REF = SKILL_DIR / "references" / "example-output.md"
 CHECKLIST_REF = SKILL_DIR / "references" / "pr-review-quick-checklist.md"
+ANTI_EXAMPLES_REF = SKILL_DIR / "references" / "go-review-anti-examples.md"
 
 
 def frontmatter(text: str) -> str:
@@ -22,6 +23,7 @@ class GoCodeReviewerSkillContractTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.skill_text = SKILL_MD.read_text()
         cls.api_ref_text = API_REF.read_text()
+        cls.anti_examples_text = ANTI_EXAMPLES_REF.read_text()
 
     # ------------------------------------------------------------------
     # Frontmatter
@@ -80,13 +82,15 @@ class GoCodeReviewerSkillContractTests(unittest.TestCase):
         self.assertIn("Select review mode (`Lite|Standard|Strict`)", self.skill_text)
 
     def test_mode_specific_execution_requirements_exist(self) -> None:
-        self.assertIn("Lite mode: one static tool minimum.", self.skill_text)
-        self.assertIn("Standard mode: config-aware tool strategy.", self.skill_text)
+        # Mode-specific requirements are defined in §Execution Modes; Workflow cross-references them.
+        self.assertIn("Run at least one static tool", self.skill_text)
+        self.assertIn("golangci-lint run` (config-aware fallback strategy)", self.skill_text)
         self.assertIn(
-            "Strict mode: `golangci-lint` plus direct `staticcheck`/`go vet` when not explicitly covered.",
+            "`golangci-lint run` + direct `staticcheck`/`go vet` when not explicitly covered by config.",
             self.skill_text,
         )
-        self.assertIn("Strict mode: run `go test ./...` and `go test -race ./...`.", self.skill_text)
+        self.assertIn("`go test ./...`", self.skill_text)
+        self.assertIn("`go test -race ./...`", self.skill_text)
 
     # ------------------------------------------------------------------
     # Original 4 gates
@@ -186,11 +190,12 @@ class GoCodeReviewerSkillContractTests(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_grey_area_guidance_exists(self) -> None:
-        self.assertIn("Grey-area guidance", self.skill_text)
-        self.assertIn("errors.Is` vs `==`", self.skill_text)
-        self.assertIn("context.TODO()", self.skill_text)
-        self.assertIn("interface{}", self.skill_text)
-        self.assertIn("defer f.Close()", self.skill_text)
+        # Grey-area guidance lives in the reference file (always loaded).
+        self.assertIn("Grey-area guidance", self.anti_examples_text)
+        self.assertIn("errors.Is` vs `==`", self.anti_examples_text)
+        self.assertIn("context.TODO()", self.anti_examples_text)
+        self.assertIn("interface{}", self.anti_examples_text)
+        self.assertIn("defer f.Close()", self.anti_examples_text)
 
     # ------------------------------------------------------------------
     # NEW: Workflow enhancements
@@ -242,38 +247,35 @@ class GoCodeReviewerSkillContractTests(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_anti_examples_count_at_least_15(self) -> None:
-        marker = "### Anti-examples (DO NOT report these)"
-        start = self.skill_text.index(marker)
-        next_heading = self.skill_text.index("\n## ", start + len(marker))
-        section = self.skill_text[start:next_heading]
-        items = [line for line in section.split("\n") if line.startswith("- \"")]
+        # Anti-examples live in the reference file (always loaded); count bullet items there.
+        items = [line for line in self.anti_examples_text.split("\n") if line.startswith("- \"")]
         self.assertGreaterEqual(
-            len(items), 15, f"Expected >= 15 anti-examples, found {len(items)}"
+            len(items), 15, f"Expected >= 15 anti-examples in reference file, found {len(items)}"
         )
 
     def test_version_specific_anti_examples_exist(self) -> None:
-        self.assertIn("when the project's `go.mod` targets Go < 1.21", self.skill_text)
-        self.assertIn("when the project's `go.mod` targets Go < 1.19", self.skill_text)
+        self.assertIn("when the project's `go.mod` targets Go < 1.21", self.anti_examples_text)
+        self.assertIn("when the project's `go.mod` targets Go < 1.19", self.anti_examples_text)
 
     def test_errgroup_false_positive_anti_example_exists(self) -> None:
         self.assertIn(
             "when no error propagation is needed and goroutine count is small and fixed",
-            self.skill_text,
+            self.anti_examples_text,
         )
 
     def test_context_propagation_anti_example_exists(self) -> None:
         self.assertIn(
             "when the function is synchronous, short-lived, performs no I/O, and has no cancellable work",
-            self.skill_text,
+            self.anti_examples_text,
         )
 
     def test_function_too_long_anti_example_exists(self) -> None:
-        self.assertIn("table-driven switch", self.skill_text)
+        self.assertIn("table-driven switch", self.anti_examples_text)
 
     def test_generics_false_positive_anti_example_exists(self) -> None:
         self.assertIn(
             "when only one concrete type is used throughout the codebase",
-            self.skill_text,
+            self.anti_examples_text,
         )
 
     # ------------------------------------------------------------------
