@@ -1,0 +1,15 @@
+{
+  "id": "003",
+  "title": "Cascade: DB pool exhaustion produces a symptom cluster across many services",
+  "type": "defect",
+  "severity": "critical",
+  "scenario": "200+ ERROR lines across 5 services, all containing 'context deadline exceeded'. The cause is a single DB pool exhaustion line that arrives milliseconds before the cascade. Counting symptoms inflates severity and points at the wrong service.",
+  "expected_finding": "Skill must distinguish the cause cluster from the symptom cluster, identify the small specific upstream error class as cause, and report ONE finding for the cause plus the cascade summary — not N parallel findings.",
+  "coverage_rules": [
+    "Cause cluster",
+    "Symptom cluster",
+    "pool exhausted",
+    "first 30 seconds"
+  ],
+  "reference": "references/log-cascade-analysis.md"
+}

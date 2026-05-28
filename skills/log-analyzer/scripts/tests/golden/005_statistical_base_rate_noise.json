@@ -1,0 +1,15 @@
+{
+  "id": "005",
+  "title": "Statistical: 87 errors in 50M requests is background noise, not a spike",
+  "type": "degradation_scenario",
+  "severity": "hygiene",
+  "scenario": "User says 'we have 87 errors per hour, that's a lot'. The service handles 50M requests/hour. error_ratio is 0.0002% — well within typical background noise.",
+  "expected_finding": "Skill must apply Statistical Significance Gate, compute error_ratio rather than count, compare to baseline, and refuse to call this a spike. Likely outcome is a 'No actionable findings' report with the rate computed.",
+  "coverage_rules": [
+    "Statistical Significance Gate",
+    "error_ratio",
+    "background noise",
+    "denominator"
+  ],
+  "reference": "references/log-statistical-methods.md"
+}

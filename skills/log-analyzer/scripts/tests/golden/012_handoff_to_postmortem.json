@@ -1,0 +1,15 @@
+{
+  "id": "012",
+  "title": "Hand-off to incident-postmortem: produce structured block consumable by Gate 1",
+  "type": "workflow",
+  "severity": "standard",
+  "scenario": "User finishes log analysis in Strict mode and asks for a post-mortem. The Hand-off Protocol section must be filled with structured fields that incident-postmortem Gate 1 (Incident Context Collection) consumes directly.",
+  "expected_finding": "Skill must emit a Hand-off Protocol block with incident_id, impact_summary, window_utc, affected_services, data_sources, top_findings (referencing finding IDs), leading_hypothesis, blameless_framing — and use system-and-process language, not name individuals.",
+  "coverage_rules": [
+    "Hand-off Protocol",
+    "incident_id",
+    "blameless_framing",
+    "incident-postmortem"
+  ],
+  "reference": "references/log-analysis-quick-checklist.md"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "001",
+  "title": "First ERROR is not the root cause — capture the run-up",
+  "type": "defect",
+  "severity": "critical",
+  "scenario": "User pastes the first ERROR line they see and asks 'is this the cause?'. The actual cause is a config push 30 seconds before the first ERROR; the first ERROR is the symptom of that push.",
+  "expected_finding": "Skill must reject 'first ERROR = root cause' shortcut, capture the 30 lines preceding the first ERROR, and apply the causation chain (symptom → proximate → underlying → contributing).",
+  "coverage_rules": [
+    "First-occurrence pivot",
+    "Causation Discipline Gate",
+    "the run-up"
+  ],
+  "reference": "references/log-anti-patterns.md"
+}

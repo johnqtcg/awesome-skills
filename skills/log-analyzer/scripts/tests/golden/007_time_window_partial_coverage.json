@@ -1,0 +1,15 @@
+{
+  "id": "007",
+  "title": "Time window: user pastes 80 lines from middle of a 4-hour outage",
+  "type": "degradation_scenario",
+  "severity": "standard",
+  "scenario": "User shares only the loud middle of an outage. Onset (5–30 min before) and recovery (after) are not represented. Drawing onset / recovery conclusions from this slice is unsound.",
+  "expected_finding": "Skill must apply Time Window Boundary Gate, label coverage as 'partial — only middle of incident', refuse to draw onset/recovery conclusions, and request additional data via Open Questions.",
+  "coverage_rules": [
+    "Time Window Boundary Gate",
+    "Coverage:",
+    "partial",
+    "unrepresentative slice"
+  ],
+  "reference": "references/log-anti-patterns.md"
+}

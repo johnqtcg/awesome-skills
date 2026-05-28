@@ -1,0 +1,15 @@
+{
+  "id": "009",
+  "title": "Retry storm amplifies error count 3x — count distinct request_ids, not lines",
+  "type": "defect",
+  "severity": "standard",
+  "scenario": "Apparent error count is 12000. Counting distinct request_ids shows only 4000 affected requests — the difference is client-side retry amplification. Reporting 12000 misroutes severity and obscures the real signal.",
+  "expected_finding": "Skill must count distinct request_id / trace_id alongside raw counts, surface the 3x amplification, and recommend a circuit breaker if absent.",
+  "coverage_rules": [
+    "retry amplification",
+    "distinct",
+    "request_id",
+    "circuit breaker"
+  ],
+  "reference": "references/log-cascade-analysis.md"
+}

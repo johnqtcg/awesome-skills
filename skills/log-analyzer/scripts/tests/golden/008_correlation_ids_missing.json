@@ -1,0 +1,15 @@
+{
+  "id": "008",
+  "title": "Correlation IDs absent — itself a High-severity Observability finding",
+  "type": "defect",
+  "severity": "critical",
+  "scenario": "Production logs lack trace_id, request_id, and any cross-service correlation field. The investigation cannot reconstruct user journeys.",
+  "expected_finding": "Skill must raise a High-severity Observability finding for the absence of correlation IDs, recommend (in order of effort) edge-injected request_id, OTel auto-instrumentation, and structured logger context binding. This is not a 'nice to have' — debugging is fundamentally degraded.",
+  "coverage_rules": [
+    "correlation IDs",
+    "Observability finding",
+    "edge-injected request_id",
+    "OTel auto-instrumentation"
+  ],
+  "reference": "references/log-correlation.md"
+}

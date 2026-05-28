@@ -1,0 +1,15 @@
+{
+  "id": "010",
+  "title": "Aggregator counts misleading when ingest sampling is enabled",
+  "type": "degradation_scenario",
+  "severity": "standard",
+  "scenario": "User cites 'Datadog shows 5000 ERRORs in the window'. Datadog has 10% logs sampling on this index — real count is approximately 50000.",
+  "expected_finding": "Skill must inspect aggregator sampling configuration before quoting counts, scale by sampling rate, and document sampling in Execution Status: Coverage. Untreated sampling assumptions are an Open Question, not a confident claim.",
+  "coverage_rules": [
+    "ingest sampling",
+    "scaled",
+    "Coverage",
+    "Sampling, Rollups"
+  ],
+  "reference": "references/log-aggregator-queries.md"
+}

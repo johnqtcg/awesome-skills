@@ -1,0 +1,15 @@
+{
+  "id": "004",
+  "title": "Trace correlation: walk one failing trace_id end-to-end across services",
+  "type": "good_practice",
+  "severity": "standard",
+  "scenario": "User has logs from 4 services for a failed checkout request. Each service emits its own ERROR but no single line tells the whole story.",
+  "expected_finding": "Skill must extract the trace_id from a representative failure, search every in-scope source for that trace_id, order by timestamp, and emit a Correlation Map table with service / operation / status / latency.",
+  "coverage_rules": [
+    "trace_id",
+    "Correlation Gate",
+    "Walking-the-Trace",
+    "Correlation Map"
+  ],
+  "reference": "references/log-correlation.md"
+}

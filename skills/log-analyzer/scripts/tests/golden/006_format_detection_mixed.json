@@ -1,0 +1,15 @@
+{
+  "id": "006",
+  "title": "Format detection: mixed slog JSON + Go panic stack trace in same source",
+  "type": "workflow",
+  "severity": "standard",
+  "scenario": "A Go service emits slog JSON normally but writes raw multi-line panic stacks to stderr on crash. Naïve line-counting overstates severity by counting every goroutine frame as a separate ERROR.",
+  "expected_finding": "Skill must detect both formats, split parsing per format, aggregate the panic block as ONE logical record, and record both formats in Execution Status.",
+  "coverage_rules": [
+    "Format Detection Gate",
+    "Multi-line stack traces",
+    "Mixed-Format Sources",
+    "Aggregate"
+  ],
+  "reference": "references/log-format-cheatsheet.md"
+}

@@ -1,0 +1,14 @@
+{
+  "id": "011",
+  "title": "Healthy window — produce No-Finding report with full Execution Status",
+  "type": "workflow",
+  "severity": "none",
+  "scenario": "User asks 'is anything wrong?' for a 1-hour window where everything is healthy. error_ratio < 0.001%, no new error classes, no spikes vs baselines.",
+  "expected_finding": "Skill must produce a No-Finding report that explicitly says 'No actionable findings in window.' AND includes Execution Status with what was scanned, statistical context, and coverage gaps. A 'no findings' report without Execution Status is a contract violation.",
+  "coverage_rules": [
+    "No actionable findings in window.",
+    "No-Finding Case",
+    "Execution Status"
+  ],
+  "reference": "references/log-analysis-quick-checklist.md"
+}
