@@ -23,6 +23,7 @@ allowed-tools: Read, Write, Grep, Glob, Bash(k6 version*), Bash(vegeta -version*
 | Define SLOs for a service                | §5.1 SLO Definition                         |
 | Debug why a test shows bad numbers       | §7 Anti-Examples -> load analysis ref        |
 | Capacity planning                        | §6.2 Scenario Selection -> breakpoint/soak   |
+| **Load generator OOM / high RSS**        | §7 AE-7 + k6-patterns §11 Memory Hygiene     |
 
 ---
 
@@ -169,9 +170,17 @@ Never fabricate performance numbers. Never claim SLO compliance without data.
 15. **Load generator runs separately from target** — never on the same machine,
     same pod, or same network bottleneck. Dedicated load generator instance.
 16. **Generator capacity verified** — the load generator itself can be the
-    bottleneck. Monitor its CPU/network. k6: check `dropped_iterations`.
+    bottleneck. Monitor its CPU **and RSS**. k6: check `dropped_iterations`.
 17. **Network is not the bottleneck** — same region/AZ as target for internal
     tests. Document network topology for external tests.
+18. **Load-generator memory budget pre-computed** — for k6 sustained tests at
+    >= 1k TPS, compute peak RSS via `maxVUs × 3 MB + Σ(Trend) × 80 B × rate ×
+    duration + body + tag overhead` BEFORE running. If peak > 80% of generator
+    RAM, tighten `maxVUs` (Little's Law in `k6-patterns.md §2`) or shorten
+    duration. The 4 most common OOM causes (in order): oversized `maxVUs` when
+    service saturates, `--out csv=` buffering, duplicated/diagnostic Trend
+    metrics retaining all samples, dynamic-URL tag bucket explosion. All four
+    are covered in `k6-patterns.md §11`.
 18. **Environment matches production** — or document differences explicitly.
     A test on a single-replica staging env says nothing about 3-replica prod.
 
@@ -309,6 +318,63 @@ k6 run --vus 50 --duration 30s test.js
 // Warning: p99.9=890ms suggests tail latency problem worth investigating
 ```
 
+### AE-7: Oversized maxVUs → load generator OOM
+
+```
+# WRONG: maxVUs set to "comfortable headroom" (2× rate)
+scenarios: {
+  writes: {
+    executor:        'constant-arrival-rate',
+    rate:            4000,
+    preAllocatedVUs: 1600,
+    maxVUs:          8000,   // ← "should be plenty"
+  },
+}
+// When the SERVICE saturates (p95 climbs from 200ms to 1.5s), k6 keeps
+// allocating new VUs trying to maintain 4k TPS. Each VU = ~3 MB resident.
+// 8000 × 3 MB = 24 GB → load generator OOMs at ~6-8 min mark.
+// Worse: this masquerades as "the load test crashed" when really the
+// SERVICE under test couldn't sustain the target rate.
+
+# RIGHT: size maxVUs via Little's Law against the SLO
+//   needed VUs = rate × healthy_p95 = 4000 × 0.2s = 800
+//   maxVUs    = 2× needed = 1600
+scenarios: {
+  writes: {
+    executor:        'constant-arrival-rate',
+    rate:            4000,
+    preAllocatedVUs: 800,
+    maxVUs:          1600,   // ← caps memory at 1600 × 3 MB ≈ 5 GB
+    gracefulStop:    '0s',
+  },
+}
+// When the service saturates now, k6 reports dropped_iterations instead
+// of OOM-ing. dropped_iterations IS the correct signal that the service
+// can't sustain target rate — it's data, not a test failure.
+```
+
+See `references/k6-patterns.md §2` (Little's Law sizing) and `§11` (full
+memory model: VU floor + sample storage + body retention + tag buckets).
+
+### AE-8: `--out csv=` for sustained tests
+
+```
+# WRONG: streaming per-request CSV
+k6 run --out csv=results.csv -e BASE_URL=... level1-4k-tps.js
+// CSV writes every per-request row to disk. k6 buffers writes;
+// at 4k TPS × 10 min = 2.4M rows × ~200 B = 500 MB-2 GB resident buffer.
+// Adds GB to load-generator memory pressure for no analytical value
+// (you re-aggregate in post anyway).
+
+# RIGHT: aggregated summary export
+k6 run --summary-export=results.json -e BASE_URL=... level1-4k-tps.js
+// Writes the same statistics k6 prints to stdout at end, ~KB JSON.
+// Zero incremental memory cost (data already in memory for stdout).
+//
+// For long-running tests where you DO want per-sample timeseries:
+k6 run --out experimental-prometheus-rw test.js   // pushes off-host
+```
+
 ---
 
 ## 8 Load Test Scorecard
@@ -329,14 +395,19 @@ Three-tier scoring applied after every test run analysis.
 7. **Load generator not co-located** — separate from target
 8. **Test data parameterized** — not single-value cache-hit bias
 
-### Hygiene (>= 3 of 4 must pass)
+### Hygiene (>= 3 of 5 must pass)
 
 9. **Environment documented** — infra specs, replica count, resource limits
 10. **Baseline comparison** — delta from previous run or production metrics
 11. **Resource metrics correlated** — CPU/mem/connections alongside latency
 12. **Results archived** — raw data + summary stored for regression tracking
+13. **Load-generator memory budgeted** — k6 scripts size `maxVUs` via Little's
+    Law (`rate × healthy_p95 × 2`), opt-in diagnostic Trends, no `--out csv`,
+    `discardResponseBodies` + per-request `responseType:'text'` override in
+    setup. See `k6-patterns.md §2 + §11`. The load generator itself OOMing
+    invalidates the run.
 
-**Verdict**: Critical 3/3 AND Standard >= 4/5 AND Hygiene >= 3/4 = **PASS**
+**Verdict**: Critical 3/3 AND Standard >= 4/5 AND Hygiene >= 3/5 = **PASS**
 
 ---
 
@@ -392,6 +463,7 @@ path capacity unknown", "single-region test — cross-region latency not measure
 | Writing k6 script (Standard+)              | `references/k6-patterns.md`       |
 | Writing vegeta attack (Standard+)          | `references/vegeta-patterns.md`   |
 | Analyzing results, finding bottlenecks     | `references/analysis-guide.md`    |
+| **k6 sizing maxVUs / OOM / RSS budgeting** | **`references/k6-patterns.md §2 + §11`** |
 | Deep depth or multi-scenario               | All three references              |
 
 Each reference has a table of contents. Load the relevant sections, not

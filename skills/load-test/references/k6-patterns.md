@@ -2,7 +2,7 @@
 
 ## Table of Contents
 1. [Script Structure](#1-script-structure)
-2. [Scenario Executors](#2-scenario-executors)
+2. [Scenario Executors](#2-scenario-executors)  ← includes maxVUs sizing
 3. [Thresholds & SLOs](#3-thresholds--slos)
 4. [Data Parameterization](#4-data-parameterization)
 5. [Authentication Patterns](#5-authentication-patterns)
@@ -11,6 +11,7 @@
 8. [Checks & Assertions](#8-checks--assertions)
 9. [Multi-Scenario Composition](#9-multi-scenario-composition)
 10. [CI/CD Integration](#10-cicd-integration)
+11. [Memory & Output Hygiene](#11-memory--output-hygiene)  ← load-generator OOM prevention
 
 ---
 
@@ -105,17 +106,47 @@ Use for: standard load tests, stress tests.
 ```javascript
 scenarios: {
   constant_rps: {
-    executor: 'constant-arrival-rate',
-    rate: 1000,            // 1000 iterations per timeUnit
-    timeUnit: '1s',        // = 1000 RPS
-    duration: '5m',
-    preAllocatedVUs: 200,  // pre-allocate to avoid cold-start
-    maxVUs: 500,           // upper bound
+    executor:        'constant-arrival-rate',
+    rate:            1000,   // 1000 iterations per timeUnit
+    timeUnit:        '1s',   // = 1000 RPS
+    duration:        '5m',
+    preAllocatedVUs: 200,    // active VU ≈ rate × healthy_p95 = 1000 × 0.2s
+    maxVUs:          500,    // 2× preAlloc — caps memory when service saturates
+    gracefulStop:    '0s',   // do NOT drain — wastes VU memory at end of run
   },
 }
 ```
 Use for: SLO validation at exact RPS target. Critical: if maxVUs is hit,
 k6 drops iterations — check `dropped_iterations` metric.
+
+**Sizing `maxVUs` via Little's Law** (this is the #1 source of load-generator
+OOM crashes):
+
+```
+active VUs   = rate × actual_response_time
+needed VUs   = rate × healthy_p95_target
+safety VUs   = needed VUs × 2  ← maxVUs target
+```
+
+| Rate (TPS) | Healthy p95 | preAllocatedVUs | maxVUs |
+|---|---|---|---|
+| 1,000 | 200 ms | 200  | 500   |
+| 2,000 | 200 ms | 400  | 1,000 |
+| 4,000 | 200 ms | 800  | 2,000 |
+| 5,000 | 200 ms | 1,000 | 2,500 |
+
+**Anti-pattern**: `maxVUs = 2 × rate` (e.g. 8,000 for 4k TPS). When the
+service saturates and p95 climbs to 1.5 s, k6 keeps adding VUs trying to
+maintain `rate`, hits the cap, and **each VU costs ~3 MB resident memory**
+(goja JS runtime + per-VU HTTP client + cookie jar + tag state). At 8,000
+VUs that is 24 GB — the load generator OOMs before the test finishes.
+With the correct cap, k6 surfaces over-saturation as `dropped_iterations`
+instead, which is the correct signal that the service can't sustain the
+target rate.
+
+Verified empirically (2026-05-14, tcg-acs-go-ob 4k TPS test): the VU
+"floor" memory once k6 ramps to maxVUs is exactly `maxVUs × ~3 MB`.
+Sample-storage memory (Trend metrics, see §11) is additive on top.
 
 ### ramping-arrival-rate — Ramp RPS for breakpoint testing
 ```javascript
@@ -418,15 +449,192 @@ export const options = {
 
 ### Run commands
 ```bash
-# Standard run with JSON output
-k6 run --out json=results.json test.js
+# Standard run with aggregated summary (recommended — KB output, near-zero memory)
+k6 run --summary-export=results.json test.js
 
 # With environment variables
 k6 run -e BASE_URL=https://staging.api.com -e API_KEY=xxx test.js
 
-# With custom VU/duration override (testing)
+# Diagnostic timing breakdown (opt-in via env var, +1 GB memory at 4k TPS)
+PROFILE_TIMINGS=1 k6 run test.js
+
+# With custom VU/duration override (smoke testing)
 k6 run --vus 10 --duration 1m test.js
 
-# Cloud execution (k6 Cloud)
-k6 cloud test.js
+# DO NOT use for high-TPS sustained tests: --out csv buffers every per-request
+# row in memory. At 4k TPS × 10 min that is 2.4M rows ≈ 500 MB-2 GB resident.
+# Use --summary-export above for aggregated output, or push to Prometheus:
+k6 run --out experimental-prometheus-rw test.js
 ```
+
+---
+
+## 11 Memory & Output Hygiene
+
+The load generator can OOM before the test completes if these knobs are
+wrong. The failure mode is sneaky: VU memory ramps to a steady "floor"
+within 2 minutes of the writes phase starting, then Trend samples grow
+linearly until the run ends. People observe "memory at 2 min is fine" and
+miss the trajectory. Six knobs to set explicitly.
+
+### 11.1 The memory model
+
+```
+total RSS ≈ VU floor + sample storage + response bodies + tag buckets
+            ────────  ──────────────  ─────────────────  ────────────
+            stable    grows linearly   per-iteration     ~constant
+            within    with duration    cost              after warm
+            ~2 min
+```
+
+- **VU floor** = `maxVUs × ~3 MB`. Stable once k6 finishes ramping. **Cannot be
+  optimized in script** other than reducing maxVUs (see §2).
+- **Sample storage** = `Σ(per-Trend-metric: 80 B × sample count)`. Grows linearly.
+  Removing unnecessary Trends is the lever (§11.3).
+- **Response bodies** = ~payload size × active VUs × pipeline depth. Set
+  `discardResponseBodies: true` to zero this out (§11.4).
+- **Tag buckets** = `tag cardinality × metric count × 80 B / bucket`. Dynamic
+  URL paths explode this. Use `tags.name` (§11.5).
+
+### 11.2 Output: never `--out csv` for sustained tests
+
+`--out csv=` and `--out json=` write **every per-request row** in real time. k6
+buffers writes; on slow disks the buffer reaches several GB.
+
+| Output flag | Memory cost | Use case |
+|---|---|---|
+| `--out csv=results.csv` | **500 MB–2 GB** at 4k TPS / 10 min | Never — replace |
+| `--out json=results.json` | Same | Never — replace |
+| **`--summary-export=results.json`** | **~0** (aggregated, written once at end) | **Default** |
+| `--out experimental-prometheus-rw` | ~0 (pushed remotely) | Long-running tests |
+
+### 11.3 Trend metrics retain ALL samples
+
+`new Trend('name', true)` keeps every sample in memory until summary (k6
+needs them for accurate percentile calculation). Cost: ~80 B × sample count.
+
+| Problem | Fix |
+|---|---|
+| Custom Trend duplicates a built-in (e.g. `writeTxLatency` vs `http_req_duration{phase:write}`) | **Delete the custom one**; tag the built-in by scenario |
+| HTTP timing breakdown (`req_blocked_ms`, `req_connecting_ms`, etc.) on every iteration | **Opt-in via env var**, see below |
+
+Opt-in pattern for diagnostic-only metrics:
+
+```javascript
+const ENABLE_TIMING_BREAKDOWN = __ENV.PROFILE_TIMINGS === '1';
+const reqBlocked    = ENABLE_TIMING_BREAKDOWN ? new Trend('req_blocked_ms',    true) : null;
+const reqConnecting = ENABLE_TIMING_BREAKDOWN ? new Trend('req_connecting_ms', true) : null;
+const reqWaiting    = ENABLE_TIMING_BREAKDOWN ? new Trend('req_waiting_ms',    true) : null;
+// ... etc
+
+export default function () {
+  const res = http.get(url, params);
+  if (ENABLE_TIMING_BREAKDOWN) {
+    reqBlocked.add(res.timings.blocked);
+    reqConnecting.add(res.timings.connecting);
+    reqWaiting.add(res.timings.waiting);
+  }
+}
+```
+
+5 timing-breakdown Trends at 4k TPS × 10 min = **~1 GB** otherwise.
+
+### 11.4 `discardResponseBodies` saves bodies — but is global
+
+```javascript
+export const options = {
+  discardResponseBodies: true,  // saves 200-500 MB at 4k TPS
+};
+```
+
+**Trap**: this is a global setting that affects setup() too. If your setup
+needs `r.json()` to parse account IDs or auth tokens, that code silently
+breaks (response body is empty). Override per-request:
+
+```javascript
+export function setup() {
+  // setup needs bodies — override the global discard
+  const GET_PARAMS = { responseType: 'text' };
+
+  const resp = http.get(`${BASE_URL}/accounts/${cid}`, GET_PARAMS);
+  const accounts = resp.json();  // works because responseType:'text' was set
+  // ...
+}
+
+export default function () {
+  // scenario uses the global discard — bodies are dropped, status still checked
+  const res = http.post(url, payload, { headers: {...} });
+  check(res, { 'ok': r => r.status === 200 });
+}
+```
+
+### 11.5 Dynamic URL paths explode tag buckets
+
+k6 tags every sample with `url` by default. With dynamic paths like
+`/accounts/customer/{id}` and 2,000 unique customer IDs, that creates 2,000
+distinct tag combinations × 9 HTTP metrics = **18,000 Trend buckets**, each
+with its own samples array overhead.
+
+**Fix**: remove `url` from `systemTags`, add explicit `tags.name` per endpoint
+so all variants collapse into one bucket:
+
+```javascript
+export const options = {
+  // Remove url, group, tls_version, proto, ip — they multiply storage.
+  // Keep 'name' so explicit tags.name on each http call groups variants.
+  systemTags: ['method', 'status', 'scenario', 'expected_response', 'name'],
+};
+
+export default function () {
+  // 2,000 distinct customerIds collapse to one metric bucket named
+  // 'GET /accounts/customer/:cid' instead of 2,000 url-tagged buckets.
+  http.get(`${BASE_URL}/accounts/customer/${cid}`,
+    { tags: { name: 'GET /accounts/customer/:cid' } });
+
+  http.post(`${BASE_URL}/transactions/credit`,
+    JSON.stringify(payload),
+    { headers: {...}, tags: { name: 'POST /transactions/credit' } });
+}
+```
+
+Saves 200-500 MB at 4k TPS / 2k unique URL paths.
+
+### 11.6 `summaryTrendStats` does NOT save sample storage
+
+```javascript
+summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(95)', 'p(99)']
+```
+
+This only controls which stats are **reported** in the summary. The Trend
+metric stores all samples regardless. Removing `p(99)` doesn't save memory
+during the run; it only skips a sort at summary time. Don't expect savings
+from this knob.
+
+### 11.7 Pre-flight memory budget calculation
+
+Before running a long sustained test, compute the expected peak:
+
+```
+VU floor       = maxVUs × 3 MB
+sample storage = (number of Trends) × (rate × duration_sec) × 80 B
+response bodies = (active VUs × avg body bytes) if NOT discarding
+tag bucket overhead = (unique URLs × HTTP metric count) × ~5 KB if 'url' in systemTags
+
+peak RSS ≈ sum of above × 1.3  (Go runtime + GC slack)
+```
+
+Example, 4k TPS × 10 min, default settings:
+- VU floor: 8,000 × 3 MB = **24 GB** ← OOM here
+- Samples: 9 metrics × 4,000 × 600 × 80 B = 1.7 GB
+- Bodies: 8,000 × 500 B = 4 MB (transient)
+- Tag overhead: 2,000 URLs × 9 × 5 KB = 90 MB
+- **Total ≈ 33 GB** → guaranteed OOM on a 16 GB load generator
+
+After applying §2 + §11.2 + §11.3 + §11.4 + §11.5:
+- VU floor: 2,000 × 3 MB = **6 GB**
+- Samples: 4 metrics × 4,000 × 600 × 80 B = 0.8 GB
+- Bodies: 0 (discarded)
+- Tag overhead: 6 endpoints × 4 × 5 KB = 120 KB
+- **Total ≈ 9 GB** → fits in 16 GB headroom
+
+Always do this calculation before kicking off a > 5 min sustained test.
