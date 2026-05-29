@@ -1,8 +1,17 @@
 """Zero-LLM contract tests for stock-analysis-lead (orchestrator).
 
 Verifies the structural shape of the orchestrator skill: frontmatter,
-required sections, dispatch references to all 5 worker skills, references
-files present, and length below the repo's 500-line limit.
+required sections, references files present, and length below the repo's
+500-line limit.
+
+It also locks down the real dispatch contract — the orchestrator → agent →
+skill mapping. The orchestrator dispatches sub-agents named ``*-reviewer``
+(defined under ``outputexample/stock-analysis-lead/agents/``); each agent's
+``skills:`` frontmatter field loads the matching ``*-review`` methodology
+skill under ``skills/``. These tests assert that chain closes with exact,
+hyphen-boundary token matching so the ``-review`` skill name can never
+satisfy a check for the ``-reviewer`` agent name (or vice versa) by
+substring coincidence.
 """
 
 from __future__ import annotations
@@ -15,6 +24,10 @@ import pytest
 SKILL_ROOT = Path(__file__).resolve().parents[2]
 SKILL_MD = SKILL_ROOT / "SKILL.md"
 REFERENCES_DIR = SKILL_ROOT / "references"
+
+REPO_ROOT = SKILL_ROOT.parents[1]
+SKILLS_DIR = REPO_ROOT / "skills"
+AGENTS_DIR = REPO_ROOT / "outputexample" / "stock-analysis-lead" / "agents"
 
 MAX_SKILL_LINES = 500
 
@@ -48,6 +61,65 @@ REQUIRED_WORKER_SKILLS = [
     "stock-industry-review",
     "stock-peer-comparison-review",
 ]
+
+# The orchestrator dispatches AGENTS (``-reviewer``), not skills directly.
+# Each agent's ``skills:`` frontmatter field loads its ``-review`` skill.
+EXPECTED_AGENTS = [
+    "stock-business-reviewer",
+    "stock-earnings-quality-reviewer",
+    "stock-balance-sheet-reviewer",
+    "stock-management-reviewer",
+    "stock-industry-reviewer",
+    "stock-peer-comparison-reviewer",
+]
+
+
+def _mentions_token(text: str, token: str) -> bool:
+    """True if ``token`` appears in ``text`` not surrounded by other
+    identifier characters (``[A-Za-z0-9-]``).
+
+    Hyphen is treated as part of the identifier, so a search for
+    ``stock-business-review`` does NOT match inside
+    ``stock-business-reviewer`` — closing the substring-collision hole
+    that let the previous test pass on a broken reference.
+    """
+    pattern = rf"(?<![A-Za-z0-9-]){re.escape(token)}(?![A-Za-z0-9-])"
+    return re.search(pattern, text) is not None
+
+
+def _frontmatter_block(text: str) -> str:
+    match = re.match(r"^---\s*\n(.*?)\n---\s*\n", text, re.DOTALL)
+    return match.group(1) if match else ""
+
+
+def _frontmatter_name(text: str) -> str | None:
+    for line in _frontmatter_block(text).splitlines():
+        match = re.match(r"^name\s*:\s*(.+?)\s*$", line)
+        if match:
+            return match.group(1).strip()
+    return None
+
+
+def _agent_declared_skills(text: str) -> list[str]:
+    """Parse the ``skills:`` frontmatter field (YAML list or inline form)."""
+    block = _frontmatter_block(text)
+    skills: list[str] = []
+    in_skills = False
+    for line in block.splitlines():
+        if re.match(r"^skills\s*:", line):
+            inline = line.split(":", 1)[1].strip()
+            if inline.startswith("["):
+                items = inline.strip("[]").split(",")
+                return [i.strip().strip("\"'") for i in items if i.strip()]
+            in_skills = True
+            continue
+        if in_skills:
+            item = re.match(r"^\s+-\s*(.+?)\s*$", line)
+            if item:
+                skills.append(item.group(1).strip().strip("\"'"))
+            elif line.strip() and not line.startswith(" "):
+                break  # reached the next top-level frontmatter key
+    return skills
 
 
 @pytest.fixture(scope="module")
@@ -116,11 +188,60 @@ def test_required_sections_present(skill_text: str) -> None:
         assert re.search(pattern, skill_text), f"missing section: {header}"
 
 
-def test_dispatches_all_workers(skill_text: str) -> None:
-    for worker_skill in REQUIRED_WORKER_SKILLS:
-        assert worker_skill in skill_text, (
-            f"orchestrator must reference worker skill: {worker_skill}"
+def test_token_matcher_rejects_substring_collision() -> None:
+    """Guard the matcher itself: the ``-review`` skill name must never
+    satisfy a check for the ``-reviewer`` agent name by substring."""
+    assert _mentions_token("dispatch stock-business-reviewer now", "stock-business-reviewer")
+    assert not _mentions_token("dispatch stock-business-reviewer now", "stock-business-review")
+    assert _mentions_token("load `stock-business-review`", "stock-business-review")
+
+
+def test_orchestrator_dispatches_all_agents(skill_text: str) -> None:
+    """Orchestrator must dispatch every worker AGENT by its exact name."""
+    for agent in EXPECTED_AGENTS:
+        assert _mentions_token(skill_text, agent), (
+            f"orchestrator must dispatch agent by exact name: {agent}"
         )
+
+
+def test_agent_definitions_exist() -> None:
+    assert AGENTS_DIR.is_dir(), f"agent definitions dir missing: {AGENTS_DIR}"
+    for agent in EXPECTED_AGENTS:
+        path = AGENTS_DIR / f"{agent}.md"
+        assert path.exists(), f"missing agent definition: {path}"
+        assert _frontmatter_name(path.read_text(encoding="utf-8")) == agent, (
+            f"agent {agent}.md frontmatter name must equal its filename"
+        )
+
+
+def test_agent_to_skill_mapping_closes() -> None:
+    """The real dispatch contract: each dispatched agent declares exactly
+    one ``skills:`` entry, that skill exists on disk, and its frontmatter
+    name equals its directory name. The mapped set must be the six distinct
+    required worker skills — no drift in either direction."""
+    mapped: list[str] = []
+    for agent in EXPECTED_AGENTS:
+        agent_text = (AGENTS_DIR / f"{agent}.md").read_text(encoding="utf-8")
+        declared = _agent_declared_skills(agent_text)
+        assert len(declared) == 1, (
+            f"agent {agent} must declare exactly one skill, got: {declared}"
+        )
+        skill = declared[0]
+        skill_md = SKILLS_DIR / skill / "SKILL.md"
+        assert skill_md.exists(), (
+            f"agent {agent} maps to skill '{skill}' but {skill_md} does not exist"
+        )
+        assert _frontmatter_name(skill_md.read_text(encoding="utf-8")) == skill, (
+            f"skill '{skill}' frontmatter name must equal its directory name"
+        )
+        mapped.append(skill)
+    assert len(set(mapped)) == len(EXPECTED_AGENTS), (
+        f"agents must map to distinct skills, got: {mapped}"
+    )
+    assert set(mapped) == set(REQUIRED_WORKER_SKILLS), (
+        f"agent→skill map {sorted(set(mapped))} != required workers "
+        f"{sorted(set(REQUIRED_WORKER_SKILLS))}"
+    )
 
 
 def test_synthesis_step_has_required_subcomponents(skill_text: str) -> None:
