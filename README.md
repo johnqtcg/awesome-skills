@@ -344,6 +344,28 @@ These skills focus more on getting a task executed than on code quality itself.
 | `yt-dlp-downloader` | Generate and run `yt-dlp` download commands | Probes formats before downloading and supports single videos, playlists, audio extraction, subtitles, and authenticated content |
 | `local-transcript` | Transcribe local audio or video files into `txt` / `pdf` / `docx` outputs | Uses an accelerated local ASR pipeline plus post-processing and proofreading to produce cleaner Chinese transcripts with paragraphing, punctuation normalization, and multi-format export |
 
+### Structured Thinking
+
+This skill turns scattered facts and intuition into a structure an audience can absorb quickly.
+
+| Skill Name | Purpose | Main strengths / advantages |
+| --- | --- | --- |
+| `constructive-thinking` | Compress chaotic information into a leader-ready structure before output | Forces a `Frame → Crux → Nodes → Tilt + Reasoning` shape so a briefing, technical proposal, or one-pager fits in 3–5 minutes of reading instead of a flat fact dump |
+
+### US Equity Analysis (multi-agent system)
+
+A `stock-analysis-lead` orchestrator drives a seven-layer fundamental "X-ray" of a single US-listed stock by dispatching six vertical equity-research skills as parallel agents, then synthesizing a buy/hold/sell verdict. The skills compose as a system, mirroring the `go-review-lead` multi-agent pattern. Scope is single-stock US-equity fundamental analysis only — not trading signals, technical analysis, options, crypto, ETFs, or non-US listings.
+
+| Skill Name | Role | Purpose | Main strengths / advantages |
+| --- | --- | --- | --- |
+| `stock-analysis-lead` | Orchestrator | Classify sector archetype, fetch SEC filings, dispatch the six vertical agents, then synthesize a verdict | Produces a buy/hold/sell call with Bull/Base/Bear target ranges using sector-aware thresholds; logs each verdict to JSON-Lines so later runs reckon with the prior view |
+| `stock-business-review` | Business model | Review business model and revenue structure | Covers product/service mix, customer concentration, geographic exposure, revenue-growth decomposition, and fact-vs-narrative information-tier discipline |
+| `stock-earnings-quality-review` | L1–L3 | Review earnings quality, cash-flow integrity, and operating leverage | Tracks OCF-vs-net-income drift, FCF trajectory, capex character, revenue-quality signals, and SaaS metrics (NRR/GRR/CAC payback/Magic Number) |
+| `stock-balance-sheet-review` | L4 | Review balance sheet health and downturn resilience | Net-debt/EBITDA leverage, current ratio, cash runway, goodwill concentration, DSO/inventory trends, off-balance-sheet items, pension underfunding |
+| `stock-management-review` | L5 | Review management quality and capital-allocation track record | 5-year capital-allocation history, buyback timing, M&A ROI, guidance-vs-actuals scorecard, comp alignment, and insider activity |
+| `stock-industry-review` | L6 | Review industry position and competitive moat | Porter Five Forces scan, market-share trend, TAM trajectory, moat classification (7 named types), and pricing-power evidence |
+| `stock-peer-comparison-review` | Cross-check | Independently benchmark the target against 2–4 closest peers | Fixed 12-item ratio panel (growth, profitability, capital intensity, leverage, capital returns, valuation) that cross-validates moat and market-share claims |
+
 <a id="en-evaluate-and-output"></a>
 ## Review Reports and Output Examples
 
