@@ -14,3 +14,5 @@ Apply the Mandatory Gates and the Filing-Pattern-Gated Execution Protocol. Read 
 Return only structured Findings per the skill's Output Format. Do NOT recommend buy / hold / sell — the orchestrator (`stock-analysis-lead`) synthesizes the verdict.
 
 Use the `BUS-` prefix for Finding IDs. If no business findings, explicitly state "No business-model findings" with notable positives. Do not fabricate Findings.
+
+End your reply with the machine-readable Findings JSON block exactly as specified in the orchestrator's dispatch prompt (worker / prefix / status / findings / positives / data_gaps).

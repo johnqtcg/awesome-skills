@@ -14,3 +14,5 @@ Apply the Mandatory Gates including the 5-year-window and insider-activity recen
 Return only structured Findings per the skill's Output Format. Cite specific dates, deal names, and quoted passages. Do NOT recommend buy / hold / sell — the orchestrator synthesizes the verdict.
 
 Use the `MGT-` prefix for Finding IDs. Be selective with High severity — reserve it for clear pattern evidence over multiple years.
+
+End your reply with the machine-readable Findings JSON block exactly as specified in the orchestrator's dispatch prompt (worker / prefix / status / findings / positives / data_gaps).

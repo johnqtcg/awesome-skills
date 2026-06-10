@@ -96,7 +96,7 @@ Story bias: FLAG — initial draft referenced "AI tailwinds" without sizing. Rep
 
 ### How confirmation bias manifests
 
-- All 5 workers report mostly positive Findings
+- All 6 workers report mostly positive Findings
 - The Findings that surface skew toward confirming the prior view
 - "Risks I Accept" reads like marketing copy ("currency headwinds", "competition") rather than substantive risks
 

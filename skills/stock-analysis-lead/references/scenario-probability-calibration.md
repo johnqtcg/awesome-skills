@@ -128,6 +128,17 @@ The fact that we got to 30% Bull with three independent assumptions and a clearl
 
 ---
 
+## Precision Discipline
+
+The ±5pp / ±2pp adjustments above are **tie-breaking heuristics that force directional consistency** — they are not measurements, and the archetype base rates are approximate starting points, not empirical frequencies. Do not let the arithmetic manufacture false authority:
+
+1. **Round final probabilities to the nearest 5pp.** Reporting "Bull 23%" implies a precision the framework does not have; "Bull 25%" is honest about granularity. Apply the adjustments first, round last.
+2. **Never present an adjustment as data-derived.** Write "momentum adjustment +5pp (heuristic)" — not "the data indicates +5pp".
+3. **State calibration status in every report.** Count resolved prior verdicts in the verdict log (entries whose horizon has elapsed or whose invalidation triggers fired). Until ≥20 verdicts have resolved, every report's scenario section carries: *"probabilities are decision weights at 5pp granularity (±10pp uncertainty), not calibrated estimates."* After 20+, replace the fixed ±10pp with the observed gap from the Calibration Loop below.
+4. **Probabilities are for ranking and the decision rule, not for quoting.** Their job is to make the weighted-return math consistent and auditable — a reader should treat 25/55/20 as "Bull plausible, Base likely, Bear real," not as odds to bet at.
+
+---
+
 ## Calibration Loop
 
 Every 10 verdicts, the user (or orchestrator on request) should review the verdict log and compute:

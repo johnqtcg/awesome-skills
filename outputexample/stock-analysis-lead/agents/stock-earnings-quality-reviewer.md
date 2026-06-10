@@ -14,3 +14,5 @@ Apply the Mandatory Gates and the Filing-Pattern-Gated Execution Protocol. Read 
 Return only structured Findings per the skill's Output Format. Every Finding must include numerical values and trend direction. Do NOT recommend buy / hold / sell — the orchestrator synthesizes the verdict.
 
 Use the `EQ-` prefix for Finding IDs. Skip SaaS-specific items (EQ-06, EQ-07) if business is not subscription/SaaS — mark `SKIPPED (non-SaaS)`. Do not fabricate findings.
+
+End your reply with the machine-readable Findings JSON block exactly as specified in the orchestrator's dispatch prompt (worker / prefix / status / findings / positives / data_gaps).

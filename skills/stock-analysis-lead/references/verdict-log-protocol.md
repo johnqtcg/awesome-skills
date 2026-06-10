@@ -14,15 +14,24 @@ This is a minimal feedback mechanism — not a full portfolio system. But it con
 
 ## File Location and Format
 
-The log lives at:
+The log lives at a project-independent location so the feedback loop survives machine moves, repo renames, and use from any project:
 
 ```
-~/.claude/projects/-Users-john-awesome-skills/memory/stock-analysis-verdicts.jsonl
+~/.claude/stock-analysis/verdicts.jsonl
 ```
 
-(Adjust the prefix path to the actual project memory directory if different.)
+Create the directory on first use: `mkdir -p ~/.claude/stock-analysis`.
 
 **Format**: JSON Lines (one verdict per line). Each line is independently parseable; appends are atomic.
+
+**Validation**: after every append, run this skill's `scripts/validate_verdict_log.py --last 1`. It checks required fields, enum values, assumption-count bounds, and target-price ordering (bear ≤ base ≤ bull). A warning, not a hard stop — but surface validation failures in the final report.
+
+**Migration from pre-v2.1 path**: earlier versions wrote to the project memory directory (`~/.claude/projects/<project-slug>/memory/stock-analysis-verdicts.jsonl`). If that file exists and the new one does not, move it once:
+
+```bash
+mkdir -p ~/.claude/stock-analysis
+mv ~/.claude/projects/*/memory/stock-analysis-verdicts.jsonl ~/.claude/stock-analysis/verdicts.jsonl
+```
 
 ---
 
@@ -147,7 +156,7 @@ The log is the minimum mechanism to convert one-shot analyses into a process wit
 
 ## Privacy and Storage Note
 
-The log lives in the local `memory/` directory and is not committed to git. It contains the user's investment views. If the user wishes to share or back up, they may copy the file; it should never be auto-committed.
+The log lives in the user's home directory (`~/.claude/stock-analysis/`) and is never committed to git. It contains the user's investment views. If the user wishes to share or back up, they may copy the file; it should never be auto-committed.
 
 ---
 
@@ -157,13 +166,13 @@ If the log doesn't exist yet, create it on the first verdict with one line. Subs
 
 ```bash
 # View latest 10 verdicts
-tail -10 ~/.claude/projects/-Users-john-awesome-skills/memory/stock-analysis-verdicts.jsonl | jq
+tail -10 ~/.claude/stock-analysis/verdicts.jsonl | jq
 
 # Get verdicts on a specific ticker
-grep '"ticker": "AAPL"' ~/.claude/projects/-Users-john-awesome-skills/memory/stock-analysis-verdicts.jsonl | jq
+grep '"ticker": "AAPL"' ~/.claude/stock-analysis/verdicts.jsonl | jq
 
 # Count Buy vs Watch vs Sell verdicts
-grep -oE '"verdict": "[^"]*"' ~/.claude/projects/-Users-john-awesome-skills/memory/stock-analysis-verdicts.jsonl | sort | uniq -c
+grep -oE '"verdict": "[^"]*"' ~/.claude/stock-analysis/verdicts.jsonl | sort | uniq -c
 ```
 
 This deliberately uses JSON-Lines rather than a single JSON array so the file can be appended without rewriting, which prevents corruption and enables atomic writes.

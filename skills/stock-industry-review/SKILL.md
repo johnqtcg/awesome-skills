@@ -1,6 +1,6 @@
 ---
 name: stock-industry-review
-description: Review a US-listed company's industry position and competitive moat for an equity-research workup. Covers Porter Five Forces scan, market-share trend (absolute and relative to industry growth), TAM size and trajectory, unit economics where disclosed (LTV/CAC, unit gross margin), moat classification (network / brand / scale-cost / switching-cost / patent / regulatory / proprietary-data), substitute threats, new-entrant threats, pricing-power evidence, supplier/channel concentration risk, and regulatory exposure. Trigger when analyzing competitive position at L6 of the seven-layer X-ray framework. Dispatched by stock-analysis-lead; skipped in Lite depth mode.
+description: Review a US-listed company's industry position and competitive moat for an equity-research workup. Covers Porter Five Forces scan, market-share trend (absolute and relative to industry growth), TAM size and trajectory, unit economics where disclosed (LTV/CAC, unit gross margin), moat classification (network / brand / scale-cost / switching-cost / patent / regulatory / proprietary-data), substitute threats, new-entrant threats, pricing-power evidence, supplier/channel concentration risk, and regulatory exposure. Trigger when analyzing competitive position at L6 of the seven-layer X-ray framework. Dispatched by stock-analysis-lead; at Lite depth runs in Lite-Industry mode (moat type + share trend only, no full Porter scan).
 allowed-tools: Read, Grep, Glob, WebSearch, WebFetch, Bash
 ---
 
@@ -12,7 +12,7 @@ Read 10-K "Competition" sections, MD&A market commentary, and external industry-
 
 ## When To Use
 
-- Orchestrator dispatches industry review (always-on in Standard / Strict; skipped in Lite).
+- Orchestrator dispatches industry review (always-on at all depths; Lite runs the lighter moat-type + share-trend pass only — no full Porter scan).
 - User asks "what's the moat", "is <ticker> losing share", "who are the competitors", "what's the TAM".
 
 ## When NOT To Use

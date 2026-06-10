@@ -70,7 +70,7 @@ Extract the ticker from the user's prompt. Validate:
    A-shares, HK-shares, and 20-F-only foreign private issuers are out of scope.
    ```
 5. Identify the question type:
-   - **Full workup**: "analyze X", "should I buy X" → all 5 workers
+   - **Full workup**: "analyze X", "should I buy X" → all 6 workers
    - **Valuation check**: "is X expensive", "what's a fair price for X" → 4 fundamentals workers + heavy valuation synthesis
    - **Specific concern**: "is X's balance sheet OK" → target the relevant worker; other workers still run for context but with lighter weighting
 
@@ -91,7 +91,7 @@ Default to Standard unless the prompt explicitly signals Lite or Strict.
 **Before proceeding to data acquisition**, check the verdict log for any prior analysis of this ticker:
 
 ```bash
-LOG_FILE=~/.claude/projects/-Users-john-awesome-skills/memory/stock-analysis-verdicts.jsonl
+LOG_FILE=~/.claude/stock-analysis/verdicts.jsonl
 test -f "$LOG_FILE" && grep "\"ticker\": \"<TICKER>\"" "$LOG_FILE" | tail -3 | jq
 ```
 
@@ -168,7 +168,7 @@ Write all fetched artifacts to a scratch directory (e.g., `$TMPDIR/stock-analysi
 }
 ```
 
-If any artifact is missing, list it in `missing` with reason. Workers receive the manifest; they self-skip when their required data is in `missing`.
+If any artifact is missing, list it in `missing` with reason. Workers receive the manifest; they self-skip when their required data is in `missing`. Reuse previously fetched artifacts only within the freshness windows in `references/data-acquisition-playbook.md` § Data Freshness Policy — filings stay valid until superseded; price, consensus, and revision data must be re-fetched every session.
 
 ### Step 3: Triage
 
@@ -197,7 +197,7 @@ Cross-check the manifest. If a worker's required data is in `missing`:
 #### Phase C: Question-driven priority
 
 If the user's question targets a specific dimension (e.g., "is the balance sheet safe"):
-- Dispatch all 5 as usual
+- Dispatch all 6 as usual
 - In Step 5 synthesis, weight the targeted dimension's Findings more heavily; show the user explicitly why other dimensions matter for the full picture
 
 #### Phase D: Sanity check — fabricated tickers
@@ -221,6 +221,13 @@ Manifest: <path to data-manifest.json>
 Filings available at: <scratch-dir>
 
 Return only structured Findings per your skill's Output Format.
+End your reply with one fenced json block matching the contract in
+references/findings-schema.md:
+{"worker": "<agent-name>", "prefix": "<BUS|EQ|BS|MGT|IND|P>",
+ "status": "OK | DEGRADED(<reason>) | SKIPPED(<reason>)",
+ "findings": [{"id": "<PREFIX>-NN", "severity": "High|Medium|Low",
+   "title": "...", "citation": "...", "evidence": "...", "implication": "..."}],
+ "positives": ["..."], "data_gaps": ["..."]}
 Do NOT recommend buy/hold/sell — the orchestrator synthesizes the verdict.
 ```
 
@@ -232,6 +239,7 @@ This is the orchestrator's most important step. Do not delegate it to a worker.
 
 #### 5a. Consolidate Worker Findings
 
+- Parse each worker's trailing Findings JSON block (contract: `references/findings-schema.md`). If a worker omitted the block, fall back to its prose Findings and flag the omission in the Data Coverage section.
 - Collect Findings from all 6 workers.
 - Deduplicate by Finding meaning (not just by ID). Cross-worker overlap is fine and often correct.
 - Assign unified IDs `INV-NNN` while preserving worker prefixes (BUS, EQ, BS, MGT, IND, **P** for peer-comparison).
@@ -353,12 +361,12 @@ This implements the source doc's Part 3 §4 "卖出三种情形" pattern —论�
 After committing the verdict, append one JSON Lines entry to:
 
 ```
-~/.claude/projects/-Users-john-awesome-skills/memory/stock-analysis-verdicts.jsonl
+~/.claude/stock-analysis/verdicts.jsonl
 ```
 
 The entry must include: ticker, company_name, verdict_date, verdict, conviction, current_price, target_base/bull/bear, weighted_expected_price, weighted_return_36mo, bear_to_current_ratio, horizon_months, archetype, good_company_score, key_bull_assumptions (3-5), key_bear_assumptions (3-5), invalidation_triggers, data_gaps_noted, cognitive_bias_flags, depth_mode, skill_version.
 
-Use atomic append (`>>` shell redirect or equivalent). Confirm the write succeeded; surface a warning if it failed.
+Create the directory first if needed (`mkdir -p ~/.claude/stock-analysis`). Use atomic append (`>>` shell redirect or equivalent). After appending, validate the entry with this skill's `scripts/validate_verdict_log.py --last 1`; surface a warning if the write or validation failed.
 
 This persistent log is the feedback mechanism — the next analysis on this ticker will read this entry in Step 1.5b and explicitly reckon with what assumptions played out.
 
@@ -392,6 +400,8 @@ Render in user's invocation language (Chinese labels if user spoke Chinese; Engl
 | Base | __% | __% | __× | $__ | __% | residual |
 | Bear | __% | __% | __× | $__ | __% | base rate <X%> + assumption adj <±pp> + momentum adj <±pp>; confirming-of-Bull citation: <citation> |
 
+Calibration status: <N> prior verdicts resolved in log — probabilities are decision weights at 5pp granularity (±10pp uncertainty until ≥20 resolved verdicts), not calibrated estimates.
+
 ## Earnings Revision Momentum / 卖方修正动量
 - Momentum bucket: <Strong Positive / Mild Positive / Mild Negative / Strong Negative>
 - 30-day NTM EPS revision: +/- X%
@@ -408,7 +418,7 @@ Render in user's invocation language (Chinese labels if user spoke Chinese; Engl
 (sorted by severity High → Medium → Low; dedup'd; capped per depth mode)
 
 ### [High|Medium|Low] Short Title
-- **ID**: `INV-NNN` (preserve worker prefix: BUS / EQ / BS / MGT / IND)
+- **ID**: `INV-NNN` (preserve worker prefix: BUS / EQ / BS / MGT / IND / P)
 - **Citation**: filing section
 - **Evidence**: from worker
 - **Implication**: from worker
@@ -433,7 +443,7 @@ Render in user's invocation language (Chinese labels if user spoke Chinese; Engl
 - Overconfidence: <PASS|FLAG + rationale>
 
 ## Verdict Log / 决策日志
-- Logged to: ~/.claude/projects/-Users-john-awesome-skills/memory/stock-analysis-verdicts.jsonl
+- Logged to: ~/.claude/stock-analysis/verdicts.jsonl
 - Entry timestamp: <ISO 8601>
 - Confirm: this verdict will be reviewed when ticker is re-analyzed
 ```
@@ -476,7 +486,8 @@ A degraded analysis with explicit gaps is more honest than a complete-looking an
 - `references/scenario-framework.md` — load during Step 5d for the Bull/Base/Bear structure.
 - `references/scenario-probability-calibration.md` — load during Step 5d for the calibrated probability assignment framework.
 - `references/cognitive-bias-gates.md` — load during Step 5e to run the 4 self-check questions.
+- `references/findings-schema.md` — the Findings JSON contract embedded in every dispatch prompt (Step 4) and parsed in Step 5a.
 
 ## Review Discipline
 
-You are the editor of a five-analyst report. Your value is not in re-doing each analyst's work — it is in committing a verdict. The source doc's strongest message: leadership wants a recommendation backed by structure, not a literature review. Take a position. Name the risk you accept. Commit to invalidation conditions. The user will override your verdict, and that is fine — but they cannot override "it depends".
+You are the editor of a six-analyst report. Your value is not in re-doing each analyst's work — it is in committing a verdict. The source doc's strongest message: leadership wants a recommendation backed by structure, not a literature review. Take a position. Name the risk you accept. Commit to invalidation conditions. The user will override your verdict, and that is fine — but they cannot override "it depends".

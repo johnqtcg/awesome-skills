@@ -124,7 +124,7 @@ The main conversation (running the `stock-analysis-lead` Skill) will:
 
 1. Identify the ticker and validate it as a US listing (rejects A-shares, HK-shares, 20-F filers).
 2. Fetch the standard data package: latest 10-K, 10-Q, DEF 14A, recent earnings call transcripts, current price + multiples, 10-year historicals, peer list, analyst consensus, insider Form 4 activity.
-3. Select depth: Lite (4 workers) / Standard (all 5) / Strict (all 5 + extended cross-check).
+3. Select depth: Lite (all 6 workers in lighter form) / Standard (all 6, full mode) / Strict (all 6 + extended cross-check).
 4. Triage and dispatch Worker Agents in parallel.
 5. Consolidate Findings; score the 10-item Good-Company checklist.
 6. Run 4-method valuation (multiples, reverse-DCF, DCF sanity check, scenarios).

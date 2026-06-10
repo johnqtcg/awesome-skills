@@ -243,6 +243,24 @@ Workers read the manifest from a path in their dispatch prompt. They self-skip c
 
 ---
 
+## Data Freshness Policy
+
+A scratch directory from a prior run may still exist. Reuse is allowed **only within these windows**, judged against the manifest's `fetched_at` (and per-artifact dates). When stale, re-fetch; if re-fetch fails, treat as `missing` — never silently analyze on stale data.
+
+| Artifact | Reuse window | Rationale |
+|---|---|---|
+| 10-K / 10-Q / DEF 14A | Until superseded by a newer filing (check EDGAR for filings after `fetched_at`) | Filings are immutable; only supersession matters |
+| Earnings call transcript | Until the next earnings date | Same — immutable once published |
+| 10-year financial history | 90 days, unless an earnings report landed since `fetched_at` | Changes only on new reports |
+| Current price + multiples | **Never reuse across sessions** — re-fetch every run | Verdict math anchors on current price |
+| Analyst consensus / earnings-revision momentum | 7 days | Revisions move weekly; momentum is the point |
+| Peer list | 180 days | Competitive set changes slowly |
+| Insider Form 4 activity | 30 days | New filings arrive continuously |
+
+Record in the manifest which artifacts were reused vs freshly fetched (`"reused_from": "<prior fetched_at>"`); the final report's Data Coverage section must disclose any reuse.
+
+---
+
 ## Failure Modes and Mitigations
 
 | Failure | Mitigation |

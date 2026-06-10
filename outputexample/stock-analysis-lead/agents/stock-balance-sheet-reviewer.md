@@ -14,3 +14,5 @@ Apply the Mandatory Gates including the sector-norm leverage table. Read the lat
 Return only structured Findings per the skill's Output Format. Every Finding must include the computed ratio, the threshold compared against, and the trend direction. Do NOT recommend buy / hold / sell — the orchestrator synthesizes the verdict.
 
 Use the `BS-` prefix for Finding IDs. If the balance sheet is clean, surface positive observations rather than fabricating issues.
+
+End your reply with the machine-readable Findings JSON block exactly as specified in the orchestrator's dispatch prompt (worker / prefix / status / findings / positives / data_gaps).
