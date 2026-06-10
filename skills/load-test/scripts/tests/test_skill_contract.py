@@ -333,8 +333,10 @@ class TestLineCount:
     """SKILL.md must stay within the line budget."""
 
     def test_skill_md_under_line_budget(self):
+        # Budget raised 420 -> 500 (the repo-wide SKILL.md limit) when the
+        # memory-hygiene patterns landed (7571a67) and pushed the file to 470.
         lines = SKILL_MD.count("\n") + 1
-        assert lines <= 420, f"SKILL.md is {lines} lines (budget: 420)"
+        assert lines <= 500, f"SKILL.md is {lines} lines (budget: 500)"
 
 
 # ──────────────────────────────────────────────────────────────────────

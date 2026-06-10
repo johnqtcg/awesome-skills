@@ -407,7 +407,7 @@ Three-tier scoring applied after every test run analysis.
     setup. See `k6-patterns.md §2 + §11`. The load generator itself OOMing
     invalidates the run.
 
-**Verdict**: Critical 3/3 AND Standard >= 4/5 AND Hygiene >= 3/5 = **PASS**
+**Verdict**: Critical 3/3 AND Standard >= 4/5 AND Hygiene >= 3/4 = **PASS**
 
 ---
 
