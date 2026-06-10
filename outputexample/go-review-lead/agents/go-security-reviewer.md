@@ -41,3 +41,5 @@ You do NOT review:
 ## Output
 
 Return your findings in the format specified by the go-security-review skill. Use the SEC- prefix for finding IDs. If no security issues found, explicitly state "No security findings" — do not fabricate issues.
+
+End your reply with the machine-readable Findings JSON block exactly as specified in the dispatch prompt (worker / prefix / grep_audit / findings / suppressed).

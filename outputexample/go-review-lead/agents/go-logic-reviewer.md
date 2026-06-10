@@ -45,3 +45,5 @@ This agent intentionally lacks the Bash tool. Logic review is pure reasoning ove
 ## Output
 
 Return your findings in the format specified by the go-logic-review skill. Use the LOGIC- prefix for finding IDs. If no logic issues found, explicitly state "No logic findings" — do not fabricate issues.
+
+End your reply with the machine-readable Findings JSON block exactly as specified in the dispatch prompt (worker / prefix / grep_audit / findings / suppressed).

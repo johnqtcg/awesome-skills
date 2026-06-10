@@ -23,6 +23,7 @@ Triage Go code changes and dispatch vertical review skills as parallel agents, t
 | Deduplicate and consolidate findings | §Step 4 |
 | Format the final report | §Report Format |
 | See a complete formatted report example | Load `references/example-output.md` |
+| Worker findings JSON contract (dispatch + parse) | Load `references/findings-schema.md` |
 
 ## When To Use
 - Full Go PR review or comprehensive code review requested
@@ -37,11 +38,13 @@ Triage Go code changes and dispatch vertical review skills as parallel agents, t
 
 ### Step 1: Analyze Scope
 
-Run the following commands to gather triage data:
+Run the following commands to gather triage data. **Diff against the merge-base of the main branch** so multi-commit branches are reviewed in full — a bare `HEAD~1` sees only the last commit and silently skips the rest of the PR:
 ```bash
-git diff --name-only HEAD~1   # changed files
-git diff HEAD~1               # full diff
+BASE=$(git merge-base origin/main HEAD 2>/dev/null || git merge-base main HEAD 2>/dev/null || git rev-parse HEAD~1)
+git diff --name-only "$BASE"   # changed files
+git diff "$BASE"               # full diff
 ```
+(`HEAD~1` is the last-resort fallback for repos with no main branch; state in the report when it was used.)
 Identify:
 - Changed `.go` files (production) and `_test.go` files (separate tracking)
 - New files added (stronger signals — more domains likely affected)
@@ -49,7 +52,7 @@ Identify:
 
 **Raw snippet fallback**: If no git context is available (user pasted a code snippet with no file path or diff):
 1. Write the snippet to `$TMPDIR/review_snippet.go`
-2. Run all grep-based triage (Phase 0 + Phases 1-4) against the temp file
+2. Run all grep-based triage (Phases 1-4) against the temp file
 3. Apply the same dispatch validation grep below
 4. Clean up the temp file after review
 
@@ -154,7 +157,7 @@ Two agents are **Always** dispatched regardless of phases:
 - **go-quality-reviewer** — baseline lint/style for any Go change
 - **go-logic-reviewer** — baseline correctness check for any behavior change
 
-For the remaining 5, use the phases below:
+For the remaining 6 (security, concurrency, error, performance, test, observability), use the phases below:
 
 ---
 
@@ -186,7 +189,7 @@ grep -n '"go.uber.org/zap"\|"log/slog"\|"go.opentelemetry.io/\|"github.com/prome
 
 Scan only lines added/modified in the diff (`^+` lines, excluding `^+++`):
 ```bash
-git diff HEAD~1 | grep '^+[^+]'
+git diff "$BASE" | grep '^+[^+]'
 ```
 
 | Pattern in added/modified lines | → Dispatch |
@@ -298,6 +301,12 @@ Diff context: [diff or "read the files directly"]
 Follow your SKILL.md exactly — including the Grep-Gated Execution Protocol.
 Run grep pre-scan on all grep-gated checklist items BEFORE semantic analysis.
 Return your complete findings report with grep audit line in Execution Status.
+End your reply with one fenced json block matching references/findings-schema.md:
+{"worker": "<agent-name>", "prefix": "<SEC|CONC|ERR|LOGIC|PERF|QUAL|TEST|OBS>",
+ "grep_audit": {"hit": X, "total": Y, "confirmed": Z},
+ "findings": [{"id": "<PREFIX>-NN", "severity": "High|Medium|Low", "title": "...",
+   "location": "path:line", "evidence": "...", "recommendation": "..."}],
+ "suppressed": [{"title": "...", "reason": "..."}]}
 [Depth appendix: "Lite mode: ..." or "Strict mode: ..." or omit for Standard]
 [Compile pre-check note if applicable: "Compile errors already reported by Lead: ..."]
 [Scope narrowing for go-logic-reviewer in Standard mode if applicable]
@@ -313,8 +322,9 @@ Return your complete findings report with grep audit line in Execution Status.
 ### Step 4: Consolidate Results
 
 After all agents return, collect each agent's full response. For each agent response:
+- Parse the trailing Findings JSON block (contract: `references/findings-schema.md`). If a worker omitted or malformed the block, fall back to its prose findings and note the omission in Execution Status — do not fail the review.
 - Extract all findings (FOUND items) for deduplication and merging
-- Extract the `Execution Status` block — specifically the `Grep pre-scan: X/Y hit, Z confirmed` line — and record it for the Per-skill grep audit in the final Execution Status section
+- Extract the grep audit (`grep_audit` in the JSON block, or the `Grep pre-scan: X/Y hit, Z confirmed` line) and record it for the Per-skill grep audit in the final Execution Status section
 
 Then merge their reports:
 

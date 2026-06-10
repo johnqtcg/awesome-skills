@@ -43,3 +43,5 @@ You do NOT review:
 ## Output
 
 Return your findings in the format specified by the go-performance-review skill. Use the PERF- prefix for finding IDs. If no performance issues found, explicitly state "No performance findings" — do not fabricate issues.
+
+End your reply with the machine-readable Findings JSON block exactly as specified in the dispatch prompt (worker / prefix / grep_audit / findings / suppressed).
