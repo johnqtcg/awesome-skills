@@ -775,7 +775,7 @@ def cmd_retrieve(args: argparse.Namespace) -> int:
     }
     write_json(Path(args.output), payload)
 
-    print(f"retrieved={len(all_results)} deduped={len(deduped)} outputexample={args.output}")
+    print(f"retrieved={len(all_results)} deduped={len(deduped)} output={args.output}")
     if retrieval_errors and not deduped:
         return 2
     return 0
@@ -874,7 +874,7 @@ def cmd_fetch_content(args: argparse.Namespace) -> int:
 
     ok = sum(1 for c in contents if not c.error)
     fail = sum(1 for c in contents if c.error)
-    print(f"fetched={ok} errors={fail} outputexample={args.output}")
+    print(f"fetched={ok} errors={fail} output={args.output}")
     return 2 if ok == 0 and urls else 0
 
 
@@ -910,7 +910,7 @@ def cmd_search_codebase(args: argparse.Namespace) -> int:
         "matches_by_file": {f: ms for f, ms in sorted(by_file.items())},
     }
     write_json(Path(args.output), payload)
-    print(f"matches={payload['total_matches']} files={payload['files_matched']} outputexample={args.output}")
+    print(f"matches={payload['total_matches']} files={payload['files_matched']} output={args.output}")
     return 0
 
 
@@ -927,7 +927,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_retrieve.add_argument("--limit-per-query", type=int, default=8)
     p_retrieve.add_argument("--timeout", type=float, default=12.0)
     p_retrieve.add_argument("--delay", type=float, default=DEFAULT_REQUEST_DELAY, help="seconds between queries")
-    p_retrieve.add_argument("--outputexample", required=True, help="outputexample JSON path")
+    p_retrieve.add_argument("--output", required=True, help="output JSON path")
     p_retrieve.set_defaults(func=cmd_retrieve)
 
     p_validate = sub.add_parser("validate", help="validate URLs and citation quality")
@@ -935,7 +935,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_validate.add_argument("--findings", default="", help="optional findings JSON path")
     p_validate.add_argument("--check-live", action="store_true", help="perform runtime reachability checks")
     p_validate.add_argument("--timeout", type=float, default=8.0)
-    p_validate.add_argument("--outputexample", default="", help="optional validation JSON path")
+    p_validate.add_argument("--output", default="", help="optional validation JSON path")
     p_validate.set_defaults(func=cmd_validate)
 
     p_report = sub.add_parser("report", help="generate markdown report")
@@ -943,7 +943,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_report.add_argument("--results", required=True, help="retrieval JSON path")
     p_report.add_argument("--findings", default="", help="optional findings JSON path")
     p_report.add_argument("--depth", choices=["quick", "standard", "deep"], default="standard")
-    p_report.add_argument("--outputexample", required=True, help="outputexample markdown path")
+    p_report.add_argument("--output", required=True, help="output markdown path")
     p_report.set_defaults(func=cmd_report)
 
     p_content = sub.add_parser("fetch-content", help="fetch and extract text from URLs")
@@ -952,7 +952,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_content.add_argument("--limit", type=int, default=0, help="max URLs to fetch (0=all)")
     p_content.add_argument("--timeout", type=float, default=15.0)
     p_content.add_argument("--workers", type=int, default=CONTENT_FETCH_WORKERS, help="parallel fetch workers")
-    p_content.add_argument("--outputexample", required=True, help="outputexample JSON path")
+    p_content.add_argument("--output", required=True, help="output JSON path")
     p_content.set_defaults(func=cmd_fetch_content)
 
     p_codebase = sub.add_parser("search-codebase", help="search local codebase with ripgrep")
@@ -960,7 +960,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_codebase.add_argument("--root", default=".", help="codebase root directory")
     p_codebase.add_argument("--glob", action="append", help="file glob filter (repeatable)")
     p_codebase.add_argument("--context", type=int, default=2, help="context lines around matches")
-    p_codebase.add_argument("--outputexample", required=True, help="outputexample JSON path")
+    p_codebase.add_argument("--output", required=True, help="output JSON path")
     p_codebase.set_defaults(func=cmd_search_codebase)
 
     return parser

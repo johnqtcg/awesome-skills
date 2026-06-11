@@ -9,30 +9,14 @@ echo "=== Deep Research Skill Regression Suite ==="
 echo "Skill root: $SKILL_DIR"
 echo ""
 
-run_pytest() {
-    if python3 -m pytest "$@" 2>/dev/null; then
-        return 0
-    elif command -v pipx &>/dev/null && pipx run pytest "$@" 2>/dev/null; then
-        return 0
-    else
-        echo "ERROR: pytest not found. Install with: pip install pytest" >&2
-        return 1
-    fi
-}
-
-echo "--- 1/4: Script unit tests (test_deep_research.py) ---"
-python3 -m unittest discover -s "$TEST_DIR" -p 'test_deep_research.py' -v
+echo "--- 1/2: All test files (unit + smoke + contract + golden) ---"
+# unittest discover picks up every test_*.py, so newly added test files can
+# never be silently skipped (the smoke tests were once missing from an
+# explicit per-file list while the script shipped broken).
+python3 -m unittest discover -s "$TEST_DIR" -p 'test_*.py' -v
 echo ""
 
-echo "--- 2/4: SKILL.md contract tests (test_skill_contract.py) ---"
-run_pytest "$TEST_DIR/test_skill_contract.py" -v
-echo ""
-
-echo "--- 3/4: Golden scenario tests (test_golden_scenarios.py) ---"
-run_pytest "$TEST_DIR/test_golden_scenarios.py" -v
-echo ""
-
-echo "--- 4/4: Script help check ---"
+echo "--- 2/2: Script help check ---"
 python3 "$SCRIPT_DIR/deep_research.py" --help >/dev/null
 echo "deep_research.py --help: OK"
 echo ""

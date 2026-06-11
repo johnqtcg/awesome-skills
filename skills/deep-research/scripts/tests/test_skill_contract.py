@@ -51,9 +51,15 @@ class TestFrontmatter(unittest.TestCase):
         self.assertIsNotNone(m)
         tools = m.group(1)
         self.assertIn(
-            "Bash(python3 scripts/deep_research.py*)",
+            "Bash(*deep_research.py*)",
             tools,
-            "allowed-tools must permit the documented helper script entrypoint",
+            "allowed-tools must permit the helper script regardless of install path "
+            "(a relative-path pattern fails to match when invoked from ~/.claude/skills/)",
+        )
+        self.assertIn(
+            "WebSearch",
+            tools,
+            "Search Fallback tier 1 is the WebSearch tool — it must be pre-approved",
         )
 
 

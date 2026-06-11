@@ -4,7 +4,7 @@ description: |
   Real-time research workflow for source-backed analysis.
   Use when users ask to research a topic, compare options, investigate claims, analyze trends, or produce synthesis with real citations.
   Handles web research, codebase research, and hybrid (web + codebase) scenarios with mandatory content extraction, hallucination-aware verification, and structured report delivery.
-allowed-tools: Read, Grep, Glob, WebFetch, Bash(python3 scripts/deep_research.py*), Bash(git log*), Bash(go test*), Bash(python -c*), Bash(python3 -c*)
+allowed-tools: Read, Grep, Glob, WebSearch, WebFetch, Bash(*deep_research.py*), Bash(git log*), Bash(go test*), Bash(python -c*), Bash(python3 -c*)
 ---
 
 # Deep Research
@@ -140,7 +140,7 @@ Use `fetch-content` subcommand after retrieval:
 python3 scripts/deep_research.py fetch-content \
   --results /tmp/research_results.json \
   --limit 10 --workers 4 \
-  --outputexample /tmp/content.json
+  --output /tmp/content.json
 ```
 
 If content extraction fails for a critical source, record in gaps — do not synthesize from titles/snippets alone.
@@ -277,8 +277,9 @@ When `fetch-content` reports errors for critical sources:
 
 ## Bundled Assets
 
-- Script: `scripts/deep_research.py` (854 lines — retrieval, extraction, validation, codebase search, report)
-- Unit tests: `scripts/tests/test_deep_research.py` (773 lines — 60+ tests for script internals)
+- Script: `scripts/deep_research.py` — retrieval, extraction, validation, codebase search, report
+- Unit tests: `scripts/tests/test_deep_research.py` — script internals (URL normalization, dedup, extraction)
+- Smoke tests: `scripts/tests/test_subcommand_smoke.py` — every subcommand executed end-to-end, offline
 - Contract tests: `scripts/tests/test_skill_contract.py` (structural integrity)
 - Golden tests: `scripts/tests/test_golden_scenarios.py` (keyword coverage)
 - Output contract: `references/output-contract-template.md`
