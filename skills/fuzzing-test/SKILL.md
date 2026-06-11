@@ -218,6 +218,9 @@ func FuzzRoundTripXxx(f *testing.F) {
 	f.Add("seed", int32(1))
 
 	f.Fuzz(func(t *testing.T, a string, b int32) {
+		if len(a) > 1<<16 {
+			t.Skip()
+		}
 		orig := Obj{A: a, B: b}
 		enc, err := Encode(orig)
 		if err != nil {
@@ -241,7 +244,7 @@ func FuzzDiffXxx(f *testing.F) {
 	f.Add("hello,world", ",")
 
 	f.Fuzz(func(t *testing.T, s, sep string) {
-		if sep == "" {
+		if sep == "" || len(s) > 1<<16 {
 			t.Skip()
 		}
 		got := ImplNew(s, sep)

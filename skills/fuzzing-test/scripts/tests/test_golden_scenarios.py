@@ -15,6 +15,8 @@ ALL_REFS = [
     TARGET_REF,
     SKILL_DIR / "references" / "crash-handling.md",
     SKILL_DIR / "references" / "ci-strategy.md",
+    SKILL_DIR / "references" / "anti-examples.md",
+    SKILL_DIR / "references" / "advanced-tuning.md",
 ]
 
 

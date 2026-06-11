@@ -181,7 +181,7 @@ Before investing in long fuzz runs, establish a baseline:
 ```bash
 # measure per-iteration cost
 go test -run=^$ -fuzz=^FuzzXxx$ -fuzztime=5s . 2>&1 | tail -1
-# outputexample: "fuzz: elapsed: 5s, execs: 48231 (9646/sec), new interesting: 12 (total: 18)"
+# output: "fuzz: elapsed: 5s, execs: 48231 (9646/sec), new interesting: 12 (total: 18)"
 ```
 
 | Metric | Healthy | Concern | Action |
