@@ -208,6 +208,7 @@ thresholds: {
 
 ### SharedArray for CSV/JSON data
 ```javascript
+import http from 'k6/http';
 import { SharedArray } from 'k6/data';
 
 const users = new SharedArray('users', function () {
@@ -232,6 +233,7 @@ export default function () {
 
 ### File upload
 ```javascript
+import http from 'k6/http';
 import { FormData } from 'https://jslib.k6.io/formdata/0.0.2/index.js';
 
 const file = open('./testdata/sample.pdf', 'b'); // binary mode
@@ -326,6 +328,7 @@ export function handleSummary(data) {
 ## 7 Custom Metrics
 
 ```javascript
+import http from 'k6/http';
 import { Counter, Gauge, Rate, Trend } from 'k6/metrics';
 
 const orderLatency = new Trend('order_latency', true);  // true = time values
@@ -360,6 +363,7 @@ export const options = {
 ## 8 Checks & Assertions
 
 ```javascript
+import http from 'k6/http';
 import { check } from 'k6';
 
 export default function () {

@@ -181,7 +181,7 @@ Never fabricate performance numbers. Never claim SLO compliance without data.
     service saturates, `--out csv=` buffering, duplicated/diagnostic Trend
     metrics retaining all samples, dynamic-URL tag bucket explosion. All four
     are covered in `k6-patterns.md §11`.
-18. **Environment matches production** — or document differences explicitly.
+19. **Environment matches production** — or document differences explicitly.
     A test on a single-replica staging env says nothing about 3-replica prod.
 
 ---
@@ -407,7 +407,7 @@ Three-tier scoring applied after every test run analysis.
     setup. See `k6-patterns.md §2 + §11`. The load generator itself OOMing
     invalidates the run.
 
-**Verdict**: Critical 3/3 AND Standard >= 4/5 AND Hygiene >= 3/4 = **PASS**
+**Verdict**: Critical 3/3 AND Standard >= 4/5 AND Hygiene >= 3/5 = **PASS**
 
 ---
 
@@ -451,7 +451,7 @@ What this test did NOT cover. Mandatory — never empty. Examples: "soak test
 not run — memory leak risk unvalidated", "only read endpoints tested — write
 path capacity unknown", "single-region test — cross-region latency not measured".
 
-**Scorecard appended**: `X/12 — Critical Y/3, Standard Z/5, Hygiene W/4 — PASS/FAIL`
+**Scorecard appended**: `X/13 — Critical Y/3, Standard Z/5, Hygiene W/5 — PASS/FAIL`
 + data basis (script only | results available | full profiling).
 
 ---

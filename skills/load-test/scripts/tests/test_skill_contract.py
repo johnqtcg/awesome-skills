@@ -227,15 +227,22 @@ class TestScorecard:
                       "Test data parameterized"):
             assert item in SKILL_MD, f"standard scorecard item missing: {item}"
 
-    def test_hygiene_tier_4_items(self):
+    def test_hygiene_tier_5_items(self):
+        # Hygiene grew from 4 to 5 items when memory-hygiene patterns landed
+        # (7571a67, item 13). The verdict, the X/13 format line, this list,
+        # and the section header must all agree on 5.
         for item in ("Environment documented", "Baseline comparison",
-                      "Resource metrics correlated", "Results archived"):
+                      "Resource metrics correlated", "Results archived",
+                      "Load-generator memory budgeted"):
             assert item in SKILL_MD, f"hygiene scorecard item missing: {item}"
 
     def test_passing_criteria(self):
         assert "3/3" in SKILL_MD
         assert ">= 4/5" in SKILL_MD or "4/5" in SKILL_MD
-        assert ">= 3/4" in SKILL_MD or "3/4" in SKILL_MD
+        assert ">= 3/5" in SKILL_MD
+        assert "Hygiene (>= 3 of 5 must pass)" in SKILL_MD
+        assert "X/13" in SKILL_MD and "Hygiene W/5" in SKILL_MD
+        assert "3/4" not in SKILL_MD, "stale 4-item hygiene arithmetic resurfaced"
 
     def test_verdict_format(self):
         assert "PASS" in SKILL_MD
