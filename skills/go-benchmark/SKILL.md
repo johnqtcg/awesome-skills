@@ -7,6 +7,7 @@ description: >
   implementations with benchstat, or measuring ns/op / B/op / allocs/op.
   In Go code contexts, also trigger when the user says "it's slow", "too many
   allocations", "find the bottleneck", or "profile this Go code".
+allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go vet*), Bash(go tool pprof*), Bash(go install golang.org/x/perf*), Bash(benchstat*)
 ---
 
 # Go Benchmark & pprof Profiling
