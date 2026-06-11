@@ -1,5 +1,5 @@
 ---
-name: incident-postmortem-postmortem
+name: incident-postmortem
 description: >
   Incident post-mortem specialist for writing blameless post-mortems, extracting
   timelines from logs/events, conducting root cause analysis (5-Why, fishbone),
@@ -8,7 +8,7 @@ description: >
   root cause analysis, or converting incident data into organizational knowledge.
   Complements systematic-debugging (finds the cause) with structured documentation
   that prevents recurrence.
-allowed-tools: Read, Write, Grep, Glob, Bash(cat *), Bash(grep *), Bash(jq *), Bash(git log*), Bash(git blame*)
+allowed-tools: Read, Write, Grep, Glob, Bash(cat *), Bash(grep *), Bash(jq *), Bash(git log*), Bash(git blame*), Bash(*lint_postmortem.py*)
 ---
 
 ## Quick Reference
@@ -333,6 +333,14 @@ Three-tier scoring applied after every post-mortem.
 12. **Follow-up tracking mechanism defined** — JIRA/Linear tickets, review date
 
 **Verdict**: Critical 3/3 AND Standard >= 4/5 AND Hygiene >= 3/4 = **PASS**
+
+**Mechanical layer** — before scoring by judgment, run the bundled linter on the produced document:
+
+```bash
+python3 scripts/lint_postmortem.py postmortem.md
+```
+
+It deterministically checks the regex-decidable subset: timestamped + sourced timeline entries, owner/deadline on every action item, prevent/detect/mitigate coverage, "What Went Well" and "Uncovered Risks" sections, and a conservative blame-phrase scan. Critical lint findings block delivery, same as scorecard Critical items. The judgment items (root-cause depth, systemic framing) remain yours.
 
 ---
 

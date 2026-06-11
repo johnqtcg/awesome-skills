@@ -1,4 +1,4 @@
-"""Contract tests for incident-postmortem-postmortem SKILL.md."""
+"""Contract tests for incident-postmortem SKILL.md."""
 
 import pathlib
 import re
@@ -25,7 +25,13 @@ class TestFrontmatter:
         self.front = m.group(1)
 
     def test_name(self):
-        assert "name: incident-postmortem-postmortem" in self.front
+        # The name field shipped as "incident-postmortem-postmortem" (a
+        # creation-time replace accident) and this very test asserted the
+        # corruption for two months. The registry identity must equal the
+        # directory name — assert that invariant, not a literal.
+        dirname = pathlib.Path(__file__).resolve().parents[2].name
+        assert f"name: {dirname}" in self.front
+        assert "postmortem-postmortem" not in self.front
 
     def test_description_triggers(self):
         desc = self.front.lower()

@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Run all regression tests for the incident-postmortem-postmortem skill.
+# Run all regression tests for the incident-postmortem skill.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_DIR="${SCRIPT_DIR}/tests"
 
-echo "[1/2] Contract tests (SKILL.md structure + reference files)"
-python3 -m pytest "${TEST_DIR}/test_skill_contract.py" -v
-
-echo "[2/2] Golden scenario tests (post-mortem quality detection)"
-python3 -m pytest "${TEST_DIR}/test_golden_scenarios.py" -v
+echo "All test files (contract + golden + postmortem linter)"
+# pytest discovers every test_*.py, so newly added test files can never be
+# silently skipped (explicit per-file lists repeatedly caused exactly that
+# across this repo's skills).
+python3 -m pytest "${TEST_DIR}" -v
 
 echo ""
 echo "incident-postmortem skill regression checks passed."

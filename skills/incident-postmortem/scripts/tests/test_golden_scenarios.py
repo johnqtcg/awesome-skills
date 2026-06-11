@@ -1,4 +1,4 @@
-"""Golden scenario tests for incident-postmortem-postmortem skill."""
+"""Golden scenario tests for incident-postmortem skill."""
 
 import json
 import pathlib
