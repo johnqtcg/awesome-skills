@@ -22,7 +22,17 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import yaml
+# Optional dependency: a hard module-level import crashes pytest COLLECTION
+# in environments without PyYAML, killing the entire repo suite instead of
+# skipping these tests (this happened in CI). Declared in requirements.txt;
+# degrade gracefully anyway.
+try:
+    import yaml
+except ImportError:  # pragma: no cover
+    yaml = None
+
+requires_yaml = unittest.skipUnless(
+    yaml is not None, "PyYAML not installed (pip install -r requirements.txt)")
 
 SKILL_DIR = Path(__file__).resolve().parents[2]
 SKILL_MD = SKILL_DIR / "SKILL.md"
@@ -51,6 +61,7 @@ def alert_rule_fragments() -> list[tuple[str, list]]:
     return out
 
 
+@requires_yaml
 class YamlParseTests(unittest.TestCase):
     def test_blocks_found(self) -> None:
         self.assertGreaterEqual(len(yaml_blocks()), 15)
@@ -70,6 +81,7 @@ class YamlParseTests(unittest.TestCase):
                                   f"{name}: rule {entry.get('alert')!r} has no expr")
 
 
+@requires_yaml
 @unittest.skipUnless(shutil.which("promtool"), "promtool not installed")
 class PromtoolTests(unittest.TestCase):
     def test_alert_fragments_pass_promtool_check(self) -> None:

@@ -17,7 +17,14 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import yaml
+# Optional dependency: a hard module-level import crashes pytest COLLECTION
+# in environments without PyYAML, killing the entire repo suite instead of
+# skipping these tests (this happened in CI). Declared in requirements.txt;
+# degrade gracefully anyway.
+try:
+    import yaml
+except ImportError:  # pragma: no cover
+    yaml = None
 
 SKILL_DIR = Path(__file__).resolve().parents[2]
 REF_DIR = SKILL_DIR / "references"
@@ -53,6 +60,7 @@ def complete_workflows() -> list[tuple[str, dict]]:
     return flows
 
 
+@unittest.skipUnless(yaml is not None, "PyYAML not installed (pip install -r requirements.txt)")
 class GoldenYamlTests(unittest.TestCase):
     def test_golden_files_exist_and_contain_yaml(self) -> None:
         for path in GOLDEN_FILES:
