@@ -1,8 +1,8 @@
 ---
 name: go-makefile-writer
-description: Canonical skill for Go Makefiles. Create/refactor root Makefiles for Go repositories with standardized build/test/lint/run targets, self-documenting help outputexample, predictable artifacts, and maintainable target naming.
+description: Canonical skill for Go Makefiles. Create/refactor root Makefiles for Go repositories with standardized build/test/lint/run targets, self-documenting help output, predictable artifacts, and maintainable target naming.
 disable-model-invocation: true
-allowed-tools: Read, Write, Grep, Glob, Bash(make*), Bash(go version*), Bash(go test*), Bash(go generate*), Bash(go install*), Bash(go get*), Bash(go build*), Bash(go mod*), Bash(go run*), Bash(go fmt*), Bash(git diff*), Bash(scripts/discover_go_entrypoints.sh*)
+allowed-tools: Read, Write, Grep, Glob, Bash(make*), Bash(go version*), Bash(go test*), Bash(go generate*), Bash(go install*), Bash(go get*), Bash(go build*), Bash(go mod*), Bash(go run*), Bash(go fmt*), Bash(git diff*), Bash(*discover_go_entrypoints.sh*)
 ---
 
 # Go Makefile Writer
@@ -45,7 +45,7 @@ Select a mode before starting and state it in the output report.
 
 1. **Inspect** project structure:
    - discover `cmd/**/main.go` entrypoints via `scripts/discover_go_entrypoints.sh`
-   - if the script cannot run, fall back to `rg --files cmd | rg '/main\.go$$'`
+   - if the script cannot run, fall back to `find cmd -name main.go -type f` (or `rg --files cmd | grep '/main\.go$'` when rg is available)
    - detect quality tools and conventions (`go test`, `golangci-lint`, `swag`)
    - detect code generation usage (`go generate`, protobuf, wire, mockgen, etc.)
    - detect containerization (`Dockerfile`, `docker-compose.yml`)

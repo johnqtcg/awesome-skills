@@ -265,6 +265,28 @@ class TestSkillMdSections(unittest.TestCase):
         """Frontmatter must declare disable-model-invocation: true."""
         self.assertIn('disable-model-invocation: true', self.text)
 
+    def test_no_global_replace_corruption(self) -> None:
+        """A repo-wide rename once mangled the description to
+        'self-documenting help outputexample'. The description is the
+        skill's trigger surface — lock the word out of this skill."""
+        self.assertNotIn('outputexample', self.text,
+                         "SKILL.md must not contain 'outputexample' (global-replace artifact)")
+
+    def test_probe_script_does_not_use_set_e(self) -> None:
+        """discover_go_entrypoints.sh is a probe: empty discovery is normal.
+        `set -e`/`pipefail` killed it on repos without cmd/ (making its own
+        'no entrypoints' branch dead code). Lock the anti-pattern out."""
+        script_path = os.path.join(SKILL_DIR, 'scripts', 'discover_go_entrypoints.sh')
+        with open(script_path, encoding='utf-8') as f:
+            script = f.read()
+        # Check actual `set` commands, not comments that merely discuss them.
+        self.assertNotRegex(script, r'(?m)^\s*set\s+-[a-z]*e',
+                            'probe script must not enable errexit')
+        self.assertNotRegex(script, r'(?m)^\s*set\s+.*pipefail',
+                            'probe script must not enable pipefail')
+        self.assertRegex(script, r'(?m)^\s*set\s+-u',
+                         'probe script must keep nounset')
+
 
 if __name__ == '__main__':
     unittest.main()

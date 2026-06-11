@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-set -euo pipefail
-
 # Discover Go entrypoints under cmd/**/main.go.
 #
 # Output (tab-separated):
@@ -12,6 +10,14 @@ set -euo pipefail
 # Usage:
 #   ./discover_go_entrypoints.sh [project-root]
 #   ./discover_go_entrypoints.sh --json [project-root]
+#
+# This is a PROBE script: finding no entrypoints is a normal outcome, not an
+# error. `set -e` / `pipefail` would kill the script inside the discovery
+# pipeline on any repo without cmd/**/main.go — making the "no entrypoints"
+# branch below unreachable dead code (this happened; see
+# scripts/tests/test_executable_assets.py). So: `set -u` only, explicit
+# handling for the genuinely fatal case (bad root), explicit exit codes.
+set -u
 
 json_mode=false
 root="."
@@ -23,13 +29,13 @@ for arg in "$@"; do
   esac
 done
 
-cd "$root"
+cd "$root" || { echo "# cannot cd to $root" >&2; exit 2; }
 
-# Find main.go files: prefer rg, fall back to find
+# Find main.go files: prefer rg, fall back to find. Empty result is normal.
 if command -v rg >/dev/null 2>&1; then
-  files=$(rg --files cmd 2>/dev/null | grep '/main\.go$' | sort)
+  files=$(rg --files cmd 2>/dev/null | grep '/main\.go$' | sort) || true
 else
-  files=$(find cmd -name 'main.go' 2>/dev/null | sort)
+  files=$(find cmd -name 'main.go' -type f 2>/dev/null | sort) || true
 fi
 
 if [ -z "$files" ]; then
@@ -91,3 +97,5 @@ echo "$files" | while IFS= read -r file; do
   dir="${file%/main.go}"
   classify "$dir"
 done
+
+exit 0
