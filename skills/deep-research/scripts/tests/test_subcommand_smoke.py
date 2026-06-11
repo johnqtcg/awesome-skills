@@ -12,6 +12,7 @@ can never ship green again. All tests are network-free.
 
 import importlib.util
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -65,6 +66,9 @@ class SubcommandSmokeTests(unittest.TestCase):
         self.results = self.tmp / "results.json"
         self.results.write_text(json.dumps(RESULTS_FIXTURE), encoding="utf-8")
 
+    @unittest.skipUnless(shutil.which("rg"),
+                         "ripgrep not installed — the subcommand itself "
+                         "fails fast with a clear message (verified below)")
     def test_search_codebase_writes_output(self) -> None:
         (self.tmp / "src").mkdir()
         (self.tmp / "src" / "pool.go").write_text(
@@ -76,6 +80,21 @@ class SubcommandSmokeTests(unittest.TestCase):
         payload = json.loads(out.read_text(encoding="utf-8"))
         self.assertGreaterEqual(payload["total_matches"], 1)
         self.assertIn("output=", proc.stdout)
+
+    def test_search_codebase_without_rg_fails_fast_with_message(self) -> None:
+        """Without ripgrep the subcommand must exit 2 with a clear message,
+        not crash — this is the exact behavior a CI runner without rg sees."""
+        empty_path_dir = self.tmp / "empty-path"
+        empty_path_dir.mkdir()
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPT), "search-codebase",
+             "--pattern", "x", "--root", str(self.tmp),
+             "--output", str(self.tmp / "o.json")],
+            capture_output=True, text=True, timeout=60,
+            env={"PATH": str(empty_path_dir)},
+        )
+        self.assertEqual(2, proc.returncode)
+        self.assertIn("rg", proc.stderr)
 
     def test_validate_writes_output(self) -> None:
         out = self.tmp / "validate.json"
