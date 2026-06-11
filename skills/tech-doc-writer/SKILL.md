@@ -8,7 +8,7 @@ description: >
   Audience-aware, evidence-based, with quality gates and anti-staleness
   enforcement. Supports concept docs, task docs, reference docs,
   troubleshooting docs, and design docs (RFC/ADR).
-allowed-tools: Read, Write, StrReplace, Grep, Glob, Bash(git log*), Bash(git diff*), Bash(go vet*), Bash(go build*), Bash(go test*)
+allowed-tools: Read, Write, Edit, StrReplace, Grep, Glob, Bash(git log*), Bash(git diff*), Bash(go vet*), Bash(go build*), Bash(go test*), Bash(*lint_doc.py*)
 ---
 
 # Tech Doc Writer
@@ -166,7 +166,17 @@ Apply these rules while writing:
 | Design | RFC-NNN: Verb + Object | RFC-042: Migrate to Event-Driven Architecture |
 
 ### Phase 4: Quality Gate (Gate 3)
-Run scorecard. Fix Critical failures before delivering.
+
+Run the scorecard in two layers:
+
+1. **Mechanical layer** — run the bundled linter on every produced or modified document:
+   ```bash
+   python3 scripts/lint_doc.py <file.md> --type <doc_type>
+   ```
+   It deterministically checks the regex-decidable scorecard subset: metadata block (owner/status/last_updated), `TBD`/empty cells in tables, single H1 with SPA length, fenced code blocks carrying language tags, and Pangu spacing in CJK-Latin mixed text. Critical lint failures block delivery, same as scorecard Critical items.
+2. **Judgment layer** — evaluate the remaining scorecard items (conclusion-first, terminology consistency, prerequisites completeness) by reading the document.
+
+Fix Critical failures from either layer before delivering.
 
 ### Phase 5: Metadata
 Add to the top of every document:
@@ -279,4 +289,5 @@ assumptions:    [assumed reader has VPN access based on repo context]
 
 Run `scripts/run_regression.sh` to verify skill integrity:
 - **Contract tests**: SKILL.md structure, reference files, template coverage
+- **Linter tests**: behavioral tests of `scripts/lint_doc.py` against fixture documents
 - **Coverage matrix**: `scripts/tests/COVERAGE.md`
