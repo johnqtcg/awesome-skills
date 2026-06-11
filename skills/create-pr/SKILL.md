@@ -2,12 +2,16 @@
 name: create-pr
 description: Create evidence-backed pull requests to the GitHub main branch with strict preflight, quality, and security gates. Use when users ask to create/submit/open/update a PR to main (including private repos), decide draft vs ready state, and provide reviewer-ready context for team review.
 disable-model-invocation: true
-allowed-tools: Read, Grep, Glob, Bash(git diff*), Bash(git log*), Bash(git status*), Bash(git push*), Bash(git branch*), Bash(git rev-parse*), Bash(git remote*), Bash(git ls-remote*), Bash(git fetch*), Bash(git merge-base*), Bash(gh pr*), Bash(gh auth*), Bash(gh repo*), Bash(gh api*), Bash(go test*), Bash(golangci-lint*), Bash(make test*), Bash(make lint*), Bash(make build*), Bash(make check*), Bash(gosec*), Bash(govulncheck*), Bash(python*create_pr.py*), Bash(python3*create_pr.py*), Bash(cp*), Bash(grep*)
+allowed-tools: Read, Grep, Glob, Bash(git diff*), Bash(git log*), Bash(git status*), Bash(git push*), Bash(git branch*), Bash(git rev-parse*), Bash(git remote*), Bash(git ls-remote*), Bash(git fetch*), Bash(git merge-base*), Bash(gh pr*), Bash(gh auth*), Bash(gh repo*), Bash(gh api*), Bash(go test*), Bash(golangci-lint*), Bash(make test*), Bash(make lint*), Bash(make build*), Bash(make check*), Bash(gosec*), Bash(govulncheck*), Bash(python *create_pr.py*), Bash(python3 *create_pr.py*), Bash(cp *create-pr-config*), Bash(grep*)
 ---
 
 # Create PR
 
 Create a high-quality PR to `main` that is easy to review, safe to merge, and explicit about risk.
+
+## Canonical Implementation
+
+The bundled `scripts/create_pr.py` is the **preferred execution path** for Gates A–H: when Python 3 is available, run the gates through it (`references/bundled-script-guide.md`) instead of hand-executing the prose commands below. The prose workflow serves two roles — the **specification** the script must implement, and the **fallback** for environments without Python. If the two ever disagree, the prose specification wins and the script is the side to fix. Shared constants (size thresholds, confidence levels, gate statuses, secret-scan semantics) are consistency-tested in `scripts/tests/test_skill_contract.py` — update both sides together.
 
 ## Quick Reference
 
@@ -158,14 +162,15 @@ Rules:
 ```bash
 # Filename risk scan
 git diff --name-only origin/main...HEAD | grep -Ei '(\.env(\..*)?|id_rsa|id_dsa|\.pem|\.p12|\.key)$'
-# Content risk scan
-git diff origin/main...HEAD | grep -En '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY-----|ghp_[A-Za-z0-9]{36}|gho_[A-Za-z0-9]{36}|xox[baprs]-|AIza[0-9A-Za-z_-]{35}|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|token[[:space:]]*[:=])'
+# Content risk scan — ADDED LINES ONLY (same semantics as the bundled script:
+# removed lines are already in history and are a history-rewrite concern, not a PR gate)
+git diff origin/main...HEAD | grep '^+[^+]' | grep -En '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY-----|ghp_[A-Za-z0-9]{36}|gho_[A-Za-z0-9]{36}|xox[baprs]-|AIza[0-9A-Za-z_-]{35}|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|token[[:space:]]*[:=])'
 # Go-specific (when available)
 gosec ./...
 govulncheck ./...
 ```
 
-Any match from the grep scans requires explicit resolution before marking ready. Any unresolved high-confidence issue keeps PR in `draft`.
+Triage matches with the same exemptions the bundled script applies: environment/config **references** (`os.Getenv(...)`, `process.env.*`, `${VAR}`) are not leaks; placeholder values (`example`, `dummy`, `changeme`, `redacted`) are not leaks; patterns listed in `.create-pr.yaml` `secret_scan.allow_patterns` are exempt. Any surviving match requires explicit resolution before marking ready. Any unresolved high-confidence issue keeps PR in `draft`.
 
 ### Gate F: Documentation and Compatibility (Mandatory)
 

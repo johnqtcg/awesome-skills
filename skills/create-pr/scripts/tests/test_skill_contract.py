@@ -367,5 +367,87 @@ class CreatePRSkillContractTests(unittest.TestCase):
             )
 
 
+class ProseScriptConsistencyTests(unittest.TestCase):
+    """Bridge tests between the two implementations of the gates.
+
+    SKILL.md's prose workflow is the specification and the no-Python
+    fallback; scripts/create_pr.py is the canonical executable. Each test
+    here fails when one side changes a shared constant or semantic without
+    the other — closing the dual-brain drift hole.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        import importlib.util
+        import sys
+
+        spec = importlib.util.spec_from_file_location("create_pr_bridge", SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        sys.modules[spec.name] = module
+        spec.loader.exec_module(module)
+        cls.mod = module
+        cls.skill_text = SKILL_MD.read_text()
+        cls.script_src = SCRIPT.read_text()
+
+    def test_canonical_implementation_declared(self) -> None:
+        self.assertIn("Canonical Implementation", self.skill_text)
+        self.assertIn("create_pr.py", self.skill_text)
+        self.assertIn("fallback", self.skill_text)
+
+    def test_size_thresholds_match(self) -> None:
+        warn = self.mod.SIZE_THRESHOLD_WARN
+        strong = self.mod.SIZE_THRESHOLD_STRONG
+        self.assertIn(f"{warn} lines", self.skill_text,
+                      f"script warns at {warn} lines but SKILL.md does not mention it")
+        self.assertIn(f"{warn + 1}–{strong}", self.skill_text,
+                      "SKILL.md warn band must match script thresholds")
+        self.assertIn(f"> {strong}", self.skill_text,
+                      f"script strong-warns above {strong} lines but SKILL.md does not")
+
+    def test_confidence_levels_match_behavior(self) -> None:
+        mk = lambda status: [self.mod.GateResult("Gate B", status, "x")]
+        derived = {
+            self.mod.determine_confidence(mk(self.mod.FAIL)),
+            self.mod.determine_confidence(mk(self.mod.SUPPRESSED)),
+            self.mod.determine_confidence(mk(self.mod.PASS)),
+        }
+        self.assertEqual(derived, {"suspected", "likely", "confirmed"})
+        for level in derived:
+            self.assertIn(level, self.skill_text,
+                          f"confidence level {level!r} missing from SKILL.md")
+
+    def test_gate_statuses_match(self) -> None:
+        for status in (self.mod.PASS, self.mod.FAIL, self.mod.SUPPRESSED, self.mod.NA):
+            self.assertIn(status, self.skill_text,
+                          f"gate status {status!r} missing from SKILL.md")
+
+    def test_gate_letters_match(self) -> None:
+        for letter in "ABCDEFGH":
+            self.assertIn(f"Gate {letter}", self.skill_text)
+            self.assertIn(f"Gate {letter}", self.script_src)
+
+    def test_secret_scan_added_lines_semantics_match(self) -> None:
+        # Script side: scans added lines only
+        self.assertIn("parse_diff_added_lines", self.script_src)
+        # Prose side: must declare the same semantics and filter the diff to + lines
+        self.assertIn("ADDED LINES ONLY", self.skill_text)
+        self.assertIn("grep '^+[^+]'", self.skill_text)
+
+    def test_secret_exemptions_match(self) -> None:
+        # Script exempts env/config references and allowlisted patterns;
+        # the prose triage must teach the same exemptions.
+        self.assertTrue(self.mod.SECRET_REFERENCE_RE.search('os.getenv("API_TOKEN")'.lower()))
+        for token in ("os.Getenv", "allow_patterns", "placeholder"):
+            self.assertIn(token, self.skill_text,
+                          f"prose Gate E missing the script's {token!r} exemption")
+
+    def test_allowed_tools_have_no_broad_cp(self) -> None:
+        fm = frontmatter(self.skill_text)
+        self.assertNotIn("Bash(cp*)", fm,
+                         "cp must be scoped to the config example, not arbitrary copies")
+        self.assertIn("Bash(cp *create-pr-config*)", fm)
+
+
 if __name__ == "__main__":
     unittest.main()
