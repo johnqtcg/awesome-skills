@@ -62,7 +62,7 @@ Re-probe and select from actual availability:
 
 ```bash
 yt-dlp -F "<url>"
-# Then use a format ID or bounded selector from the outputexample
+# Then use a format ID or bounded selector from the output
 ```
 
 ### `ffmpeg not found` / Merge failure

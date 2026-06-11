@@ -144,7 +144,7 @@ Append `2>&1 | tee "<dir>/yt-dlp.log"` when logging is useful (batch, troublesho
 
 ## Anti-Examples (Core Mistakes)
 
-For the full set of 8 anti-examples, read `references/anti-examples.md`. The three most critical are inlined here:
+For the full set of 9 anti-examples, read `references/anti-examples.md`. The four most critical are inlined here (numbering is shared with the full catalog):
 
 1. **Guessing format availability without probing** — formats change per site and per video. Probe first.
    ```
@@ -160,7 +160,7 @@ For the full set of 8 anti-examples, read `references/anti-examples.md`. The thr
 
 5. **Claiming download success without running the command** — if you did not execute it, say so.
 
-6. **Re-starting from scratch when YouTube throttles mid-download** — the `.part` file is preserved; re-run with `--continue --limit-rate 2M --concurrent-fragments 1` to resume, not restart. See `references/safety-and-recovery.md § YouTube throttling mid-download`.
+9. **Re-starting from scratch when YouTube throttles mid-download** — the `.part` file is preserved; re-run with `--continue --limit-rate 2M --concurrent-fragments 1` to resume, not restart. See `references/safety-and-recovery.md § YouTube throttling mid-download`.
 
 ## Honest Degradation
 

@@ -82,7 +82,7 @@ class TestCommonScenarios(unittest.TestCase):
         self.assertIn("--download-archive", self.skill)
 
     def test_merge_output_format(self):
-        self.assertIn("--merge-outputexample-format", self.all_text)
+        self.assertIn("--merge-output-format", self.all_text)
 
     def test_cookies_from_browser(self):
         self.assertIn("--cookies-from-browser", self.all_text)

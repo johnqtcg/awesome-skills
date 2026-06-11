@@ -7,12 +7,11 @@ TEST_DIR="$SCRIPT_DIR/tests"
 echo "=== yt-dlp-downloader Skill Regression Suite ==="
 echo ""
 
-echo "--- 1/2: Contract tests (test_skill_contract.py) ---"
-python3 -m unittest "$TEST_DIR/test_skill_contract.py" -v
-echo ""
-
-echo "--- 2/2: Golden scenario tests (test_golden_scenarios.py) ---"
-python3 -m unittest "$TEST_DIR/test_golden_scenarios.py" -v
+echo "--- All test files (contract + golden + flags-against-binary) ---"
+# unittest discover picks up every test_*.py so newly added test files can
+# never be silently skipped (an explicit per-file list once missed the
+# binary-validation tests while 17 corrupted flags shipped green).
+python3 -m unittest discover -s "$TEST_DIR" -p 'test_*.py' -v
 echo ""
 
 echo "=== All regression checks passed ==="

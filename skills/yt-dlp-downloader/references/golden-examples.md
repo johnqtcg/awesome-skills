@@ -9,7 +9,7 @@ These examples show the expected answer shape. Keep the final response compact.
 - **Probe**: skipped — default best-quality download, public video
 - **Final command**:
   ```bash
-  yt-dlp --no-playlist -f "bv*+ba/b" --merge-outputexample-format mp4 \
+  yt-dlp --no-playlist -f "bv*+ba/b" --merge-output-format mp4 \
     --download-archive "~/Downloads/video/.yt-dlp-archive.txt" \
     --continue --no-overwrites --retries 10 --fragment-retries 10 \
     -o "~/Downloads/video/%(title).200s [%(id)s].%(ext)s" "<url>"
@@ -29,7 +29,7 @@ These examples show the expected answer shape. Keep the final response compact.
 - **Final command**:
   ```bash
   yt-dlp --no-playlist -f "bv*[height<=1080]+ba/b[height<=1080]" \
-    --merge-outputexample-format mp4 \
+    --merge-output-format mp4 \
     --download-archive "<dir>/.yt-dlp-archive.txt" \
     --continue --no-overwrites --retries 10 --fragment-retries 10 \
     -o "<dir>/%(title).200s [%(id)s].%(ext)s" "<url>"
@@ -48,7 +48,7 @@ These examples show the expected answer shape. Keep the final response compact.
 - **Final command**:
   ```bash
   yt-dlp --cookies-from-browser chrome --no-playlist \
-    -f "bv*+ba/b" --merge-outputexample-format mp4 \
+    -f "bv*+ba/b" --merge-output-format mp4 \
     --download-archive "<dir>/.yt-dlp-archive.txt" \
     --continue --no-overwrites --retries 10 --fragment-retries 10 \
     -o "<dir>/%(title).200s [%(id)s].%(ext)s" "<url>"
@@ -83,7 +83,7 @@ These examples show the expected answer shape. Keep the final response compact.
   ```
 - **Final command** (after confirming zh-Hans available):
   ```bash
-  yt-dlp --yes-playlist -f "bv*+ba/b" --merge-outputexample-format mp4 \
+  yt-dlp --yes-playlist -f "bv*+ba/b" --merge-output-format mp4 \
     --write-subs --sub-lang "zh-Hans" --sub-format vtt --embed-subs \
     --download-archive "<dir>/.yt-dlp-archive.txt" \
     --continue --no-overwrites --retries 10 --fragment-retries 10 \
@@ -100,7 +100,7 @@ These examples show the expected answer shape. Keep the final response compact.
 - **Probe**: skipped — SponsorBlock works independently of format
 - **Final command**:
   ```bash
-  yt-dlp --no-playlist -f "bv*+ba/b" --merge-outputexample-format mp4 \
+  yt-dlp --no-playlist -f "bv*+ba/b" --merge-output-format mp4 \
     --sponsorblock-remove sponsor,selfpromo,interaction \
     --download-archive "<dir>/.yt-dlp-archive.txt" \
     --continue --no-overwrites --retries 10 --fragment-retries 10 \

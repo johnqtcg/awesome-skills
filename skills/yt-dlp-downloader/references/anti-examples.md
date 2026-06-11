@@ -2,7 +2,7 @@
 
 Read this file when reviewing or generating yt-dlp commands. Each example shows a common mistake and the correct alternative.
 
-For the three most critical mistakes (guessing formats, missing `--no-playlist`, and claiming success without execution), see SKILL.md directly.
+For the four most critical mistakes — 1 (guessing formats), 3 (missing `--no-playlist`), 5 (claiming success without execution), and 9 (restarting from scratch after throttling) — see SKILL.md directly.
 
 ## 2. Using `--cookies` to bypass content the user is not authorized to access
 

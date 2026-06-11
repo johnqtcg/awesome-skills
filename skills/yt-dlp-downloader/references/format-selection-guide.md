@@ -18,7 +18,7 @@ The `-f` flag accepts a format selection expression. Key operators:
 
 ### Best quality (default)
 ```bash
--f "bv*+ba/b" --merge-outputexample-format mp4
+-f "bv*+ba/b" --merge-output-format mp4
 ```
 
 ### Resolution cap
@@ -35,7 +35,7 @@ The `-f` flag accepts a format selection expression. Key operators:
 
 ### Smallest file
 ```bash
--f "wv*+wa/w" --merge-outputexample-format mp4
+-f "wv*+wa/w" --merge-output-format mp4
 ```
 
 ### VP9/AV1 preference (YouTube)

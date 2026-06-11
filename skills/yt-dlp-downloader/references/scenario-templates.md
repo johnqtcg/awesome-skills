@@ -6,7 +6,7 @@ Use one template as the base, then add only the extra flags required by the requ
 
 ```bash
 yt-dlp --no-playlist \
-  -f "bv*+ba/b" --merge-outputexample-format mp4 \
+  -f "bv*+ba/b" --merge-output-format mp4 \
   --download-archive "<dir>/.yt-dlp-archive.txt" \
   --continue --no-overwrites \
   --retries 10 --fragment-retries 10 --concurrent-fragments 4 \
@@ -20,7 +20,7 @@ Probe first with `yt-dlp -F "<url>"`, then use a bounded selector or format ID.
 
 ```bash
 yt-dlp --no-playlist \
-  -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-outputexample-format mp4 \
+  -f "bv*[height<=1080]+ba/b[height<=1080]" --merge-output-format mp4 \
   --download-archive "<dir>/.yt-dlp-archive.txt" \
   --continue --no-overwrites \
   --retries 10 --fragment-retries 10 \
@@ -31,7 +31,7 @@ yt-dlp --no-playlist \
 **Alternative using format sorting** (prefer h264 codec, max 1080p):
 ```bash
 yt-dlp --no-playlist \
-  -S "res:1080,vcodec:h264" --merge-outputexample-format mp4 \
+  -S "res:1080,vcodec:h264" --merge-output-format mp4 \
   -o "<dir>/%(title).200s [%(id)s].%(ext)s" \
   "<url>"
 ```
@@ -40,7 +40,7 @@ yt-dlp --no-playlist \
 
 ```bash
 yt-dlp --yes-playlist \
-  -f "bv*+ba/b" --merge-outputexample-format mp4 \
+  -f "bv*+ba/b" --merge-output-format mp4 \
   --download-archive "<dir>/.yt-dlp-archive.txt" \
   --continue --no-overwrites \
   --retries 10 --fragment-retries 10 --concurrent-fragments 4 \
@@ -73,7 +73,7 @@ Probe subtitle availability first with `yt-dlp --list-subs "<url>"`.
 
 ```bash
 yt-dlp --no-playlist \
-  -f "bv*+ba/b" --merge-outputexample-format mp4 \
+  -f "bv*+ba/b" --merge-output-format mp4 \
   --write-subs --sub-lang "en,zh-Hans" --sub-format "vtt" --embed-subs \
   --download-archive "<dir>/.yt-dlp-archive.txt" \
   --continue --no-overwrites \
@@ -89,7 +89,7 @@ Prefer browser cookies if available:
 ```bash
 yt-dlp --cookies-from-browser chrome \
   --no-playlist \
-  -f "bv*+ba/b" --merge-outputexample-format mp4 \
+  -f "bv*+ba/b" --merge-output-format mp4 \
   --download-archive "<dir>/.yt-dlp-archive.txt" \
   --continue --no-overwrites \
   --retries 10 --fragment-retries 10 \
@@ -101,7 +101,7 @@ Or use a cookie file the user already has:
 
 ```bash
 yt-dlp --cookies "/path/to/cookies.txt" \
-  --no-playlist -f "bv*+ba/b" --merge-outputexample-format mp4 \
+  --no-playlist -f "bv*+ba/b" --merge-output-format mp4 \
   -o "<dir>/%(title).200s [%(id)s].%(ext)s" "<url>"
 ```
 
@@ -110,7 +110,7 @@ yt-dlp --cookies "/path/to/cookies.txt" \
 ```bash
 yt-dlp --no-playlist \
   --live-from-start \
-  -f "bv*+ba/b" --merge-outputexample-format mp4 \
+  -f "bv*+ba/b" --merge-output-format mp4 \
   --continue --no-overwrites \
   --retries 20 --fragment-retries 20 \
   -o "<dir>/%(title).200s [%(id)s].%(ext)s" \
@@ -125,7 +125,7 @@ Remove sponsor segments from the downloaded file:
 
 ```bash
 yt-dlp --no-playlist \
-  -f "bv*+ba/b" --merge-outputexample-format mp4 \
+  -f "bv*+ba/b" --merge-output-format mp4 \
   --sponsorblock-remove sponsor,selfpromo,interaction \
   --download-archive "<dir>/.yt-dlp-archive.txt" \
   --continue --no-overwrites \
