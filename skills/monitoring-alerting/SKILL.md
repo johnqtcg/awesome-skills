@@ -9,6 +9,7 @@ description: >
   cardinality management, and on-call routing configuration. Use even for "just add an
   alert" — a poorly designed alert either pages at 3AM for non-issues (alert fatigue)
   or stays silent during real outages (false confidence).
+allowed-tools: Read, Write, Grep, Glob, Bash(promtool*), Bash(amtool*)
 ---
 
 # Monitoring & Alerting Design Review
@@ -25,8 +26,10 @@ description: >
 | Avoid common alerting mistakes         | §6 Anti-Examples                         |
 | Score the review result                | §7 Scorecard                             |
 | Format review output                   | §8 Output Contract                       |
+| Validate rules before shipping         | §5.5 Rule Validation                     |
 | Deep-dive SLI/SLO patterns            | `references/sli-slo-patterns.md`         |
 | Understand alert anti-patterns         | `references/alert-anti-patterns.md`      |
+| Routing / grouping / inhibition config | `references/alertmanager-config-patterns.md` |
 
 ---
 
@@ -108,7 +111,7 @@ Before delivering output, verify all §8 Output Contract sections present. §8.9
 |-------|-------------|-------|-------------------|
 | **Lite** | Single alert rule review, dashboard panel addition | 1–4 | None |
 | **Standard** | Full SLI/SLO definition, alert suite for a service | 1–4 | `sli-slo-patterns.md` |
-| **Deep** | Alert fatigue audit, multi-service monitoring architecture, burn-rate alerting | 1–4 | Both reference files |
+| **Deep** | Alert fatigue audit, multi-service monitoring architecture, burn-rate alerting | 1–4 | All three reference files |
 
 **Force Standard or higher** when any signal appears:
 SLO definition, burn-rate alerting, PagerDuty/OpsGenie routing, multi-service dashboard, alert fatigue investigation, label cardinality concern.
@@ -176,6 +179,43 @@ Execute every item. Mark **PASS** / **WARN** / **FAIL** with evidence.
 13. **Inhibition rules prevent alert cascade** — if the database is down, suppress all "elevated error rate" alerts from services that depend on it. Without inhibition, one root cause generates dozens of symptomatic alerts.
 
 14. **Alert fatigue metrics tracked** — measure: total alerts/week, alerts-per-on-call-shift, % of alerts that required action, MTTA (mean time to acknowledge). Target: <5 pages/week per on-call, >80% actionability rate.
+
+### 5.5 Rule Validation (Eat Your Own Dog Food)
+
+A skill that preaches "no false positives, no silent gaps" must validate its rules mechanically, not by eyeball:
+
+15. **Rules pass `promtool check rules`** — syntax + PromQL validation before any rule ships:
+    ```bash
+    promtool check rules alerts.yml
+    ```
+
+16. **SLO-critical alerts have `promtool test rules` unit tests** — Prometheus natively supports asserting "given this input series, this alert fires (or stays silent)". This is the executable form of the sensitivity/specificity tradeoff:
+    ```yaml
+    # alerts_test.yml — run with: promtool test rules alerts_test.yml
+    rule_files:
+      - alerts.yml
+    evaluation_interval: 1m
+    tests:
+      - interval: 1m
+        input_series:
+          - series: 'http_errors_total{job="api"}'
+            values: '0+10x10'      # 10 errors/min
+          - series: 'http_requests_total{job="api"}'
+            values: '0+100x10'     # 100 req/min → 10% error rate
+        alert_rule_test:
+          - eval_time: 10m
+            alertname: HighErrorRate
+            exp_alerts:
+              - exp_labels: {severity: critical, job: api}
+    ```
+    Write at least two cases per SLO-critical alert: one where it MUST fire, one where it MUST stay silent (transient spike absorbed by `for`).
+
+17. **Routing config passes `amtool check-config`** — Alertmanager routing/inhibition changes are validated before deploy:
+    ```bash
+    amtool check-config alertmanager.yml
+    ```
+
+If promtool/amtool are unavailable in the environment, state `Not run — <tool> unavailable` in §8.4 and list the exact commands for the user; never claim rules are validated without running them.
 
 ---
 
@@ -290,6 +330,8 @@ Every monitoring review MUST produce these sections. Write "N/A — [reason]" if
 
 ### 8.4 Alert Rules
 - Per alert: name, expr, for, severity, summary, runbook_url
+- Validation evidence: `promtool check rules` / `promtool test rules` output,
+  or `Not run — <tool> unavailable` + exact commands for the user
 
 ### 8.5 Dashboard Spec (Standard/Deep)
 - Panel layout, queries, variables, drill-down structure
