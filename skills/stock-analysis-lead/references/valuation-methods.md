@@ -4,6 +4,66 @@ Load during Step 5c. The orchestrator runs four valuation methods in sequence: m
 
 ---
 
+## Method 0: Driver Model (build this FIRST — it powers Methods 2–4)
+
+Do not narrate three plausible terminal P/Es. Build one **driver model** and let the engine compute DCF, reverse-DCF, the three scenarios, the (derived) terminal multiple, and a sensitivity table. Changing one assumption (e.g. Azure growth) recomputes the target automatically.
+
+**Why a model, not three numbers:** the old failure mode was hand-picking a terminal P/E and three CAGRs — internally inconsistent and unauditable. A driver model makes Bull/Base/Bear three parameterizations of the *same* equations, and forces the terminal multiple to be an OUTPUT (Gordon: EV/FCF = (1+g)/(WACC−g)).
+
+**False-precision guardrail:** every driver must carry a `source`. The **anchor** drivers (`revenue_0`, `op_margin_start`, `da_pct`, `capex_pct` — the starting point) MUST be `data` from `financials.json`; forward drivers (`revenue_cagr`, `op_margin_terminal`, `wacc`, `terminal_growth`) are legitimately `assumption`. If an anchor is only an assumption, the run prints `grounding: LOW` and the valuation must be labeled **illustrative, not analytical**. An un-sourced driver is rejected outright — you cannot slip a guessed number into a DCF.
+
+### Procedure
+
+```bash
+# 1. anchors come from first-hand data (Step 2 produced financials.json)
+# 2. author model.json (schema below)
+python3 scripts/finlib/valuation.py run --model $TMPDIR/stock-analysis-<ticker>/model.json \
+        --sensitivity revenue_cagr
+```
+
+Outputs: `base_target`, `scenarios{bull,base,bear,weighted,weighted_return,bear_to_current}`,
+`reverse_dcf.implied` (the growth the **current price** implies — flag if it exceeds the company's track record), `derived_terminal_ev_fcf`, `sensitivity`, and `grounding`.
+
+### model.json schema
+
+```json
+{
+  "ticker": "MSFT", "current_price": 421.92,
+  "shares_diluted": 7.43, "net_cash": 60.0, "horizon_years": 5,
+  "drivers": {
+    "revenue_0":          {"value": 282.0, "source": {"kind":"data","ref":"financials.json:revenue@FY2025"}},
+    "op_margin_start":    {"value": 0.45,  "source": {"kind":"data","ref":"financials.json:op_income/revenue@FY2025"}},
+    "da_pct":             {"value": 0.10,  "source": {"kind":"data","ref":"financials.json:dep_amort/revenue@FY2025"}},
+    "capex_pct":          {"value": 0.20,  "source": {"kind":"data","ref":"financials.json:capex/revenue@FY2025"}},
+    "revenue_cagr":       {"value": 0.12,  "source": {"kind":"assumption","note":"Azure-led ~12%"}},
+    "op_margin_terminal": {"value": 0.43,  "source": {"kind":"assumption","note":"mild fade"}},
+    "tax_rate":           {"value": 0.17,  "source": {"kind":"data","ref":"financials.json:effective_tax@FY2025"}},
+    "wacc":               {"value": 0.09,  "source": {"kind":"assumption","note":"CAPM ~9%"}},
+    "terminal_growth":    {"value": 0.04,  "source": {"kind":"assumption","note":"~GDP+"}}
+  },
+  "scenarios": {
+    "bull": {"revenue_cagr": 0.15, "op_margin_terminal": 0.45, "terminal_growth": 0.045},
+    "base": {},
+    "bear": {"revenue_cagr": 0.07, "op_margin_terminal": 0.40, "terminal_growth": 0.03}
+  },
+  "probabilities": {"bull": 0.25, "base": 0.50, "bear": 0.25}
+}
+```
+
+FCF each year = NOPAT + D&A − capex − ΔNWC, with operating margin fading linearly from `op_margin_start` to `op_margin_terminal` over the horizon; terminal value via Gordon. The report's scenario table and the decision-rule inputs (weighted return, bear/current) should be **read from this model's output**, and the report must state the `grounding` verdict and show the sensitivity row so a reader sees which numbers are data-grounded vs assumed.
+
+### Mandatory disclosure (the report must SHOW, not just compute)
+
+A DCF / reverse-DCF number is not analytical unless the reader can see its load-bearing assumptions. Whenever the report cites **any** DCF, reverse-DCF, or intrinsic-value figure, it MUST disclose, adjacent to that figure:
+
+- **WACC** and **terminal growth `g`** — the two assumptions that move the answer most (a 1pp WACC change ≈ 10%+ on value; an undisclosed WACC makes any "implied CAGR" unfalsifiable);
+- the **reverse-DCF implied growth** at the current price, printed next to the company's actual track-record CAGR;
+- a **sensitivity table** — at minimum the 1-D `revenue_cagr ± 3pp` sweep the engine emits. For any verdict that leans on the DCF, run a **2-D grid** (`revenue_cagr × wacc`, or `revenue_cagr × terminal multiple`) — call `valuation.py` twice across a WACC range, or vary `terminal_growth`. The engine's single-driver sweep is a floor, not the ceiling.
+
+A single-point intrinsic value with none of the above is **illustrative, not analytical** — label it so. Never call a bare point estimate "the strongest single piece of evidence": its precision is an artifact of undisclosed assumptions.
+
+---
+
 ## Method 1: Multiples — Multi-Dimensional Cross-Check
 
 Apply each multiple along three dimensions:
@@ -151,6 +211,10 @@ Reconcile any disagreements. Examples:
 - Scenarios show 60% upside but Bear shows 40% downside → odds attractive only if you can size the position correctly.
 
 The reconciliation paragraph in the final report should explicitly call out which method was load-bearing for the verdict and why.
+
+### DCF intrinsic value ↔ scenario / multiple target price
+
+The DCF prints an intrinsic value **as of today**; the Bull/Base/Bear table prints a **36-month** target (often forward EPS × a multiple). These are two different numbers, and readers conflate them. When the DCF Base intrinsic value and the Base scenario target differ by more than ~10%, the report MUST reconcile them in one explicit sentence — is the gap the time horizon (36 months of compounding), an assumed multiple re-rating, a different FCF-conversion path, or a share-count change? An unreconciled "\$553 DCF vs \$600 target" pair reads as two methods that were never made to agree, and quietly hides which one the verdict actually rests on.
 
 ---
 

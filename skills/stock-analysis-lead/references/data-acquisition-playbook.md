@@ -55,6 +55,27 @@ https://www.sec.gov/cgi-bin/browse-edgar?action=getcompany&CIK=<TICKER>&type=10-
 - 10-K and 10-Q filings can be > 1MB; consider using `firecrawl-download` to extract clean text rather than `WebFetch` which has length limits.
 - For PDFs of older filings, EDGAR provides text-extracted HTML — prefer the HTML version.
 
+### EDGAR XBRL — STRUCTURED first-hand financials (preferred over scraping)
+
+For **numbers** (as opposed to prose sections), do not scrape the HTML and do not use aggregator mirrors. Use the canonical XBRL `companyfacts` API via the bundled pipeline — it returns every reported financial concept as a structured time series, each value tagged with its source filing + period:
+
+```bash
+# network (requires a descriptive User-Agent per SEC fair-access policy):
+python3 scripts/finlib/edgar.py fetch --ticker MSFT --out $TMPDIR/stock-analysis-msft/financials.json
+# offline, from an already-downloaded companyfacts.json:
+python3 scripts/finlib/edgar.py parse --facts companyfacts.json --out financials.json
+```
+
+Endpoints used:
+- Ticker → CIK: `https://www.sec.gov/files/company_tickers.json`
+- Company facts: `https://data.sec.gov/api/xbrl/companyfacts/CIK##########.json` (10-digit zero-padded CIK)
+
+Concepts extracted (canonical → XBRL tag candidates are in `scripts/finlib/edgar.py:CONCEPT_MAP`): revenue, operating_income, net_income, ocf, capex, dep_amort, sbc, accounts_receivable, allowance_doubtful, deferred_revenue, **rpo** (`RevenueRemainingPerformanceObligation`), shares_diluted, total_debt, cash_and_sti.
+
+`financials.json` shape: `{values:{concept:{value,tag,unit,end,fy,fp,form}}, gaps:[...]}`. **Anything in `gaps` was not exposed flatly** — most importantly **segment operating income**, which XBRL tags dimensionally (per-segment members), so it cannot be pulled as one number. When `segment_operating_income` is a gap, the earnings-quality / business workers must read the 10-K **segment footnote** directly to build the segment→consolidated bridge. Never infer segment economics from consolidated totals.
+
+This `financials.json` is the input to the orchestrator's 口径 lint gate (`scripts/finlib/lint.py`): feeding ratio `inputs` from it makes the recompute check meaningful and keeps every printed number first-hand and auditable.
+
 ---
 
 ## Filing-Section Strategy
@@ -240,24 +261,6 @@ If any artifact is missing or partially fetched, add an entry to `missing` with:
 ```
 
 Workers read the manifest from a path in their dispatch prompt. They self-skip checks dependent on missing artifacts and report the skip in their Execution Status.
-
----
-
-## Data Freshness Policy
-
-A scratch directory from a prior run may still exist. Reuse is allowed **only within these windows**, judged against the manifest's `fetched_at` (and per-artifact dates). When stale, re-fetch; if re-fetch fails, treat as `missing` — never silently analyze on stale data.
-
-| Artifact | Reuse window | Rationale |
-|---|---|---|
-| 10-K / 10-Q / DEF 14A | Until superseded by a newer filing (check EDGAR for filings after `fetched_at`) | Filings are immutable; only supersession matters |
-| Earnings call transcript | Until the next earnings date | Same — immutable once published |
-| 10-year financial history | 90 days, unless an earnings report landed since `fetched_at` | Changes only on new reports |
-| Current price + multiples | **Never reuse across sessions** — re-fetch every run | Verdict math anchors on current price |
-| Analyst consensus / earnings-revision momentum | 7 days | Revisions move weekly; momentum is the point |
-| Peer list | 180 days | Competitive set changes slowly |
-| Insider Form 4 activity | 30 days | New filings arrive continuously |
-
-Record in the manifest which artifacts were reused vs freshly fetched (`"reused_from": "<prior fetched_at>"`); the final report's Data Coverage section must disclose any reuse.
 
 ---
 

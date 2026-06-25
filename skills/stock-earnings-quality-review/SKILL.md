@@ -38,13 +38,20 @@ A 20% gross margin is normal for retail and catastrophic for software. Identify 
 ### 4) Non-GAAP Discipline Gate
 Where the company reports both GAAP and non-GAAP, always check the reconciliation. If SBC, restructuring, or amortization is excluded from "Adjusted EBITDA", surface it — these are real costs.
 
+### 5) First-Hand Data + Bridge Gate (mandatory)
+Every reported financial figure you cite MUST come from the manifest's first-hand `financials.json` (SEC EDGAR XBRL, produced by `scripts/finlib/edgar.py`) or directly from the filing — **never** from a search snippet or an aggregator summary. If a figure is only available second-hand, tag it `second-hand` and lower the confidence of any conclusion resting on it.
+- **Segment → consolidated bridge required.** An operating-leverage / margin conclusion is not credible without showing the bridge: segment operating income → consolidated operating income → EBIT → FCF, reconciled to the filing. If `financials.json["gaps"]` lists `segment_operating_income` (EDGAR exposes it dimensionally, not flatly), read the 10-K **segment footnote** directly to build the bridge — do not infer segment economics from consolidated totals.
+
+### 6) Single-Period Gate (mandatory)
+A single quarter's YoY is polluted by one-off items, SBC vesting cadence, and depreciation-recognition timing. **Any operating-leverage or trend conclusion requires ≥4 quarters or a TTM basis** — a single-quarter "OpInc grew faster than revenue, so leverage is positive" claim will be FAILed by the orchestrator's 口径 lint gate (`scripts/finlib/lint.py`, `period_count >= 4`). Strengthens Gate 2.
+
 ## Workflow
 
-1. Load cash flow statement (10-K Item 8), income statement, and segment notes.
+1. Load first-hand `financials.json` (EDGAR XBRL) + cash flow statement (10-K Item 8), income statement, and **segment footnote**.
 2. Run filing-pattern-gated scan over the checklist; semantic-confirm hits.
-3. Pull 10-year financial-history from manifest if present; compute trends for OCF/Net Income ratio, FCF, gross margin, opex rates.
+3. Compute trends from ≥4 quarters / multi-year series: OCF/Net Income ratio, FCF (and the GAAP-vs-adjusted gap), gross margin, opex rates, capex/D&A. Build the segment→consolidated bridge.
 4. If business model = SaaS / subscription, run the SaaS sub-checklist (items EQ-06 + EQ-07).
-5. Emit Findings with severity + numerical evidence (don't say "margin declining" without a number).
+5. Emit Findings with severity + numerical evidence (don't say "margin declining" without a number), each citing its `financials.json` source tag.
 
 ## Filing-Pattern-Gated Execution Protocol
 
@@ -58,7 +65,7 @@ Where the company reports both GAAP and non-GAAP, always check the reconciliatio
 6. Report only items where the numbers actually violate the rubric.
 7. Include `Filing pre-scan: X/Y items hit, Z confirmed as findings`.
 
-## Earnings Quality Checklist (14 Items)
+## Earnings Quality Checklist (15 Items)
 
 | ID | Item | Filing Section | Threshold / Trigger |
 |---|---|---|---|
@@ -76,6 +83,7 @@ Where the company reports both GAAP and non-GAAP, always check the reconciliatio
 | EQ-12 | Sales & Marketing rate trend | Income segment | Flag if S&M / Revenue rising while revenue growth slowing (CAC inflation) |
 | EQ-13 | R&D rate + SBC treatment in non-GAAP | Income + non-GAAP reconciliation | Flag if SBC > 15% of revenue AND excluded from Adjusted EBITDA |
 | EQ-14 | One-time-item frequency (restructuring, write-downs) | Income statement "Special items" 5-year count | Flag if "one-time" items appear in 3+ of last 5 years (i.e., they're recurring) |
+| EQ-15 | Segment margin & mix-shift | Segment footnote: operating income + revenue BY segment | Flag if a segment growing >5pp faster/slower than core carries a structurally different margin AND the blended-margin trend is mix-driven, not efficiency-driven |
 
 ### Severity Rubric
 
@@ -126,8 +134,8 @@ Notable positives: OCF/NI = 1.05 (3-year avg); FCF margin 28% and stable.
 
 ## Load References Selectively
 
-- `references/earnings-quality-patterns.md` — load when interpreting OCF/NI gaps, capex classification, or SaaS-specific metrics; contains worked examples, sector-specific margin benchmarks, and the Magic Number / CAC-payback formulae.
+- `references/earnings-quality-patterns.md` — load when interpreting OCF/NI gaps, capex classification, SaaS-specific metrics, or segment-margin mix-shift (EQ-15); contains worked examples, sector-specific margin benchmarks, the Magic Number / CAC-payback formulae, and the blended-margin mix-shift decomposition.
 
 ## Review Discipline
 
-You are the most-loaded worker (14 checks). Discipline: numbers in every Finding; suppress items you cannot quantify. Orchestrator weights High-severity items heavily — false High findings damage the verdict more than missed Medium findings.
+You are the most-loaded worker (15 checks). Discipline: numbers in every Finding; suppress items you cannot quantify. Orchestrator weights High-severity items heavily — false High findings damage the verdict more than missed Medium findings.

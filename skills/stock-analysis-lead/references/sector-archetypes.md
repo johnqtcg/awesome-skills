@@ -14,7 +14,19 @@ If a company spans two archetypes (e.g., a SaaS company with a mature cash-cow s
 
 ---
 
-## The Seven Archetypes
+## Analytical Addendum — per-archetype mandatory depth (not just thresholds)
+
+Tuning thresholds (revenue-growth ≥X%, Net Debt/EBITDA ≤Y×) makes scoring *fair* across archetypes, but it does not make the analysis *deep*. A payments specialist knows to look for client incentives and cross-border yield; a generalist running the same 10-item checklist does not. So each archetype below carries an **Analytical Addendum** with three fields the orchestrator MUST push into the workers (not leave optional):
+
+- **`mandatory_drivers`** — how revenue/earnings must be decomposed for THIS archetype (e.g. payment network: GDV × yield, split domestic vs cross-border). The valuation `model.json` should use the `revenue_bridge` (see `valuation-methods.md`) to encode these, so the Bear case is derived, not hand-filled.
+- **`mandatory_line_items`** — archetype-specific income-statement items a generalist read misses (e.g. client incentives / contra-revenue). These promote the matching worker check (e.g. BUS-11, EQ-15) from optional to **required** for this archetype.
+- **`specialist_checks`** — the analyses a sector specialist always runs.
+
+This is the upgrade from "generalist coverage" to "generalist coverage + sector depth." When the orchestrator classifies the archetype (Step 1.5c), it loads this addendum and passes the mandatory items to the relevant workers in the dispatch prompt; the workers treat them as required, and the synthesis flags any that came back `Suppressed` without justification.
+
+---
+
+## The Eight Archetypes
 
 ### 1. High-Growth SaaS / Software
 
@@ -41,6 +53,11 @@ If a company spans two archetypes (e.g., a SaaS company with a mature cash-cow s
 - EV/FCF: 20–35× typical; <15× cheap; >40× expensive
 - Forward P/E: 25–50× typical; <20× cheap; >55× expensive
 - EV/Sales: 6–15× typical
+
+**Analytical Addendum**:
+- `mandatory_drivers`: ARR (or seats × ARPU); net-new ARR = gross-new − churn; subscription vs services split.
+- `mandatory_line_items`: SBC (a real cost — never silently excluded from "adjusted"); deferred revenue / RPO; capitalized software.
+- `specialist_checks`: NRR/GRR (EQ-06), Magic Number / CAC payback (EQ-07), SBC dilution net of buybacks (EQ-13).
 
 ---
 
@@ -70,6 +87,11 @@ If a company spans two archetypes (e.g., a SaaS company with a mature cash-cow s
 - Forward P/E: 18–25× typical; <16× cheap; >28× expensive
 - Dividend yield 2.5–4% acts as floor
 
+**Analytical Addendum**:
+- `mandatory_drivers`: volume × price/mix; organic vs FX vs M&A decomposition (BUS-06).
+- `mandatory_line_items`: trade spend / promotional allowances (contra-revenue → BUS-11); dividend + buyback.
+- `specialist_checks`: dividend coverage (payout / FCF), pricing power across the cycle (margin stability), price-vs-volume split of growth.
+
 ---
 
 ### 3. Hyperscaler / Mega-Cap Tech Platform
@@ -96,6 +118,11 @@ If a company spans two archetypes (e.g., a SaaS company with a mature cash-cow s
 - EV/FCF: 18–28× typical; market-cap weighted
 - Forward P/E: 20–32× typical
 - Use SOTP for multi-segment cases (separate values for AWS vs retail, etc.)
+
+**Analytical Addendum**:
+- `mandatory_drivers`: per-segment revenue (cloud vs ads vs devices) with its own growth; capex→revenue lag.
+- `mandatory_line_items`: SBC; capex/D&A (expansion vs maintenance); segment operating income (read the segment footnote).
+- `specialist_checks`: segment margin & mix-shift (EQ-15), SOTP, AI-capex ROI (dollars vs expected revenue stream).
 
 ---
 
@@ -126,6 +153,11 @@ If a company spans two archetypes (e.g., a SaaS company with a mature cash-cow s
 - Dividend yield 3–5%
 - For utilities: P/Book vs allowed-ROE matters more than P/E
 
+**Analytical Addendum**:
+- `mandatory_drivers`: rate base × allowed ROE (utilities) or backlog × win-rate × margin (industrials).
+- `mandatory_line_items`: maintenance vs growth capex; regulated vs unregulated revenue; debt maturity ladder.
+- `specialist_checks`: FCF after maintenance capex, rate-case outcomes, refinancing/interest-coverage at current rates.
+
 ---
 
 ### 5. Cyclical (Materials, Auto, Semiconductors, Travel)
@@ -152,6 +184,11 @@ If a company spans two archetypes (e.g., a SaaS company with a mature cash-cow s
 - EV/EBITDA mid-cycle: 6–10×
 - P/Book: useful floor for asset-heavy cyclicals
 - **Buy near trough, sell near peak** — multiple compresses at trough but earnings power expands
+
+**Analytical Addendum**:
+- `mandatory_drivers`: volume × price at MID-cycle (not current); explicit cycle-stage call.
+- `mandatory_line_items`: inventory / DSO; trough vs peak vs mid-cycle margin; net debt at peak leverage.
+- `specialist_checks`: cycle-normalized EPS, survive-the-trough test (peak Net Debt/EBITDA ≤1×), low-cost-producer position.
 
 ---
 
@@ -180,6 +217,11 @@ If a company spans two archetypes (e.g., a SaaS company with a mature cash-cow s
 - Forward P/E: 9–14× banks; 10–16× insurers; 18–28× asset managers
 - **NOT EV/FCF** — financials don't have meaningful FCF in conventional sense
 
+**Analytical Addendum**:
+- `mandatory_drivers`: NII = earning assets × NIM (banks); premiums × (1 − combined ratio) (P&C); fee vs spread income split.
+- `mandatory_line_items`: loan-loss provisions / reserves; CET1; off-balance-sheet exposure.
+- `specialist_checks`: ROTCE, reserve coverage (allowance/NPL), efficiency ratio, credit discipline through cycle, P/TBV.
+
 ---
 
 ### 7. REIT (Real Estate Investment Trust)
@@ -207,6 +249,43 @@ If a company spans two archetypes (e.g., a SaaS company with a mature cash-cow s
 - Dividend yield: 3–5% high-quality; 5–8% mid-tier; > 8% distressed
 - **NAV (Net Asset Value)** comparison — discount to NAV = buy signal at quality REITs
 - Cap rate analysis vs comparables
+
+**Analytical Addendum**:
+- `mandatory_drivers`: same-store NOI growth (occupancy × rent) + external/acquisition growth, split.
+- `mandatory_line_items`: AFFO (capex-adjusted FFO); straight-line rent; development pipeline; debt maturity ladder.
+- `specialist_checks`: AFFO payout coverage, occupancy vs benchmark, NAV / cap-rate, weighted debt maturity.
+
+---
+
+### 8. Payment Network / Card Scheme / Transaction Processor
+
+**Identifiers**:
+- Revenue is a **yield (take-rate) on payment volume** (GDV / TPV), not a product price
+- Asset-light (capex < 5% of revenue), very high margins, reports **net revenue** (gross − client incentives)
+- Faster growth than a mature staple (often 10–18%); two-sided network
+- Examples: MA, V, AXP (network side), PYPL, FI, GPN, FISV-style processors
+
+**Good-Company Thresholds** (network-type — do NOT use mature-staple ≥4% growth, which under-rates them):
+1. Net-revenue growth ≥ 8%; WEAK 5–8%; FAIL <5%
+2. Operating margin very high (≥ 40% net); WEAK 30–40%; FAIL <30%
+3. Operating leverage positive (scale economics); WEAK flat; FAIL negative
+4. FCF/Revenue ≥ 35% and growing; WEAK 25–35%; FAIL <25%
+5. **VAS / value-added-services growth + buyback coverage of SBC** replaces NRR
+6. Volume share rising or stable vs the other network (relative growth vs Visa/MA)
+7. Net Debt/EBITDA ≤ 2–3× (asset-light, can carry some); FAIL >3.5×
+8. Management: capital-allocation discipline, incentive-contract win/loss track record
+9. Moat: two-sided network effect + proprietary data (typically the strongest moat class)
+10. TAM: cash displacement + new flows (B2B, cross-border, disbursements) + VAS
+
+**Valuation Norms**:
+- Forward P/E: 22–35× typical; <20× cheap; >38× expensive
+- EV/FCF: 25–35× typical
+- EV/Sales: high (10–18×) — the asset-light, high-margin model sustains it
+
+**Analytical Addendum** (this is the archetype the Mastercard review exposed as missing):
+- `mandatory_drivers`: **GDV/TPV × yield**, split **domestic vs cross-border** (cross-border is the highest-yield, most-cyclical slice); switched-transaction count; **VAS modeled as its own stream**. Encode as a `revenue_bridge` (segments + volume×yield) so the Bear case is derived from a volume shock, not hand-filled.
+- `mandatory_line_items`: **client incentives / rebates = contra-revenue (gross→net bridge) — BUS-11 is REQUIRED here, not optional**; VAS revenue and its structurally different (often lower-gross) margin.
+- `specialist_checks`: BUS-11 (contra-revenue / incentive ratio + trend), EQ-15 (VAS margin mix-shift on the blended margin), cross-border-yield sensitivity, take-rate computed on the correct (gross vs net) denominator.
 
 ---
 

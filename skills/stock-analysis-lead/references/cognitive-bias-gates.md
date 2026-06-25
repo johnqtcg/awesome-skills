@@ -1,8 +1,8 @@
 # Cognitive-Bias Gates
 
-Load during Step 5e. Run 4 binary self-check questions. Document each as PASS or FLAG with rationale.
+Load during Step 5e. Run 6 binary self-check questions. Document each as PASS or FLAG with rationale.
 
-The source document's end section enumerates six common cognitive biases. The four most relevant to the verdict step are below — these are the failure modes that turn a sound analysis into a bad recommendation.
+Gates 1–4 are the four cognitive biases from the source document most relevant to the verdict step — the failure modes that turn a sound analysis into a bad recommendation. Gate 5 adds information-edge honesty (no faked private-information certainty); Gate 6 adds the mirror check — no hiding behind consensus with zero articulated edge.
 
 ---
 
@@ -96,7 +96,7 @@ Story bias: FLAG — initial draft referenced "AI tailwinds" without sizing. Rep
 
 ### How confirmation bias manifests
 
-- All 6 workers report mostly positive Findings
+- All 5 workers report mostly positive Findings
 - The Findings that surface skew toward confirming the prior view
 - "Risks I Accept" reads like marketing copy ("currency headwinds", "competition") rather than substantive risks
 
@@ -170,6 +170,60 @@ Overconfidence: FLAG — my Weighted Expected Price is $260 vs consensus median 
 
 ---
 
+## Gate 5 — Information-Edge Honesty
+
+Full doctrine in `references/information-edge.md`. The single most dangerous form of false confidence is implying analyst-grade conviction on a thesis whose only inputs are public.
+
+### How it manifests
+- Conviction language ("high conviction", "strong buy with confidence") on a thesis built entirely from public filings + sell-side consensus.
+- Implying a depth/edge the framework structurally lacks: no channel checks, no expert-network calls, no IR/management access, no first-hand supply-chain datapoints.
+
+### PASS condition
+- The report carries the mandatory disclosure: *本分析基于公开披露 + 卖方一致预期,无渠道调研/专家网络/IR 直连/一手供应链 datapoint;价值在流程、广度与校准,不在信息优势。*
+- Conviction is capped: "High" is reserved for unambiguous *valuation/process* dislocations (the math is clear), never for forward judgments a better-informed human could out-call. When in doubt, one notch lower.
+
+### FLAG condition
+- Any "analyst-grade" / "high-conviction" framing whose edge would actually require private information. Downgrade conviction and state why.
+
+### What to write in the output
+```
+Information edge: PASS — public-info-only synthesis; disclosure carried; conviction Medium (edge is the valuation dislocation + cross-sectional rank, not private datapoints).
+```
+
+---
+
+## Gate 6 — Consensus Clone (no edge)
+
+**Question**: Is my verdict just the consensus, with no articulated variant view? (The mirror of Gate 4: Gate 4 catches being *too far above* consensus on a narrative; Gate 6 catches being *indistinguishable from* consensus while implying the report adds insight.)
+
+Full doctrine in `references/information-edge.md` §1b. A report whose verdict direction matches the sell-side majority and whose target sits on top of the consensus median, with no falsifiable differentiated claim anywhere, is a **consensus clone** — well-organized, well-cited, and adding nothing the reader didn't already have.
+
+### How to detect
+- Same verdict DIRECTION as the sell-side majority (e.g., Buy among mostly Buys), AND
+- `|weighted expected price − consensus median| / consensus median ≤ 10%`, AND
+- the report contains **no explicit, falsifiable 变量观点 / Variant Perception** statement (thesis, number, or probability where you specifically differ).
+
+### PASS condition
+The report carries an explicit, falsifiable Variant Perception (per information-edge.md §1b) — a specific way it differs from consensus on thesis, a number, or probability — OR it plainly declares *"变量观点：无 — consensus-aligned; the value here is independent confirmation, not a differentiated call."* Either is acceptable; honesty is the bar.
+
+### FLAG condition
+Verdict ≈ consensus AND no variant statement (or only a generic one like "we're more disciplined"). **Antidote**: add one specific, checkable claim where your view diverges from the crowd, or explicitly label the report a consensus restatement. A consensus-confirming call can be correct — but it must be **declared**, not disguised as insight.
+
+### What to write in the output
+```
+Consensus clone: PASS — variant view stated: market prices VAS as cyclical services (reverse-DCF implies ~8% blended CAGR); I treat VAS as a structural re-rating item growing ~2× the network — falsified if VAS organic growth drops below the network's for 2 quarters.
+```
+or
+```
+Consensus clone: FLAG → resolved — initial verdict was Buy at ~consensus target with no differentiation. Added explicit variant view on incentive-ratio trajectory (I model incentives rising to 36% of gross vs consensus ~33%), which is what makes my Base net-revenue CAGR ~1.5pp below the Street.
+```
+or
+```
+Consensus clone: PASS — 变量观点：无. Verdict is consensus-aligned (Buy, target within 6% of median); value is the independent, first-hand-data confirmation of the bull case, not a differentiated call. Stated plainly, not dressed as edge.
+```
+
+---
+
 ## Bonus — Reverse Sanity Check
 
 If all 4 gates pass without flags, ask one more question: **Am I being too confident about the gates themselves?**
@@ -192,6 +246,8 @@ Each FLAG reduces conviction. Mapping:
 | 3+ flags | Conviction = Low; consider downgrading verdict from Buy → Watch |
 
 A "Buy" with Low conviction is fine — it tells the user the position size should be modest. The output should not bury the conviction tag; surface it next to the verdict.
+
+The mapping above counts **Gates 1–4** (the bias gates). **Gates 5 and 6 are honesty/edge gates**: a FLAG there is resolved by *adding the missing disclosure* (the information-edge statement, or the variant-perception statement), not by cutting a conviction notch. They do not, by themselves, move conviction — they ensure the report is honest about what kind of call it is.
 
 ---
 

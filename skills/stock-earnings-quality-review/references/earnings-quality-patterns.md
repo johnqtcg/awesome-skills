@@ -145,6 +145,23 @@ Operating leverage = (% change in operating income) / (% change in revenue).
 
 ---
 
+## Segment Margin & Mix-Shift (EQ-15)
+
+A consolidated margin trend can lie. When a company has a fast-growing segment whose margin is structurally different from the core, the **blended margin moves because of mix, not because the business got more or less efficient**. Reading only the consolidated line misses this — and misses the thesis when the fast segment is the real story.
+
+**When to run it:** the company reports ≥2 segments, and one is growing materially faster (>5pp) than the core. Read the **segment footnote** (operating income + revenue by segment) directly — do not infer segment economics from consolidated totals (see Gate 5).
+
+**What to compute:**
+1. Segment revenue **growth** and segment **operating margin**, for each segment, over ≥3 years.
+2. Decompose the consolidated-margin change into **mix effect** (weights shifting toward a higher/lower-margin segment) vs **rate effect** (each segment's own margin moving). A first-order split: Δblended ≈ Σ(Δweightᵢ × marginᵢ) [mix] + Σ(weightᵢ × Δmarginᵢ) [rate].
+3. State whether the reported margin trend is mix-driven or efficiency-driven, and **project the blended-margin path** if the fast segment keeps gaining share.
+
+**Worked example (the pattern the MA report missed):** A payment-network-style company where a value-added-services (VAS) segment grows ~20% vs ~12% core, but VAS carries a structurally **lower** gross margin than the core network. As VAS share of revenue climbs (e.g. 38% → 41%), the blended margin is **dragged down by mix even if each segment's own margin is flat or rising**. A naive "operating margin expanded, so the business is more efficient" read is wrong — the right finding is "core margin expanded X pp, but mix shift toward VAS offset Y pp, netting +Z pp; if VAS keeps gaining share, blended margin compresses absent core re-rating." The inverse (a fast-growing *higher*-margin segment lifting the blend) is equally a mix story, not an efficiency story.
+
+Flag severity Medium normally; High when the mix shift materially changes the forward-margin trajectory the valuation depends on.
+
+---
+
 ## Three-Cost-Rate Discipline
 
 S&M, R&D, G&A as a % of revenue. Healthy trajectory:

@@ -36,6 +36,9 @@ Read the "Commitments and Contingencies" footnote in every review. Operating lea
 ### 4) Goodwill-History Gate
 A single goodwill impairment is a yellow flag; multiple is a red flag indicating chronic overpayment in M&A. Check 5-year impairment history, not just current year.
 
+### 5) First-Hand Data Gate (mandatory)
+Cite debt, cash, lease, pension, goodwill, AR and contract-liability figures from the manifest's first-hand `financials.json` (SEC EDGAR XBRL, via `scripts/finlib/edgar.py`) or directly from the filing — never from a search snippet. Any leverage ratio you state (Net Debt/EBITDA etc.) must use the named-input formulas in `scripts/finlib/ratios.py` so it survives the orchestrator's 口径 lint gate; in particular **EV-based metrics require `total_debt` and `cash_and_sti`** (a net-cash company has EV below market cap). Tag any second-hand figure as such and lower confidence accordingly.
+
 ## Workflow
 
 1. Load 10-Q balance sheet and 10-K notes (Commitments, Goodwill, Pension).

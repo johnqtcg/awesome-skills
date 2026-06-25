@@ -67,7 +67,7 @@ Some red flags are "presence of A without B" (e.g., "AI revenue" mentioned witho
 - AND NOT on B (definition / methodology / breakdown absent in the same section)
 - → Confirmed Finding
 
-## Business Checklist (10 Items)
+## Business Checklist (11 Items)
 
 | ID | Item | Filing Pattern | Severity Bias |
 |---|---|---|---|
@@ -81,6 +81,7 @@ Some red flags are "presence of A without B" (e.g., "AI revenue" mentioned witho
 | BUS-08 | Material adjusted-metric usage and definition consistency | Earnings releases + 10-K "Non-GAAP reconciliation"; keywords `"Adjusted EBITDA"`, `"Non-GAAP"` | High if SBC excluded from Adjusted EBITDA |
 | BUS-09 | Narrative buckets without defined methodology | Compound pattern: `"AI revenue"` OR `"<theme> revenue"` AND NOT (methodology paragraph in same section) | High if material % of total |
 | BUS-10 | Information-tier discipline — what is fact vs management-defined | Cross-check: any number quoted by IR but absent from filings | High if material |
+| BUS-11 | Contra-revenue / client incentives — the gross→net bridge | 10-K revenue-recognition note + MD&A; keywords `"client incentives"`, `"rebates"`, `"incentives"`, `"contra-revenue"`, `"net revenue"` | **High for network/platform/marketplace**; Med otherwise |
 
 ### Severity Rubric
 
@@ -136,7 +137,7 @@ Do not fabricate marginal findings to look thorough. Suppression discipline matt
 
 ## Load References Selectively
 
-- `references/business-model-patterns.md` — load when classifying business-model archetype (BUS-05) or when SaaS-specific subscriptions need NRR/ARR awareness; covers high-margin-low-turnover vs low-margin-high-turnover taxonomies and revenue-disaggregation patterns.
+- `references/business-model-patterns.md` — load when classifying business-model archetype (BUS-05), when SaaS-specific subscriptions need NRR/ARR awareness, or when building the contra-revenue / gross→net bridge (BUS-11); covers high-margin-low-turnover vs low-margin-high-turnover taxonomies, revenue-disaggregation patterns, and the client-incentives bridge.
 
 ## Review Discipline
 

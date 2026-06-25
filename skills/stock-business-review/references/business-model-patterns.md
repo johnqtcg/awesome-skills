@@ -63,6 +63,23 @@ Mismatches between segments here and what the IR deck shows are a signal — com
 
 ---
 
+## Contra-Revenue / Client Incentives — the Gross-to-Net Bridge (BUS-11)
+
+For network, platform, and marketplace businesses (and many consumer/distribution models), **gross billings are not net revenue**. A large contra-revenue line — variously "client incentives", "rebates", "partner incentives", "customer incentives", "co-brand payments", or "marketing development funds" — is netted against gross revenue before the top line you see. Reading only net revenue misses one of the most important company-specific dynamics, and is the single clearest dividing line between someone who read the income statement summary and someone who read the 10-K.
+
+**Why it matters most for payment networks (the canonical case):** Mastercard and Visa report **net revenue** = gross revenue − client incentives. Incentives are the principal battleground for winning issuer / co-brand / merchant contracts; they routinely run **a third or more of gross revenue** and grow as a contra-line. Net-revenue growth is therefore the *difference* of two large, faster-growing numbers — gross drivers up, incentives up — so a small change in the incentive ratio swings reported growth materially. The same pattern appears in marketplaces (seller rebates), consumer brands (trade spend / slotting), and gross-vs-net travel/ad intermediaries.
+
+**Where to find it:** 10-K revenue-recognition note (ASC 606) and MD&A — search `"client incentives"`, `"rebates"`, `"incentives"`, `"contra-revenue"`, and any "Gross revenue / Rebates and incentives / Net revenue" presentation. The cash-flow and segment notes sometimes disclose the gross figure separately.
+
+**What to compute and report (BUS-11):**
+- Incentives as **% of GROSS revenue**, and its **trend** (3+ years). A rising ratio is a margin-of-the-business signal even when net revenue still grows.
+- **Incentive growth vs net-revenue growth** — if incentives grow faster than net revenue for multiple years, pricing/competitive pressure is building beneath a healthy-looking top line.
+- The **take-rate trap**: confirm whether a quoted "take rate" / yield is computed on **gross** or **net** — they are different denominators, and analysts routinely conflate them.
+
+If the company has no material contra-revenue line (most pure-product or pure-subscription businesses), mark BUS-11 `Suppressed — no material contra-revenue line` and move on. Do not invent one.
+
+---
+
 ## SaaS Recognition Patterns
 
 If you see these signals in the 10-K, the business is SaaS / subscription and the earnings-quality worker should run its SaaS sub-checklist (EQ-06 NRR, EQ-07 Magic Number):

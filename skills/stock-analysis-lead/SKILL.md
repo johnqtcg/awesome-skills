@@ -70,7 +70,7 @@ Extract the ticker from the user's prompt. Validate:
    A-shares, HK-shares, and 20-F-only foreign private issuers are out of scope.
    ```
 5. Identify the question type:
-   - **Full workup**: "analyze X", "should I buy X" → all 6 workers
+   - **Full workup**: "analyze X", "should I buy X" → all 5 workers
    - **Valuation check**: "is X expensive", "what's a fair price for X" → 4 fundamentals workers + heavy valuation synthesis
    - **Specific concern**: "is X's balance sheet OK" → target the relevant worker; other workers still run for context but with lighter weighting
 
@@ -91,7 +91,7 @@ Default to Standard unless the prompt explicitly signals Lite or Strict.
 **Before proceeding to data acquisition**, check the verdict log for any prior analysis of this ticker:
 
 ```bash
-LOG_FILE=~/.claude/stock-analysis/verdicts.jsonl
+LOG_FILE=~/.claude/projects/-Users-john-awesome-skills/memory/stock-analysis-verdicts.jsonl
 test -f "$LOG_FILE" && grep "\"ticker\": \"<TICKER>\"" "$LOG_FILE" | tail -3 | jq
 ```
 
@@ -122,18 +122,28 @@ See `references/verdict-log-protocol.md` for the full format and review procedur
 - **Cyclical** (materials, auto, semiconductors, travel)
 - **Bank / Insurance / Asset Manager (Financials)**
 - **REIT**
+- **Payment Network / Card Scheme / Transaction Processor** (MA, V, AXP-network, PYPL, processors)
 
 Classification rules (see `references/sector-archetypes.md` for full taxonomy):
 - Look at revenue mix, gross margin, capex intensity, and dominant business model.
 - If a company is materially multi-archetype (e.g., AMZN = Hyperscaler + Retail), pick the dominant by revenue (>60%) but flag the secondary archetype and run a secondary score on that segment in Strict mode.
 
-**Apply only the threshold set from the matching archetype** in the Good-Company checklist (Step 5b) and the valuation norms (Step 5c). The prior version's SaaS-default thresholds (rev growth ≥15%, NRR>115%, Net Debt/EBITDA <2) systematically under-rated mature cash cows, utilities, banks, REITs, and cyclicals — that bias is now fixed by sector-aware scoring.
+**Apply only the threshold set from the matching archetype** in the Good-Company checklist (Step 5b) and the valuation norms (Step 5c). **Also load the archetype's Analytical Addendum and pass its `mandatory_line_items` + `specialist_checks` into the worker dispatch (Step 4) as REQUIRED checks** — this turns generalist coverage into sector depth (e.g., payment network → BUS-11 client incentives + EQ-15 VAS mix-shift become mandatory, and the valuation model uses a `revenue_bridge`). The prior version's SaaS-default thresholds (rev growth ≥15%, NRR>115%, Net Debt/EBITDA <2) systematically under-rated mature cash cows, utilities, banks, REITs, and cyclicals — that bias is now fixed by sector-aware scoring.
 
 Document the archetype choice in the final report's Execution Status section.
 
 ### Step 2: Data Acquisition
 
 Fetch the standard data package before dispatching workers. Workers receive paths to local copies, not URLs.
+
+**FIRST-HAND DATA RULE (mandatory).** Before falling back to any aggregator (stockanalysis.com, macrotrends, etc.), pull structured financials directly from SEC EDGAR's XBRL `companyfacts` API with the bundled pipeline:
+
+```bash
+python3 scripts/finlib/edgar.py fetch --ticker <TICKER> --out $TMPDIR/stock-analysis-<ticker>/financials.json
+# offline / cached companyfacts: python3 scripts/finlib/edgar.py parse --facts <companyfacts.json> --out financials.json
+```
+
+`financials.json` carries, for **every reported figure, its source XBRL tag + period + form** (revenue, operating income, OCF, capex, D&A, SBC, accounts receivable + allowance, deferred revenue, RPO, shares, debt, cash). Add it to the manifest as `financials`. Aggregator sites are **fallback only**; any reported financial number that came from a search snippet (not from `financials.json` or the filing) must be tagged `second-hand` in the manifest. Concepts EDGAR does not expose as a flat value — notably **segment operating income** (dimensional) — land in `financials.json["gaps"]`; workers must then read the relevant 10-K **footnote directly**, never infer them from consolidated totals.
 
 | Artifact | Primary source | Tool | Required for | Fallback |
 |---|---|---|---|---|
@@ -168,7 +178,7 @@ Write all fetched artifacts to a scratch directory (e.g., `$TMPDIR/stock-analysi
 }
 ```
 
-If any artifact is missing, list it in `missing` with reason. Workers receive the manifest; they self-skip when their required data is in `missing`. Reuse previously fetched artifacts only within the freshness windows in `references/data-acquisition-playbook.md` § Data Freshness Policy — filings stay valid until superseded; price, consensus, and revision data must be re-fetched every session.
+If any artifact is missing, list it in `missing` with reason. Workers receive the manifest; they self-skip when their required data is in `missing`.
 
 ### Step 3: Triage
 
@@ -197,7 +207,7 @@ Cross-check the manifest. If a worker's required data is in `missing`:
 #### Phase C: Question-driven priority
 
 If the user's question targets a specific dimension (e.g., "is the balance sheet safe"):
-- Dispatch all 6 as usual
+- Dispatch all 5 as usual
 - In Step 5 synthesis, weight the targeted dimension's Findings more heavily; show the user explicitly why other dimensions matter for the full picture
 
 #### Phase D: Sanity check — fabricated tickers
@@ -217,17 +227,11 @@ Each Agent invocation receives a prompt with:
 You are <worker-name>. Load your skill via the skills: field.
 Ticker: <TICKER>
 Depth: <Lite|Standard|Strict>
+Archetype: <archetype> — apply its sector-archetypes.md Analytical Addendum (mandatory_line_items + specialist_checks) as REQUIRED, not optional.
 Manifest: <path to data-manifest.json>
 Filings available at: <scratch-dir>
 
 Return only structured Findings per your skill's Output Format.
-End your reply with one fenced json block matching the contract in
-references/findings-schema.md:
-{"worker": "<agent-name>", "prefix": "<BUS|EQ|BS|MGT|IND|P>",
- "status": "OK | DEGRADED(<reason>) | SKIPPED(<reason>)",
- "findings": [{"id": "<PREFIX>-NN", "severity": "High|Medium|Low",
-   "title": "...", "citation": "...", "evidence": "...", "implication": "..."}],
- "positives": ["..."], "data_gaps": ["..."]}
 Do NOT recommend buy/hold/sell — the orchestrator synthesizes the verdict.
 ```
 
@@ -239,7 +243,6 @@ This is the orchestrator's most important step. Do not delegate it to a worker.
 
 #### 5a. Consolidate Worker Findings
 
-- Parse each worker's trailing Findings JSON block (contract: `references/findings-schema.md`). If a worker omitted the block, fall back to its prose Findings and flag the omission in the Data Coverage section.
 - Collect Findings from all 6 workers.
 - Deduplicate by Finding meaning (not just by ID). Cross-worker overlap is fine and often correct.
 - Assign unified IDs `INV-NNN` while preserving worker prefixes (BUS, EQ, BS, MGT, IND, **P** for peer-comparison).
@@ -267,6 +270,8 @@ Scoring: PASS = 7+, "good company"; PASS = 9+, "high quality". Same scoring rubr
 **Required output**: document the archetype + threshold-set used so the score is auditable. Without this, the score is uninterpretable.
 
 #### 5c. Valuation (from `references/valuation-methods.md` + sector-archetype norms)
+
+**Build a driver model, don't hand-pick three P/Es.** Author a `model.json` (drivers each tagged `source: data|assumption`; anchors — revenue_0, op_margin_start, da_pct, capex_pct — fed from `financials.json`) and run `python3 scripts/finlib/valuation.py run --model model.json`. It outputs DCF, **reverse-DCF (what growth the current price implies)**, the three scenarios as one model's parameter sets, a **derived** terminal multiple (Gordon `(1+g)/(WACC−g)`, never typed), and a sensitivity table. **The report MUST disclose WACC, terminal g, reverse-DCF implied growth, and the sensitivity table** (valuation-methods.md § Mandatory disclosure), and reconcile DCF intrinsic value against the scenario target when they diverge >10% — a point estimate without these is illustrative, not analytical. If any anchor is an assumption it prints `grounding: LOW`. See `references/valuation-methods.md`.
 
 Run four methods in order. **Use archetype-specific valuation norms** (P/E ranges, EV/FCF ranges, dividend yield benchmarks) from `references/sector-archetypes.md` — NOT generic SaaS norms:
 
@@ -328,14 +333,20 @@ Compute:
 
 Note: the hard thresholds (50%/0.75, 30%/0.70, 15%/0.80) are themselves uncalibrated. They are the framework's current best guess; the verdict log enables future recalibration based on observed outcome distribution.
 
+#### 5d-bis. 口径 / Calculation Lint Gate (MANDATORY — deterministic)
+
+Do not trust LLM arithmetic or labels. Emit every multiple/ratio/margin to `metrics.json` (per entry: `id`, `claimed_label`, `stated_value`, `inputs`, `tags{basis,period,period_count}`, `is_trend_claim`), then run `python3 scripts/finlib/lint.py --metrics $TMPDIR/stock-analysis-<ticker>/metrics.json`. It (via `scripts/finlib/ratios.py`) catches: **label vs formula** (an `ev_*` multiple without `total_debt`+`cash_and_sti` is the P/FCF-as-EV/FCF error; EV = mktcap+debt−cash) · **internal consistency** (stated vs recomputed-from-inputs >2% → catches "capex/rev 50%" when inputs give 67%) · **single-period** (`period_count<4` on a leverage/trend claim → FAIL; use ≥4Q or TTM) · **口径 tags** (mixing GAAP/non-GAAP/core, TTM/FY → WARN). **Any FAIL blocks the report** — fix it, or tag the value `second-hand/unverified` and lower the dependent conclusion's confidence. Feed `inputs` from `financials.json` so the recompute is meaningful.
+
 #### 5e. Cognitive-Bias Self-Check (from `references/cognitive-bias-gates.md`)
 
-Run 4 binary checks; document each as PASS or FLAG:
+Run 6 binary checks; document each as PASS or FLAG:
 
 1. **Anchoring**: Am I anchoring on past prices rather than intrinsic value? FLAG if "cheap" justification rests on historical price decline.
 2. **Story bias**: Have I quantified the narrative (revenue, time horizon, probability)? FLAG if "AI-beneficiary" or similar appears without numbers.
 3. **Confirmation**: Did at least one worker raise a substantive counter-thesis? FLAG if all workers agree without dissent.
 4. **Overconfidence**: Am I more bullish than current sell-side consensus by > 20%? If yes, FLAG and justify the divergence specifically.
+5. **Information edge**: this is public-information-only synthesis — no channel checks, IR access, or expert network. Carry the mandatory `信息优势声明` disclosure and cap conviction accordingly (no "analyst-grade" certainty on a public-only thesis). See `references/information-edge.md`.
+6. **Consensus clone**: is the verdict ≈ consensus (same direction AND weighted price within ±10% of median) with no falsifiable variant view? FLAG → add a 变量观点 / Variant Perception statement (what the market prices in · where I differ · what would prove me wrong), or explicitly declare the call consensus-aligned. See `references/information-edge.md` §1b.
 
 Any FLAG must be addressed in the final report — not buried.
 
@@ -361,12 +372,12 @@ This implements the source doc's Part 3 §4 "卖出三种情形" pattern —论�
 After committing the verdict, append one JSON Lines entry to:
 
 ```
-~/.claude/stock-analysis/verdicts.jsonl
+~/.claude/projects/-Users-john-awesome-skills/memory/stock-analysis-verdicts.jsonl
 ```
 
 The entry must include: ticker, company_name, verdict_date, verdict, conviction, current_price, target_base/bull/bear, weighted_expected_price, weighted_return_36mo, bear_to_current_ratio, horizon_months, archetype, good_company_score, key_bull_assumptions (3-5), key_bear_assumptions (3-5), invalidation_triggers, data_gaps_noted, cognitive_bias_flags, depth_mode, skill_version.
 
-Create the directory first if needed (`mkdir -p ~/.claude/stock-analysis`). Use atomic append (`>>` shell redirect or equivalent). After appending, validate the entry with this skill's `scripts/validate_verdict_log.py --last 1`; surface a warning if the write or validation failed.
+Use atomic append (`>>` shell redirect or equivalent). Confirm the write succeeded; surface a warning if it failed.
 
 This persistent log is the feedback mechanism — the next analysis on this ticker will read this entry in Step 1.5b and explicitly reckon with what assumptions played out.
 
@@ -382,7 +393,12 @@ Render in user's invocation language (Chinese labels if user spoke Chinese; Engl
 - Target price range: $X – $Y (Base: $Z)
 - Weighted expected return: __% over <horizon, default 36 months>
 - Conviction: <High/Medium/Low>
-- **Sector archetype**: <SaaS / Hyperscaler / Mature Cash Cow / Capital-Intensive / Cyclical / Financials / REIT>
+- **Sector archetype**: <SaaS / Hyperscaler / Mature Cash Cow / Capital-Intensive / Cyclical / Financials / REIT / Payment Network>
+
+## Variant Perception / 变量观点 (mandatory)
+- Market prices in / 市场当前定价: <reverse-DCF implied growth __% · consensus rating __ / median target $__>
+- Where I differ (falsifiable) / 我的差异化判断: <one specific thesis/number/probability claim — or "无: consensus-aligned, value is independent confirmation">
+- What would prove me wrong vs the crowd / 证伪点: <specific datapoint>
 
 ## Prior Verdict Tracking / 历史 verdict 跟踪 (if log shows past entry)
 - Prior verdict (<date>, <X months ago>): <verdict> at $<price>, target $<base>, Bull $<bull>, Bear $<bear>
@@ -399,8 +415,7 @@ Render in user's invocation language (Chinese labels if user spoke Chinese; Engl
 | Bull | __% | __% | __× | $__ | __% | base rate <X%> + assumption adj <±pp> + momentum adj <±pp>; disconfirming evidence: <citation> |
 | Base | __% | __% | __× | $__ | __% | residual |
 | Bear | __% | __% | __× | $__ | __% | base rate <X%> + assumption adj <±pp> + momentum adj <±pp>; confirming-of-Bull citation: <citation> |
-
-Calibration status: <N> prior verdicts resolved in log — probabilities are decision weights at 5pp granularity (±10pp uncertainty until ≥20 resolved verdicts), not calibrated estimates.
+- DCF disclosure (mandatory): WACC __% · terminal g __% · reverse-DCF implied growth __% (vs track-record __%) · sensitivity(revenue_cagr ±3pp): $__–$__. Base prob = residual. Reconcile DCF intrinsic vs target if >10% apart. A target without these is illustrative, not analytical.
 
 ## Earnings Revision Momentum / 卖方修正动量
 - Momentum bucket: <Strong Positive / Mild Positive / Mild Negative / Strong Negative>
@@ -418,7 +433,7 @@ Calibration status: <N> prior verdicts resolved in log — probabilities are dec
 (sorted by severity High → Medium → Low; dedup'd; capped per depth mode)
 
 ### [High|Medium|Low] Short Title
-- **ID**: `INV-NNN` (preserve worker prefix: BUS / EQ / BS / MGT / IND / P)
+- **ID**: `INV-NNN` (preserve worker prefix: BUS / EQ / BS / MGT / IND)
 - **Citation**: filing section
 - **Evidence**: from worker
 - **Implication**: from worker
@@ -441,9 +456,11 @@ Calibration status: <N> prior verdicts resolved in log — probabilities are dec
 - Story bias: <PASS|FLAG + rationale>
 - Confirmation: <PASS|FLAG + rationale>
 - Overconfidence: <PASS|FLAG + rationale>
+- Information edge: <PASS|FLAG + rationale>
+- Consensus clone / variant view: <PASS|FLAG + rationale>
 
 ## Verdict Log / 决策日志
-- Logged to: ~/.claude/stock-analysis/verdicts.jsonl
+- Logged to: ~/.claude/projects/-Users-john-awesome-skills/memory/stock-analysis-verdicts.jsonl
 - Entry timestamp: <ISO 8601>
 - Confirm: this verdict will be reviewed when ticker is re-analyzed
 ```
@@ -485,9 +502,8 @@ A degraded analysis with explicit gaps is more honest than a complete-looking an
 - `references/valuation-methods.md` — load during Step 5c for the multi-method valuation procedure including reverse-DCF.
 - `references/scenario-framework.md` — load during Step 5d for the Bull/Base/Bear structure.
 - `references/scenario-probability-calibration.md` — load during Step 5d for the calibrated probability assignment framework.
-- `references/cognitive-bias-gates.md` — load during Step 5e to run the 4 self-check questions.
-- `references/findings-schema.md` — the Findings JSON contract embedded in every dispatch prompt (Step 4) and parsed in Step 5a.
+- `references/cognitive-bias-gates.md` — load during Step 5e to run the 5 self-check questions; `references/information-edge.md` — the public-info honesty doctrine + the AI-advantaged edges (cross-section `scripts/finlib/crosssection.py`, monitoring `scripts/finlib/verdict_diff.py`).
 
 ## Review Discipline
 
-You are the editor of a six-analyst report. Your value is not in re-doing each analyst's work — it is in committing a verdict. The source doc's strongest message: leadership wants a recommendation backed by structure, not a literature review. Take a position. Name the risk you accept. Commit to invalidation conditions. The user will override your verdict, and that is fine — but they cannot override "it depends".
+You are the editor of a five-analyst report. Your value is not in re-doing each analyst's work — it is in committing a verdict. The source doc's strongest message: leadership wants a recommendation backed by structure, not a literature review. Take a position. Name the risk you accept. Commit to invalidation conditions. The user will override your verdict, and that is fine — but they cannot override "it depends".

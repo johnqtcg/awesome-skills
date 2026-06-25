@@ -19,7 +19,7 @@ Each scenario must have its probability anchored to one of these reference point
 
 What is the historical frequency that a company in this archetype, at this growth stage, achieved the Bull-scenario trajectory?
 
-Approximate base rates by archetype (data: industry analyst studies, academic finance literature; refine as data accumulates):
+Approximate base rates by archetype. **These are uncalibrated judgment priors, not measured frequencies** — a directional starting point informed by industry/academic studies, to be revised by the Calibration Loop (below) as the verdict log accumulates real outcomes. Do not present a probability built on them as if it were empirically derived; cite them as "archetype prior," not "base rate observed in data":
 
 | Archetype | Bull Achievement Base Rate | Bear Realization Base Rate |
 |---|---|---|
@@ -62,11 +62,12 @@ This is what the previous version's "adversarial test" should have done — requ
 
 ### Procedural Rules
 
-1. Start with the archetype base rate (Anchor 1) as the default Bull probability.
+1. Start with the archetype prior (Anchor 1) as the default Bull probability.
 2. Adjust downward for each independent assumption above 1 (Anchor 2).
 3. Cite disconfirming evidence and explain weight (Anchor 3).
-4. Base case is residual: Base = 100% − Bull − Bear.
-5. Bear is set similarly: archetype base rate, adjusted for independent failure conditions, with confirming-of-Bull evidence cited.
+4. Base case is **the residual**: Base = 100% − Bull − Bear. **Label it `(residual)` in the output** — it is a balancing figure, never an independently estimated probability. Presenting the residual as if it were derived from its own base rate is the "tell" of a probability dressed up as quantitative.
+5. Bear is set similarly: archetype prior, adjusted for independent failure conditions, with confirming-of-Bull evidence cited.
+6. **Earnings-revision momentum tilt** (from `earnings-revision-momentum.md`, applied in Step 5d) is the ONLY post-anchor adjustment: Mild ±2pp / Strong ±5pp on Bull and Bear. It is a judgmental tilt and MUST cite the revision evidence behind the bucket (e.g. "6 of 8 analysts raised NTM EPS; +3% 30-day revision"). Do not stack other ad-hoc ±pp nudges on top — base-rate prior + assumption-independence + one evidenced momentum tilt is auditable; a pile of unexplained ±pp is not.
 
 ### Probability Sum Constraints
 
@@ -125,17 +126,6 @@ But wait, we set Bull at 30% in the actual Adobe analysis. Why?
 The fact that we got to 30% Bull with three independent assumptions and a clearly-articulated disconfirming-evidence rebuttal means the probability should perhaps have been 22–25%, not 30%.
 
 **Lesson**: This framework would have lowered the Adobe Bull weight from 30% to ~23%, which would have moved the weighted expected price from $411 to maybe $385. Still a Buy, but more conservative — and more honest about the AI uncertainty.
-
----
-
-## Precision Discipline
-
-The ±5pp / ±2pp adjustments above are **tie-breaking heuristics that force directional consistency** — they are not measurements, and the archetype base rates are approximate starting points, not empirical frequencies. Do not let the arithmetic manufacture false authority:
-
-1. **Round final probabilities to the nearest 5pp.** Reporting "Bull 23%" implies a precision the framework does not have; "Bull 25%" is honest about granularity. Apply the adjustments first, round last.
-2. **Never present an adjustment as data-derived.** Write "momentum adjustment +5pp (heuristic)" — not "the data indicates +5pp".
-3. **State calibration status in every report.** Count resolved prior verdicts in the verdict log (entries whose horizon has elapsed or whose invalidation triggers fired). Until ≥20 verdicts have resolved, every report's scenario section carries: *"probabilities are decision weights at 5pp granularity (±10pp uncertainty), not calibrated estimates."* After 20+, replace the fixed ±10pp with the observed gap from the Calibration Loop below.
-4. **Probabilities are for ranking and the decision rule, not for quoting.** Their job is to make the weighted-return math consistent and auditable — a reader should treat 25/55/20 as "Bull plausible, Base likely, Bear real," not as odds to bet at.
 
 ---
 
