@@ -132,6 +132,8 @@ Classification rules (see `references/sector-archetypes.md` for full taxonomy):
 
 Document the archetype choice in the final report's Execution Status section.
 
+**Optionality test (run right after classification).** Compute the visible/established business's intrinsic value (a driver-model DCF on only the segments that earn revenue today) ÷ market cap. If it is below ~30–40%, the stock is **option-dominated**: attach the **Optionality Overlay** (`references/sector-archetypes.md`). The overlay does NOT change the base archetype — it changes the *valuation structure*: Step 5c builds a **sum-of-the-parts** instead of relying on a single-entity target, reverse-DCF is demoted to sizing the option premium (never a mechanical downgrade), Step 5d sets probabilities from the **venture tree**, and the **segment-materiality rule** forces every material engine (e.g. a high-margin, fast-growing energy/storage segment) to be modeled, not mentioned. Tesla is the canonical case (visible ≈ 9% of price).
+
 ### Step 2: Data Acquisition
 
 Fetch the standard data package before dispatching workers. Workers receive paths to local copies, not URLs.
@@ -273,6 +275,8 @@ Scoring: PASS = 7+, "good company"; PASS = 9+, "high quality". Same scoring rubr
 
 **Build a driver model, don't hand-pick three P/Es.** Author a `model.json` (drivers each tagged `source: data|assumption`; anchors — revenue_0, op_margin_start, da_pct, capex_pct — fed from `financials.json`) and run `python3 scripts/finlib/valuation.py run --model model.json`. It outputs DCF, **reverse-DCF (what growth the current price implies)**, the three scenarios as one model's parameter sets, a **derived** terminal multiple (Gordon `(1+g)/(WACC−g)`, never typed), and a sensitivity table. **The report MUST disclose WACC, terminal g, reverse-DCF implied growth, and the sensitivity table** (valuation-methods.md § Mandatory disclosure), and reconcile DCF intrinsic value against the scenario target when they diverge >10% — a point estimate without these is illustrative, not analytical. If any anchor is an assumption it prints `grounding: LOW`. See `references/valuation-methods.md`.
 
+**Option-dominated stocks (Optionality Overlay attached) — build a sum-of-the-parts (PRIMARY lens).** A single-entity scenario target cannot value a company whose price is mostly unproven future businesses. Author a `sotp.json` and run `python3 scripts/finlib/sotp.py run --model sotp.json` (valuation-methods.md Method 5): established engines as `fixed`/`multiple` legs (a material energy/storage segment **modeled** GWh×$/kWh×margin, not a one-line positive — segment-materiality rule), each venture as an `option` leg (TAM→share→take-rate→margin→exit × P(success)/time) with **low/base/high ranges**. The engine refuses un-sourced drivers and refuses a point-estimate option leg; the output is a per-share **distribution** plus `option_share_of_value` (modeled) and `market_implied_option_share` (~the % of price the market calls option) — never a single target. The gap between those two is the priced-for-perfection signal. Here reverse-DCF on the visible business only *sizes* the option premium; it is tautological that the visible business cannot justify the price, so it MUST NOT trigger the "implied growth infeasible → downgrade" reconciliation row below.
+
 Run four methods in order. **Use archetype-specific valuation norms** (P/E ranges, EV/FCF ranges, dividend yield benchmarks) from `references/sector-archetypes.md` — NOT generic SaaS norms:
 
 1. **Multiples**: PE, PEG, P/S, EV/EBITDA, EV/FCF (or archetype-specific alternatives like P/TBV for banks, P/FFO for REITs). For each:
@@ -294,7 +298,7 @@ When the four methods produce conflicting signals, apply the following priority 
 |---|---|
 | Multiples say "cheap" but Scenarios say "Watch/Hold" | **Scenarios win** — multiples reflect past; scenarios reflect forward fundamentals |
 | Multiples say "expensive" but Scenarios say "Buy" | **Scenarios win IF assumptions feasible**; otherwise multiples win (overpaying for growth that may not arrive) |
-| Reverse-DCF says "market implies impossible growth" | **Treat as Bear-confirming**; reduce verdict tier by one |
+| Reverse-DCF says "market implies impossible growth" | **Treat as Bear-confirming**; reduce verdict tier by one — **EXCEPT** when the Optionality Overlay is attached: then this is tautological (visible business never justifies an option stock's price), so it only *sizes* the premium and must NOT cut the tier |
 | Reverse-DCF says "market implies modest growth" + Scenarios say "Buy" | **Both agree** — verdict is well-supported |
 | Peer Comparison says "expensive vs peers" + Multiples say "cheap vs history" | Investigate **why**: company-specific issue or sector-wide derating? |
 
@@ -313,6 +317,8 @@ For each scenario, specify:
 - Anchor 1: archetype base rate (e.g., Hyperscaler Bull base rate 25-35%)
 - Anchor 2: independent-assumption adjustment (each independent positive assumption above 1 reduces Bull by ~5pp)
 - Anchor 3: mandatory disconfirming-evidence citation (for Bull ≥25%, cite specific real-world bear thesis and explain weight)
+
+**Option-dominated stocks** — derive Bull/Bear from the **venture tree**, not pp-subtraction (see `references/scenario-probability-calibration.md`): an independent `P(success)` per venture (the SAME number used in the SOTP option legs); Bear = `Π(1−Pᵢ)` (visible-only); Bull = the value-dominant venture(s) succeeding; Base = residual. This replaces the "base rate −5pp −2pp" arithmetic for these names.
 
 **Earnings-revision momentum adjustment** (see `references/earnings-revision-momentum.md`):
 - Strong Positive momentum → Bull +5pp, Bear -5pp
@@ -347,6 +353,7 @@ Run 6 binary checks; document each as PASS or FLAG:
 4. **Overconfidence**: Am I more bullish than current sell-side consensus by > 20%? If yes, FLAG and justify the divergence specifically.
 5. **Information edge**: this is public-information-only synthesis — no channel checks, IR access, or expert network. Carry the mandatory `信息优势声明` disclosure and cap conviction accordingly (no "analyst-grade" certainty on a public-only thesis). See `references/information-edge.md`.
 6. **Consensus clone**: is the verdict ≈ consensus (same direction AND weighted price within ±10% of median) with no falsifiable variant view? FLAG → add a 变量观点 / Variant Perception statement (what the market prices in · where I differ · what would prove me wrong), or explicitly declare the call consensus-aligned. See `references/information-edge.md` §1b.
+7. **Inverted rigor** (option-dominated names only): is the segment that drives the *largest* share of value the *least*-modeled thing in the report? FLAG if the option/venture value is a single judgment number with no SOTP, no ranges, no P(success). Being rigorous on the visible 10% while hand-waving the decisive 90% is the signature failure for these names — the SOTP (Step 5c) is the fix.
 
 Any FLAG must be addressed in the final report — not buried.
 
@@ -416,6 +423,13 @@ Render in user's invocation language (Chinese labels if user spoke Chinese; Engl
 | Base | __% | __% | __× | $__ | __% | residual |
 | Bear | __% | __% | __× | $__ | __% | base rate <X%> + assumption adj <±pp> + momentum adj <±pp>; confirming-of-Bull citation: <citation> |
 - DCF disclosure (mandatory): WACC __% · terminal g __% · reverse-DCF implied growth __% (vs track-record __%) · sensitivity(revenue_cagr ±3pp): $__–$__. Base prob = residual. Reconcile DCF intrinsic vs target if >10% apart. A target without these is illustrative, not analytical.
+
+## Sum-of-the-Parts / 分部加总估值 (option-dominated stocks only)
+| Segment | Method | Value low–base–high | % of base equity | P(success) | Grounding |
+| <auto> | fixed (DCF EV) | $__–$__–$__ | __% | — | OK |
+| <energy> | multiple (GWh×$/kWh×margin) | $__–$__–$__ | __% | — | OK |
+| <robotaxi> | option (TAM→share→take×P) | $__–$__–$__ | __% | __% (range) | LOW |
+- Per-share distribution: $__ (low) – $__ (base) – $__ (high). Modeled option share of value: __%. **Market-implied option share: __%** (the ~90%-is-option figure). Gap = priced-for-perfection signal. Each venture leg shows its assumption chain + P(success) as a range, never a point.
 
 ## Earnings Revision Momentum / 卖方修正动量
 - Momentum bucket: <Strong Positive / Mild Positive / Mild Negative / Strong Negative>
@@ -499,7 +513,7 @@ A degraded analysis with explicit gaps is more honest than a complete-looking an
 - `references/earnings-revision-momentum.md` — load during Step 2 (data) and Step 5d (probability adjustment) for analyst-revision tracking.
 - `references/verdict-log-protocol.md` — load during Step 1.5b (read past verdict) and Step 5g (append new verdict).
 - `references/good-company-checklist.md` — load during Step 5b to score the 10 items.
-- `references/valuation-methods.md` — load during Step 5c for the multi-method valuation procedure including reverse-DCF.
+- `references/valuation-methods.md` — load during Step 5c for the multi-method valuation procedure including reverse-DCF and **Method 5 Sum-of-the-Parts** (`scripts/finlib/sotp.py`) for option-dominated stocks.
 - `references/scenario-framework.md` — load during Step 5d for the Bull/Base/Bear structure.
 - `references/scenario-probability-calibration.md` — load during Step 5d for the calibrated probability assignment framework.
 - `references/cognitive-bias-gates.md` — load during Step 5e to run the 5 self-check questions; `references/information-edge.md` — the public-info honesty doctrine + the AI-advantaged edges (cross-section `scripts/finlib/crosssection.py`, monitoring `scripts/finlib/verdict_diff.py`).

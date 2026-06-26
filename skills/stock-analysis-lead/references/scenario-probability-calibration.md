@@ -82,6 +82,18 @@ If your computed probabilities produce:
 
 ---
 
+## Option-Dominated Stocks — the Venture Probability Tree
+
+For an option-dominated name (Optionality Overlay attached — see `sector-archetypes.md`), do **not** derive Bull/Bear by subtracting a few pp from a single number. "谷底基准 ~20% − 4 项独立成功(−5pp) − 动量(−2pp)" is gut-feel dressed as arithmetic — the exact softness the original Tesla report was criticised for. Replace it with an explicit tree over the ventures that drive the value:
+
+1. **Assign an independent `P(success)` to each value-driving venture** (e.g. robotaxi reaches commercial scale; Optimus ships at volume with real margin; FSD becomes a high-margin software stream). Express each as a **range/bucket** (e.g. 10–20%), tagged as a judgment prior, not a measured frequency. **Use the same `P(success)` here as in the SOTP option leg** (`sotp.py`) — one number, both places, so the scenario weights and the SOTP cannot silently disagree.
+2. **Bear = the visible-business-only outcome** (every venture → 0). If the ventures are roughly independent, `P(Bear) = Π(1 − Pᵢ)`. State the independence assumption; if ventures are correlated (shared FSD tech stack), say so and adjust.
+3. **Bull = the value-dominant venture(s) succeed.** State exactly which combination Bull represents (e.g. "robotaxi *or* Optimus reaches scale" vs "both") and compute its probability from the tree — do not hand-pick it.
+4. **Base = the residual**, `100% − Bull − Bear`, labelled `(residual)` — unchanged. The residual discipline is *correct* and survives here; what changes is that the two tail probabilities are now derived from the tree, not from pp arithmetic, so the residual inherits a defensible number instead of a soft one.
+5. **Momentum tilt** (±2pp mild / ±5pp strong) still applies as the only post-tree adjustment, and still MUST cite the revision evidence behind the bucket. Do not stack other ad-hoc ±pp nudges.
+
+This keeps the honest parts (labelled residual, one evidenced momentum tilt, range-not-point probabilities) and fixes the soft part (the tails are now a tree of individually-stated, individually-falsifiable venture odds).
+
 ## How This Affects Decision Rule
 
 The decision rule (Strong Buy / Buy / Watch / Hold thresholds) stays the same. What changes is the quality of the inputs feeding into the weighted expected price.

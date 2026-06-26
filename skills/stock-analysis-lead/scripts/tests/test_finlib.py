@@ -178,6 +178,38 @@ def test_headline_margin_reconciled_PASSES():
 
 
 # --------------------------------------------------------------------------- #
+# lint — option/venture value must be a distribution, not a point (P4)
+# --------------------------------------------------------------------------- #
+
+def test_option_value_as_point_FAILS():
+    # The TSLA report's "$650 判断值" — one number for the whole option.
+    entry = {
+        "id": "robotaxi_value",
+        "claimed_label": "robotaxi/Optimus option value $650",
+        "stated_value": 650.0,
+        "inputs": {"judgment": 650.0},        # no range, no P(success)
+        "kind": "option_value",
+    }
+    findings = lint.lint([entry])
+    fails = [f for f in findings if f["level"] == "FAIL"]
+    assert fails, "a point-estimate option value should FAIL"
+    assert any("distribution" in f["message"] for f in fails)
+
+
+def test_option_value_with_range_and_psuccess_PASSES():
+    entry = {
+        "id": "robotaxi_value",
+        "claimed_label": "robotaxi option value (low-base-high)",
+        "stated_value": 33.0,
+        "inputs": {"low": 12.0, "high": 60.0, "p_success": 0.16},
+        "kind": "option_value",
+    }
+    findings = lint.lint([entry])
+    fails = [f for f in findings if f["level"] == "FAIL"]
+    assert not fails, f"a ranged option value with P(success) should pass, got {fails}"
+
+
+# --------------------------------------------------------------------------- #
 # edgar — XBRL parsing against a synthetic fixture (no network)
 # --------------------------------------------------------------------------- #
 

@@ -26,6 +26,38 @@ This is the upgrade from "generalist coverage" to "generalist coverage + sector 
 
 ---
 
+## Optionality Overlay — a modifier on top of any archetype
+
+The eight archetypes are about the *visible, modelable* business. Some companies, though, have most of their market value in **unproven future businesses** — a robotaxi network, humanoid robots, an AI platform, a single pre-approval drug. Forcing such a name into one base archetype (Tesla → "Cyclical-auto") and valuing it on mid-cycle EPS misses 90% of what the market is actually pricing. The overlay fixes this **without** changing the base archetype — it changes the *valuation structure*.
+
+### Detection test (run after base-archetype classification, Step 1.5c)
+
+Compute the **visible/established business's intrinsic value** (a `valuation.py` driver-model DCF on only the segments that earn real revenue today) ÷ **market cap**.
+
+- **< ~30–40% → option-dominated**: attach the Optionality Overlay.
+- ≥ ~40% → the company is mostly its visible business; value it normally.
+
+(For Tesla mid-2026: visible auto+energy DCF ≈ $35/share vs price ≈ $375 → visible is ~9% of price → strongly option-dominated.)
+
+### What attaching the overlay changes
+
+1. **Valuation switches to Sum-of-the-Parts** (`valuation-methods.md` Method 5, `scripts/finlib/sotp.py`) as the **primary** lens. The single-entity Bull/Base/Bear scenario target becomes secondary triangulation, not the answer.
+2. **Reverse-DCF is demoted to sizing the option premium** — it quantifies *how much* of the price is option; it is NOT a downgrade trigger (the "implied growth infeasible → reduce one tier" reconciliation rule is suspended — an infeasible implied visible-growth is tautological for an option stock).
+3. **Probabilities come from the venture tree** (`scenario-probability-calibration.md`): an independent `P(success)` per venture, the same number that feeds the SOTP option legs.
+4. **The Segment-Materiality rule (below) binds** — every material engine must be modeled, not mentioned.
+
+### Segment-Materiality → Modeling Obligation (kills the "one-line positive" disease)
+
+The recurring failure (Mastercard's VAS surfaced once and never modeled; Tesla Energy cited at "39.5% margin, 规模潜力" and never modeled) is treating a material segment as a qualitative aside. Rule:
+
+> **Any segment that is either (a) > ~10% of value, or (b) high-growth AND high-margin AND disclosed in physical units (GWh, deliveries, seats), MUST get its own modeled SOTP leg** — a `multiple` leg (units × price × margin → metric × exit multiple) or an `option` leg — **not** a one-line "positive." If you mention it as a strength, you owe it a leg.
+
+### Worked example — Tesla
+
+Base archetype **Cyclical (auto)** + **Optionality Overlay**. SOTP legs: `net_cash` (the cash fortress) · `auto` = `fixed` (visible-business DCF EV) · `energy` = `multiple` (GWh × $/kWh × 39.5% margin — modeled, per the materiality rule) · `robotaxi`, `Optimus`, `FSD-software` = three `option` legs, each TAM → share → take-rate → margin → exit × P(success)/time, low/base/high. The report shows the per-share distribution, `option_share_of_value` (modeled) next to `market_implied_option_share` (~90%), and each venture's P(success) as a range — replacing the original "$650 判断值."
+
+---
+
 ## The Eight Archetypes
 
 ### 1. High-Growth SaaS / Software

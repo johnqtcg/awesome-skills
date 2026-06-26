@@ -259,6 +259,24 @@ def test_synthesis_step_has_required_subcomponents(skill_text: str) -> None:
         assert component in skill_text, f"synthesis missing component: {component}"
 
 
+def test_optionality_overlay_wired(skill_text: str) -> None:
+    """The P4 option-dominated path must be wired end-to-end in the orchestrator:
+    detection (Optionality test), SOTP valuation branch, venture-tree probability,
+    and the inverted-rigor self-check. Detail lives in the reference files; SKILL.md
+    must carry the pointers and the dispatch wiring."""
+    for token in (
+        "Optionality Overlay",      # the modifier
+        "option-dominated",         # the routing condition
+        "sotp.py",                  # the SOTP engine is invoked
+        "Sum-of-the-Parts",         # the primary lens for these names
+        "venture tree",             # probability method
+        "market_implied_option_share",  # the ~90%-is-option output
+        "Inverted rigor",           # the self-check
+        "分部加总估值",              # the CN output-block label
+    ):
+        assert token in skill_text, f"optionality overlay wiring missing: {token}"
+
+
 def test_output_contract_has_required_sections(skill_text: str) -> None:
     for output_section in (
         "Verdict",

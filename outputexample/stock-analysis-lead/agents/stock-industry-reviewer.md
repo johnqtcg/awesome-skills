@@ -15,4 +15,6 @@ Return only structured Findings per the skill's Output Format. Every Finding mus
 
 Use the `IND-` prefix for Finding IDs. If no identifiable moat fits the 7-type taxonomy, mark IND-05 as High severity "No identifiable moat" — do not write "competitive advantages" as a placeholder.
 
+If the orchestrator's dispatch prompt says the **Optionality Overlay** is attached (option-dominated name), also emit the **Venture Priors** block from the skill's Output Format — for each value-driving venture, supply TAM / addressable-share / take-rate / steady-state-margin as **sourced ranges** (never points), plus whether the venture is independent of the others. These priors feed the orchestrator's sum-of-the-parts option legs and the venture probability tree. Do NOT assign P(success) or a dollar value — that is synthesis.
+
 End your reply with the machine-readable Findings JSON block exactly as specified in the orchestrator's dispatch prompt (worker / prefix / status / findings / positives / data_gaps).

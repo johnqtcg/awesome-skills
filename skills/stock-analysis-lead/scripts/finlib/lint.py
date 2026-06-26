@@ -179,8 +179,32 @@ def check_basis_reconciliation(entry: dict) -> list:
     return out
 
 
+def check_option_point_value(entry: dict) -> list:
+    """FAIL an option / venture / SOTP value stated as a single point. The value of
+    a business that does not yet earn revenue (robotaxi, humanoid robots, an AI
+    platform) is a distribution, not a number — it must be reported as a
+    low-base-high band with an explicit P(success). A bare point target on a
+    narrative-driven name is the option-stock twin of the pseudo-precision the
+    other checks catch on the visible business. Clear it by supplying low/high (or
+    a range) in inputs/tags, or setting is_range/p_success."""
+    out = []
+    if entry.get("kind") not in ("option_value", "sotp_option", "venture_value"):
+        return out
+    inputs = entry.get("inputs", {})
+    tags = entry.get("tags", {})
+    has_range = (entry.get("is_range") or "p_success" in inputs or "p_success" in tags
+                 or any(k in inputs for k in ("low", "high", "range"))
+                 or any(k in tags for k in ("low", "high", "range")))
+    if not has_range:
+        out.append(_finding("FAIL", entry.get("id", "?"),
+                            f"option/venture value '{entry.get('claimed_label')}' stated as a single "
+                            f"point — a value driven by an unproven business is a distribution; report "
+                            f"low-base-high and P(success), never a point target"))
+    return out
+
+
 CHECKS = [check_recompute, check_ev_label, check_single_period, check_unit_tags,
-          check_definition, check_basis_reconciliation]
+          check_definition, check_basis_reconciliation, check_option_point_value]
 
 
 def lint(metrics: list) -> list:

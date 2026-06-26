@@ -103,6 +103,21 @@ External sources: <industry research firm / analyst report>
 Filing pre-scan: 10/10 items hit, 4 confirmed as findings
 ```
 
+### Venture Priors (option-dominated names only — when the orchestrator's dispatch says Optionality Overlay)
+
+When the company is option-dominated (Tesla, pre-profit narrative names), the orchestrator values the unproven engines with a sum-of-the-parts whose `option` legs need priors you are best placed to supply. For **each** value-driving venture (e.g. robotaxi, humanoid robots, an AI/software stream), emit a structured prior — and express every uncertain field as a **range with a source tag**, never a point (a point would be false precision the orchestrator's SOTP engine rejects):
+
+```
+Venture: <name>
+- TAM at maturity: $<low>–$<high>B (<target year>) — source: <research firm + year> [estimate]
+- Company addressable share: <low>–<high>% — basis: <vs named competitor / structural argument> [estimate]
+- Take-rate / revenue capture: <low>–<high>% [assumption — state the network/pricing logic]
+- Plausible steady-state operating margin: <%> — analog: <named comparable business> [assumption]
+- Independent of the company's other ventures? <yes/no — shared tech stack?>  ← feeds the venture probability tree
+```
+
+Do NOT assign `P(success)` or a dollar value — that is the orchestrator's synthesis. Your job is the falsifiable, sourced, ranged inputs. If you cannot source even a range for a field, say so; a missing prior is better than a fabricated one.
+
 ### Summary
 
 One line: `N High / M Medium / K Low — most material: <IND-NN short title>`.
