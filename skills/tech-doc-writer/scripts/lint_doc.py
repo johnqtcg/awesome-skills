@@ -39,7 +39,10 @@ VALID_STATUS = {"draft", "active", "needs-update", "deprecated"}
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 CJK = r"一-鿿㐀-䶿"
 PANGU_RE = re.compile(rf"([{CJK}])([A-Za-z0-9])|([A-Za-z0-9])([{CJK}])")
-URL_RE = re.compile(r"https?://\S+|[\w./~-]*/[\w./~-]+")
+# Path charset must be explicit ASCII: Python's \w matches CJK, so a \w-based
+# pattern would treat prose like 读/写 as a "path" and swallow the surrounding
+# CJK text — masking real pangu violations on any line containing a slash.
+URL_RE = re.compile(r"https?://\S+|[A-Za-z0-9._~-]*(?:/[A-Za-z0-9._~-]+)+")
 TBD_RE = re.compile(r"^\s*(TBD|TODO|待定|待补充)?\s*$", re.IGNORECASE)
 
 

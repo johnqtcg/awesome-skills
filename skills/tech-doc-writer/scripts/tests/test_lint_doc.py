@@ -112,6 +112,23 @@ class LintDocTests(unittest.TestCase):
         hits = [f for f in lint_doc.lint(doc) if f.check == "pangu-spacing"]
         self.assertEqual([], [str(f) for f in hits])
 
+    def test_pangu_detected_on_line_with_cjk_slash(self):
+        """Regression: URL_RE was \\w-based, and Python \\w matches CJK — prose
+        like 读/写 was treated as a path, swallowing surrounding CJK text and
+        masking the real violation (使用Redis) on the same line."""
+        doc = GOOD_DOC + "\n支持读/写分离且使用Redis部署。\n"
+        hits = [f for f in lint_doc.lint(doc) if f.check == "pangu-spacing"]
+        self.assertEqual(1, len(hits), [str(f) for f in hits])
+        self.assertIn("用R", hits[0].message)
+
+    def test_pangu_still_exempts_real_paths_and_urls(self):
+        doc = GOOD_DOC + (
+            "\n配置文件位于config/app.yaml中。"
+            "\n安装到/usr/local/bin目录,详见 https://example.com/docs 页面。\n"
+        )
+        hits = [f for f in lint_doc.lint(doc) if f.check == "pangu-spacing"]
+        self.assertEqual([], [str(f) for f in hits])
+
     def test_h1_inside_code_fence_not_counted(self):
         doc = GOOD_DOC + "\n```markdown\n# Not A Real Title\n```\n"
         self.assertNotIn("single-h1", checks(lint_doc.lint(doc)))

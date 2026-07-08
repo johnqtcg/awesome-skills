@@ -31,6 +31,18 @@ Maps to the 10-item quality checklist from `skill最佳实践.md` Appendix C:
 | Doc type classification | `TestDocTypeClassification` | 5 types present in SKILL.md |
 | Maintenance | `TestMaintenanceSection` | section, triggers, lifecycle statuses, cadence |
 
+## Linter Behavioral Tests (`test_lint_doc.py`)
+
+| Area | Tests |
+|------|-------|
+| Clean document | good doc produces zero findings |
+| Metadata (critical) | missing owner/status/last_updated, invalid status value, non-ISO date |
+| Tables | TBD cell critical for `--type reference` / warning for task, empty cell detected |
+| Headings | long title warned (SPA), multiple H1 warned, H1 inside fence not counted |
+| Code fences | untagged fence warned |
+| Pangu spacing | violation detected with line number; inline code + fenced blocks exempt; **CJK-slash regression** (`读/写` prose must not mask violations — URL_RE was `\w`-based and Python `\w` matches CJK); real paths/URLs still exempt |
+| CLI contract | exit 0 clean / 1 critical / 1 with `--strict` on warnings / 2 unreadable file |
+
 ## Golden Scenario Tests (`test_golden_scenarios.py`)
 
 | Fixture | Scenario | Verifies |

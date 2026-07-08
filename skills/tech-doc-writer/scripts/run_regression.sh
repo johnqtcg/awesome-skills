@@ -69,7 +69,6 @@ done
 echo ""
 echo "--- Anti-Examples migration check ---"
 # Verify Anti-Examples are in writing-quality-guide.md (not duplicated in SKILL.md)
-ANTI_COUNT_GUIDE=$(grep -c "^\*\*" references/writing-quality-guide.md 2>/dev/null | tail -1)
 if grep -q "§Anti-Examples" references/writing-quality-guide.md; then
     echo "  OK: §Anti-Examples section exists in writing-quality-guide.md"
 else
