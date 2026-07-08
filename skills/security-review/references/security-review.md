@@ -1,6 +1,18 @@
-# Security Review Reference
+# Security Review — Supplementary Review Aids
+
+> **Single source of truth**: all normative rules — severity model, remediation SLA,
+> evidence-confidence labels, false-positive suppression rules, baseline diff labels,
+> risk-acceptance fields, automation commands, and tool-interpretation rules — are
+> defined **only in `SKILL.md`**. Do not restate them here. If a normative rule ever
+> appears in this file again, treat `SKILL.md` as authoritative and delete the copy.
+>
+> This file holds only supplementary aids that are useful during a review but too
+> bulky for the main flow: threat prompts, a negative-test matrix, and the CWE/ASVS
+> mapping lookup table.
 
 ## Quick Threat Prompts
+
+Use these to seed trust-boundary analysis (process step 2) before running scenario checks:
 
 - Can an unauthenticated caller reach this path?
 - Can a low-privilege user access another tenant/user resource?
@@ -11,28 +23,9 @@
 - Can JWT/session/cookie logic be bypassed or weakened?
 - Can redirect/callback endpoints be abused?
 
-## Go 10-Domain Quick Matrix
-
-Use this matrix for Go repos and mark each `PASS/FAIL/N/A` with one-line evidence.
-
-Execution order:
-
-1. Triage applicability for each domain (`Applicable` or `N/A` with reason).
-2. Deep-check only `Applicable` domains.
-3. Keep `N/A` evidence explicit to avoid false completeness.
-
-1. Randomness safety: `crypto/rand` used for tokens/keys/nonces; no `math/rand` in secret paths.
-2. SQL injection + lifecycle: parameterized SQL, identifier allowlists, `rows.Close`, `rows.Err`, `stmt.Close`, `Commit/Rollback` pairing.
-3. Sensitive data handling: redacted logs, no internal-error leakage, minimal response exposure.
-4. Secret/config management: no hardcoded secrets, env fail-fast, secret masking, justified `nolint:gosec`.
-5. TLS safety: `MinVersion >= TLS1.2`, no unsafe `InsecureSkipVerify`, mTLS where required.
-6. Crypto primitive correctness: bcrypt/argon2id for password storage, no MD5/SHA1, constant-time comparison for MAC/signature.
-7. Concurrency safety: `go test -race` clean, no TOCTOU in auth/balance, no unsynchronized shared state.
-8. Go injection sinks: `html/template` not `text/template`, `exec.Command` arg separation, `filepath.Join` traversal check.
-9. Static scanner posture: `gosec` findings triaged with exploitability evidence.
-10. Dependency vulnerability posture: `govulncheck` source-mode reachability and remediation path.
-
 ## Minimal Negative Test Matrix
+
+Use when writing the suggested regression/negative test for a finding (Output Contract §1):
 
 - Auth missing -> `401`
 - Insufficient role -> `403`
@@ -45,68 +38,22 @@ Execution order:
 - Third-party timeout/failure -> safe fallback/error path
 - Duplicate idempotency key -> no duplicate side effect
 
-## Evidence Levels
+## CWE / OWASP ASVS Mapping Table
 
-- `confirmed`: proven exploitable path
-- `likely`: strong evidence, one assumption remaining
-- `suspected`: needs more data
+Lookup table for the mandatory Standards Mapping (`SKILL.md § Standards Mapping`).
+Section-level ASVS references are sufficient; use `Mapping: TBD` with a reason if unclear.
 
-## Suppression Guidance
-
-Suppress only when one of these is proven:
-
-1. Upstream guard/middleware blocks the path.
-2. Input is not attacker-controlled at boundary.
-3. Sink is safely parameterized/encoded by framework guarantees.
-
-Suppressed items go to assumptions, not findings.
-
-## Baseline Diff Labels
-
-- `new`
-- `regressed`
-- `unchanged`
-- `resolved`
-
-## Risk Acceptance Entry Template
-
-- Finding ID:
-- Reason:
-- Compensating controls:
-- Owner:
-- Expiry/review date:
-
-## SLA Defaults
-
-- P0: immediate mitigation, full fix <= 24h
-- P1: <= 3 business days
-- P2: <= 14 calendar days
-- P3: backlog milestone
-
-## Standard Mapping Hints
-
-- Authz/IDOR -> CWE-639, OWASP ASVS V4
-- Injection -> CWE-89/CWE-78/CWE-94, OWASP ASVS V5
-- Sensitive data exposure -> CWE-200, OWASP ASVS V8/V9
-- SSRF -> CWE-918, OWASP ASVS V5
-- Hardcoded secrets -> CWE-798, OWASP ASVS V6
-- Weak randomness -> CWE-330, OWASP ASVS V7
-- Weak TLS config -> CWE-295/CWE-327, OWASP ASVS V9
-- Weak crypto/hash usage -> CWE-327/CWE-328, OWASP ASVS V6
-
-## Tooling Quick Commands
-
-```bash
-rg -n "(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY-----|ghp_[A-Za-z0-9]{36}|xox[baprs]-|password\s*=|secret\s*=|token\s*=)" .
-gosec ./...
-govulncheck ./...
-govulncheck -mode=binary ./...
-```
-
-## Tool Interpretation Notes
-
-- `gosec` is coding-pattern-oriented and may require reachability/exploitability triage.
-- `govulncheck` source mode is reachability-aware and should drive confidence.
-- `govulncheck -mode=binary` is exposure-oriented and can over-report; do not mark `confirmed` from this alone.
-
-If tools are unavailable, report explicitly and continue with manual evidence.
+| Finding Category | CWE | OWASP ASVS |
+|------------------|-----|-----------|
+| Authz bypass / IDOR | CWE-639 | V4 |
+| SQL / command / code injection | CWE-89 / CWE-78 / CWE-94 | V5 |
+| XSS | CWE-79 | V5 |
+| CSRF | CWE-352 | V4 |
+| Path traversal | CWE-22 | V12 |
+| SSRF | CWE-918 | V5 |
+| Sensitive data exposure | CWE-200 | V8 / V9 |
+| Hardcoded secrets | CWE-798 | V6 |
+| Weak randomness | CWE-330 | V7 |
+| Weak TLS config | CWE-295 / CWE-327 | V9 |
+| Weak crypto / hash usage | CWE-327 / CWE-328 | V6 |
+| Race condition / TOCTOU | CWE-362 / CWE-367 | V11 |

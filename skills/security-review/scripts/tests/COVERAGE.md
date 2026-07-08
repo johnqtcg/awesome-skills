@@ -41,6 +41,8 @@ Maps each core rule/gate in SKILL.md to its golden fixture and contract test. Us
 | Finding volume cap (P0/P1 never dropped; P2/P3 soft cap) | `test_finding_volume_cap_documented` | ✅ |
 | Change Origin Classification (introduced/pre-existing/uncertain) | `test_change_origin_classification_documented` | ✅ |
 | Baseline Diff Mode (new/regressed/unchanged/resolved + "Baseline not found") | `test_baseline_diff_mode_documented` | ✅ |
+| Drift guard: aids reference must not restate normative rules (suppression/SLA/labels/etc.) | `test_aids_reference_does_not_duplicate_normative_rules` | ✅ |
+| Description has "Use when" trigger + boundary vs go-review-lead / go-security-review | `test_frontmatter_description_has_trigger_and_boundary` | ✅ |
 
 ## Golden Fixtures (`test_golden_reviews.py`)
 
@@ -82,7 +84,7 @@ Maps each core rule/gate in SKILL.md to its golden fixture and contract test. Us
 | True positives | 15 |
 | False positives | 5 |
 | Categories covered | auth, secrets, injection, concurrency, resource_lifecycle, session, container, endpoint, ssrf, crypto |
-| Contract tests | 44 |
+| Contract tests | 46 |
 | SKILL.md lines | 494 (budget: ≤ 500) |
 
 ## Gap Analysis

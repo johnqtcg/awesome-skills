@@ -1,6 +1,6 @@
 ---
 name: security-review
-description: Perform exploitability-first security reviews for code changes (auth, input, secrets, API, data, concurrency, container, third-party, and dependency risk), with mandatory evidence, suppression discipline, scope-based review depth, and Go-specific secure-coding gates.
+description: Exploitability-first standalone security review of code changes, diffs, PRs, or services. Use when asked for a security review, security audit, vulnerability assessment, or pre-merge security check (安全审查/安全评审/漏洞排查) — covers auth, input, secrets, API, data, concurrency, container, third-party, and dependency risk across Go, Node.js/TypeScript, Java, and Python, with mandatory evidence, false-positive suppression, scope-based depth (Lite/Standard/Deep), and CWE/OWASP-mapped machine-readable output. NOT for general-purpose Go code review — use go-review-lead for that (it dispatches go-security-review as its security dimension); this skill is the deeper security-only process with mandatory gates and audit-grade output.
 allowed-tools: Read, Grep, Glob, Bash(git diff*), Bash(go vet*), Bash(go build*), Bash(go test -race*), Bash(gosec*), Bash(govulncheck*), Bash(semgrep*), Bash(npm audit*), Bash(curl*), Bash(mvn dependency:tree*), Bash(mvn org.owasp:dependency-check-maven:check*), Bash(mvn spotbugs:check*), Bash(pip-audit*), Bash(safety check*), Bash(bandit*)
 ---
 

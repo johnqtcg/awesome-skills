@@ -42,16 +42,12 @@ When severity or confidence decisions feel ambiguous, or before publishing findi
 When the report needs additional anti-examples for quality validation or reviewer training:
 → Load `references/anti-examples.md` for extended anti-examples (AE-2 through AE-7) covering N/A abuse, confirmed-without-reproducer, P0-acceptance-without-escalation, and transitive call path omissions.
 
-## Standards Mapping Examples
+When seeding trust-boundary analysis, writing the suggested regression/negative test for a finding, or mapping findings to CWE/OWASP ASVS:
+→ Load `references/security-review.md` for the quick threat prompts, minimal negative-test matrix, and CWE/ASVS mapping lookup table.
 
-Include mapping for each finding when applicable:
+## Standards Mapping
 
-- `CWE-xxx` — Common Weakness Enumeration identifier (e.g., CWE-89 SQL injection, CWE-639 IDOR)
-- `OWASP ASVS <section>` — Application Security Verification Standard section (e.g., V4.1.2)
-
-Common mappings: CWE-89 (SQL injection), CWE-79 (XSS), CWE-639 (IDOR), CWE-352 (CSRF), CWE-22 (path traversal), CWE-918 (SSRF), CWE-362 (race/TOCTOU), CWE-798 (hardcoded secrets).
-
-If unclear, use `Mapping: TBD` with reason.
+The normative rule lives in `SKILL.md § Standards Mapping` (map each finding to `CWE-xxx` and `OWASP ASVS`; use `Mapping: TBD` with reason if unclear). For the full lookup table, load `references/security-review.md § CWE / OWASP ASVS Mapping Table` — do not maintain a second mapping list here.
 
 ## Asset Index
 
@@ -61,7 +57,7 @@ If unclear, use `Mapping: TBD` with reason.
 | `references/scenario-checklists.md` | Full 11-scenario checklist with per-item details |
 | `references/severity-calibration.md` | Severity + confidence calibration rules and common finding patterns |
 | `references/anti-examples.md` | Extended anti-examples (AE-2, AE-4, AE-6, AE-7) |
-| `references/security-review.md` | General security review methodology |
+| `references/security-review.md` | Supplementary aids: threat prompts, negative-test matrix, CWE/ASVS mapping table (normative rules live only in `SKILL.md`) |
 | `references/lang-nodejs.md` | Node.js/TypeScript domain-specific gates |
 | `references/lang-java.md` | Java/Spring domain-specific gates |
 | `references/lang-python.md` | Python/FastAPI/Django domain-specific gates |

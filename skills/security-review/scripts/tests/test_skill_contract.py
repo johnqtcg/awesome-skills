@@ -359,6 +359,43 @@ class SecurityReviewContractTests(unittest.TestCase):
         self.assertIn("suspected", gate_c_section)
         self.assertIn("Uncovered Risk List", gate_c_section)
 
+    # ------------------------------------------------------------------
+    # Drift guard: normative rules live only in SKILL.md
+    # ------------------------------------------------------------------
+
+    def test_aids_reference_does_not_duplicate_normative_rules(self) -> None:
+        """references/security-review.md once restated severity/SLA/suppression rules
+        and drifted (4 suppression rules in SKILL.md vs 3 in the copy). It is now a
+        supplementary-aids file; normative rule text must never reappear there."""
+        aids_text = (REFERENCES_DIR / "security-review.md").read_text()
+        self.assertIn("only in `SKILL.md`", aids_text, "single-source-of-truth note missing")
+        forbidden = [
+            "Suppress only when",          # suppression rules copy
+            "SLA Defaults",                # remediation SLA copy
+            "Evidence Levels",             # confidence labels copy
+            "Baseline Diff Labels",        # baseline status copy
+            "Risk Acceptance Entry",       # risk acceptance template copy
+            "Tool Interpretation",         # tool interpretation copy
+            "Tooling Quick Commands",      # automation commands copy
+            "Go 10-Domain Quick Matrix",   # Gate D domain list copy
+        ]
+        for marker in forbidden:
+            self.assertNotIn(
+                marker,
+                aids_text,
+                f"normative section {marker!r} duplicated in references/security-review.md; "
+                "SKILL.md is the single source of truth",
+            )
+
+    def test_frontmatter_description_has_trigger_and_boundary(self) -> None:
+        """Description must state when to use the skill and how it differs from
+        go-review-lead / go-security-review to prevent trigger collisions."""
+        fm = frontmatter(self.skill_text)
+        desc = re.search(r"^description:\s*(.+)$", fm, re.MULTILINE).group(1)
+        self.assertIn("Use when", desc, "description missing 'Use when' trigger phrase")
+        self.assertIn("go-review-lead", desc, "description missing boundary vs go-review-lead")
+        self.assertIn("go-security-review", desc, "description missing boundary vs go-security-review")
+
 
 if __name__ == "__main__":
     unittest.main()
