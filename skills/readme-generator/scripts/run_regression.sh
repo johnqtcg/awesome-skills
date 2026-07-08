@@ -10,7 +10,7 @@ echo "  readme-generator skill regression suite"
 echo "============================================"
 
 echo ""
-echo "[1/3] Validate skill frontmatter"
+echo "[1/4] Validate skill frontmatter"
 if [[ -f "${VALIDATOR}" ]]; then
   python3 "${VALIDATOR}" "${SKILL_DIR}"
 else
@@ -18,7 +18,7 @@ else
 fi
 
 echo ""
-echo "[2/3] Run contract tests"
+echo "[2/4] Run contract tests"
 if python3 -c "import pytest" >/dev/null 2>&1; then
   python3 -m pytest "${SKILL_DIR}/scripts/tests/test_skill_contract.py" -v
 else
@@ -27,12 +27,21 @@ else
 fi
 
 echo ""
-echo "[3/3] Run golden scenario tests"
+echo "[3/4] Run golden scenario tests"
 if python3 -c "import pytest" >/dev/null 2>&1; then
   python3 -m pytest "${SKILL_DIR}/scripts/tests/test_golden_scenarios.py" -v
 else
   echo "  pytest not installed; falling back to unittest"
   python3 "${SKILL_DIR}/scripts/tests/test_golden_scenarios.py"
+fi
+
+echo ""
+echo "[4/4] Run discovery script behavioral tests"
+if python3 -c "import pytest" >/dev/null 2>&1; then
+  python3 -m pytest "${SKILL_DIR}/scripts/tests/test_discovery_script.py" -v
+else
+  echo "  pytest not installed; falling back to unittest"
+  python3 "${SKILL_DIR}/scripts/tests/test_discovery_script.py"
 fi
 
 echo ""

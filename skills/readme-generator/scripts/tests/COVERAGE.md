@@ -28,6 +28,16 @@
 
 **Subtotal: 96 contract tests across 21 classes**
 
+## Discovery Script Behavioral Tests (`test_discovery_script.py`)
+
+| # | Class | Tests | Covers |
+|---|-------|-------|--------|
+| 1 | DiscoveryScriptBehavior | 7 | Runs script against fixture repos: empty dir (DEGRADED), empty Makefile, comment-only .env.example, .yaml-only workflows, Go service (READY), GPL license detection, codecov TSV key spelling — asserts exit 0 + verdict section in every case |
+| 2 | DiscoveryScriptContract | 3 | No errexit/pipefail on executable `set` lines (probe scripts must survive empty probes), `set -u` present, explicit trailing `exit 0` |
+| 3 | TestRoutingSync | 2 | SKILL.md §Project Type Routing ↔ script `project_type=` emissions stay in sync (both directions) |
+
+**Subtotal: 12 behavioral tests across 3 classes**
+
 ## Golden Scenario Tests (`test_golden_scenarios.py`)
 
 | # | Class | Tests | Fixture | Covers |
@@ -70,12 +80,13 @@
 | Structural Integrity | 7/7 | 100% |
 | Cross-Cutting Integrity | 3/3 | 100% |
 | Golden Fixtures (9 scenarios) | 43/43 | 100% |
+| Discovery Script behavior (7 fixture repos + 3 static guards + 2 sync guards) | 12/12 | 100% |
 
-**Total: 139 tests (96 contract + 43 golden), 21 categories, all 100%**
+**Total: 151 tests (96 contract + 43 golden + 12 behavioral), 22 categories, all 100%**
 
 ## Known Gaps
 
-1. No integration test for running discover script against a real repo and validating TSV output
+1. ~~No integration test for running discover script against a real repo and validating TSV output~~ — closed 2026-07-08 by `test_discovery_script.py`: fixture-repo behavioral tests added after an audit found 3 silent-truncation crash paths under `set -euo pipefail` (empty Makefile, comment-only `.env.example`, `.yaml`-only workflows)
 2. No optional prompt-sidecar coverage beyond the core skill contract tests
 3. Templates depth test uses line count, not structural validation of each template
 4. Golden fixture 009 tests degradation concept but not actual degraded README generation
