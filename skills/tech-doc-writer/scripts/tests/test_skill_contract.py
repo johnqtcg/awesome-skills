@@ -338,6 +338,27 @@ class TestQualityScorecard(unittest.TestCase):
         checks = standard_section.count("- [ ]")
         self.assertGreaterEqual(checks, 4, f"Need ≥4 Standard checks, found {checks}")
 
+    def test_tier_thresholds_match_item_counts(self):
+        """Drift guard: the `≥ n/total` label in each tier header must match the
+        number of checklist items actually listed. Regression: the Hygiene header
+        said `≥ 3/5` while listing 6 items (6th item added, header not updated)."""
+        import re as _re
+        scorecard = self.content.split("Gate 3: Quality Scorecard")[1].split("\n## ")[0]
+        for tier in ("Standard", "Hygiene"):
+            section = scorecard.split(f"**{tier}")[1]
+            if tier == "Standard":
+                section = section.split("**Hygiene")[0]
+            header = section.split("**")[0]
+            match = _re.search(r"≥\s*\d+/(\d+)", header)
+            self.assertIsNotNone(match, f"{tier} header missing `≥ n/total` label")
+            declared_total = int(match.group(1))
+            actual_items = section.count("- [ ]")
+            self.assertEqual(
+                declared_total, actual_items,
+                f"{tier} tier declares /{declared_total} but lists "
+                f"{actual_items} checklist items — update both together",
+            )
+
 
 # ─── Execution modes ───
 

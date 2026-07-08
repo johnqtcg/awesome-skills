@@ -25,7 +25,7 @@ Maps to the 10-item quality checklist from `skill最佳实践.md` Appendix C:
 | Golden infrastructure | `TestGoldenInfrastructure` | test file exists, golden dir exists, ≥6 fixtures |
 | Template coverage | `TestTemplatesCoverage` | 5 doc types: task, concept, reference, troubleshooting, design |
 | Quality guide sections | `TestQualityGuideSections` | §Funnel, §BAD/GOOD (≥3 each), §Code, §Visual, §Review |
-| Quality scorecard tiers | `TestQualityScorecard` | 3 tiers, Critical ≥3 checks, Standard ≥4 checks |
+| Quality scorecard tiers | `TestQualityScorecard` | 3 tiers, Critical ≥3 checks, Standard ≥4 checks, tier `≥ n/total` labels match actual item counts (drift guard; regression: Hygiene said /5 while listing 6 items) |
 | Execution modes | `TestExecutionModes` | Write, Review, Improve |
 | Hard rules | `TestHardRules` | section exists, Reader-first, One-doc-one-job, Evidence-over-opinion |
 | Doc type classification | `TestDocTypeClassification` | 5 types present in SKILL.md |

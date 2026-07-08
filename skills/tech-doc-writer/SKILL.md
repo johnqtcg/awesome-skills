@@ -95,7 +95,7 @@ Run after writing/reviewing. Results must be reported in the output. Items marke
 - [ ] Code examples are self-contained with imports, not just fragments [task, troubleshooting, reference]
 - [ ] Error codes / status codes documented with trigger conditions and recommended actions [reference, when API doc]
 
-**Hygiene (≥ 3/5 pass)**
+**Hygiene (≥ 4/6 pass)**
 - [ ] Diagrams have title, legend, and terms consistent with prose [all, when diagrams present]
 - [ ] Cross-references to related docs where appropriate [all]
 - [ ] Short paragraphs; 80%+ structured info in lists/tables [all]
