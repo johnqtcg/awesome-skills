@@ -168,7 +168,7 @@ The core value: **finding a problem during development costs far less than findi
 
 The linter flags a slice that should be pre-allocated:
 
-```
+```text
 internal/pkg/dbutil/oracle_update_or_insert_builder.go:66:2:
   Consider pre-allocating `parts` (prealloc)
 ```
@@ -197,7 +197,7 @@ func buildUpdateSet(cols []columnMeta, t reflect.Type, args *[]interface{}, para
 
 The linter warns that a function's cyclomatic complexity is too high:
 
-```
+```text
 main.go:34:1: cyclomatic complexity 16 of func `main` is high (> 15) (gocyclo)
 ```
 
@@ -207,7 +207,7 @@ Fix: split the monolithic `main()` into an `App` struct with focused methods —
 
 The linter flags a meaningless package name:
 
-```
+```text
 utils/time.go:1:9: var-naming: avoid meaningless package names (revive)
 package utils
 ```
@@ -304,7 +304,7 @@ jobs:
 
 #### Formatting check fails
 
-```
+```text
 Error: code is not formatted; run 'make fmt' and commit changes
 ```
 
@@ -377,7 +377,7 @@ The team follows GitHub Flow, with a single long-lived branch `main`:
 
 #### 3.2.2 Format
 
-```
+```text
 <type>(<scope>): <subject>
 
 <body>
@@ -435,7 +435,7 @@ Explain *why* the change is needed. Record design decisions and trade-offs. Wrap
 
 **Full example**
 
-```
+```text
 feat(connection-pool): add idle connection cleanup
 
 Previously idle connections were never cleaned up, leading to
@@ -601,7 +601,7 @@ Go has no mandatory project layout, but the community has converged on well-esta
 
 Each subdirectory corresponds to one binary; the directory name becomes the binary name:
 
-```
+```text
 cmd/
 ├── server/
 │   └── main.go  → go build -o server ./cmd/server
@@ -644,7 +644,7 @@ When `cmd/` is unnecessary: if the project produces only one binary, placing `ma
 
 `internal/` is a **hard constraint enforced by the Go compiler** — packages under `internal/` can only be imported by code in the parent directory tree:
 
-```
+```text
 myapp/
 ├── cmd/server/main.go       # OK: can import myapp/internal/...
 ├── internal/
@@ -661,7 +661,7 @@ This is **compiler-level** encapsulation — not a convention, not a lint rule, 
 
 Recommended `internal/` layout:
 
-```
+```text
 internal/
 ├── config/       # configuration loading
 ├── handler/      # HTTP/gRPC handlers
@@ -710,7 +710,7 @@ import (
 
 **Small project (CLI tool or simple service)**
 
-```
+```text
 mytool/
 ├── main.go
 ├── app.go
@@ -723,7 +723,7 @@ mytool/
 
 **Medium project (monolithic API service)**
 
-```
+```text
 myapi/
 ├── cmd/
 │   └── server/
@@ -746,7 +746,7 @@ myapi/
 
 **Large project (multiple services + SDK)**
 
-```
+```text
 platform/
 ├── cmd/
 │   ├── api-server/
@@ -811,7 +811,7 @@ go generate ./...
 
 **Dependency direction** — one-way, top to bottom:
 
-```
+```text
 cmd/ → internal/ → model/  (no reverse dependencies)
 
 handler → service → repo → model
@@ -854,7 +854,7 @@ When circular dependencies appear: extract shared types into a dedicated package
 - Lowercase, words separated by underscores
 - **The package name provides the context; the file name only describes the file's responsibility** — do not repeat the package name
 
-```
+```text
 # How the Go standard library does it:
 net/http/client.go        # not http_client.go
 net/http/server.go        # not http_server.go
@@ -867,7 +867,7 @@ database/sql/convert.go
 
 Apply the same principle in project code:
 
-```
+```text
 # Inside internal/apiserver/persistence/cache/
 customer.go               # not customer_cache.go
 customer_immutable.go
@@ -1021,7 +1021,7 @@ GET /orders?q=2024-03&status=pending&offset=0&limit=20
 
 Middleware execution order:
 
-```
+```text
 Request  → Recovery → CORS → Logging → RateLimit → Auth → Handler
 Response ← Recovery ← CORS ← Logging ← RateLimit ← Auth ← Handler
 ```
@@ -1145,7 +1145,7 @@ grpc.NewServer(
 
 **Bearer Token**
 
-```
+```text
 Authorization: Bearer <token>
 ```
 

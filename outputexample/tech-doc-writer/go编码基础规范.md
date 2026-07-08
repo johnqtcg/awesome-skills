@@ -168,7 +168,7 @@ help:
 
 linter 建议给切片预先分配内存：
 
-```
+```text
 internal/pkg/dbutil/oracle_update_or_insert_builder.go:66:2:
   Consider pre-allocating `parts` (prealloc)
 ```
@@ -197,7 +197,7 @@ func buildUpdateSet(cols []columnMeta, t reflect.Type, args *[]interface{}, para
 
 linter 提醒代码复杂度过高，建议拆分：
 
-```
+```text
 main.go:34:1: cyclomatic complexity 16 of func `main` is high (> 15) (gocyclo)
 ```
 
@@ -207,7 +207,7 @@ main.go:34:1: cyclomatic complexity 16 of func `main` is high (> 15) (gocyclo)
 
 linter 提示无意义的包名：
 
-```
+```text
 utils/time.go:1:9: var-naming: avoid meaningless package names (revive)
 package utils
 ```
@@ -304,7 +304,7 @@ jobs:
 
 #### 格式化检查失败
 
-```
+```text
 Error: code is not formatted; run 'make fmt' and commit changes
 ```
 
@@ -377,7 +377,7 @@ func handleStateMachine(state State) {
 
 #### 3.2.2 格式
 
-```
+```text
 <type>(<scope>): <subject>
 
 <body>
@@ -435,7 +435,7 @@ update code                                      # 缺少 type，描述模糊
 
 **完整示例**
 
-```
+```text
 feat(connection-pool): add idle connection cleanup
 
 Previously idle connections were never cleaned up, leading to
@@ -601,7 +601,7 @@ Go 没有强制项目结构标准，但社区形成了事实上的约定。
 
 每个子目录对应一个可执行程序，子目录名即二进制名：
 
-```
+```text
 cmd/
 ├── server/
 │   └── main.go  → go build -o server ./cmd/server
@@ -644,7 +644,7 @@ func main() {
 
 `internal/` 是 Go 编译器**强制执行**的访问控制——`internal/` 下的包只能被其父目录及子目录 import：
 
-```
+```text
 myapp/
 ├── cmd/server/main.go       # OK: 可以 import myapp/internal/...
 ├── internal/
@@ -661,7 +661,7 @@ import "myapp/internal/handler" // 编译错误！
 
 推荐的 `internal/` 组织方式：
 
-```
+```text
 internal/
 ├── config/       # 配置加载
 ├── handler/      # HTTP/gRPC handler
@@ -710,7 +710,7 @@ import (
 
 **小型项目（CLI 工具/简单服务）**
 
-```
+```text
 mytool/
 ├── main.go
 ├── app.go
@@ -723,7 +723,7 @@ mytool/
 
 **中型项目（单体 API 服务）**
 
-```
+```text
 myapi/
 ├── cmd/
 │   └── server/
@@ -746,7 +746,7 @@ myapi/
 
 **大型项目（多服务 + SDK）**
 
-```
+```text
 platform/
 ├── cmd/
 │   ├── api-server/
@@ -811,7 +811,7 @@ go generate ./...
 
 **依赖方向**——单向、从上到下：
 
-```
+```text
 cmd/ → internal/ → model/（无逆向依赖）
 
 handler → service → repo → model
@@ -854,7 +854,7 @@ handler → service → repo → model
 - 文件名应小写，使用下划线分割单词
 - **包名负责提供上下文信息，文件名只负责解释文件的功能**，不重复包名
 
-```
+```text
 # Go 标准库的做法:
 net/http/client.go        # 而不是 http_client.go
 net/http/server.go        # 而不是 http_server.go
@@ -867,7 +867,7 @@ database/sql/convert.go
 
 项目中同样遵循此原则：
 
-```
+```text
 # internal/apiserver/persistence/cache/ 目录下
 customer.go               # 而不是 customer_cache.go
 customer_immutable.go
@@ -1021,7 +1021,7 @@ GET /orders?q=2024-03&status=pending&offset=0&limit=20
 
 中间件执行顺序：
 
-```
+```text
 请求 → Recovery → CORS → Logging → RateLimit → Auth → Handler
 响应 ← Recovery ← CORS ← Logging ← RateLimit ← Auth ← Handler
 ```
@@ -1145,7 +1145,7 @@ grpc.NewServer(
 
 **Bearer Token 认证**
 
-```
+```text
 Authorization: Bearer <token>
 ```
 
