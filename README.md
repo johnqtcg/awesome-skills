@@ -8,11 +8,11 @@
 
 A curated system for **AI skill engineering** — not just a prompt collection. Built for Claude Code and applicable to any AI coding assistant, this project covers the full loop from reusable skill methodology to skill-specific design rationale to quantitative evaluation and real software engineering workflow integration.
 
-- **33** production-ready Claude Code skills: Go, testing, security, CI/CD, database, cache, infrastructure, research, docs, planning
-- **41** installable skills in total: 33 production-ready skills + 8 multi-agent Go review components used by the orchestration architecture
-- **46** paired design rationale docs (EN + ZH), one explanation track for each skill
+- **51** installable Claude Code skills spanning Go, testing, security, CI/CD, database, cache, infrastructure, research, docs, planning, and multi-agent review/analysis
+- **16** of those are multi-agent components: a 9-part Go review system (`go-review-lead` + 8 vertical reviewers) and a 7-part US-equity analysis system (`stock-analysis-lead` + 6 vertical reviewers)
+- **23** skills ship paired design rationale (EN + ZH) → **46** rationale docs; **13** have complete five-layer coverage (rationale + skill + evaluation + real output example)
 - **64** paired evaluation reports (EN + ZH) with quantitative metrics
-- **364** golden test fixtures + **65** Python test files for deterministic regression
+- **376** golden test fixtures + **93** Python test files for deterministic regression
 - Testing skills: `unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
 - Delivery pipeline: `go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`
 
@@ -30,7 +30,7 @@ npx skills add johnqtcg/awesome-skills --skill <skill-name> -g
 # Install a curated set
 npx skills add johnqtcg/awesome-skills --skill go-review-lead systematic-debugging unit-test -g
 
-# Install all 41 skills at once (33 production-ready + 8 multi-agent review components)
+# Install all 51 skills at once
 npx skills add johnqtcg/awesome-skills --all -g
 ```
 
@@ -42,9 +42,9 @@ npx skills find
 
 Install scope note:
 
-- The repository exposes **29** installable skills in total.
-- The **33 production-ready skills** are the fully documented set with rationale, evaluation, and output examples.
-- The additional **8 skills** are reusable Go review orchestration components for the multi-agent review architecture. They are installable and regression-tested, but are not counted as standalone production-ready skills yet.
+- The repository exposes **51** installable skills in total.
+- **23** ship paired design rationale + evaluation reports; **13** of those also include real output examples (complete five-layer coverage: rationale + skill + evaluation + output example).
+- **16** are multi-agent orchestration components — a 9-part Go review system (`go-review-lead` + 8 vertical reviewers) and a 7-part US-equity analysis system (`stock-analysis-lead` + 6 vertical reviewers). They are installable and regression-tested.
 
 ### Option 2 — Install manually
 
@@ -135,8 +135,8 @@ That is much stronger than saying “these skills seem useful,” because it giv
 
 This project does not rely on “use one LLM to judge another LLM” as its primary guardrail. Instead, it uses deterministic regression assets:
 
-- `132` golden JSON fixtures
-- `29` Python test files
+- `376` golden JSON fixtures
+- `93` Python test files
 - contract tests for required gates, outputs, and structure
 - golden-scenario tests for real task coverage
 

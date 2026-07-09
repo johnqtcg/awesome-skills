@@ -12,4 +12,5 @@ runtime/
 .claudeignore
 .claude
 site/
+.cache/
 .understand-anything/

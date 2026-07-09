@@ -57,8 +57,8 @@ Five interconnected layers make up this repository. Please understand each befor
 
 Current scope note:
 
-- **21 production-ready skills** have full five-layer coverage.
-- **8 multi-agent Go review components** live under `skills/` as installable, regression-tested building blocks for the review orchestration architecture. They are not yet maintained as standalone rationale/evaluation/outputexample packages.
+- **13 skills** have full five-layer coverage; **23** carry paired rationale + evaluation.
+- **16 multi-agent components** — a 9-part Go review system (`go-review-lead` + 8 vertical reviewers) and a 7-part US-equity analysis system (`stock-analysis-lead` + 6 vertical reviewers) — live under `skills/` as installable, regression-tested building blocks. They are not yet maintained as standalone rationale/evaluation/outputexample packages.
 
 ## 4. Preferred Contribution Unit
 
@@ -74,7 +74,7 @@ If you are adding a new production-ready skill, the preferred submission unit is
 
 This is not a hard mechanical rule, but it matches how the production-ready part of the repository is currently organized and gives the strongest contribution quality.
 
-For the 8 multi-agent Go review components, the expected unit is smaller: update the skill, its references/tests, and the shared architecture docs when needed. Those components do not currently require standalone `rationale/`, `evaluate/`, or `outputexample/` directories.
+For the 16 multi-agent components (Go review + US-equity analysis), the expected unit is smaller: update the skill, its references/tests, and the shared architecture docs when needed. Those components do not currently require standalone `rationale/`, `evaluate/`, or `outputexample/` directories.
 
 ## 5. Naming and Organization Rules
 

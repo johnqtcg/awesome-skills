@@ -32,8 +32,11 @@ jobs:
           key: ${{ runner.os }}-pip-mkdocs-material
           restore-keys: ${{ runner.os }}-pip-
 
+      - name: Install image libraries (for social card generation)
+        run: sudo apt-get update && sudo apt-get install -y libcairo2-dev libfreetype6-dev libffi-dev libjpeg-dev libpng-dev libz-dev pngquant
+
       - name: Install dependencies
-        run: pip install mkdocs-material mkdocs-minify-plugin
+        run: pip install "mkdocs-material[imaging]" mkdocs-minify-plugin
 
       - name: Build site
         run: mkdocs build

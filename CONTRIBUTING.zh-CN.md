@@ -57,8 +57,8 @@ Language:
 
 当前分层说明：
 
-- **21 个生产级 skill** 具备完整的五层闭环。
-- **8 个 Multi-Agent Go 评审组件** 位于 `skills/` 下，作为可安装、可回归测试的编排构件存在；它们暂未按独立 skill 维度维护单独的 rationale / evaluate / outputexample。
+- **13 个 skill** 具备完整的五层闭环；**23** 个配有成对的 rationale + evaluate。
+- **16 个多智能体组件**——9 件套的 Go 评审系统（`go-review-lead` + 8 个纵向评审）和 7 件套的美股分析系统（`stock-analysis-lead` + 6 个纵向评审）——位于 `skills/` 下，作为可安装、可回归测试的编排构件存在；它们暂未按独立 skill 维度维护单独的 rationale / evaluate / outputexample。
 
 ## 4. 推荐的贡献单元
 
@@ -74,7 +74,7 @@ Language:
 
 这不是机械要求，但这是本仓库当前生产级 skill 最符合实际的贡献方式。仓库现有的生产级内容就是按这种闭环组织的。
 
-对于那 8 个 Multi-Agent Go 评审组件，贡献单元可以更小：优先更新 skill 本体、references/tests，以及必要的共享架构文档；它们当前不强制要求单独的 rationale / evaluate / outputexample 目录。
+对于那 16 个多智能体组件（Go 评审 + 美股分析），贡献单元可以更小：优先更新 skill 本体、references/tests，以及必要的共享架构文档；它们当前不强制要求单独的 rationale / evaluate / outputexample 目录。
 
 ## 5. 命名与组织约定
 

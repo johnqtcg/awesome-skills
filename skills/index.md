@@ -2,24 +2,23 @@
 
 This section contains all installable skills collected in `awesome-skills`.
 
-The repository currently exposes two layers:
+The repository exposes **51 installable skills**:
 
-- **21 production-ready skills** with full rationale, evaluation, and output-example coverage
-- **8 multi-agent Go review components** used by the review orchestration architecture
+- **23** ship paired design rationale and evaluation reports; **13** of those also include real output examples (complete five-layer coverage: rationale + skill + evaluation + output example).
+- **16** are multi-agent orchestration components (see below).
 
 Each skill is organized as its own directory and uses `SKILL.md` as the main entrypoint. The left navigation is the fastest way to jump to a specific skill.
 
-Production-ready groups:
+## Multi-agent systems
 
-- Backend workflow: `go-makefile-writer`, `git-commit`, `create-pr`, `go-ci-workflow`
-- Quality and testing: `unit-test`, `tdd-workflow`, `api-integration-test`, `e2e-test`, `fuzzing-test`
-- Review and security: `go-code-reviewer`, `security-review`, `systematic-debugging`
-- Research and docs: `google-search`, `deep-research`, `update-doc`, `readme-generator`, `tech-doc-writer`
-- Task execution: `yt-dlp-downloader`, `local-transcript`
-
-Multi-agent review components:
+**Go review — 9 components:**
 
 - Orchestrator: `go-review-lead`
-- Vertical reviewers: `go-security-review`, `go-concurrency-review`, `go-error-review`, `go-logic-review`, `go-performance-review`, `go-quality-review`, `go-test-review`
+- Vertical reviewers: `go-security-review`, `go-concurrency-review`, `go-error-review`, `go-logic-review`, `go-observability-review`, `go-performance-review`, `go-quality-review`, `go-test-review`
 
-These 8 review components are installable and regression-tested, but they are not currently counted in the repository's "production-ready skill" total.
+**US-equity analysis — 7 components:**
+
+- Orchestrator: `stock-analysis-lead`
+- Vertical reviewers: `stock-business-review`, `stock-earnings-quality-review`, `stock-balance-sheet-review`, `stock-management-review`, `stock-industry-review`, `stock-peer-comparison-review`
+
+These multi-agent components are installable and regression-tested, but do not yet have standalone rationale, evaluation, or output-example tracks.

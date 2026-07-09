@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📘 Contribution guide
+    url: https://github.com/johnqtcg/awesome-skills/blob/main/CONTRIBUTING.md
+    about: How a skill is structured and what a complete contribution looks like — read this before opening a skill proposal.
+  - name: 🌱 Good first issues
+    url: https://github.com/johnqtcg/awesome-skills/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+    about: Small, well-scoped tasks — a good place to make your first contribution.

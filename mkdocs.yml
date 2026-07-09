@@ -53,6 +53,11 @@ plugins:
       separator: '[\s\-\.\u3000\u3001\u3002\uff0c]+'
   - minify:
       minify_html: true
+  # Social cards (Open Graph preview images) generate only in CI, where the Cairo/Pango
+  # imaging libraries are installed. GitHub Actions sets CI=true; local `mkdocs serve`
+  # leaves it unset, so cards are skipped and no system dependencies are required.
+  - social:
+      cards: !ENV [CI, false]
 
 markdown_extensions:
   - admonition
@@ -73,6 +78,13 @@ markdown_extensions:
   - md_in_html
 
 extra:
+  alternate:
+    - name: English
+      link: /awesome-skills/
+      lang: en
+    - name: 中文
+      link: /awesome-skills/index-zh/
+      lang: zh
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/johnqtcg/awesome-skills

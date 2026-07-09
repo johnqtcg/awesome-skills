@@ -22,18 +22,18 @@
       </p>
       <div class="lp-stats" aria-label="项目统计">
         <div class="lp-stat">
-          <strong class="lp-stat__num" data-count-to="33">33</strong>
-          <span class="lp-stat__label">生产级<br>Skills</span>
+          <strong class="lp-stat__num" data-count-to="51">51</strong>
+          <span class="lp-stat__label">可安装<br>Skills</span>
         </div>
         <div class="lp-stat__sep" aria-hidden="true"></div>
         <div class="lp-stat">
-          <strong class="lp-stat__num" data-count-to="46">46</strong>
-          <span class="lp-stat__label">设计说明<br>文档</span>
+          <strong class="lp-stat__num" data-count-to="23">23</strong>
+          <span class="lp-stat__label">设计+评测<br>文档</span>
         </div>
         <div class="lp-stat__sep" aria-hidden="true"></div>
         <div class="lp-stat">
-          <strong class="lp-stat__num" data-count-to="364">364</strong>
-          <span class="lp-stat__label">黄金测试<br>场景</span>
+          <strong class="lp-stat__num" data-count-to="13">13</strong>
+          <span class="lp-stat__label">五层<br>全齐</span>
         </div>
         <div class="lp-stat__sep" aria-hidden="true"></div>
         <div class="lp-stat">
@@ -88,7 +88,7 @@
           <code class="lp-arch__dir">skills/</code>
           <strong class="lp-arch__name">可执行 Skills</strong>
           <span class="lp-arch__desc">
-            33 个经过方法论打磨的生产级 skill 产物
+            51 个经过方法论打磨的可安装 skill 产物
           </span>
         </a>
 
@@ -171,9 +171,9 @@
     <div class="lp-container">
       <header class="lp-section__hd">
         <span class="lp-tag">Skill 列表</span>
-        <h2 class="lp-section__h">33 个生产级 Skills</h2>
+        <h2 class="lp-section__h">51 个可安装 Skills</h2>
         <p class="lp-section__p">
-          每个 skill 均配有设计说明文档、量化评审报告和回归测试。
+          其中 23 个配有成对的设计说明与量化评审报告，13 个具备含真实产出示例的完整五层交付。下方展示其中一部分。
         </p>
       </header>
 
@@ -394,9 +394,29 @@
           <div class="lp-qs__body">
             <h3 class="lp-qs__title">浏览并选择一个 skill</h3>
             <p class="lp-qs__p">
-              从上方列表中找一个与你工作场景匹配的 skill，或从
-              <a href="../skills/google-search/SKILL/">google-search</a> 入手。
-              阅读配套的<a href="../rationale/index.zh-CN/">设计说明</a>可以帮助理解背后的设计决策。
+              从上方列表中找一个匹配的 skill，或从
+              <a href="../skills/google-search/SKILL/">google-search</a> 入手。每个 skill 都是一份纯
+              <code>SKILL.md</code>——一小段 frontmatter 契约，加上一组强制门控（gate）构成的正文：
+            </p>
+            <pre class="lp-qs__pre"><code>---
+name: google-search
+description: Use when the user wants help finding information through
+  Google-style web search and expects more than raw links … classify
+  the goal, generate precise queries, cross-check key claims, return a
+  concise conclusion plus reusable search strings.
+allowed-tools: Read, Grep, Glob, WebFetch
+---
+
+## Mandatory Gates
+Gates execute in strict serial order. Any gate failure blocks the next.
+
+### 1) Scope Classification Gate
+### 2) Ambiguity Resolution Gate
+### 3) Evidence Requirements Gate
+### 4) Language Detection Gate
+…                       # 共 8 道 gate</code></pre>
+            <p class="lp-qs__p">
+              阅读配套的<a href="../rationale/google-search/design.zh-CN/">设计说明</a>，理解它为何这样设计。
             </p>
           </div>
         </div>
@@ -404,12 +424,13 @@
         <div class="lp-qs__step">
           <div class="lp-qs__n">02</div>
           <div class="lp-qs__body">
-            <h3 class="lp-qs__title">复制 skill 目录</h3>
-            <pre class="lp-qs__pre"><code># 项目级安装（仅当前项目）
-cp -r skills/&lt;名称&gt; .claude/skills/&lt;名称&gt;
+            <h3 class="lp-qs__title">安装它</h3>
+            <pre class="lp-qs__pre"><code># 推荐 —— skills CLI（支持 Claude Code、Cursor、Copilot 等 15+ 智能体）
+npx skills add johnqtcg/awesome-skills --skill &lt;名称&gt; -g
 
-# 个人级安装（所有项目）
-cp -r skills/&lt;名称&gt; ~/.claude/skills/&lt;名称&gt;</code></pre>
+# 或手动复制目录
+cp -r skills/&lt;名称&gt; .claude/skills/&lt;名称&gt;      # 当前项目
+cp -r skills/&lt;名称&gt; ~/.claude/skills/&lt;名称&gt;    # 所有项目</code></pre>
           </div>
         </div>
 
@@ -432,7 +453,7 @@ cp -r skills/&lt;名称&gt; ~/.claude/skills/&lt;名称&gt;</code></pre>
   <!-- ============================================================
        推荐阅读路径
   ============================================================ -->
-  <section class="lp-section lp-section--alt lp-section--last" id="reading-path">
+  <section class="lp-section lp-section--alt" id="reading-path">
     <div class="lp-container">
       <header class="lp-section__hd">
         <span class="lp-tag">推荐路径</span>
@@ -471,6 +492,39 @@ cp -r skills/&lt;名称&gt; ~/.claude/skills/&lt;名称&gt;</code></pre>
       <p class="lp-path__zh">
         <a href="../">Switch to English version &#8594;</a>
       </p>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       参与共建
+  ============================================================ -->
+  <section class="lp-section lp-section--last" id="contribute">
+    <div class="lp-container">
+      <header class="lp-section__hd">
+        <span class="lp-tag">参与共建</span>
+        <h2 class="lp-section__h">新增或改进一个 Skill</h2>
+        <p class="lp-section__p">
+          小到改一个错别字，大到贡献一个完整的新 skill，都欢迎——衡量标准就是这个仓库对自己的五层要求。
+        </p>
+      </header>
+      <div class="lp-grid lp-grid--2col">
+        <a href="https://github.com/johnqtcg/awesome-skills/blob/main/CONTRIBUTING.zh-CN.md" class="lp-card" target="_blank" rel="noopener noreferrer">
+          <span class="lp-card__name">贡献指南 →</span>
+          <span class="lp-card__desc">一个完整 skill 需要交付什么——SKILL.md + rationale + evaluation + output example，以及命名与目录规范。</span>
+        </a>
+        <a href="https://github.com/johnqtcg/awesome-skills/issues/new/choose" class="lp-card" target="_blank" rel="noopener noreferrer">
+          <span class="lp-card__name">提一个 issue →</span>
+          <span class="lp-card__desc">用引导式模板提议新 skill 或报告 bug，也可以认领一个 good-first-issue。</span>
+        </a>
+        <a href="https://github.com/johnqtcg/awesome-skills/blob/main/.github/PULL_REQUEST_TEMPLATE.md" class="lp-card" target="_blank" rel="noopener noreferrer">
+          <span class="lp-card__name">PR 模板 →</span>
+          <span class="lp-card__desc">结构化的 摘要 / 变更 / 测试计划 清单。每个 PR 合并前都会在 CI 跑一遍 golden 回归测试。</span>
+        </a>
+        <a href="https://github.com/johnqtcg/awesome-skills" class="lp-card" target="_blank" rel="noopener noreferrer">
+          <span class="lp-card__name">直接在线编辑 →</span>
+          <span class="lp-card__desc">这里每个文档页右上角都有 ✎ 编辑链接，直接打开 GitHub 上的源文件——改小问题最快。</span>
+        </a>
+      </div>
     </div>
   </section>
 

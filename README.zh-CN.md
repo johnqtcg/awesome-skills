@@ -8,11 +8,11 @@
 
 一个围绕高质量 **Claude Code Skill** 方法论、设计说明、评审、验证与工作流落地构建的开源项目。
 
-- **33** 个生产级 Claude Code Skills：覆盖 Go、测试、安全、CI/CD、数据库、缓存、基础设施、调研、文档、规划
-- **41** 个可安装 skill：其中 33 个为生产级 skill，另外 8 个为 Multi-Agent Go 评审编排组件
-- **46** 份设计说明文档（中英双语），每个 skill 都有对应的说明链路
+- **51** 个可安装 Claude Code Skill：覆盖 Go、测试、安全、CI/CD、数据库、缓存、基础设施、调研、文档、规划，以及多智能体评审 / 分析
+- 其中 **16** 个为多智能体组件：9 件套的 Go 评审系统（`go-review-lead` + 8 个纵向评审）和 7 件套的美股分析系统（`stock-analysis-lead` + 6 个纵向评审）
+- **23** 个 skill 配有成对的设计说明（中英双语）→ **46** 份文档；**13** 个具备完整五层交付（rationale + skill + evaluation + 真实产出示例）
 - **64** 份量化评审报告（中英双语），含可追溯指标
-- **364** 个 golden JSON 场景 + **65** 个 Python 测试文件，确定性回归保障
+- **376** 个 golden JSON 场景 + **93** 个 Python 测试文件，确定性回归保障
 - 测试 skills：`unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
 - 交付管线：`go-makefile-writer` → `git-commit` → `create-pr` → `go-ci-workflow` → `go-code-reviewer` → `security-review`
 
@@ -30,7 +30,7 @@ npx skills add johnqtcg/awesome-skills --skill <skill-名称> -g
 # 安装多个 skill
 npx skills add johnqtcg/awesome-skills --skill go-review-lead systematic-debugging unit-test -g
 
-# 一键安装全部 41 个 skill（33 个生产级 + 8 个编排组件）
+# 一键安装全部 51 个 skill
 npx skills add johnqtcg/awesome-skills --all -g
 ```
 
@@ -42,9 +42,9 @@ npx skills find
 
 安装范围说明：
 
-- 仓库总计提供 **29** 个可安装 skill。
-- 其中 **33 个生产级 skill** 是完整的闭环集合，具备 rationale、evaluation 和 output examples。
-- 额外的 **8 个 skill** 是供 Multi-Agent Go 评审架构复用的编排组件；它们可安装、可回归测试，但暂不单独计入“生产级 skill”统计。
+- 仓库总计提供 **51** 个可安装 skill。
+- 其中 **23** 个配有成对的设计说明 + 量化评审报告；这 23 个里有 **13** 个还附带真实产出示例（完整五层交付：rationale + skill + evaluation + output example）。
+- 另有 **16** 个为多智能体编排组件——9 件套的 Go 评审系统（`go-review-lead` + 8 个纵向评审）和 7 件套的美股分析系统（`stock-analysis-lead` + 6 个纵向评审）；它们可安装、可回归测试。
 
 ### 方式二 — 手动安装
 
@@ -140,8 +140,8 @@ npx skills find
 
 这个项目没有把“让一个 LLM 去评价另一个 LLM”当成主要守护手段，而是优先采用确定性验证：
 
-- `132` 个 golden JSON 场景
-- `65` 个 Python 测试文件
+- `376` 个 golden JSON 场景
+- `93` 个 Python 测试文件
 - 合约测试守护门禁、输出契约和结构规则
 - 黄金场景测试守护真实任务覆盖
 

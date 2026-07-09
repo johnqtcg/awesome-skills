@@ -20,18 +20,18 @@
       </p>
       <div class="lp-stats" aria-label="Project statistics">
         <div class="lp-stat">
-          <strong class="lp-stat__num" data-count-to="33">33</strong>
-          <span class="lp-stat__label">Production<br>Skills</span>
+          <strong class="lp-stat__num" data-count-to="51">51</strong>
+          <span class="lp-stat__label">Installable<br>Skills</span>
         </div>
         <div class="lp-stat__sep" aria-hidden="true"></div>
         <div class="lp-stat">
-          <strong class="lp-stat__num" data-count-to="46">46</strong>
-          <span class="lp-stat__label">Rationale<br>Docs</span>
+          <strong class="lp-stat__num" data-count-to="23">23</strong>
+          <span class="lp-stat__label">Design +<br>Eval Docs</span>
         </div>
         <div class="lp-stat__sep" aria-hidden="true"></div>
         <div class="lp-stat">
-          <strong class="lp-stat__num" data-count-to="364">364</strong>
-          <span class="lp-stat__label">Golden<br>Fixtures</span>
+          <strong class="lp-stat__num" data-count-to="13">13</strong>
+          <span class="lp-stat__label">Five-Layer<br>Complete</span>
         </div>
         <div class="lp-stat__sep" aria-hidden="true"></div>
         <div class="lp-stat">
@@ -86,7 +86,7 @@
           <code class="lp-arch__dir">skills/</code>
           <strong class="lp-arch__name">Executable Skills</strong>
           <span class="lp-arch__desc">
-            33 production-ready skill artifacts shaped by the methodology above
+            51 installable skill artifacts shaped by the methodology above
           </span>
         </a>
 
@@ -170,9 +170,9 @@
     <div class="lp-container">
       <header class="lp-section__hd">
         <span class="lp-tag">Skills</span>
-        <h2 class="lp-section__h">33 Production-Ready Skills</h2>
+        <h2 class="lp-section__h">51 Installable Skills</h2>
         <p class="lp-section__p">
-          Each skill ships with paired rationale docs, evaluation reports, and regression tests.
+          23 ship paired design rationale and evaluation reports; 13 have complete five-layer coverage with real output examples. A selection is shown below.
         </p>
       </header>
 
@@ -394,9 +394,29 @@
             <h3 class="lp-qs__title">Browse and choose a skill</h3>
             <p class="lp-qs__p">
               Find a skill in the grid above, or start with
-              <a href="skills/google-search/SKILL/">google-search</a> as a straightforward
-              first example. Read the paired
-              <a href="rationale/">rationale docs</a> to understand the design decisions.
+              <a href="skills/google-search/SKILL/">google-search</a>. Every skill is a plain
+              <code>SKILL.md</code> — a small frontmatter contract plus a body of mandatory gates:
+            </p>
+            <pre class="lp-qs__pre"><code>---
+name: google-search
+description: Use when the user wants help finding information through
+  Google-style web search and expects more than raw links … classify
+  the goal, generate precise queries, cross-check key claims, return a
+  concise conclusion plus reusable search strings.
+allowed-tools: Read, Grep, Glob, WebFetch
+---
+
+## Mandatory Gates
+Gates execute in strict serial order. Any gate failure blocks the next.
+
+### 1) Scope Classification Gate
+### 2) Ambiguity Resolution Gate
+### 3) Evidence Requirements Gate
+### 4) Language Detection Gate
+…                       # 8 gates total</code></pre>
+            <p class="lp-qs__p">
+              Read the paired <a href="rationale/google-search/design/">rationale doc</a>
+              to see why it is built this way.
             </p>
           </div>
         </div>
@@ -404,12 +424,13 @@
         <div class="lp-qs__step">
           <div class="lp-qs__n">02</div>
           <div class="lp-qs__body">
-            <h3 class="lp-qs__title">Copy the skill directory</h3>
-            <pre class="lp-qs__pre"><code># Project-level (one project)
-cp -r skills/&lt;name&gt; .claude/skills/&lt;name&gt;
+            <h3 class="lp-qs__title">Install it</h3>
+            <pre class="lp-qs__pre"><code># Recommended — skills CLI (Claude Code, Cursor, Copilot, 15+ agents)
+npx skills add johnqtcg/awesome-skills --skill &lt;name&gt; -g
 
-# User-level (all projects)
-cp -r skills/&lt;name&gt; ~/.claude/skills/&lt;name&gt;</code></pre>
+# Or copy the directory manually
+cp -r skills/&lt;name&gt; .claude/skills/&lt;name&gt;      # this project
+cp -r skills/&lt;name&gt; ~/.claude/skills/&lt;name&gt;    # all projects</code></pre>
           </div>
         </div>
 
@@ -432,7 +453,7 @@ cp -r skills/&lt;name&gt; ~/.claude/skills/&lt;name&gt;</code></pre>
   <!-- ============================================================
        RECOMMENDED READING PATH
   ============================================================ -->
-  <section class="lp-section lp-section--alt lp-section--last" id="reading-path">
+  <section class="lp-section lp-section--alt" id="reading-path">
     <div class="lp-container">
       <header class="lp-section__hd">
         <span class="lp-tag">Recommended Path</span>
@@ -471,6 +492,40 @@ cp -r skills/&lt;name&gt; ~/.claude/skills/&lt;name&gt;</code></pre>
       <p class="lp-path__zh">
         <a href="index-zh/">&#20013;&#25991;&#29256;&#35831;&#20174;&#36825;&#37324;&#24320;&#22987;&nbsp;&#8594;</a>
       </p>
+    </div>
+  </section>
+
+  <!-- ============================================================
+       CONTRIBUTE
+  ============================================================ -->
+  <section class="lp-section lp-section--last" id="contribute">
+    <div class="lp-container">
+      <header class="lp-section__hd">
+        <span class="lp-tag">Contribute</span>
+        <h2 class="lp-section__h">Add or Improve a Skill</h2>
+        <p class="lp-section__p">
+          From a one-line typo fix to a full new skill — contributions are welcome, held to the
+          same five-layer standard the repository holds itself to.
+        </p>
+      </header>
+      <div class="lp-grid lp-grid--2col">
+        <a href="https://github.com/johnqtcg/awesome-skills/blob/main/CONTRIBUTING.md" class="lp-card" target="_blank" rel="noopener noreferrer">
+          <span class="lp-card__name">Contribution guide →</span>
+          <span class="lp-card__desc">What a complete skill ships with — SKILL.md + rationale + evaluation + output example — plus naming and layout rules.</span>
+        </a>
+        <a href="https://github.com/johnqtcg/awesome-skills/issues/new/choose" class="lp-card" target="_blank" rel="noopener noreferrer">
+          <span class="lp-card__name">Open an issue →</span>
+          <span class="lp-card__desc">Propose a new skill or report a bug with the guided templates, or pick up a good-first-issue.</span>
+        </a>
+        <a href="https://github.com/johnqtcg/awesome-skills/blob/main/.github/PULL_REQUEST_TEMPLATE.md" class="lp-card" target="_blank" rel="noopener noreferrer">
+          <span class="lp-card__name">PR template →</span>
+          <span class="lp-card__desc">A structured summary / changes / test-plan checklist. Every PR runs the golden-fixture regression suite in CI before merge.</span>
+        </a>
+        <a href="https://github.com/johnqtcg/awesome-skills" class="lp-card" target="_blank" rel="noopener noreferrer">
+          <span class="lp-card__name">Edit any page directly →</span>
+          <span class="lp-card__desc">Every doc page here carries an ✎ edit link (top-right) that opens its source on GitHub — the fastest path for a small fix.</span>
+        </a>
+      </div>
     </div>
   </section>
 
