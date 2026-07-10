@@ -57,7 +57,7 @@ Language:
 
 当前分层说明：
 
-- **13 个 skill** 具备完整的五层闭环；**23** 个配有成对的 rationale + evaluate。
+- **13 个 skill** 具备完整的五层闭环；**24** 个配有成对的 rationale + evaluate。
 - **16 个多智能体组件**——9 件套的 Go 评审系统（`go-review-lead` + 8 个纵向评审）和 7 件套的美股分析系统（`stock-analysis-lead` + 6 个纵向评审）——位于 `skills/` 下，作为可安装、可回归测试的编排构件存在；它们暂未按独立 skill 维度维护单独的 rationale / evaluate / outputexample。
 
 ## 4. 推荐的贡献单元

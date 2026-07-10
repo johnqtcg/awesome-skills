@@ -17,6 +17,7 @@
 - [go-code-reviewer](go-code-reviewer/design.zh-CN.md)
 - [update-doc](update-doc/design.zh-CN.md)
 - [tech-doc-writer](tech-doc-writer/design.zh-CN.md)
+- [load-test](load-test/design.zh-CN.md)
 - [unit-test](unit-test/design.zh-CN.md)
 
 完整列表请直接使用左侧导航浏览。

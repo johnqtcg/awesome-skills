@@ -133,6 +133,7 @@ nav:
       - go-code-reviewer: rationale/go-code-reviewer/design.md
       - go-makefile-writer: rationale/go-makefile-writer/design.md
       - google-search: rationale/google-search/design.md
+      - load-test: rationale/load-test/design.md
       - local-transcript: rationale/local-transcript/design.md
       - mysql-migration: rationale/mysql-migration/design.md
       - readme-generator: rationale/readme-generator/design.md
@@ -158,6 +159,7 @@ nav:
       - go-code-reviewer: rationale/go-code-reviewer/design.zh-CN.md
       - go-makefile-writer: rationale/go-makefile-writer/design.zh-CN.md
       - google-search: rationale/google-search/design.zh-CN.md
+      - load-test: rationale/load-test/design.zh-CN.md
       - local-transcript: rationale/local-transcript/design.zh-CN.md
       - mysql-migration: rationale/mysql-migration/design.zh-CN.md
       - readme-generator: rationale/readme-generator/design.zh-CN.md

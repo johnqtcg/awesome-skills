@@ -4,7 +4,7 @@ This section contains all installable skills collected in `awesome-skills`.
 
 The repository exposes **51 installable skills**:
 
-- **23** ship paired design rationale and evaluation reports; **13** of those also include real output examples (complete five-layer coverage: rationale + skill + evaluation + output example).
+- **24** ship paired design rationale and evaluation reports; **13** of those also include real output examples (complete five-layer coverage: rationale + skill + evaluation + output example).
 - **16** are multi-agent orchestration components (see below).
 
 Each skill is organized as its own directory and uses `SKILL.md` as the main entrypoint. The left navigation is the fastest way to jump to a specific skill.

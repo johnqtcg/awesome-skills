@@ -57,7 +57,7 @@ Five interconnected layers make up this repository. Please understand each befor
 
 Current scope note:
 
-- **13 skills** have full five-layer coverage; **23** carry paired rationale + evaluation.
+- **13 skills** have full five-layer coverage; **24** carry paired rationale + evaluation.
 - **16 multi-agent components** — a 9-part Go review system (`go-review-lead` + 8 vertical reviewers) and a 7-part US-equity analysis system (`stock-analysis-lead` + 6 vertical reviewers) — live under `skills/` as installable, regression-tested building blocks. They are not yet maintained as standalone rationale/evaluation/outputexample packages.
 
 ## 4. Preferred Contribution Unit

@@ -17,6 +17,7 @@ Representative rationale docs:
 - [go-code-reviewer](go-code-reviewer/design.md)
 - [update-doc](update-doc/design.md)
 - [tech-doc-writer](tech-doc-writer/design.md)
+- [load-test](load-test/design.md)
 - [unit-test](unit-test/design.md)
 
 Use the left navigation to browse the full set of skill-specific rationale documents.

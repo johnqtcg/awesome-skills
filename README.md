@@ -10,7 +10,7 @@ A curated system for **AI skill engineering** — not just a prompt collection. 
 
 - **51** installable Claude Code skills spanning Go, testing, security, CI/CD, database, cache, infrastructure, research, docs, planning, and multi-agent review/analysis
 - **16** of those are multi-agent components: a 9-part Go review system (`go-review-lead` + 8 vertical reviewers) and a 7-part US-equity analysis system (`stock-analysis-lead` + 6 vertical reviewers)
-- **23** skills ship paired design rationale (EN + ZH) → **46** rationale docs; **13** have complete five-layer coverage (rationale + skill + evaluation + real output example)
+- **24** skills ship paired design rationale (EN + ZH) → **48** rationale docs; **13** have complete five-layer coverage (rationale + skill + evaluation + real output example)
 - **64** paired evaluation reports (EN + ZH) with quantitative metrics
 - **376** golden test fixtures + **93** Python test files for deterministic regression
 - Testing skills: `unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
@@ -43,7 +43,7 @@ npx skills find
 Install scope note:
 
 - The repository exposes **51** installable skills in total.
-- **23** ship paired design rationale + evaluation reports; **13** of those also include real output examples (complete five-layer coverage: rationale + skill + evaluation + output example).
+- **24** ship paired design rationale + evaluation reports; **13** of those also include real output examples (complete five-layer coverage: rationale + skill + evaluation + output example).
 - **16** are multi-agent orchestration components — a 9-part Go review system (`go-review-lead` + 8 vertical reviewers) and a 7-part US-equity analysis system (`stock-analysis-lead` + 6 vertical reviewers). They are installable and regression-tested.
 
 ### Option 2 — Install manually
