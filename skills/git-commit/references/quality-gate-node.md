@@ -1,10 +1,10 @@
-# Quality Gate: Node.js / TypeScript
+# Quality Gate: Node.js / TypeScript / Bun / Deno
 
-Marker: `package.json` in the repo root.
+Marker: `package.json` in the repo root (Bun uses it too); `deno.json` / `deno.jsonc` marks a Deno project (see the Deno section — the `<pm>` workflow below does not apply).
 
 ## Package Manager Detection
 
-Pick the first match: `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `package-lock.json` or none → npm. Abbreviate as `<pm>` below.
+Pick the first match: `bun.lock` or `bun.lockb` → bun, `pnpm-lock.yaml` → pnpm, `yarn.lock` → yarn, `package-lock.json` or none → npm. Abbreviate as `<pm>` below (for bun, "exec" is `bunx`).
 
 ## Lint
 
@@ -39,3 +39,11 @@ FILE_COUNT=$(git diff --cached --name-only -- '*.js' '*.ts' '*.jsx' '*.tsx' | wc
     <pm> exec vitest run $CHANGED_DIRS
     ```
 - If no `"test"` script exists in `package.json`, skip and note it.
+
+## Deno
+
+Deno projects (`deno.json` / `deno.jsonc`, often no `package.json`) use the built-in toolchain instead of a package manager:
+
+- Lint: `deno lint`
+- Type check: `deno check .` (Deno ≥ 1.44; older versions need explicit entrypoints)
+- Tests: `deno task test` if a `test` task is defined in `deno.json`, else `deno test`

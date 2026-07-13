@@ -1,5 +1,7 @@
 import json
+import os
 import re
+import subprocess
 import unittest
 from pathlib import Path, PurePosixPath
 
@@ -142,15 +144,27 @@ def subject_is_valid(subject_line: str) -> bool:
 
 
 def resolve_timeout_seconds(env: dict[str, str], makefile_timeout: str | None) -> int:
+    """Ask the REAL enforcer (scripts/run-gate.sh) which timeout it would apply.
+
+    This used to be a Python re-implementation of the priority rules; now the
+    golden expectation is checked against the executable artifact itself.
+    """
+    cmd = ["bash", str(SKILL_DIR / "scripts" / "run-gate.sh")]
     if makefile_timeout:
-        return int(makefile_timeout)
-    if env.get("QUALITY_GATE_TIMEOUT_SECONDS"):
-        return int(env["QUALITY_GATE_TIMEOUT_SECONDS"])
-    if env.get("SKILL_QUALITY_GATE_TIMEOUT_SECONDS"):
-        return int(env["SKILL_QUALITY_GATE_TIMEOUT_SECONDS"])
-    if env.get("COMMIT_TEST_TIMEOUT"):
-        return int(env["COMMIT_TEST_TIMEOUT"])
-    return 120
+        cmd += ["-t", str(makefile_timeout)]
+    cmd.append("true")
+    run_env = {
+        **os.environ,
+        # Empty string counts as unset for ${VAR:-...}: shield from ambient env.
+        "QUALITY_GATE_TIMEOUT_SECONDS": "",
+        "SKILL_QUALITY_GATE_TIMEOUT_SECONDS": "",
+        "COMMIT_TEST_TIMEOUT": "",
+        **env,
+    }
+    out = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env=run_env)
+    match = re.search(r"GATE_TIMEOUT: (\d+)s", out.stderr)
+    assert match, f"run-gate.sh did not report its timeout: {out.stderr!r}"
+    return int(match.group(1))
 
 
 class GoldenFixtureIntegrityTests(unittest.TestCase):

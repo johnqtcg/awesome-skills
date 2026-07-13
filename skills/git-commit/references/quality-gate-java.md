@@ -2,6 +2,19 @@
 
 Marker: `pom.xml` or `build.gradle` / `build.gradle.kts` in the repo root.
 
+**Manifest changes are project-wide.** The module scoping below selects ZERO modules for a stage that only touches `pom.xml`/Gradle files — a silent no-op gate. Check first:
+
+```bash
+MANIFEST_CHANGED=$(git diff --cached --name-only -- 'pom.xml' '*/pom.xml' \
+  '*.gradle' '*.gradle.kts' \
+  'gradle.properties' '*/gradle.properties' 'gradle.lockfile' '*/gradle.lockfile' \
+  | wc -l | tr -d ' ')
+# `*.gradle` / `*.gradle.kts` match build.gradle AND settings.gradle(.kts) at any depth.
+```
+
+- `MANIFEST_CHANGED` > 0 → run the root gate (`mvn test -q` / `./gradlew test`) and skip module scoping — a dependency bump can break any module.
+- **Empty-set rule**: if the scoped module set below comes out empty for ANY reason (root-module sources, files the ancestor walk cannot map), run the root full gate — an empty selection must never mean "no tests" (silent no-op gate).
+
 ## Maven
 
 Determine scope by checking for multi-module structure:
@@ -26,6 +39,8 @@ MODULE_COUNT=$(grep -c '<module>' pom.xml 2>/dev/null || true); MODULE_COUNT=${M
   done | sort -u | paste -sd,)
   if [ -n "$CHANGED_MODULES" ]; then
     mvn test -pl "$CHANGED_MODULES" -am -q
+  else
+    mvn test -q   # empty-set rule: unmapped/root sources → full run, never a no-op
   fi
   ```
   Note: `-am` (also-make) ensures dependencies of changed modules are built first.
@@ -42,7 +57,11 @@ MODULE_COUNT=$(grep -c '<module>' pom.xml 2>/dev/null || true); MODULE_COUNT=${M
       d=$(dirname "$d")
     done
   done | sort -u | sed 's|/|:|g; s|^|:|')
-  for proj in $CHANGED_PROJECTS; do
-    ./gradlew "${proj}:test"
-  done
+  if [ -n "$CHANGED_PROJECTS" ]; then
+    for proj in $CHANGED_PROJECTS; do
+      ./gradlew "${proj}:test"
+    done
+  else
+    ./gradlew test   # empty-set rule: unmapped/root sources → full run, never a no-op
+  fi
   ```

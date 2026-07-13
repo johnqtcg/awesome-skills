@@ -12,6 +12,8 @@ CHANGED_PKGS=$(git diff --cached --name-only -- '*.go' \
   | sed 's|^|./|')
 ```
 
+**Manifest changes are module-wide.** If the stage touches `go.mod`, `go.sum`, or `go.work*`, ignore `CHANGED_PKGS` and use the full `./...` forms below — a dependency change can affect every package, and for a manifest-only stage `$CHANGED_PKGS` is empty (an unquoted empty var makes `go build`/`go vet` silently run on the current directory only).
+
 ## Build
 
 - **<= 20 packages**: `go build ./...`
