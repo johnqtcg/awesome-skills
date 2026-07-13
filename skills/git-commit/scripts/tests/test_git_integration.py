@@ -1,9 +1,10 @@
 """Behavioral integration tests for the git-commit skill.
 
-Unlike the contract/golden tests (which check structure and re-implement
-algorithms), these tests EXTRACT the actual bash blocks from SKILL.md and run
-them against real temporary git repositories, proving the preflight, secret-scan
-and stash logic behave correctly in the states the skill claims to handle.
+Runs the skill's real artifacts against temporary git repositories:
+  - the §1 Preflight bash block (still inline in SKILL.md), extracted and executed;
+  - scripts/secret-scan.sh;
+  - scripts/stash-guard.sh, including the failure paths a commit skill must survive
+    (gate FAILS, interrupt) — the changes must still be restored.
 
 Skipped when git is not installed.
 """
@@ -16,7 +17,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-SKILL_MD = Path(__file__).resolve().parents[2] / "SKILL.md"
+SKILL_DIR = Path(__file__).resolve().parents[2]
+SKILL_MD = SKILL_DIR / "SKILL.md"
+SCRIPTS = SKILL_DIR / "scripts"
 GIT = shutil.which("git")
 
 
@@ -32,12 +35,6 @@ def _block_with(*needles: str) -> str | None:
 
 
 PREFLIGHT = _block_with("is-inside-work-tree", "IN_PROGRESS")
-SECRET_SCAN = _block_with("SECRET_PATTERNS")
-# The fallback regex scan only (independent of whether gitleaks is installed).
-SECRET_FALLBACK = (
-    SECRET_SCAN[SECRET_SCAN.index("if command -v rg"):] if SECRET_SCAN else None
-)
-STASH = _block_with("git stash push --keep-index")
 
 _ISOLATED_ENV = {
     "GIT_CONFIG_GLOBAL": os.devnull,
@@ -57,114 +54,135 @@ def _env(extra=None):
     return env
 
 
-def _git(cwd, *args):
-    return subprocess.run([GIT, *args], cwd=cwd, env=_env(), capture_output=True, text=True)
+class _RepoTestCase(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.repo = Path(self._tmp.name)
+        self.git("init", "-q")
+        (self.repo / "file.txt").write_text("base\n")
+        self.git("add", "file.txt")
+        self.git("commit", "-qm", "chore: init")
+        self.default_branch = self.git("symbolic-ref", "--short", "HEAD").stdout.strip()
+
+    def git(self, *args):
+        return subprocess.run([GIT, *args], cwd=self.repo, env=_env(),
+                              capture_output=True, text=True)
+
+    def bash(self, script, extra_env=None):
+        return subprocess.run(["bash", "-c", script], cwd=self.repo, env=_env(extra_env),
+                              capture_output=True, text=True, timeout=60)
+
+    def script(self, name, *args, extra_env=None):
+        return subprocess.run(["bash", str(SCRIPTS / name), *args], cwd=self.repo,
+                              env=_env(extra_env), capture_output=True, text=True, timeout=60)
 
 
-def _bash(script, cwd, extra_env=None):
-    return subprocess.run(
-        ["bash", "-c", script], cwd=cwd, env=_env(extra_env),
-        capture_output=True, text=True, timeout=60,
-    )
+@unittest.skipUnless(GIT and PREFLIGHT, "git or preflight block unavailable")
+class PreflightTests(_RepoTestCase):
+    def test_clean_repo_reports_no_blocker(self):
+        out = self.bash(PREFLIGHT)
+        self.assertIn("true", out.stdout)
+        self.assertNotIn("IN_PROGRESS", out.stdout)
+        self.assertNotIn("file.txt", out.stdout)
+
+    def test_detects_merge_in_progress_and_conflict(self):
+        self.git("checkout", "-qb", "feature")
+        (self.repo / "file.txt").write_text("feature\n")
+        self.git("commit", "-qam", "feat: feature side")
+        self.git("checkout", "-q", self.default_branch)
+        (self.repo / "file.txt").write_text("mainline\n")
+        self.git("commit", "-qam", "fix: main side")
+        self.assertNotEqual(0, self.git("merge", "feature").returncode)
+        out = self.bash(PREFLIGHT)
+        self.assertIn("IN_PROGRESS MERGE_HEAD", out.stdout)
+        self.assertIn("file.txt", out.stdout)
+
+    def test_detects_rebase_in_progress_worktree_safe(self):
+        (self.repo / ".git" / "rebase-merge").mkdir()
+        self.assertIn("IN_PROGRESS rebase-merge", self.bash(PREFLIGHT).stdout)
+
+    def test_allows_detached_head(self):
+        head = self.git("rev-parse", "HEAD").stdout.strip()
+        self.git("checkout", "-q", head)
+        self.assertNotIn("IN_PROGRESS", self.bash(PREFLIGHT).stdout)
 
 
 @unittest.skipUnless(GIT, "git not installed")
-@unittest.skipUnless(PREFLIGHT and SECRET_FALLBACK and STASH,
-                     "expected bash blocks not found in SKILL.md")
-class GitCommitIntegrationTests(unittest.TestCase):
-    def setUp(self):
-        self._tmp = tempfile.TemporaryDirectory()
-        self.repo = Path(self._tmp.name)
-        _git(self.repo, "init", "-q")
-        (self.repo / "file.txt").write_text("base\n")
-        _git(self.repo, "add", "file.txt")
-        _git(self.repo, "commit", "-qm", "chore: init")
-        self.default_branch = _git(self.repo, "symbolic-ref", "--short", "HEAD").stdout.strip()
+class SecretScanScriptTests(_RepoTestCase):
+    def test_clean_stage_exits_zero_no_findings(self):
+        (self.repo / "hello.txt").write_text("nothing secret here\n")
+        self.git("add", "hello.txt")
+        out = self.script("secret-scan.sh")
+        self.assertEqual(0, out.returncode, "clean scan must exit 0, not the grep no-match 1")
+        self.assertNotIn("SECRET_CANDIDATE", out.stdout)
 
-    def tearDown(self):
-        self._tmp.cleanup()
+    def test_flags_added_sk_proj_key(self):
+        (self.repo / "config.py").write_text('API_KEY = "sk-proj-abcdEFGH1234ijklMNOP5678qrstUVWX"\n')
+        self.git("add", "config.py")
+        out = self.script("secret-scan.sh")
+        self.assertEqual(0, out.returncode)
+        self.assertIn("SECRET_CANDIDATE", out.stdout)
+        self.assertIn("sk-proj-", out.stdout)
 
-    # ---- Preflight ----
-
-    def test_preflight_clean_repo_reports_no_blocker(self):
-        out = _bash(PREFLIGHT, self.repo)
-        self.assertIn("true", out.stdout)          # is-inside-work-tree
-        self.assertNotIn("IN_PROGRESS", out.stdout)  # no rebase/merge/etc in progress
-        self.assertNotIn("file.txt", out.stdout)     # no conflicted paths
-
-    def test_preflight_detects_merge_in_progress_and_conflict(self):
-        _git(self.repo, "checkout", "-qb", "feature")
-        (self.repo / "file.txt").write_text("feature\n")
-        _git(self.repo, "commit", "-qam", "feat: feature side")
-        _git(self.repo, "checkout", "-q", self.default_branch)
-        (self.repo / "file.txt").write_text("mainline\n")
-        _git(self.repo, "commit", "-qam", "fix: main side")
-        merge = _git(self.repo, "merge", "feature")
-        self.assertNotEqual(0, merge.returncode, "merge should conflict")
-        out = _bash(PREFLIGHT, self.repo)
-        self.assertIn("IN_PROGRESS MERGE_HEAD", out.stdout)
-        self.assertIn("file.txt", out.stdout)  # conflict diff surfaced the path
-
-    def test_preflight_detects_rebase_in_progress_worktree_safe(self):
-        # Simulate a rebase state dir; the skill must find it via --git-path.
-        (self.repo / ".git" / "rebase-merge").mkdir()
-        out = _bash(PREFLIGHT, self.repo)
-        self.assertIn("IN_PROGRESS rebase-merge", out.stdout)
-
-    def test_preflight_allows_detached_head(self):
-        head = _git(self.repo, "rev-parse", "HEAD").stdout.strip()
-        _git(self.repo, "checkout", "-q", head)  # detached
-        out = _bash(PREFLIGHT, self.repo)
-        self.assertNotIn("IN_PROGRESS", out.stdout)  # detached HEAD is not a blocker
-
-    # ---- Secret scan (fallback regex layer) ----
-
-    def test_secret_scan_flags_added_sk_proj_key(self):
-        (self.repo / "config.py").write_text(
-            'API_KEY = "sk-proj-abcdEFGH1234ijklMNOP5678qrstUVWX"\n'
-        )
-        _git(self.repo, "add", "config.py")
-        out = _bash(SECRET_FALLBACK, self.repo)
-        self.assertIn("sk-proj-", out.stdout,
-                      "modern sk-proj- key must be flagged (regex allows internal hyphens)")
-
-    def test_secret_scan_ignores_removed_secret(self):
+    def test_ignores_removed_secret(self):
         (self.repo / "secrets.txt").write_text("KEY = AKIAIOSFODNN7EXAMPLE\n")
-        _git(self.repo, "add", "secrets.txt")
-        _git(self.repo, "commit", "-qm", "chore: add (pre-existing) secret")
+        self.git("add", "secrets.txt")
+        self.git("commit", "-qm", "chore: pre-existing secret")
         (self.repo / "secrets.txt").write_text("KEY = removed\n")
-        _git(self.repo, "add", "secrets.txt")
-        out = _bash(SECRET_FALLBACK, self.repo)
-        self.assertNotIn("AKIA", out.stdout,
-                         "removing a leaked secret must not be blocked (added-lines-only scan)")
+        self.git("add", "secrets.txt")
+        out = self.script("secret-scan.sh")
+        self.assertEqual(0, out.returncode)
+        self.assertNotIn("AKIA", out.stdout, "removing a secret must not be flagged")
 
-    # ---- Stash isolation + round-trip ----
 
-    def test_stash_isolates_gate_and_restores_worktree(self):
-        # staged modification + unstaged modification (same file) + untracked file
+@unittest.skipUnless(GIT, "git not installed")
+class StashGuardTests(_RepoTestCase):
+    def _dirty(self):
+        """staged + unstaged edit of the same file, plus an untracked file."""
         (self.repo / "file.txt").write_text("staged\n")
-        _git(self.repo, "add", "file.txt")
+        self.git("add", "file.txt")
         (self.repo / "file.txt").write_text("unstaged\n")
         (self.repo / "untracked.txt").write_text("untracked\n")
 
-        snap = self.repo / "snapshot.out"
-        probed = STASH.replace(
-            "# ... run quality gate against the staged-only tree ...",
-            'cat file.txt > "$SNAP"; '
-            '(ls untracked.txt >/dev/null 2>&1 && echo UNTRACKED_PRESENT || echo UNTRACKED_ABSENT) >> "$SNAP"',
-        )
-        self.assertIn("$SNAP", probed, "probe injection point must exist in the stash block")
-        result = _bash(probed, self.repo, extra_env={"SNAP": str(snap)})
-        self.assertEqual(0, result.returncode, result.stderr)
-
-        gate_view = snap.read_text()
-        self.assertIn("staged", gate_view, "gate must see the STAGED content")
-        self.assertNotIn("unstaged", gate_view, "gate must not see the unstaged change")
-        self.assertIn("UNTRACKED_ABSENT", gate_view, "gate must not see untracked files")
-
-        # after restore: unstaged change and untracked file are back (no data loss)
+    def _assert_restored(self):
         self.assertEqual("unstaged\n", (self.repo / "file.txt").read_text())
         self.assertTrue((self.repo / "untracked.txt").exists())
+        self.assertEqual("staged\n", self.git("show", ":file.txt").stdout)  # index preserved
+
+    def test_restores_after_successful_gate(self):
+        self._dirty()
+        out = self.script("stash-guard.sh", "true")
+        self.assertEqual(0, out.returncode, out.stderr)
+        self._assert_restored()
+
+    def test_restores_even_when_gate_fails(self):
+        # THE key transactional guarantee: gate failure must NOT strand changes in the stash.
+        self._dirty()
+        out = self.script("stash-guard.sh", "sh", "-c", "exit 3")
+        self.assertEqual(3, out.returncode, "gate's exit code must propagate")
+        self._assert_restored()
+
+    def test_gate_sees_staged_only_snapshot(self):
+        self._dirty()
+        snap = self.repo / "snap.out"
+        out = self.script(
+            "stash-guard.sh", "sh", "-c",
+            'cat file.txt > "$SNAP"; '
+            '{ ls untracked.txt >/dev/null 2>&1 && echo PRESENT || echo ABSENT; } >> "$SNAP"',
+            extra_env={"SNAP": str(snap)},
+        )
+        self.assertEqual(0, out.returncode, out.stderr)
+        view = snap.read_text()
+        self.assertIn("staged", view)          # gate saw staged content
+        self.assertNotIn("unstaged", view)     # not the unstaged edit
+        self.assertIn("ABSENT", view)          # untracked hidden during gate
+        self._assert_restored()
+
+    def test_no_dirty_state_runs_gate_without_stashing(self):
+        out = self.script("stash-guard.sh", "true")
+        self.assertEqual(0, out.returncode, out.stderr)
+        self.assertEqual("", self.git("stash", "list").stdout, "must not leave a stray stash")
 
 
 if __name__ == "__main__":

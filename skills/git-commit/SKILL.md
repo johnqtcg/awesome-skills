@@ -1,8 +1,8 @@
 ---
 name: git-commit
-description: Safely create a git commit by validating repository state, staging intended changes, scanning for secrets/conflicts, generating an English Angular (Conventional Commits) message from staged diff, and committing without amend.
+description: Safely create a git commit by validating repository state, staging intended changes, scanning for secrets/conflicts, generating a Conventional Commits message (repository convention first, else an English Angular default) from the staged diff, and committing without amend.
 disable-model-invocation: true
-allowed-tools: Read, Grep, Bash(git add*), Bash(git commit*), Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git stash*), Bash(git rev-parse*), Bash(git show*), Bash(go list*), Bash(go build*), Bash(go vet*), Bash(go test*), Bash(golangci-lint*), Bash(pytest*), Bash(ruff check*), Bash(flake8*), Bash(mypy*), Bash(pyright*), Bash(cargo check*), Bash(cargo clippy*), Bash(cargo test*), Bash(mvn test*), Bash(./gradlew*), Bash(npm*), Bash(yarn*), Bash(pnpm*), Bash(npx nx*), Bash(npx turbo*), Bash(npx lerna*), Bash(make test*), Bash(make check*), Bash(gitleaks*)
+allowed-tools: Read, Grep, Bash(git add*), Bash(git commit*), Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git stash*), Bash(git rev-parse*), Bash(git show*), Bash(go list*), Bash(go build*), Bash(go vet*), Bash(go test*), Bash(golangci-lint*), Bash(pytest*), Bash(ruff check*), Bash(flake8*), Bash(mypy*), Bash(pyright*), Bash(cargo check*), Bash(cargo clippy*), Bash(cargo test*), Bash(mvn test*), Bash(./gradlew*), Bash(npm*), Bash(yarn*), Bash(pnpm*), Bash(npx nx*), Bash(npx turbo*), Bash(npx lerna*), Bash(make test*), Bash(make check*), Bash(gitleaks*), Bash(bash scripts/stash-guard.sh*), Bash(bash scripts/secret-scan.sh*)
 metadata:
   short-description: Safely commit staged changes with an Angular-style message
 ---
@@ -45,42 +45,23 @@ A detached `HEAD` is not a stop condition — proceed and note it in the report.
 
 ### 2. Staging
 
+- **Snapshot what is already staged first**: `git diff --cached --name-only`. If files are already staged that the user did not ask to commit, STOP and ask — commit them together, keep them staged for later, or split. Never silently fold pre-staged files into this commit.
 - If the user names exact files, stage those only with `git add <paths>`.
 - If the user says "commit my changes", start from `git status --short`.
 - Count changed paths. **If > 8 files, always list the full file set and ask for confirmation** before staging anything.
 - If `<= 8` files, read the diffs and split by logical intent. If one file mixes intents, use `git add -p`.
 - Stage task-related untracked files only when they clearly belong to the same change.
-- If unstaged or untracked changes remain after staging, isolate them transactionally so the quality gate sees exactly the staged snapshot:
-```bash
-git stash push --keep-index --include-untracked -m "pre-commit gate $$"
-STASH=$(git rev-parse -q --verify stash@{0})    # exact OID we pushed (must be non-empty)
-# ... run quality gate against the staged-only tree ...
-# Restore onto a clean HEAD (avoids the --keep-index + pop double-apply conflict); the reset
-# is safe because the set is in the stash, and the OID check keeps us to OUR stash.
-if [ -n "$STASH" ] && [ "$(git rev-parse -q --verify stash@{0})" = "$STASH" ]; then
-  git reset -q --hard
-  git stash pop --index -q
-fi
-```
-If `stash pop` reports a conflict, or the OID check failed (another stash landed on top), STOP: the full change set is safe in stash `$STASH` — report the OID and let the user finish (`git stash apply --index $STASH`) after resolving. Never leave a half-restored tree.
+- If unstaged or untracked changes remain after staging, the quality gate MUST run through the isolation wrapper (§4) so it sees exactly the staged snapshot and your changes are restored on **every** exit path.
 - Verify staging with `git diff --cached --stat`. If nothing is staged, stop.
 - Run `git diff --cached --submodule=short`. If a submodule pointer changed, confirm it is intentional.
 
 ### 3. Secret/sensitive-content gate
 
+Run the scanner — it prints `SENSITIVE_FILE:` / `SECRET_CANDIDATE:` lines (empty output = clean) and always exits 0, so "no secret" is never misread as a gate failure:
 ```bash
-# Prefer the repo's own scanner if configured — it handles entropy, binaries, baselines.
-if [ -f .gitleaks.toml ] || command -v gitleaks >/dev/null 2>&1; then
-  gitleaks protect --staged --redact --no-banner || echo "REVIEW: gitleaks findings above"
-fi
-
-# Built-in fallback. Scan ADDED lines only — never block a commit that REMOVES a secret.
-if command -v rg >/dev/null 2>&1; then SEARCHER="rg -n"; else SEARCHER="grep -En"; fi
-SENSITIVE_FILES='(^|/)(\.env(\..*)?|id_rsa|id_ed25519|id_dsa|.*\.pem|.*\.p12|.*\.key|.*\.keystore|credentials\.json|service[-_]?account.*\.json)$'
-SECRET_PATTERNS='(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|DSA|PGP|PRIVATE) KEY-----|ghp_[A-Za-z0-9]{36}|gho_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{82}|xox[baprs]-[A-Za-z0-9\-]+|hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+|AIza[0-9A-Za-z\-_]{35}|sk_live_[0-9a-zA-Z]{24,}|rk_live_[0-9a-zA-Z]{24,}|sk-[A-Za-z0-9_-]{20,}|SG\.[A-Za-z0-9\-_]{22}\.[A-Za-z0-9\-_]{43}|mongodb(\+srv)?://[^\s]+@|postgres(ql)?://[^\s]*:[^\s]*@|mysql://[^\s]*:[^\s]*@|password\s*=|secret\s*=|token\s*=|api[_-]?key\s*=)'
-git diff --cached --name-only --diff-filter=d | $SEARCHER "$SENSITIVE_FILES"
-git diff --cached --diff-filter=d -U0 | grep -E '^\+[^+]' | $SEARCHER "$SECRET_PATTERNS"
+bash scripts/secret-scan.sh
 ```
+It prefers the repo's `gitleaks` when the binary is installed (via the current `gitleaks git --pre-commit --staged` form) and always runs a built-in regex fallback over **added** staged lines only — removing a secret is never blocked.
 
 Triage every match. **Path/type never auto-dismisses a match — real keys do get committed into tests and docs. Only a committed allowlist hard-dismisses; everything else lowers confidence and is still surfaced.**
 
@@ -111,6 +92,11 @@ git diff --cached --name-only | grep '\.' | sed 's/.*\.//' | sort | uniq -c | so
 - If a check fails, stop and report it.
 - The user may explicitly skip; report `quality gate: skipped by user`.
 - **Timeout**: default is **120 seconds** with no output. If the repo wrapper or environment exposes `COMMIT_TEST_TIMEOUT`, `QUALITY_GATE_TIMEOUT_SECONDS`, or `SKILL_QUALITY_GATE_TIMEOUT_SECONDS`, use that override and report the chosen timeout before running long tests.
+- **Isolation (guaranteed restore)**: when unstaged or untracked changes are present, run the detected gate through the wrapper so those changes are stashed and restored on **every** exit path — gate pass, gate failure, or interrupt:
+  ```bash
+  bash scripts/stash-guard.sh <gate command>   # e.g. bash scripts/stash-guard.sh make ci
+  ```
+  Its exit code is the gate's. On a restore conflict or stash-OID mismatch it aborts loudly and preserves the exact stash (`git stash apply --index <OID>`) — never a half-restored tree.
 
 ### 5. Compose commit message
 
@@ -118,6 +104,7 @@ git diff --cached --name-only | grep '\.' | sed 's/.*\.//' | sort | uniq -c | so
 - commitlint config (`.commitlintrc*`, `commitlint.config.*`, or a `commitlint` key in `package.json`) → follow its `type-enum`, case, and length rules.
 - `.gitmessage` template (`git config commit.template`), or commit rules in `CONTRIBUTING`/`AGENTS.md` → follow them.
 - If a convention is found, adopt its type set, language, and subject length in place of the Angular / English / 50-char defaults. If none is found, use the defaults.
+- Carry the discovered subject-length limit into the §6 guard as `SUBJECT_MAX` (default 50) so the executable check enforces the repo's actual limit, not a hardcoded 50.
 
 Scope discovery:
 ```bash
@@ -137,7 +124,8 @@ git log --oneline -50 | grep -oE '^[0-9a-f]+ [a-z]+(\([a-z0-9_-]+\))?:' | sed 's
 Single-line commit:
 ```bash
 SUBJECT='<type>(<scope>): <subject>'
-[ ${#SUBJECT} -le 50 ] || { echo "subject too long (${#SUBJECT}/50)"; exit 1; }
+SUBJECT_MAX=${SUBJECT_MAX:-50}   # 50 default; set from the repo convention (§5)
+[ ${#SUBJECT} -le "$SUBJECT_MAX" ] || { echo "subject too long (${#SUBJECT}/$SUBJECT_MAX)"; exit 1; }
 case "$SUBJECT" in *.) echo "subject must not end with ."; exit 1 ;; esac
 git commit -m "$SUBJECT"
 ```
@@ -145,7 +133,8 @@ git commit -m "$SUBJECT"
 Multi-line commit:
 ```bash
 SUBJECT='<type>(<scope>): <subject>'
-[ ${#SUBJECT} -le 50 ] || { echo "subject too long (${#SUBJECT}/50)"; exit 1; }
+SUBJECT_MAX=${SUBJECT_MAX:-50}   # 50 default; set from the repo convention (§5)
+[ ${#SUBJECT} -le "$SUBJECT_MAX" ] || { echo "subject too long (${#SUBJECT}/$SUBJECT_MAX)"; exit 1; }
 case "$SUBJECT" in *.) echo "subject must not end with ."; exit 1 ;; esac
 git commit -F - <<'EOF'
 <type>(<scope>): <subject>
@@ -166,7 +155,8 @@ Hook awareness:
 ### 7. Post-commit report
 ```bash
 git rev-parse --short HEAD
-git show --name-status --oneline --no-patch HEAD
+git show -s --format='%h %s' HEAD          # hash + subject
+git show --name-status --format= HEAD      # changed files (NOT --no-patch: it disables --name-status)
 ```
 Report the hash, final subject, changed files summary, and quality gate status.
 

@@ -127,7 +127,8 @@ class TestKeyContent:
         assert "<= 50 char" in skill_content or "<= 50 chars" in skill_content
 
     def test_subject_guard_is_executable(self, skill_content):
-        assert "subject too long (${#SUBJECT}/50)" in skill_content
+        assert "subject too long (${#SUBJECT}/$SUBJECT_MAX)" in skill_content
+        assert "SUBJECT_MAX=${SUBJECT_MAX:-50}" in skill_content
         assert "subject must not end with ." in skill_content
 
     def test_heredoc_commit_format(self, skill_content):
@@ -142,8 +143,12 @@ class TestKeyContent:
     def test_hook_awareness(self, skill_content):
         assert "--no-verify" in skill_content, "Must mention --no-verify policy"
 
-    def test_stash_strategy(self, skill_content):
-        assert "git stash push --keep-index" in skill_content
+    def test_stash_guard_script(self):
+        script = SKILL_DIR / "scripts" / "stash-guard.sh"
+        assert script.is_file(), "scripts/stash-guard.sh must exist"
+        content = script.read_text()
+        assert "git stash push --keep-index" in content
+        assert "trap" in content, "restore must be trap-guaranteed on every exit path"
 
     def test_partial_staging(self, skill_content):
         assert "git add -p" in skill_content
@@ -161,9 +166,13 @@ class TestKeyContent:
     def test_staging_file_count_threshold(self, skill_content):
         assert "> 8 files" in skill_content, "Must define staging confirmation threshold"
 
-    def test_rg_grep_fallback(self, skill_content):
-        assert "command -v rg" in skill_content, "Must detect rg availability"
-        assert "grep -En" in skill_content, "Must have grep fallback"
+    def test_secret_scan_script_fallback(self):
+        script = SKILL_DIR / "scripts" / "secret-scan.sh"
+        assert script.is_file(), "scripts/secret-scan.sh must exist"
+        content = script.read_text()
+        assert "command -v rg" in content, "must detect rg availability"
+        assert "grep -En" in content, "must have grep fallback"
+        assert "gitleaks git --pre-commit" in content, "must use the non-deprecated gitleaks form"
 
     def test_submodule_awareness(self, skill_content):
         assert "submodule" in skill_content.lower()
