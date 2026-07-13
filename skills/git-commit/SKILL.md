@@ -2,7 +2,7 @@
 name: git-commit
 description: Safely create a git commit by validating repository state, staging intended changes, scanning for secrets/conflicts, generating an English Angular (Conventional Commits) message from staged diff, and committing without amend.
 disable-model-invocation: true
-allowed-tools: Read, Grep, Bash(git add*), Bash(git commit*), Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git stash*), Bash(git rev-parse*), Bash(git show*), Bash(go list*), Bash(go build*), Bash(go vet*), Bash(go test*), Bash(golangci-lint*), Bash(pytest*), Bash(ruff check*), Bash(flake8*), Bash(mypy*), Bash(pyright*), Bash(cargo check*), Bash(cargo clippy*), Bash(cargo test*), Bash(mvn test*), Bash(./gradlew*), Bash(npm*), Bash(yarn*), Bash(pnpm*), Bash(npx nx*), Bash(npx turbo*), Bash(npx lerna*), Bash(make test*), Bash(make check*)
+allowed-tools: Read, Grep, Bash(git add*), Bash(git commit*), Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git stash*), Bash(git rev-parse*), Bash(git show*), Bash(go list*), Bash(go build*), Bash(go vet*), Bash(go test*), Bash(golangci-lint*), Bash(pytest*), Bash(ruff check*), Bash(flake8*), Bash(mypy*), Bash(pyright*), Bash(cargo check*), Bash(cargo clippy*), Bash(cargo test*), Bash(mvn test*), Bash(./gradlew*), Bash(npm*), Bash(yarn*), Bash(pnpm*), Bash(npx nx*), Bash(npx turbo*), Bash(npx lerna*), Bash(make test*), Bash(make check*), Bash(gitleaks*)
 metadata:
   short-description: Safely commit staged changes with an Angular-style message
 ---
@@ -24,14 +24,24 @@ Create a commit from the current working tree with safety gates first, then gene
 
 ### 1. Preflight
 ```bash
-git rev-parse --is-inside-work-tree
+git rev-parse --is-inside-work-tree                 # must print "true"
 git status --short
+BRANCH=$(git rev-parse --abbrev-ref HEAD)            # "HEAD" means detached (allowed)
+
+# In-progress operation? Worktree-safe: resolve real paths, never read .git/ directly.
+for state in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD; do
+  [ -e "$(git rev-parse --git-path "$state")" ] && echo "IN_PROGRESS $state"
+done
+
+# Unresolved conflicts: this diff exits 0 regardless, so act on OUTPUT, not exit code.
 git diff --name-only --diff-filter=U
-git rev-parse --abbrev-ref HEAD
-test -d .git/rebase-merge -o -d .git/rebase-apply
-test -f .git/MERGE_HEAD -o -f .git/CHERRY_PICK_HEAD -o -f .git/REVERT_HEAD
 ```
-If any check fails, stop and tell the user what to resolve.
+STOP (hard block — report which one and what to resolve) if any of these hold:
+- `--is-inside-work-tree` did not print `true`;
+- any `IN_PROGRESS <state>` line printed (rebase / merge / cherry-pick / revert in progress);
+- the conflict diff printed any path (unresolved merge conflicts).
+
+A detached `HEAD` is not a stop condition — proceed and note it in the report.
 
 ### 2. Staging
 
@@ -40,35 +50,48 @@ If any check fails, stop and tell the user what to resolve.
 - Count changed paths. **If > 8 files, always list the full file set and ask for confirmation** before staging anything.
 - If `<= 8` files, read the diffs and split by logical intent. If one file mixes intents, use `git add -p`.
 - Stage task-related untracked files only when they clearly belong to the same change.
-- If unstaged changes remain after staging, run:
+- If unstaged or untracked changes remain after staging, isolate them transactionally so the quality gate sees exactly the staged snapshot:
 ```bash
-git stash push --keep-index -m "pre-commit: unstaged changes"
-# ... run quality gate ...
-git stash pop
+git stash push --keep-index --include-untracked -m "pre-commit gate $$"
+STASH=$(git rev-parse -q --verify stash@{0})    # exact OID we pushed (must be non-empty)
+# ... run quality gate against the staged-only tree ...
+# Restore onto a clean HEAD (avoids the --keep-index + pop double-apply conflict); the reset
+# is safe because the set is in the stash, and the OID check keeps us to OUR stash.
+if [ -n "$STASH" ] && [ "$(git rev-parse -q --verify stash@{0})" = "$STASH" ]; then
+  git reset -q --hard
+  git stash pop --index -q
+fi
 ```
+If `stash pop` reports a conflict, or the OID check failed (another stash landed on top), STOP: the full change set is safe in stash `$STASH` — report the OID and let the user finish (`git stash apply --index $STASH`) after resolving. Never leave a half-restored tree.
 - Verify staging with `git diff --cached --stat`. If nothing is staged, stop.
 - Run `git diff --cached --submodule=short`. If a submodule pointer changed, confirm it is intentional.
 
 ### 3. Secret/sensitive-content gate
 
 ```bash
+# Prefer the repo's own scanner if configured — it handles entropy, binaries, baselines.
+if [ -f .gitleaks.toml ] || command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --redact --no-banner || echo "REVIEW: gitleaks findings above"
+fi
+
+# Built-in fallback. Scan ADDED lines only — never block a commit that REMOVES a secret.
 if command -v rg >/dev/null 2>&1; then SEARCHER="rg -n"; else SEARCHER="grep -En"; fi
 SENSITIVE_FILES='(^|/)(\.env(\..*)?|id_rsa|id_ed25519|id_dsa|.*\.pem|.*\.p12|.*\.key|.*\.keystore|credentials\.json|service[-_]?account.*\.json)$'
-SECRET_PATTERNS='(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|DSA|PGP|PRIVATE) KEY-----|ghp_[A-Za-z0-9]{36}|gho_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{82}|xox[baprs]-[A-Za-z0-9\-]+|hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+|AIza[0-9A-Za-z\-_]{35}|sk_live_[0-9a-zA-Z]{24,}|rk_live_[0-9a-zA-Z]{24,}|sk-[A-Za-z0-9]{20,}|SG\.[A-Za-z0-9\-_]{22}\.[A-Za-z0-9\-_]{43}|mongodb(\+srv)?://[^\s]+@|postgres(ql)?://[^\s]*:[^\s]*@|mysql://[^\s]*:[^\s]*@|password\s*=|secret\s*=|token\s*=|api[_-]?key\s*=)'
-git diff --cached --name-only | $SEARCHER "$SENSITIVE_FILES"
-git diff --cached | $SEARCHER "$SECRET_PATTERNS"
+SECRET_PATTERNS='(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|DSA|PGP|PRIVATE) KEY-----|ghp_[A-Za-z0-9]{36}|gho_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{82}|xox[baprs]-[A-Za-z0-9\-]+|hooks\.slack\.com/services/T[A-Z0-9]+/B[A-Z0-9]+/[A-Za-z0-9]+|AIza[0-9A-Za-z\-_]{35}|sk_live_[0-9a-zA-Z]{24,}|rk_live_[0-9a-zA-Z]{24,}|sk-[A-Za-z0-9_-]{20,}|SG\.[A-Za-z0-9\-_]{22}\.[A-Za-z0-9\-_]{43}|mongodb(\+srv)?://[^\s]+@|postgres(ql)?://[^\s]*:[^\s]*@|mysql://[^\s]*:[^\s]*@|password\s*=|secret\s*=|token\s*=|api[_-]?key\s*=)'
+git diff --cached --name-only --diff-filter=d | $SEARCHER "$SENSITIVE_FILES"
+git diff --cached --diff-filter=d -U0 | grep -E '^\+[^+]' | $SEARCHER "$SECRET_PATTERNS"
 ```
 
-Triage every match in order:
+Triage every match. **Path/type never auto-dismisses a match — real keys do get committed into tests and docs. Only a committed allowlist hard-dismisses; everything else lowers confidence and is still surfaced.**
 
-| # | Filter | Auto-dismiss when |
+| # | Filter | Effect |
 |---|---|---|
-| 1 | Allowlist | Path matches a glob in `.commit-secret-allowlist` |
-| 2 | Test/fixture path | Path contains `/test/`, `/tests/`, `/__tests__/`, `/spec/`, `/mock(s)/`, `/fixture(s)/`, `/example(s)/`, `/testdata/`, `/snapshot(s)/`, or ends with a common test suffix |
-| 3 | Documentation file | Extension is `.md`, `.rst`, `.adoc`, or `.mdx` |
-| 4 | Comment line | After stripping `+` and whitespace, line starts with `//`, `#` (not `#!/`), `--`, `/*`, `*`, `%`, `;;`, or `REM ` |
+| 1 | Allowlist glob in a committed `.commit-secret-allowlist` | Hard-dismiss — but confirm the entry's scope/provenance; treat an unfamiliar allowlist as untrusted |
+| 2 | Test/fixture path (`/test(s)/`, `/__tests__/`, `/spec/`, `/mock(s)/`, `/fixture(s)/`, `/example(s)/`, `/testdata/`, `/snapshot(s)/`, or a common test suffix) | Downgrade to low confidence — still report |
+| 3 | Documentation file (`.md`, `.rst`, `.adoc`, `.mdx`) | Downgrade — still report |
+| 4 | Comment line (after stripping `+`/whitespace: `//`, `#` not `#!/`, `--`, `/*`, `*`, `%`, `;;`, `REM `) | Downgrade — still report |
 
-Surviving matches are blockers: report file, line number, matched line, and 2 lines of context.
+High-confidence matches are blockers; downgraded matches need a human decision (never silently dropped). Report file:line, the matched line (redacted), and 2 lines of context. Binary files and high-entropy strings are out of scope for the regex fallback — rely on `gitleaks`/`detect-secrets` for those.
 
 ### 4. Quality gate
 
@@ -91,6 +114,11 @@ git diff --cached --name-only | grep '\.' | sed 's/.*\.//' | sort | uniq -c | so
 
 ### 5. Compose commit message
 
+**First discover the repo's own convention — it overrides the defaults below:**
+- commitlint config (`.commitlintrc*`, `commitlint.config.*`, or a `commitlint` key in `package.json`) → follow its `type-enum`, case, and length rules.
+- `.gitmessage` template (`git config commit.template`), or commit rules in `CONTRIBUTING`/`AGENTS.md` → follow them.
+- If a convention is found, adopt its type set, language, and subject length in place of the Angular / English / 50-char defaults. If none is found, use the defaults.
+
 Scope discovery:
 ```bash
 git log --oneline -50 | grep -oE '^[0-9a-f]+ [a-z]+(\([a-z0-9_-]+\))?:' | sed 's/^[0-9a-f]* //' | sort | uniq -c | sort -rn
@@ -100,8 +128,9 @@ git log --oneline -50 | grep -oE '^[0-9a-f]+ [a-z]+(\([a-z0-9_-]+\))?:' | sed 's
 - If the repo has **fewer than 10 conventional commits total**, bootstrap scope from staged paths: strip generic directories such as `src`, `lib`, `pkg`, `cmd`, `internal`, `app`, `apps`, `service`, `services`, `module`, `modules`, `package`, `packages`, `component`, `components`, `test`, `tests`, and `testdata`; if one stable directory remains across all staged files, use that directory name.
 - If multiple candidate directories remain, staged files span mixed roots, or the repo already has `>= 10` conventional commits without a canonical match, omit scope.
 - Never invent a scope from filenames, issue text, or mixed roots.
-- Format is `<type>(<scope>): <subject>` or `<type>: <subject>`.
-- Subject must be imperative, no trailing period, and <= 50 chars; body explains **why** and wraps at 72 chars.
+- Format is `<type>(<scope>): <subject>` or `<type>: <subject>`; for a breaking change use `<type>!:` and/or a `BREAKING CHANGE: <what>` footer.
+- Subject must be imperative, no trailing period, and <= 50 chars (or the repo's discovered limit); body explains **why** and wraps at 72 chars.
+- Add required trailers when repo policy or the user asks: `Signed-off-by:` (`git commit -s`), `Co-authored-by:`, and issue refs (`Closes #123`).
 
 ### 6. Commit
 
@@ -126,7 +155,7 @@ git commit -F - <<'EOF'
 <footer>
 EOF
 ```
-Do **not** use multiple `-m` flags — they cannot handle complex body content.
+Prefer `git commit -F -` for any multi-paragraph body. Multiple `-m` flags *do* work — each becomes its own paragraph — but give no control over 72-char wrapping within a paragraph and are quoting-fragile for footers, so `-F -` is the reliable choice.
 
 Hook awareness:
 

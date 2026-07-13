@@ -8,7 +8,9 @@ Determine scope by checking for multi-module structure:
 
 ```bash
 # Check if this is a multi-module project (parent pom with <modules>)
-MODULE_COUNT=$(grep -c '<module>' pom.xml 2>/dev/null || echo 0)
+MODULE_COUNT=$(grep -c '<module>' pom.xml 2>/dev/null || true); MODULE_COUNT=${MODULE_COUNT:-0}
+# (`grep -c` prints 0 AND exits 1 on no match; `|| echo 0` would append a second line
+#  and break the numeric compare below. `|| true` + default keeps it a single value.)
 ```
 
 - **Single-module** (`MODULE_COUNT` = 0): `mvn test -q`

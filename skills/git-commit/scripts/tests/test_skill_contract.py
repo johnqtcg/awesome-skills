@@ -133,8 +133,11 @@ class TestKeyContent:
     def test_heredoc_commit_format(self, skill_content):
         assert "<<'EOF'" in skill_content, "Must use heredoc for multi-line commits"
 
-    def test_no_multiple_m_flags(self, skill_content):
-        assert "Do **not** use multiple `-m`" in skill_content
+    def test_multiple_m_guidance_is_accurate(self, skill_content):
+        # Prefer `-F -` for bodies. The old claim "multiple -m cannot handle a body"
+        # was factually wrong — each -m becomes its own paragraph.
+        assert "git commit -F -" in skill_content
+        assert "each becomes its own paragraph" in skill_content
 
     def test_hook_awareness(self, skill_content):
         assert "--no-verify" in skill_content, "Must mention --no-verify policy"

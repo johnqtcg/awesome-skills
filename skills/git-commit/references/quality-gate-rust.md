@@ -14,7 +14,9 @@ Determine scope by checking for workspace:
 
 ```bash
 # Workspace if [workspace] section exists in root Cargo.toml
-IS_WORKSPACE=$(grep -c '^\[workspace\]' Cargo.toml 2>/dev/null || echo 0)
+IS_WORKSPACE=$(grep -c '^\[workspace\]' Cargo.toml 2>/dev/null || true); IS_WORKSPACE=${IS_WORKSPACE:-0}
+# (`grep -c` prints 0 AND exits 1 on no match; `|| echo 0` would append a second line
+#  and break the numeric compare. `|| true` + default keeps it a single value.)
 ```
 
 - **Single-crate** (`IS_WORKSPACE` = 0): `cargo test`

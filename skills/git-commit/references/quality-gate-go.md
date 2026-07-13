@@ -26,6 +26,10 @@ CHANGED_PKGS=$(git diff --cached --name-only -- '*.go' \
 ## Tests
 
 - **<= 20 packages**: `go test ./...`
-- **> 20 packages**: `go test $CHANGED_PKGS`
+- **> 20 packages**: still prefer `go test ./...` — Go caches unchanged packages
+  (`ok ... (cached)`), so a full run is usually cheap, and unlike scoping to
+  `$CHANGED_PKGS` it **cannot miss a reverse dependency** (a package that imports a
+  changed one). Scope to `$CHANGED_PKGS` only when a full run is proven too slow, and
+  then state explicitly that reverse-dependency tests were skipped.
 
 Note: POSIX shell utilities required (`dirname`, `sort`, `sed`). On native Windows without Git Bash/WSL, list changed packages manually.
