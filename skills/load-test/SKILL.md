@@ -29,9 +29,14 @@ allowed-tools: Read, Write, Grep, Glob, Bash(k6 version*), Bash(vegeta -version*
 
 ## 1 Scope
 
-**In scope**: HTTP/gRPC service load testing, SLO definition, scenario design,
-script generation (k6 primary, vegeta, wrk), result analysis, bottleneck
-identification, capacity planning recommendations.
+**In scope**: HTTP service load testing (primary), SLO definition, scenario
+design, script generation (k6 primary; vegeta for constant-rate), result
+analysis, bottleneck identification, capacity planning recommendations.
+
+**Partial coverage** — the same methodology applies, but this skill ships no
+dedicated reference patterns yet: gRPC services, `wrk` / Lua scripting, and
+distributed execution (k6 Operator, execution segments, k6 Cloud). State this
+limitation explicitly if a task centers on one of these.
 
 **Out of scope**: unit/micro-benchmarks (use `go-benchmark`), database-only
 benchmarks, browser/UI performance (Lighthouse), chaos engineering fault
@@ -156,8 +161,10 @@ Never fabricate performance numbers. Never claim SLO compliance without data.
 
 ### 5.3 Analysis Methodology
 
-11. **Report percentiles, not averages** — p50, p95, p99, p99.9, max. Averages
-    are meaningless for latency.
+11. **Report percentiles, not averages** — p50, p95, p99, p99.9, max. An average
+    is meaningless as a latency SLO or verdict (a bimodal 5ms/500ms service and a
+    flat 250ms service share the same mean); averages still have their place in
+    capacity math like Little's Law — just never as the latency verdict.
 12. **Correlate metrics across layers** — latency + CPU + memory + DB connections
     + goroutines + GC pauses. Latency alone doesn't find the bottleneck.
 13. **Identify saturation point** — the RPS where p99 exceeds SLO. This is the
@@ -192,12 +199,17 @@ Never fabricate performance numbers. Never claim SLO compliance without data.
 
 | Tool      | Best For                                    | Language | Distributed |
 |-----------|---------------------------------------------|----------|-------------|
-| **k6**    | Scenario modeling, JS scripting, CI/CD       | JS/TS    | k6 Cloud    |
+| **k6**    | Scenario modeling, JS scripting, CI/CD       | JS/TS    | Cloud / Operator / segments |
 | **vegeta** | Constant-rate attacks, Go pipelines         | Go CLI   | Manual      |
 | **wrk**   | Raw throughput measurement, simple scripts   | Lua      | No          |
 
 Default to k6 unless: (a) user explicitly requests another tool, (b) constant-rate
 is the only requirement (vegeta), or (c) maximum raw throughput measurement (wrk).
+
+This skill ships k6 and vegeta reference patterns. `wrk` is listed for
+tool-selection completeness but has no dedicated pattern reference here — use it
+only for simple raw-throughput probes. Distributed k6 (Operator / execution
+segments / Cloud) is named but not yet backed by a reference pattern.
 
 ### 6.2 Scenario Selection
 
@@ -254,7 +266,7 @@ export const options = {
   thresholds: {
     http_req_duration: ['p(99)<200', 'p(50)<50'],   // latency SLO
     http_req_failed: ['rate<0.001'],                 // error rate SLO
-    http_reqs: ['rate>5000'],                        // throughput SLO
+    http_reqs: ['rate>5000'],                        // total-RPS SLO (counts failures too; pair with http_req_failed)
   },
 };
 // Output: p99=312ms FAIL (SLO: <200ms) — clear, actionable

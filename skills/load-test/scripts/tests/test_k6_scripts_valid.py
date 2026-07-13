@@ -89,5 +89,26 @@ class K6InspectTests(unittest.TestCase):
                                 "expected at least 4 locally-validatable scripts")
 
 
+class RateMetricSemanticsTests(unittest.TestCase):
+    """A k6 Rate must receive a value every iteration (0 or 1). Feeding it only
+    on failure (``check(...) || rate.add(1)``) makes it report 0% or 100%, never
+    the true ratio. Static guard so the teaching scripts cannot regress."""
+
+    RATE_DECL = re.compile(r"(?:const|let|var)\s+(\w+)\s*=\s*new Rate\(")
+
+    def test_rate_metrics_recorded_every_iteration(self) -> None:
+        violations = []
+        for idx, src in complete_scripts():
+            for m in self.RATE_DECL.finditer(src):
+                name = m.group(1)
+                adds = re.findall(rf"\b{re.escape(name)}\.add\(([^)]*)\)", src)
+                if adds and all(a.strip() == "1" for a in adds):
+                    violations.append(
+                        f"block #{idx}: Rate '{name}' only ever adds literal 1 "
+                        f"(reports 0%/100%, not the true ratio) — use {name}.add(!ok)")
+        self.assertEqual([], violations,
+                         "Rate metric recorded only on failure:\n  " + "\n  ".join(violations))
+
+
 if __name__ == "__main__":
     unittest.main()

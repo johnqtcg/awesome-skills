@@ -1,0 +1,15 @@
+{
+  "id": "LT-015",
+  "title": "Custom Rate metric records only failures (reports 0% or 100%)",
+  "type": "defect",
+  "severity": "standard",
+  "code_snippet": "import http from 'k6/http';\nimport { check, sleep } from 'k6';\nimport { Rate } from 'k6/metrics';\n\nconst errorRate = new Rate('errors');\n\nexport const options = {\n  thresholds: { errors: ['rate<0.01'] },\n};\n\nexport default function () {\n  const res = http.get('http://api.example.com/orders');\n  check(res, { 'status is 200': (r) => r.status === 200 }) || errorRate.add(1);\n  sleep(1);\n}",
+  "violated_rule": "Custom Rate metric must record a value on every iteration (0 or 1), not only on failure",
+  "expected_feedback": "The `errors` Rate is fed only when the check fails (`... || errorRate.add(1)`), so it only ever receives 1. A k6 Rate reports non-zero-samples / total-samples, so this metric reports 0% when nothing fails and 100% the moment anything fails — never the true error ratio, which makes the `rate<0.01` threshold meaningless. Fix: capture the check result and add a boolean every iteration, e.g. `const ok = check(...); errorRate.add(!ok);`. k6's built-in `http_req_failed` is already a correct error Rate, so a custom one is only worth adding for a non-HTTP-status success definition.",
+  "coverage_rules": [
+    "Rate",
+    "record a value on every iteration",
+    "records only failures"
+  ],
+  "reference": "references/k6-patterns.md"
+}

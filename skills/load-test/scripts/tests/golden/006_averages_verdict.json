@@ -10,7 +10,7 @@
     "Report percentiles, not averages",
     "Percentile latency reported",
     "Reporting averages as performance verdict",
-    "meaningless for latency"
+    "meaningless as a latency"
   ],
   "reference": "SKILL.md"
 }

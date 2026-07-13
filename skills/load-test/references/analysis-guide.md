@@ -45,8 +45,10 @@ exhaustion, or intermittent downstream timeout.
 ```
 p50=10ms  p90=12ms  p95=15ms  p99=1.2s  max=5s
 ```
-The p95-to-p99 cliff (15ms -> 1.2s) suggests a capacity limit is hit
-at ~95% load — likely connection pool, thread pool, or rate limiter.
+The p95-to-p99 cliff (15ms -> 1.2s) means the slowest ~5% of requests hit a hard
+limit the other 95% do not — a connection pool, thread pool, or rate limiter
+saturating for that subset. (This is the shape of the request-latency
+distribution, not "95% system load".)
 
 ---
 
@@ -125,7 +127,10 @@ These require infrastructure changes:
 ### Tier 3: Test methodology errors (not real bottlenecks)
 
 9. **Load generator is the bottleneck** — k6 CPU at 100%.
-   Signal: `dropped_iterations` metric > 0. Generator CPU maxed.
+   Signal: `dropped_iterations > 0` **and** the generator's own CPU is maxed. If
+   the generator CPU is healthy, `dropped_iterations` instead means the *service*
+   cannot sustain the rate (see `k6-patterns.md §2`) — do not blame the test rig
+   on the metric alone.
 
 10. **Network between generator and target** — cross-region testing.
     Signal: min latency equals network RTT. Latency floor is high.

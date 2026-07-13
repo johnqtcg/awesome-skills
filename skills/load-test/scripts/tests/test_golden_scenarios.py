@@ -249,6 +249,15 @@ class TestLT008:
     def test_expected_mentions_sharedarray(self):
         assert "sharedarray" in self.fx["expected_feedback"].lower()
 
+    def test_rate_metric_recorded_every_iteration(self):
+        # Regression guard: the good exemplar must feed the Rate a boolean every
+        # iteration, never only on failure (which reports 0%/100%, not the ratio).
+        snippet = self.fx["code_snippet"]
+        assert "errorRate.add(!" in snippet, \
+            "LT-008 must feed the Rate a boolean every iteration (errorRate.add(!ok))"
+        assert "|| errorRate.add(1)" not in snippet, \
+            "LT-008 must not record the error Rate only on failure"
+
 
 class TestLT009:
     """Well-formed vegeta breakpoint."""
@@ -367,3 +376,22 @@ class TestLT014:
 
     def test_expected_mentions_findings(self):
         assert "finding" in self.fx["expected_feedback"].lower()
+
+
+class TestLT015:
+    """Custom Rate metric fed only on failure — reports 0%/100%, never the ratio."""
+
+    @pytest.fixture(autouse=True)
+    def _fx(self):
+        self.fx = _load("LT-015")
+
+    def test_type_severity(self):
+        assert self.fx["type"] == "defect"
+        assert self.fx["severity"] == "standard"
+
+    def test_violated_rule_mentions_rate(self):
+        assert "rate" in self.fx["violated_rule"].lower()
+
+    def test_expected_explains_fix(self):
+        fb = self.fx["expected_feedback"].lower()
+        assert "add(!ok)" in fb or "every iteration" in fb

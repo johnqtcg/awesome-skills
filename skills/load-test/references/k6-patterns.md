@@ -59,10 +59,15 @@ export const options = {
 export default function () {
   const res = http.get('http://api.example.com/endpoint');
 
-  check(res, {
+  // A k6 Rate must receive a value on EVERY iteration (0 on success, 1 on
+  // failure). `check(...) || errorRate.add(1)` is WRONG: it adds 1 only on
+  // failure, so a Rate (= non-zero samples / total samples) reports 0% when
+  // nothing fails and 100% the moment anything fails — never the true ratio.
+  const ok = check(res, {
     'status is 200': (r) => r.status === 200,
     'body is not empty': (r) => r.body.length > 0,
-  }) || errorRate.add(1);
+  });
+  errorRate.add(!ok);
 
   reqDuration.add(res.timings.duration);
 
@@ -112,7 +117,7 @@ scenarios: {
     duration:        '5m',
     preAllocatedVUs: 200,    // active VU ≈ rate × healthy_p95 = 1000 × 0.2s
     maxVUs:          500,    // 2× preAlloc — caps memory when service saturates
-    gracefulStop:    '0s',   // do NOT drain — wastes VU memory at end of run
+    gracefulStop:    '0s',   // drain window for in-flight iterations at scenario end (default 30s); '0s' cuts them off immediately. About drain time, not memory — use only when trailing iterations need not be measured.
   },
 }
 ```
@@ -141,8 +146,20 @@ maintain `rate`, hits the cap, and **each VU costs ~3 MB resident memory**
 (goja JS runtime + per-VU HTTP client + cookie jar + tag state). At 8,000
 VUs that is 24 GB — the load generator OOMs before the test finishes.
 With the correct cap, k6 surfaces over-saturation as `dropped_iterations`
-instead, which is the correct signal that the service can't sustain the
-target rate.
+instead of OOM-ing.
+
+**`dropped_iterations > 0` has two causes — disambiguate with the generator's
+own CPU/RSS before blaming the service:**
+
+- **Generator-bound**: the load generator's CPU is maxed (or it hit its own VU
+  ceiling). The number reflects the *test rig*, not the service — not a service
+  finding. (This is `analysis-guide.md §3` Tier-3 "generator is the bottleneck".)
+- **Service-bound**: the generator is healthy but `maxVUs` was reached because
+  per-iteration latency climbed, so k6 cannot start iterations on schedule. Only
+  this case means the *service* cannot sustain the target rate.
+
+Never read `dropped_iterations` alone as "the service is fine, the test broke" —
+that conclusion requires confirming the generator was saturated.
 
 Verified empirically (2026-05-14, tcg-acs-go-ob 4k TPS test): the VU
 "floor" memory once k6 ramps to maxVUs is exactly `maxVUs × ~3 MB`.
@@ -182,8 +199,11 @@ thresholds: {
   // Error rate SLO
   http_req_failed: ['rate<0.001'],  // < 0.1% failure
 
-  // Throughput SLO (via custom counter)
-  http_reqs: ['rate>5000'],  // > 5000 RPS
+  // Throughput SLO. NOTE: http_reqs counts ALL requests including failures, so
+  // this is TOTAL RPS, not successful RPS. For a strict successful-throughput
+  // SLO, tag successful responses and threshold that tag, and always pair with
+  // http_req_failed to bound the failed share.
+  http_reqs: ['rate>5000'],  // > 5000 total RPS
 
   // Per-endpoint SLOs using tags
   'http_req_duration{name:login}': ['p(99)<500'],
@@ -196,11 +216,27 @@ thresholds: {
 
 ### Threshold aggregation methods
 - `p(N)` — Nth percentile
-- `avg` — average (avoid for latency)
+- `avg` — average (never for a latency SLO/verdict; fine for capacity math)
 - `min`, `max` — extremes
 - `med` — median (alias for p(50))
 - `rate` — ratio (for Rate metrics)
 - `count` — total count
+
+### Abort a run early on breach — `abortOnFail`
+
+`abortOnFail` is a property of the **threshold object**, not an environment
+variable. There is no `K6_THRESHOLD_ABORT_ON_FAIL`.
+
+```javascript
+thresholds: {
+  http_req_failed: [
+    { threshold: 'rate<0.01', abortOnFail: true, delayAbortEval: '10s' },
+  ],
+}
+```
+
+Either way, k6 already exits non-zero when any threshold fails, which fails a CI
+step without any extra flag.
 
 ---
 
@@ -341,11 +377,9 @@ export default function () {
 
   // Record custom metric values
   orderLatency.add(res.timings.duration);
-  if (res.status === 201) {
-    ordersCreated.add(1);
-  } else {
-    orderErrors.add(1);
-  }
+  const created = res.status === 201;
+  if (created) ordersCreated.add(1);  // Counter: increment once per success
+  orderErrors.add(!created);          // Rate: add EVERY iteration (0 or 1), not only on failure
   activeUsers.add(__VU);
 }
 
@@ -357,6 +391,14 @@ export const options = {
   },
 };
 ```
+
+**Custom `Rate` metrics — record a value on every iteration.** A `Rate` reports
+`non-zero samples / total samples`. A Rate metric that records only failures
+(`check(...) || r.add(1)`, or `r.add(1)` solely inside an `else`) reports 0% when
+nothing fails and 100% the moment anything fails — never the true ratio, so its
+threshold is meaningless. Always feed it a boolean every iteration: `r.add(!ok)`.
+(k6's built-in `http_req_failed` is already a correct Rate; a custom error Rate
+is only worth adding when you need a non-HTTP-status success definition.)
 
 ---
 
@@ -436,12 +478,13 @@ export const options = {
 ### GitHub Actions
 ```yaml
 - name: Run load test
+  # k6 exits non-zero automatically when any threshold fails, which fails this
+  # CI step. To abort the run *early* on breach, set abortOnFail on the threshold
+  # object in the script (see §3) — there is NO K6_THRESHOLD_ABORT_ON_FAIL env var.
   run: |
     k6 run --out json=results.json \
       --tag testid=${{ github.sha }} \
       scripts/load-test.js
-  env:
-    K6_THRESHOLD_ABORT_ON_FAIL: "true"
 
 - name: Archive results
   if: always()
@@ -482,6 +525,14 @@ linearly until the run ends. People observe "memory at 2 min is fine" and
 miss the trajectory. Six knobs to set explicitly.
 
 ### 11.1 The memory model
+
+> **Calibration note.** The constants below (~3 MB/VU, ~80 B/sample, CSV
+> 500 MB–2 GB) are DIRECTIONAL — measured on k6 v0.4x, x86-64 Linux, ~1 KB JSON
+> bodies (the 2026-05-14 tcg-acs 4k-TPS run). Actual RSS shifts with k6 version,
+> script complexity, tag cardinality, and output plugin. Use them as a pre-flight
+> estimate, then measure real RSS on your own setup before trusting a number. The
+> *relationships* (VU floor ∝ maxVUs; sample storage ∝ Trend sample count; CSV ∝
+> rate × duration) hold regardless; the *constants* drift.
 
 ```
 total RSS ≈ VU floor + sample storage + response bodies + tag buckets
