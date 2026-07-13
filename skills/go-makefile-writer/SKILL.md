@@ -92,12 +92,13 @@ Select a mode before starting and state it in the output report.
 - Output executable bare `Makefile` by default (tabs for recipes, not spaces).
 
 ### Build Quality
-- Inject version info via `-ldflags` in **all** build targets:
+- Inject version metadata via `-ldflags` in build targets:
   ```
   LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildTime=$(BUILD_TIME)
   ```
-- Always include `-race` flag in test targets.
-- For container builds and cross-compilation, set `CGO_ENABLED=0` for static binaries.
+  `-X` only sets an **existing** package-level string var — `-X main.version` assumes `var version string` in package `main`; discover the real package/name first and use its import path if it lives elsewhere (a wrong path silently no-ops). `-s -w` strips the symbol table and DWARF (release builds only; keep a debug build without it).
+- Default the `test` target to `-race` — it catches real data races. But `-race` requires `CGO_ENABLED=1`, a supported OS/arch, and adds ~5–10× memory / 2–20× time; also offer a race-free path (`test-short`, or gate on platform/cgo) for cgo-disabled builds, unsupported platforms, and perf-sensitive runs.
+- `CGO_ENABLED=0` is the default for **pure-Go** static builds and containers. For cgo projects (`import "C"`, `mattn/go-sqlite3`, …) keep `CGO_ENABLED=1` — and note the two collide: a `-race` test target cannot run under `CGO_ENABLED=0`.
 - Pin tool versions in `install-tools` for CI reproducibility.
 
 ### Safety
@@ -111,20 +112,21 @@ Read `go.mod` for the `go` directive before composing the Makefile. Record as `G
 
 | Go Version | Makefile Impact |
 |-----------|-----------------|
-| < 1.16 | `go install` does not support `@version` syntax; use `go get` for tool installation |
-| < 1.18 | No `go build -cover`; use `-coverprofile` flag via `go test` only |
-| ≥ 1.21 | `go test -coverprofile` supports integration coverage via `GOCOVERDIR`; consider `cover-integration` target |
-| ≥ 1.22 | Enhanced loop variable semantics; no Makefile impact but note in output |
+| < 1.16 | `go install` does not support `pkg@version`; use `go get` for tool installation |
+| ≥ 1.18 | Go workspaces (`go.work`) and fuzzing (`go test -fuzz`) available |
+| ≥ 1.20 | `go build -cover` + `GOCOVERDIR` enable whole-program / integration coverage; consider a `cover-integration` target |
+| ≥ 1.21 | `go.mod` `toolchain` directive (automatic toolchain selection); built-in `min`/`max`/`clear` |
+| ≥ 1.22 | Per-iteration loop variable semantics; no Makefile impact but note in output |
 
 If `go.mod` is not found or not readable, record `Go version: unknown` and use conservative defaults (no version-specific features).
 
 ## Monorepo Support
 
-When multiple `go.mod` files are detected (step 1 Inspect), adapt the Makefile for monorepo layout:
+When the repo is a Go workspace or multi-module layout (step 1 Inspect), adapt for monorepo:
 
-- **Module discovery**: list all modules via `rg --files -g 'go.mod' | xargs -I{} dirname {}`
+- **Detect via the toolchain, not a bare file search**: prefer `go.work` (`go env GOWORK`); when it exists, the modules are its `use` directives (`go list -m` run inside the workspace). Only fall back to searching for `go.mod` files when there is no `go.work`, and then exclude `vendor/`, `testdata/`, `examples/`, and tool-only modules.
 - **Per-module targets**: generate `test-<module>`, `lint-<module>`, `build-<module>` for each module that has entrypoints
-- **Aggregate targets**: `test-all`, `lint-all`, `build-all` that iterate over all modules
+- **Aggregate targets**: `test-all`, `lint-all`, `build-all` that iterate over the workspace modules
 - **Root Makefile pattern**:
 
 ```make

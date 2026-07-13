@@ -44,14 +44,15 @@ help: ## Show available targets
 
 ## 4. Build and Run Patterns
 
-Prefer deterministic binary output with version injection:
+Stamp binaries with version metadata. Drive the timestamp from the commit (or `SOURCE_DATE_EPOCH`) so identical source yields identical binaries — a wall-clock `date` breaks reproducibility. Two caveats on the flags below: `-X importpath.name` sets an **existing** package-level string var only (`-X main.version` assumes `var version string` in package `main` — discover the real import path first, a wrong one silently no-ops), and `-s -w` strips the symbol table/DWARF (release builds only). `make version` prints the *Make* variables, not what the binary embeds — verify injection with `./bin/api --version`.
 
 ```make
 GO         := go
 BIN_DIR    := bin
 VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null || date +%s)
+BUILD_TIME := $(shell date -u -d "@$(SOURCE_DATE_EPOCH)" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -r "$(SOURCE_DATE_EPOCH)" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS    := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildTime=$(BUILD_TIME)
 
 build-api: ## Build API binary
@@ -139,8 +140,12 @@ The `ci` target should mirror CI exactly so developers catch issues before push.
 generate: ## Run go generate
 	$(GO) generate ./...
 
-generate-check: generate ## Verify generated code is up to date
-	@git diff --exit-code || (echo "generated code is stale; run 'make generate' and commit" && exit 1)
+generate-check: generate ## Verify generated code is up to date (fails on any drift, incl. new files)
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "generated code is stale — run 'make generate' and commit:"; \
+		git status --porcelain; \
+		exit 1; \
+	fi
 ```
 
 Add `generate` as a prerequisite of `build-all` when generated code exists.

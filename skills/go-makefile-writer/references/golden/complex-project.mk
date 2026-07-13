@@ -18,7 +18,8 @@ GO         := go
 BIN_DIR    := bin
 VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
-BUILD_TIME := $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
+SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null || date +%s)
+BUILD_TIME := $(shell date -u -d "@$(SOURCE_DATE_EPOCH)" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -r "$(SOURCE_DATE_EPOCH)" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS    := -s -w \
 	-X main.version=$(VERSION) \
 	-X main.commit=$(COMMIT) \
@@ -137,9 +138,12 @@ generate: ## Run all code generation (go generate + swagger)
 	$(GO) generate ./...
 	$(MAKE) swagger
 
-generate-check: generate ## Verify generated code is up to date
-	@git diff --exit-code || \
-		(echo "generated code is stale; run 'make generate' and commit" && exit 1)
+generate-check: generate ## Verify generated code is up to date (fails on any drift, incl. new files)
+	@if [ -n "$$(git status --porcelain)" ]; then \
+		echo "generated code is stale — run 'make generate' and commit:"; \
+		git status --porcelain; \
+		exit 1; \
+	fi
 
 # ---------- ci ----------
 
@@ -175,8 +179,9 @@ check-tools: ## Verify required tools are installed
 
 # ---------- clean ----------
 
-clean: ## Remove build artifacts
-	rm -rf $(BIN_DIR) coverage.out docs/
+clean: ## Remove build artifacts (generated files only — never hand-written docs)
+	rm -rf $(BIN_DIR) coverage.out
+	rm -f docs/docs.go docs/swagger.json docs/swagger.yaml
 
 # ---------- phony ----------
 
