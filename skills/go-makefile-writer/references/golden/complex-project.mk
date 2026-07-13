@@ -20,7 +20,7 @@ VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "
 COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null || date +%s)
 BUILD_TIME := $(shell date -u -d "@$(SOURCE_DATE_EPOCH)" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -r "$(SOURCE_DATE_EPOCH)" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
-LDFLAGS    := -s -w \
+LDFLAGS    := $(if $(DEBUG),,-s -w) \
 	-X main.version=$(VERSION) \
 	-X main.commit=$(COMMIT) \
 	-X main.buildTime=$(BUILD_TIME)
@@ -33,7 +33,9 @@ IMAGE_TAG   ?= $(VERSION)
 PLATFORMS ?= linux/amd64 linux/arm64
 
 # Pinned tool versions
-GOLANGCI_LINT_VERSION ?= v1.62.2
+# Discover the repo's pinned version first (CI / .golangci.version / mise/asdf); prefer the
+# official installer over `go install` (golangci-lint docs: source installs aren't guaranteed).
+GOLANGCI_LINT_VERSION ?= v2.1.6
 SWAG_VERSION          ?= v1.16.4
 MOCKGEN_VERSION       ?= v0.5.0
 
@@ -107,6 +109,9 @@ tidy: ## Tidy and verify module dependencies
 test: ## Run all tests with race detection
 	$(GO) test -race ./...
 
+test-short: ## Run tests without the race detector (cgo-off / unsupported platforms / quick)
+	$(GO) test -short ./...
+
 test-integration: ## Run integration tests (requires build tag)
 	$(GO) test -race -tags=integration ./...
 
@@ -138,11 +143,13 @@ generate: ## Run all code generation (go generate + swagger)
 	$(GO) generate ./...
 	$(MAKE) swagger
 
-generate-check: generate ## Verify generated code is up to date (fails on any drift, incl. new files)
-	@if [ -n "$$(git status --porcelain)" ]; then \
-		echo "generated code is stale — run 'make generate' and commit:"; \
-		git status --porcelain; \
-		exit 1; \
+generate-check: ## Verify generated code is up to date (ignores a pre-existing dirty tree)
+	@before="$$(git status --porcelain)"; \
+	$(MAKE) generate >/dev/null; \
+	after="$$(git status --porcelain)"; \
+	if [ "$$before" != "$$after" ]; then \
+		echo "generated code changed — run 'make generate' and commit these:"; \
+		git status --porcelain; exit 1; \
 	fi
 
 # ---------- ci ----------
@@ -166,7 +173,7 @@ version: ## Print embedded version info
 # ---------- tools ----------
 
 install-tools: ## Install required development tools
-	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 	$(GO) install github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION)
 	$(GO) install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
 
@@ -185,7 +192,7 @@ clean: ## Remove build artifacts (generated files only — never hand-written do
 
 # ---------- phony ----------
 
-.PHONY: help \
+.PHONY: test-short help \
 	build-api build-consumer-sync build-consumer-notify build-cron-cleanup build-migrate build-all \
 	run-api run-consumer-sync run-consumer-notify run-cron-cleanup run-migrate \
 	build-linux \

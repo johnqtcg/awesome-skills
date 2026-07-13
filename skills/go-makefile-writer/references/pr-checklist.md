@@ -31,10 +31,10 @@ Use this checklist for quick and reliable review of Makefile PRs.
 - Commands are deterministic across local and CI.
 - `run-*` targets do not pollute source directories with ad hoc binaries.
 - Cleanup behavior is explicit (`clean` removes known artifacts only).
-- Cross-compilation uses `CGO_ENABLED=0` for static binaries.
+- Pure-Go cross-compilation uses `CGO_ENABLED=0` for static binaries; cgo builds keep `CGO_ENABLED=1` with a cross toolchain.
 
 ## 6) Test and Quality Parity
-- `test` target includes `-race` flag.
+- `test` target uses `-race` by default (a race-free variant is provided for cgo-off / unsupported platforms).
 - `lint` target matches team standard.
 - Coverage target behavior is clear (`cover`, optional `cover-check` threshold).
 - `ci` target combines fmt-check + lint + test + cover-check and mirrors actual CI pipeline.

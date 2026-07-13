@@ -99,9 +99,18 @@ Per-scenario behavioral verification (mirrors security-review TP/FP approach).
 | Metric | Count |
 |--------|-------|
 | Total golden fixtures | 16 (12 TP defects + 4 FP) |
-| Contract tests | 46 (across 6 test classes) |
-| Behavioral tests (`TestMakefileDefectBehavior`) | 16 |
-| SKILL.md lines | 252 (budget: ≤ 400) |
+| Contract tests (`test_skill_contract.py`) | 49 |
+| Golden-review tests (`test_golden_reviews.py`) | 24 |
+| Executable-asset tests (`test_executable_assets.py`) | 17 |
+| **Total** | **90** |
+| SKILL.md lines | 263 (budget: ≤ 400) |
+
+Executable-asset tests run real `make` / `go` / `git` (skipped when a toolchain is
+absent): golden Makefiles execute; `discover_go_entrypoints.sh` classifies entrypoints
+and, via `--modules`, lists `go.work` `use` modules (excluding examples/vendored); a real
+build injects and verifies **all three** `-X` vars (version/commit/buildTime) through a
+`--version` CLI; a fixed `SOURCE_DATE_EPOCH` yields a reproducible `buildTime`; `clean`
+spares hand-written docs; and `generate-check` ignores a pre-existing dirty tree.
 
 ## Known Coverage Gaps
 

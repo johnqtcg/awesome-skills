@@ -53,7 +53,7 @@ VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "
 COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null || date +%s)
 BUILD_TIME := $(shell date -u -d "@$(SOURCE_DATE_EPOCH)" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -r "$(SOURCE_DATE_EPOCH)" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
-LDFLAGS    := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildTime=$(BUILD_TIME)
+LDFLAGS    := $(if $(DEBUG),,-s -w) -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildTime=$(BUILD_TIME)   # DEBUG=1 keeps symbols/DWARF for a debug build
 
 build-api: ## Build API binary
 	@mkdir -p $(BIN_DIR)
@@ -80,6 +80,9 @@ tidy: ## Tidy and verify module dependencies
 
 test: ## Run all tests with race detection
 	$(GO) test -race ./...
+
+test-short: ## Run tests without the race detector (cgo-off / unsupported platforms / quick)
+	$(GO) test -short ./...
 
 cover: ## Run tests with coverage report
 	$(GO) test -race -coverprofile=coverage.out ./...
@@ -140,11 +143,13 @@ The `ci` target should mirror CI exactly so developers catch issues before push.
 generate: ## Run go generate
 	$(GO) generate ./...
 
-generate-check: generate ## Verify generated code is up to date (fails on any drift, incl. new files)
-	@if [ -n "$$(git status --porcelain)" ]; then \
-		echo "generated code is stale — run 'make generate' and commit:"; \
-		git status --porcelain; \
-		exit 1; \
+generate-check: ## Verify generated code is up to date (ignores a pre-existing dirty tree)
+	@before="$$(git status --porcelain)"; \
+	$(MAKE) generate >/dev/null; \
+	after="$$(git status --porcelain)"; \
+	if [ "$$before" != "$$after" ]; then \
+		echo "generated code changed — run 'make generate' and commit these:"; \
+		git status --porcelain; exit 1; \
 	fi
 ```
 
@@ -248,8 +253,8 @@ check-tools: ## Verify required tools are installed
 - Generated code not checked for staleness before build.
 - Hardcoded `GOOS/GOARCH` without variable override.
 - `install-tools` using unpinned `@latest` in production CI (pin versions for reproducibility).
-- Test targets missing `-race` flag.
-- Cross-compilation without `CGO_ENABLED=0`.
+- Test targets missing `-race` entirely — the default `test` should use it (a `test-short` escape hatch for cgo-off / unsupported platforms is fine).
+- Pure-Go cross-compilation without `CGO_ENABLED=0` (cgo builds need `CGO_ENABLED=1` + a cross toolchain).
 
 ## 14. Validation Matrix
 

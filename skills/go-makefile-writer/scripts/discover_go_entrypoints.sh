@@ -20,16 +20,36 @@
 set -u
 
 json_mode=false
+modules_mode=false
 root="."
 
 for arg in "$@"; do
   case "$arg" in
-    --json) json_mode=true ;;
-    *)      root="$arg" ;;
+    --json)    json_mode=true ;;
+    --modules) modules_mode=true ;;
+    *)         root="$arg" ;;
   esac
 done
 
 cd "$root" || { echo "# cannot cd to $root" >&2; exit 2; }
+
+# --modules: list Go workspace module directories from go.work `use` directives.
+# Prefer the toolchain; fall back to parsing go.work so it works without `go`
+# installed. Modules NOT listed under `use` (examples/, tools/, vendored) are
+# excluded — this is what a bare `rg --files go.mod` gets wrong.
+if $modules_mode; then
+  if command -v go >/dev/null 2>&1 && [ -n "$(go env GOWORK 2>/dev/null)" ]; then
+    go list -m -f '{{.Dir}}' 2>/dev/null || true
+  elif [ -f go.work ]; then
+    awk '
+      /^[[:space:]]*use[[:space:]]*\(/  { inblk=1; next }
+      inblk && /^[[:space:]]*\)/        { inblk=0; next }
+      inblk                             { gsub(/[[:space:]]/,""); if ($0 != "") print; next }
+      /^[[:space:]]*use[[:space:]]/     { sub(/^[[:space:]]*use[[:space:]]+/,""); gsub(/[[:space:]]/,""); print }
+    ' go.work
+  fi
+  exit 0
+fi
 
 # Find main.go files: prefer rg, fall back to find. Empty result is normal.
 if command -v rg >/dev/null 2>&1; then

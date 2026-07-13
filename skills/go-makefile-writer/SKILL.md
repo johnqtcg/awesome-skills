@@ -77,7 +77,7 @@ Select a mode before starting and state it in the output report.
    - run `make help`
    - run `make test`
    - run one representative `build-*` target
-   - run `make version` to verify version injection
+   - build, then run the binary's `--version` to verify injection reached the artifact (`make version` only prints the Make variables, not what the binary embeds)
    - if possible, run one representative `run-*` target in a safe environment
    - **Refactor mode**: verify previously used critical targets still work (or provide aliases); compare target list before vs after
 
@@ -127,10 +127,18 @@ When the repo is a Go workspace or multi-module layout (step 1 Inspect), adapt f
 - **Detect via the toolchain, not a bare file search**: prefer `go.work` (`go env GOWORK`); when it exists, the modules are its `use` directives (`go list -m` run inside the workspace). Only fall back to searching for `go.mod` files when there is no `go.work`, and then exclude `vendor/`, `testdata/`, `examples/`, and tool-only modules.
 - **Per-module targets**: generate `test-<module>`, `lint-<module>`, `build-<module>` for each module that has entrypoints
 - **Aggregate targets**: `test-all`, `lint-all`, `build-all` that iterate over the workspace modules
+- **Per-module `go mod tidy`**: `tidy` operates on a single main module — run it inside each module (`for m in $(MODULES); do (cd $$m && go mod tidy); done`), never once at the workspace root
 - **Root Makefile pattern**:
 
 ```make
-MODULES := $(shell rg --files -g 'go.mod' | xargs -I{} dirname {} | sort)
+# Workspace-aware: use go.work's module list when present, else a SCOPED go.mod
+# search (a bare `rg go.mod` sweeps in vendor/testdata/examples).
+GOWORK := $(shell go env GOWORK 2>/dev/null)
+ifeq ($(GOWORK),)
+MODULES := $(shell rg --files -g 'go.mod' 2>/dev/null | xargs -I{} dirname {} | grep -Ev '(^|/)(vendor|testdata|examples?)(/|$$)' | sort)
+else
+MODULES := $(shell go list -m -f '{{.Dir}}' 2>/dev/null)
+endif
 
 test-all: ## Run tests for all modules
 	@for mod in $(MODULES); do \
@@ -155,7 +163,7 @@ Before writing or reviewing a Makefile, check against these common mistakes. If 
 **Missing fundamentals:**
 - No `help` target or missing `##` self-documenting comments
 - No `.PHONY` declaration for non-file targets
-- No `-race` flag in `test` target
+- No race testing at all — the default `test` should use `-race` (a race-free variant like `test-short` is fine for cgo-off / unsupported platforms, but do not omit race entirely)
 - No `-ldflags` version injection in `build-*` targets
 
 **Naming and layout:**
@@ -164,11 +172,12 @@ Before writing or reviewing a Makefile, check against these common mistakes. If 
 
 **Reproducibility:**
 - `install-tools` using `@latest` for all tools in CI (pin specific versions for reproducibility; `@latest` is acceptable only for local dev convenience)
+- Hardcoding a tool version without discovering the repo's existing pin — check CI workflows, `.golangci.version` / `.tool-versions` (asdf/mise), and any existing `install-tools` first; use a current compatible version (golangci-lint is now v2, module path `.../v2/cmd/golangci-lint`) and prefer the tool's official installer where it documents one (`go install` from source is explicitly not guaranteed for golangci-lint)
 - `ci` target that diverges from the actual CI pipeline — `make ci` should mirror CI exactly
 - Hidden assumptions about local paths or OS-specific tools (e.g., `sed -i` without considering macOS vs GNU differences)
 
 **Cross-compilation:**
-- Cross-compilation without `CGO_ENABLED=0` — produces dynamically linked binaries that fail on target machines
+- Cross-compiling a **pure-Go** binary without `CGO_ENABLED=0` — produces dynamically linked binaries that fail on target machines (cgo projects instead need `CGO_ENABLED=1` and a cross C toolchain)
 - Hardcoded `GOOS/GOARCH` without variable override
 
 **Code generation:**

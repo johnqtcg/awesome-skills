@@ -16,13 +16,15 @@ VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "
 COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null || date +%s)
 BUILD_TIME := $(shell date -u -d "@$(SOURCE_DATE_EPOCH)" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -r "$(SOURCE_DATE_EPOCH)" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
-LDFLAGS    := -s -w \
+LDFLAGS    := $(if $(DEBUG),,-s -w) \
 	-X main.version=$(VERSION) \
 	-X main.commit=$(COMMIT) \
 	-X main.buildTime=$(BUILD_TIME)
 
 # Pinned tool versions
-GOLANGCI_LINT_VERSION ?= v1.62.2
+# Discover the repo's pinned version first (CI / .golangci.version / mise/asdf); prefer the
+# official installer over `go install` (golangci-lint docs: source installs aren't guaranteed).
+GOLANGCI_LINT_VERSION ?= v2.1.6
 
 # ---------- build ----------
 
@@ -53,6 +55,9 @@ tidy: ## Tidy and verify module dependencies
 test: ## Run all tests with race detection
 	$(GO) test -race ./...
 
+test-short: ## Run tests without the race detector (cgo-off / unsupported platforms / quick)
+	$(GO) test -short ./...
+
 COVER_MIN ?= 80
 cover: ## Run tests with coverage report
 	$(GO) test -race -coverprofile=coverage.out ./...
@@ -81,7 +86,7 @@ version: ## Print embedded version info
 # ---------- tools ----------
 
 install-tools: ## Install required development tools
-	$(GO) install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
 
 check-tools: ## Verify required tools are installed
 	@command -v golangci-lint >/dev/null || \
@@ -94,7 +99,7 @@ clean: ## Remove build artifacts
 
 # ---------- phony ----------
 
-.PHONY: help build-api build-all run-api \
+.PHONY: test-short help build-api build-all run-api \
 	fmt fmt-check tidy test cover cover-check lint \
 	ci version install-tools check-tools clean
 
