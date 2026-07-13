@@ -20,17 +20,21 @@ LDFLAGS    := $(if $(DEBUG),,-s -w) \
 	-X main.version=$(VERSION) \
 	-X main.commit=$(COMMIT) \
 	-X main.buildTime=$(BUILD_TIME)
+# -trimpath strips local filesystem paths so identical source builds identically
+# regardless of checkout location (one requirement for reproducible binaries).
+BUILD_FLAGS := -trimpath -ldflags "$(LDFLAGS)"
 
-# Pinned tool versions
-# Discover the repo's pinned version first (CI / .golangci.version / mise/asdf); prefer the
-# official installer over `go install` (golangci-lint docs: source installs aren't guaranteed).
-GOLANGCI_LINT_VERSION ?= v2.1.6
+# Pinned tool version. Discover the repo's existing pin first (CI workflow /
+# .golangci.version / .tool-versions), then install via the official binary
+# installer below — its docs state `go install` from source is not guaranteed.
+# golangci-lint tracks only the two most recent Go minor releases; keep this current.
+GOLANGCI_LINT_VERSION ?= v2.12.2
 
 # ---------- build ----------
 
 build-api: ## Build API binary
 	@mkdir -p $(BIN_DIR)
-	$(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/api ./cmd/api
+	$(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/api ./cmd/api
 
 build-all: build-api ## Build all binaries
 
@@ -55,7 +59,10 @@ tidy: ## Tidy and verify module dependencies
 test: ## Run all tests with race detection
 	$(GO) test -race ./...
 
-test-short: ## Run tests without the race detector (cgo-off / unsupported platforms / quick)
+test-norace: ## Run the full test suite without -race (cgo-off / platforms without race support)
+	$(GO) test ./...
+
+test-short: ## Run only quick tests (skips testing.Short()-gated cases; NOT a race-free equivalent)
 	$(GO) test -short ./...
 
 COVER_MIN ?= 80
@@ -85,8 +92,9 @@ version: ## Print embedded version info
 
 # ---------- tools ----------
 
-install-tools: ## Install required development tools
-	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+install-tools: ## Install pinned dev tools (golangci-lint via its official installer)
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
+		| sh -s -- -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION)
 
 check-tools: ## Verify required tools are installed
 	@command -v golangci-lint >/dev/null || \
@@ -99,7 +107,7 @@ clean: ## Remove build artifacts
 
 # ---------- phony ----------
 
-.PHONY: test-short help build-api build-all run-api \
+.PHONY: test-norace test-short help build-api build-all run-api \
 	fmt fmt-check tidy test cover cover-check lint \
 	ci version install-tools check-tools clean
 

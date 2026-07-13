@@ -24,6 +24,9 @@ LDFLAGS    := $(if $(DEBUG),,-s -w) \
 	-X main.version=$(VERSION) \
 	-X main.commit=$(COMMIT) \
 	-X main.buildTime=$(BUILD_TIME)
+# -trimpath strips local filesystem paths so identical source builds identically
+# regardless of checkout location (one requirement for reproducible binaries).
+BUILD_FLAGS := -trimpath -ldflags "$(LDFLAGS)"
 
 # Container
 IMAGE_NAME  ?= $(shell basename $(CURDIR))
@@ -32,10 +35,11 @@ IMAGE_TAG   ?= $(VERSION)
 # Cross-compilation
 PLATFORMS ?= linux/amd64 linux/arm64
 
-# Pinned tool versions
-# Discover the repo's pinned version first (CI / .golangci.version / mise/asdf); prefer the
-# official installer over `go install` (golangci-lint docs: source installs aren't guaranteed).
-GOLANGCI_LINT_VERSION ?= v2.1.6
+# Pinned tool versions. golangci-lint: discover the repo's existing pin first
+# (CI workflow / .golangci.version / .tool-versions), then install via the official
+# binary installer below — its docs state `go install` from source is not guaranteed.
+# golangci-lint tracks only the two most recent Go minor releases; keep this current.
+GOLANGCI_LINT_VERSION ?= v2.12.2
 SWAG_VERSION          ?= v1.16.4
 MOCKGEN_VERSION       ?= v0.5.0
 
@@ -46,23 +50,23 @@ COVER_MIN ?= 80
 
 build-api: ## Build API binary
 	@mkdir -p $(BIN_DIR)
-	$(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/api ./cmd/api
+	$(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/api ./cmd/api
 
 build-consumer-sync: ## Build consumer-sync binary
 	@mkdir -p $(BIN_DIR)
-	$(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/consumer-sync ./cmd/consumer/sync
+	$(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/consumer-sync ./cmd/consumer/sync
 
 build-consumer-notify: ## Build consumer-notify binary
 	@mkdir -p $(BIN_DIR)
-	$(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/consumer-notify ./cmd/consumer/notify
+	$(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/consumer-notify ./cmd/consumer/notify
 
 build-cron-cleanup: ## Build cron-cleanup binary
 	@mkdir -p $(BIN_DIR)
-	$(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/cron-cleanup ./cmd/cron/cleanup
+	$(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/cron-cleanup ./cmd/cron/cleanup
 
 build-migrate: ## Build migrate binary
 	@mkdir -p $(BIN_DIR)
-	$(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/migrate ./cmd/migrate
+	$(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/migrate ./cmd/migrate
 
 build-all: build-api build-consumer-sync build-consumer-notify build-cron-cleanup build-migrate ## Build all binaries
 
@@ -87,11 +91,11 @@ run-migrate: build-migrate ## Run database migration
 
 build-linux: ## Build all binaries for Linux amd64 (static)
 	@mkdir -p $(BIN_DIR)
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/api-linux-amd64 ./cmd/api
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/consumer-sync-linux-amd64 ./cmd/consumer/sync
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/consumer-notify-linux-amd64 ./cmd/consumer/notify
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/cron-cleanup-linux-amd64 ./cmd/cron/cleanup
-	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/migrate-linux-amd64 ./cmd/migrate
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/api-linux-amd64 ./cmd/api
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/consumer-sync-linux-amd64 ./cmd/consumer/sync
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/consumer-notify-linux-amd64 ./cmd/consumer/notify
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/cron-cleanup-linux-amd64 ./cmd/cron/cleanup
+	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/migrate-linux-amd64 ./cmd/migrate
 
 # ---------- quality ----------
 
@@ -109,7 +113,10 @@ tidy: ## Tidy and verify module dependencies
 test: ## Run all tests with race detection
 	$(GO) test -race ./...
 
-test-short: ## Run tests without the race detector (cgo-off / unsupported platforms / quick)
+test-norace: ## Run the full test suite without -race (cgo-off / platforms without race support)
+	$(GO) test ./...
+
+test-short: ## Run only quick tests (skips testing.Short()-gated cases; NOT a race-free equivalent)
 	$(GO) test -short ./...
 
 test-integration: ## Run integration tests (requires build tag)
@@ -143,13 +150,15 @@ generate: ## Run all code generation (go generate + swagger)
 	$(GO) generate ./...
 	$(MAKE) swagger
 
-generate-check: ## Verify generated code is up to date (ignores a pre-existing dirty tree)
-	@before="$$(git status --porcelain)"; \
+generate-check: ## Verify generated code is up to date (fails on codegen error; ignores unrelated pre-existing dirt)
+	@set -e; \
+	before="$$(git status --porcelain)$$(git diff)"; \
 	$(MAKE) generate >/dev/null; \
-	after="$$(git status --porcelain)"; \
+	after="$$(git status --porcelain)$$(git diff)"; \
 	if [ "$$before" != "$$after" ]; then \
-		echo "generated code changed — run 'make generate' and commit these:"; \
-		git status --porcelain; exit 1; \
+		echo "generated code is stale — run 'make generate' and commit the result:"; \
+		git status --porcelain; \
+		exit 1; \
 	fi
 
 # ---------- ci ----------
@@ -172,8 +181,9 @@ version: ## Print embedded version info
 
 # ---------- tools ----------
 
-install-tools: ## Install required development tools
-	$(GO) install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+install-tools: ## Install pinned dev tools (golangci-lint via its official installer)
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
+		| sh -s -- -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION)
 	$(GO) install github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION)
 	$(GO) install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
 
@@ -196,7 +206,7 @@ clean: ## Remove build artifacts (generated files only — never hand-written do
 	build-api build-consumer-sync build-consumer-notify build-cron-cleanup build-migrate build-all \
 	run-api run-consumer-sync run-consumer-notify run-cron-cleanup run-migrate \
 	build-linux \
-	fmt fmt-check tidy test test-integration bench cover cover-check lint \
+	fmt fmt-check tidy test test-norace test-integration bench cover cover-check lint \
 	swagger generate generate-check \
 	ci docker-build docker-push \
 	version install-tools check-tools clean

@@ -4,10 +4,12 @@
   "type": "defect",
   "severity": "high",
   "makefile_snippet": "build-linux:\n\tGOOS=linux GOARCH=amd64 go build -o bin/api-linux ./cmd/api",
-  "expected_feedback": "cross-compilation should set CGO_ENABLED=0 for static binaries",
+  "expected_feedback": "For a pure-Go binary, cross-compilation should set CGO_ENABLED=0 to produce a static binary. This is conditional on the project being pure-Go: a cgo project instead needs CGO_ENABLED=1 plus a cross C toolchain, so do not blanket-apply CGO_ENABLED=0.",
   "coverage_rules": [
     "CGO_ENABLED=0",
-    "static binaries"
+    "static binaries",
+    "pure-Go",
+    "cross toolchain"
   ],
   "reference": "references/makefile-quality-guide.md"
 }

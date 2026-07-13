@@ -4,10 +4,12 @@
   "type": "defect",
   "severity": "high",
   "makefile_snippet": "test:\n\t$(GO) test ./...",
-  "expected_feedback": "test target should include -race flag",
+  "expected_feedback": "The default test target should run with -race. A race-free equivalent (test-norace: go test ./...) is acceptable ONLY as an alternate target for cgo-off builds or platforms without race support — it must not replace -race on the default target.",
   "coverage_rules": [
     "-race",
-    "race detection"
+    "race detection",
+    "cgo",
+    "unsupported platforms"
   ],
   "reference": "references/makefile-quality-guide.md"
 }

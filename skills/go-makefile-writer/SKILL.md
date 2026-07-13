@@ -2,7 +2,7 @@
 name: go-makefile-writer
 description: Canonical skill for Go Makefiles. Create/refactor root Makefiles for Go repositories with standardized build/test/lint/run targets, self-documenting help output, predictable artifacts, and maintainable target naming.
 disable-model-invocation: true
-allowed-tools: Read, Write, Grep, Glob, Bash(make*), Bash(go version*), Bash(go test*), Bash(go generate*), Bash(go install*), Bash(go get*), Bash(go build*), Bash(go mod*), Bash(go run*), Bash(go fmt*), Bash(git diff*), Bash(*discover_go_entrypoints.sh*)
+allowed-tools: Read, Write, Grep, Glob, Bash(make*), Bash(go version*), Bash(go env*), Bash(go list*), Bash(go test*), Bash(go generate*), Bash(go install*), Bash(go get*), Bash(go build*), Bash(go mod*), Bash(go run*), Bash(go fmt*), Bash(git diff*), Bash(git status*), Bash(*discover_go_entrypoints.sh*)
 ---
 
 # Go Makefile Writer
@@ -44,14 +44,14 @@ Select a mode before starting and state it in the output report.
 0. **Select mode** (`Create` or `Refactor`) and record rationale.
 
 1. **Inspect** project structure:
-   - discover `cmd/**/main.go` entrypoints via `scripts/discover_go_entrypoints.sh`
+   - discover `cmd/**/main.go` entrypoints by running this skill's discovery script against the target repo: `bash <skill-dir>/scripts/discover_go_entrypoints.sh <project-root>` (the script lives in the skill directory, not in the target repo — pass the repo root as its argument)
    - if the script cannot run, fall back to `find cmd -name main.go -type f` (or `rg --files cmd | grep '/main\.go$'` when rg is available)
    - detect quality tools and conventions (`go test`, `golangci-lint`, `swag`)
    - detect code generation usage (`go generate`, protobuf, wire, mockgen, etc.)
    - detect containerization (`Dockerfile`, `docker-compose.yml`)
    - **read `go.mod`** for Go version (`go` directive) and module path
    - inspect existing `Makefile` if present (Refactor mode)
-   - **detect monorepo layout**: check for multiple `go.mod` files via `rg --files -g 'go.mod'`
+   - **detect workspace / multi-module layout via the toolchain first**: `go env GOWORK` (a non-empty path means a `go.work` workspace → its modules are `go list -m`). Only when there is no `go.work` fall back to a scoped `go.mod` search (`bash <skill-dir>/scripts/discover_go_entrypoints.sh --modules <project-root>`, which excludes `vendor/`, `testdata/`, `examples/`). See §Monorepo Support.
 
 2. **Plan** target set:
    - core targets: `help`, `fmt`, `tidy`, `test`, `cover`, `lint`, `clean`
@@ -97,8 +97,9 @@ Select a mode before starting and state it in the output report.
   LDFLAGS := -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildTime=$(BUILD_TIME)
   ```
   `-X` only sets an **existing** package-level string var — `-X main.version` assumes `var version string` in package `main`; discover the real package/name first and use its import path if it lives elsewhere (a wrong path silently no-ops). `-s -w` strips the symbol table and DWARF (release builds only; keep a debug build without it).
-- Default the `test` target to `-race` — it catches real data races. But `-race` requires `CGO_ENABLED=1`, a supported OS/arch, and adds ~5–10× memory / 2–20× time; also offer a race-free path (`test-short`, or gate on platform/cgo) for cgo-disabled builds, unsupported platforms, and perf-sensitive runs.
+- Default the `test` target to `-race` — it catches real data races. But `-race` requires `CGO_ENABLED=1`, a supported OS/arch, and adds ~5–10× memory / 2–20× time. Offer a genuine race-free equivalent, `test-norace` (`go test ./...` — the **full** suite, no race), for cgo-disabled builds and platforms without race support. Do not conflate this with `test-short` (`go test -short ./...`): `-short` skips `testing.Short()`-gated cases, so it runs a *smaller* set — it turns off race only as a side effect and is not a substitute for the full suite.
 - `CGO_ENABLED=0` is the default for **pure-Go** static builds and containers. For cgo projects (`import "C"`, `mattn/go-sqlite3`, …) keep `CGO_ENABLED=1` — and note the two collide: a `-race` test target cannot run under `CGO_ENABLED=0`.
+- For reproducible release builds add `-trimpath` (strips local paths so the binary is checkout-location-independent) and drive `buildTime` from `SOURCE_DATE_EPOCH`. This raises reproducibility but is not absolute: `git describe --dirty` makes `VERSION` depend on tree state, so only a clean checkout with a fixed toolchain is bit-for-bit reproducible.
 - Pin tool versions in `install-tools` for CI reproducibility.
 
 ### Safety
@@ -163,7 +164,7 @@ Before writing or reviewing a Makefile, check against these common mistakes. If 
 **Missing fundamentals:**
 - No `help` target or missing `##` self-documenting comments
 - No `.PHONY` declaration for non-file targets
-- No race testing at all — the default `test` should use `-race` (a race-free variant like `test-short` is fine for cgo-off / unsupported platforms, but do not omit race entirely)
+- No race testing at all — the default `test` should use `-race`; provide `test-norace` (full suite, no race) as the cgo-off / unsupported-platform equivalent. `test-short` runs a smaller quick set and is not a substitute.
 - No `-ldflags` version injection in `build-*` targets
 
 **Naming and layout:**
@@ -198,7 +199,7 @@ Before writing or reviewing a Makefile, check against these common mistakes. If 
 ## Load References Selectively
 
 When starting any Makefile creation or refactor task:
-→ Run `scripts/discover_go_entrypoints.sh` first to discover `cmd/**/main.go` binary locations and infer project shape (single-binary vs multi-binary).
+→ Run this skill's discovery script against the target repo first — `bash <skill-dir>/scripts/discover_go_entrypoints.sh <project-root>` — to discover `cmd/**/main.go` binary locations and infer project shape (single-binary vs multi-binary). Add `--modules` to list workspace/multi-module directories.
 
 When writing or reviewing specific targets (`build`, `test`, `lint`, `run`, `install-tools`), or checking quality rules:
 → Load `references/makefile-quality-guide.md` for canonical target templates, variable conventions, `.PHONY` rules, self-documenting `help` output, and the 15-item review checklist.
@@ -252,7 +253,7 @@ check-tools, clean
 ✓ make help       — 16 targets listed
 ✓ make test       — all tests pass with -race
 ✓ make build-api  — binary at bin/api
-✓ make version    — version=v0.1.0-dirty commit=abc1234
+✓ ./bin/api --version — version=v0.1.0-dirty commit=abc1234 buildTime=… (injection reached the artifact)
 ```
 
 ## Self-Validation

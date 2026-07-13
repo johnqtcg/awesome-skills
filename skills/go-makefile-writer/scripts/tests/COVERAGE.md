@@ -101,16 +101,23 @@ Per-scenario behavioral verification (mirrors security-review TP/FP approach).
 | Total golden fixtures | 16 (12 TP defects + 4 FP) |
 | Contract tests (`test_skill_contract.py`) | 49 |
 | Golden-review tests (`test_golden_reviews.py`) | 24 |
-| Executable-asset tests (`test_executable_assets.py`) | 17 |
-| **Total** | **90** |
-| SKILL.md lines | 263 (budget: ≤ 400) |
+| Executable-asset tests (`test_executable_assets.py`) | 22 |
+| **Total** | **95** |
+| SKILL.md lines | 264 (budget: ≤ 400) |
 
 Executable-asset tests run real `make` / `go` / `git` (skipped when a toolchain is
-absent): golden Makefiles execute; `discover_go_entrypoints.sh` classifies entrypoints
-and, via `--modules`, lists `go.work` `use` modules (excluding examples/vendored); a real
-build injects and verifies **all three** `-X` vars (version/commit/buildTime) through a
-`--version` CLI; a fixed `SOURCE_DATE_EPOCH` yields a reproducible `buildTime`; `clean`
-spares hand-written docs; and `generate-check` ignores a pre-existing dirty tree.
+absent). Coverage:
+- golden Makefiles execute (`help`, dry-run `build-*`, `test`);
+- `discover_go_entrypoints.sh --modules` lists `go.work` `use` modules via the toolchain,
+  the traditional multi-module repo with **no** `go.work` (scoped `go.mod` search, excludes
+  vendor/testdata/examples), and parses `go.work` comments + quoted paths in the no-toolchain
+  fallback;
+- a real build injects and verifies **all three** `-X` vars (version/commit/buildTime) via a
+  `--version` CLI; a fixed `SOURCE_DATE_EPOCH` gives a reproducible `buildTime`; and identical
+  source at two different paths produces a **byte-identical** binary (proves `-trimpath`);
+- `clean` spares hand-written docs; and `generate-check` (a) ignores unrelated pre-existing
+  dirt, (b) **fails** when `make generate` errors (`set -e`), and (c) detects a content change
+  to an already-dirty file (status+diff snapshot).
 
 ## Known Coverage Gaps
 

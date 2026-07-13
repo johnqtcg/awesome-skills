@@ -56,8 +56,7 @@ Use this checklist for quick and reliable review of Makefile PRs.
 Minimum evidence:
 - `make help`
 - `make test`
-- one representative `build-*`
-- `make version`
+- one representative `build-*`, then run the built binary's `--version` (confirms `-ldflags` injection reached the artifact — `make version` only echoes the Make variables)
 
 Recommended evidence:
 - `make lint`

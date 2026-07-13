@@ -44,7 +44,7 @@ help: ## Show available targets
 
 ## 4. Build and Run Patterns
 
-Stamp binaries with version metadata. Drive the timestamp from the commit (or `SOURCE_DATE_EPOCH`) so identical source yields identical binaries — a wall-clock `date` breaks reproducibility. Two caveats on the flags below: `-X importpath.name` sets an **existing** package-level string var only (`-X main.version` assumes `var version string` in package `main` — discover the real import path first, a wrong one silently no-ops), and `-s -w` strips the symbol table/DWARF (release builds only). `make version` prints the *Make* variables, not what the binary embeds — verify injection with `./bin/api --version`.
+Stamp binaries with version metadata. Drive the timestamp from the commit (or `SOURCE_DATE_EPOCH`) rather than a wall-clock `date`, so the stamp is stable across rebuilds. This is **one input** to reproducibility, not a guarantee of it: byte-for-byte identical binaries also need `-trimpath` (strips local filesystem paths so the build is checkout-location-independent), a fixed toolchain version, and a clean tree. Note that `VERSION` from `git describe --dirty` varies with working-tree state, so a dirty tree is inherently non-reproducible — treat this as *"more reproducible under a fixed checkout + toolchain + SOURCE_DATE_EPOCH"*, not an absolute. Two flag caveats: `-X importpath.name` sets an **existing** package-level string var only (`-X main.version` assumes `var version string` in package `main` — discover the real import path first, a wrong one silently no-ops), and `-s -w` strips the symbol table/DWARF (release builds only). `make version` prints the *Make* variables, not what the binary embeds — verify injection by running the built binary's `--version`.
 
 ```make
 GO         := go
@@ -54,10 +54,11 @@ COMMIT     := $(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 SOURCE_DATE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null || date +%s)
 BUILD_TIME := $(shell date -u -d "@$(SOURCE_DATE_EPOCH)" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u -r "$(SOURCE_DATE_EPOCH)" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null || date -u '+%Y-%m-%dT%H:%M:%SZ')
 LDFLAGS    := $(if $(DEBUG),,-s -w) -X main.version=$(VERSION) -X main.commit=$(COMMIT) -X main.buildTime=$(BUILD_TIME)   # DEBUG=1 keeps symbols/DWARF for a debug build
+BUILD_FLAGS := -trimpath -ldflags "$(LDFLAGS)"   # -trimpath makes the build checkout-location-independent
 
 build-api: ## Build API binary
 	@mkdir -p $(BIN_DIR)
-	$(GO) build -ldflags "$(LDFLAGS)" -o $(BIN_DIR)/api ./cmd/api
+	$(GO) build $(BUILD_FLAGS) -o $(BIN_DIR)/api ./cmd/api
 
 version: ## Print version variables
 	@echo "version=$(VERSION) commit=$(COMMIT) build_time=$(BUILD_TIME)"
@@ -81,7 +82,10 @@ tidy: ## Tidy and verify module dependencies
 test: ## Run all tests with race detection
 	$(GO) test -race ./...
 
-test-short: ## Run tests without the race detector (cgo-off / unsupported platforms / quick)
+test-norace: ## Full test suite without -race — the race-free equivalent for cgo-off / unsupported platforms
+	$(GO) test ./...
+
+test-short: ## Quick tests only — skips testing.Short()-gated cases (a smaller set, NOT a race-free equivalent)
 	$(GO) test -short ./...
 
 cover: ## Run tests with coverage report
@@ -143,13 +147,15 @@ The `ci` target should mirror CI exactly so developers catch issues before push.
 generate: ## Run go generate
 	$(GO) generate ./...
 
-generate-check: ## Verify generated code is up to date (ignores a pre-existing dirty tree)
-	@before="$$(git status --porcelain)"; \
+generate-check: ## Verify generated code is up to date (fails on codegen error; ignores unrelated pre-existing dirt)
+	@set -e; \
+	before="$$(git status --porcelain)$$(git diff)"; \
 	$(MAKE) generate >/dev/null; \
-	after="$$(git status --porcelain)"; \
+	after="$$(git status --porcelain)$$(git diff)"; \
 	if [ "$$before" != "$$after" ]; then \
-		echo "generated code changed — run 'make generate' and commit these:"; \
-		git status --porcelain; exit 1; \
+		echo "generated code is stale — run 'make generate' and commit the result:"; \
+		git status --porcelain; \
+		exit 1; \
 	fi
 ```
 
@@ -217,15 +223,21 @@ Use `scripts/discover_go_entrypoints.sh` to auto-discover entrypoints and genera
 
 ## 11. Tool Installation
 
-Pin versions for CI reproducibility. Use `@latest` only in local development convenience targets:
+Pin versions for CI reproducibility. Use `@latest` only in local development convenience targets.
+
+Tool-version strategy, in order:
+1. **Discover an existing pin first** — a CI workflow (`.github/workflows/*`), `.golangci.version`, or `.tool-versions` (asdf/mise). Match it; do not invent a version.
+2. **golangci-lint is now v2** — module path `github.com/golangci/golangci-lint/v2/cmd/golangci-lint`. It tracks only the **two most recent Go minor releases**, so a stale pin can be incompatible with a newer toolchain — keep it current.
+3. **Prefer the official binary installer** — golangci-lint's docs state a `go install` from source is *not guaranteed* to work, so install the released binary. `go install` remains fine for tools that ship no installer (swag, mockgen).
 
 ```make
-# Pinned versions for reproducible CI
-GOLANGCI_LINT_VERSION ?= v1.62.2
+# Discover the repo's pin first; golangci-lint supports only the latest two Go minors.
+GOLANGCI_LINT_VERSION ?= v2.12.2
 SWAG_VERSION          ?= v1.16.4
 
-install-tools: ## Install required development tools
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
+install-tools: ## Install pinned dev tools (golangci-lint via its official installer)
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
+		| sh -s -- -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION)
 	go install github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION)
 
 check-tools: ## Verify required tools are installed
@@ -253,7 +265,7 @@ check-tools: ## Verify required tools are installed
 - Generated code not checked for staleness before build.
 - Hardcoded `GOOS/GOARCH` without variable override.
 - `install-tools` using unpinned `@latest` in production CI (pin versions for reproducibility).
-- Test targets missing `-race` entirely — the default `test` should use it (a `test-short` escape hatch for cgo-off / unsupported platforms is fine).
+- Test targets missing `-race` entirely — the default `test` should use it. Provide `test-norace` (`go test ./...`, full suite, no race) as the race-free equivalent for cgo-off / unsupported platforms; `test-short` is a *smaller* quick set, not a substitute for it.
 - Pure-Go cross-compilation without `CGO_ENABLED=0` (cgo builds need `CGO_ENABLED=1` + a cross toolchain).
 
 ## 14. Validation Matrix
@@ -261,8 +273,7 @@ check-tools: ## Verify required tools are installed
 Minimum:
 - `make help`
 - `make test`
-- one `build-*`
-- `make version` (verify version injection)
+- one `build-*`, then run the built binary's `--version` to confirm the `-X` values reached the artifact (`make version` only echoes the Make variables, not what the binary embeds)
 
 Recommended:
 - `make lint`

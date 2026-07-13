@@ -179,9 +179,17 @@ class RealBuildTests(unittest.TestCase):
         )
         (self.proj / "go.mod").write_text("module fixture\n\ngo 1.22\n")
         (self.proj / "Makefile").write_text((GOLDEN_DIR / "simple-project.mk").read_text())
+        # Point GOCACHE at a writable dir — the default ~/Library/Caches/go-build is
+        # outside a restricted sandbox's writable set, so a cold rebuild there is denied.
+        self.build_env = {**os.environ, "GOCACHE": str(self.proj / ".gocache")}
+
+    def _build(self, cwd: Path, extra_env: dict | None = None) -> subprocess.CompletedProcess:
+        env = self.build_env if extra_env is None else {**self.build_env, **extra_env}
+        return subprocess.run(["make", "build-api"], cwd=cwd, env=env,
+                              capture_output=True, text=True, timeout=60)
 
     def test_build_injects_all_version_metadata(self) -> None:
-        build = run(["make", "build-api"], self.proj)
+        build = self._build(self.proj)
         self.assertEqual(0, build.returncode, build.stderr)
         binary = self.proj / "bin" / "api"
         self.assertTrue(binary.exists(), "make build-api did not produce bin/api")
@@ -197,19 +205,45 @@ class RealBuildTests(unittest.TestCase):
         self.assertEqual("running\n", run([str(binary)], self.proj).stdout)
 
     def test_build_time_reproducible_with_fixed_epoch(self) -> None:
-        env = {**os.environ, "SOURCE_DATE_EPOCH": "1700000000"}  # 2023-11-14T22:13:20Z
-
         def build_time() -> str:
-            subprocess.run(["make", "build-api"], cwd=self.proj, env=env,
-                           capture_output=True, text=True, timeout=30)
+            b = self._build(self.proj, {"SOURCE_DATE_EPOCH": "1700000000"})  # 2023-11-14
+            self.assertEqual(0, b.returncode, b.stderr)  # both builds must actually succeed
             return run([str(self.proj / "bin" / "api"), "--version"], self.proj).stdout
 
         first, second = build_time(), build_time()
         self.assertEqual(first, second, "fixed SOURCE_DATE_EPOCH must give an identical buildTime")
         self.assertIn("buildTime=2023-11-14", first, first)
 
+    def test_binary_reproducible_across_checkout_paths(self) -> None:
+        """Identical source at two DIFFERENT paths + a fixed SOURCE_DATE_EPOCH must
+        produce a byte-identical binary. This is exactly what -trimpath buys, and is the
+        evidence behind the docs' (narrowed) reproducibility claim — without -trimpath the
+        embedded build path differs and the hashes diverge."""
+        import hashlib
+
+        # Shared writable GOCACHE (sandbox) + fixed epoch; -trimpath makes the two
+        # different build paths irrelevant to the output.
+        env = {**self.build_env, "SOURCE_DATE_EPOCH": "1700000000"}
+        main_go = (self.proj / "cmd" / "api" / "main.go").read_text()
+        makefile = (self.proj / "Makefile").read_text()
+        digests = []
+        for _ in range(2):
+            d = Path(tempfile.mkdtemp())
+            self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+            (d / "cmd" / "api").mkdir(parents=True)
+            (d / "cmd" / "api" / "main.go").write_text(main_go)
+            (d / "go.mod").write_text("module fixture\n\ngo 1.22\n")
+            (d / "Makefile").write_text(makefile)
+            b = subprocess.run(["make", "build-api"], cwd=d, env=env,
+                               capture_output=True, text=True, timeout=60)
+            self.assertEqual(0, b.returncode, b.stderr)
+            digests.append(hashlib.sha256((d / "bin" / "api").read_bytes()).hexdigest())
+        self.assertEqual(digests[0], digests[1],
+                         "identical source at different paths + fixed epoch + -trimpath "
+                         "must be byte-identical")
+
     def test_clean_removes_build_artifacts(self) -> None:
-        self.assertEqual(0, run(["make", "build-api"], self.proj).returncode)
+        self.assertEqual(0, self._build(self.proj).returncode)
         self.assertTrue((self.proj / "bin" / "api").exists())
         clean = run(["make", "clean"], self.proj)
         self.assertEqual(0, clean.returncode, clean.stderr)
@@ -267,11 +301,53 @@ class DiscoverModulesTests(unittest.TestCase):
         self.assertFalse(any("examples" in d for d in dirs),
                          f"a module not in go.work `use` must not be listed: {out.stdout!r}")
 
+    def test_traditional_multimodule_without_gowork(self):
+        # Tier 3: a plain multi-module repo with NO go.work must still list modules
+        # (scoped go.mod search), excluding vendored / example modules.
+        for m in ("svc-a", "svc-b", "examples/demo", "vendor/dep"):
+            (self.repo / m).mkdir(parents=True)
+            (self.repo / m / "go.mod").write_text("module m\n\ngo 1.22\n")
+        out = subprocess.run(["bash", str(DISCOVER), "--modules", str(self.repo)],
+                             capture_output=True, text=True, timeout=30)
+        self.assertEqual(0, out.returncode, out.stderr)
+        dirs = out.stdout.split()
+        self.assertTrue(any(d.endswith("svc-a") for d in dirs),
+                        f"traditional multi-module repo must list modules: {out.stdout!r}")
+        self.assertTrue(any(d.endswith("svc-b") for d in dirs), out.stdout)
+        self.assertFalse(any("examples" in d or "vendor" in d for d in dirs),
+                         f"vendored/example modules must be excluded: {out.stdout!r}")
+
+    def test_go_work_parser_handles_comments_and_quotes(self):
+        # Force the toolchain-absent branch (tier 2 awk parser) via a minimal PATH,
+        # exercising `//` comment stripping and quote removal directly.
+        (self.repo / "go.work").write_text(
+            'go 1.22\n\nuse (\n\t./svc-a  // primary service\n\t"./svc-b"\n)\n'
+        )
+        out = subprocess.run(["env", "PATH=/usr/bin:/bin", "bash", str(DISCOVER),
+                              "--modules", str(self.repo)],
+                             capture_output=True, text=True, timeout=30)
+        self.assertEqual(0, out.returncode, out.stderr)
+        lines = [ln.strip() for ln in out.stdout.splitlines() if ln.strip()]
+        self.assertIn("./svc-a", lines, f"comment not stripped / path lost: {out.stdout!r}")
+        self.assertIn("./svc-b", lines, f"surrounding quotes not removed: {out.stdout!r}")
+
 
 @unittest.skipUnless(GIT, "git not installed")
 class GenerateCheckBeforeAfterTests(unittest.TestCase):
-    """generate-check compares before/after, so a PRE-EXISTING dirty tree unrelated
-    to codegen is not misreported as 'generated code stale' (the porcelain-only bug)."""
+    """generate-check must satisfy three properties the naive porcelain-only version failed:
+    (a) a PRE-EXISTING dirty tree unrelated to codegen is NOT misreported as stale;
+    (b) a failing `make generate` FAILS the check (set -e), never passes silently;
+    (c) a content change to an ALREADY-dirty file IS caught (status alone can't see it)."""
+
+    # Mirrors the generate-check recipe shipped in the golden Makefiles.
+    CHECK = (
+        "generate-check: ## check\n"
+        "\t@set -e; \\\n"
+        "\tbefore=\"$$(git status --porcelain)$$(git diff)\"; \\\n"
+        "\t$(MAKE) generate >/dev/null; \\\n"
+        "\tafter=\"$$(git status --porcelain)$$(git diff)\"; \\\n"
+        "\tif [ \"$$before\" != \"$$after\" ]; then echo STALE; exit 1; fi\n"
+    )
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -285,24 +361,37 @@ class GenerateCheckBeforeAfterTests(unittest.TestCase):
         self._git("add", "committed.txt")
         self._git("commit", "-qm", "init")
         (self.repo / "committed.txt").write_text("locally edited\n")  # pre-existing, unrelated dirt
-        # No-op `generate` + the golden's before/after generate-check recipe.
-        (self.repo / "Makefile").write_text(
-            "generate:\n\t@true\n\n"
-            "generate-check: ## check\n"
-            "\t@before=\"$$(git status --porcelain)\"; \\\n"
-            "\t$(MAKE) generate >/dev/null; \\\n"
-            "\tafter=\"$$(git status --porcelain)\"; \\\n"
-            "\tif [ \"$$before\" != \"$$after\" ]; then echo STALE; exit 1; fi\n"
-        )
 
     def _git(self, *a):
         return subprocess.run(["git", *a], cwd=self.repo, env=self.env, capture_output=True, text=True)
 
+    def _write(self, generate_body: str) -> None:
+        (self.repo / "Makefile").write_text(f"generate:\n\t{generate_body}\n\n" + self.CHECK)
+
+    def _run(self):
+        return subprocess.run(["make", "generate-check"], cwd=self.repo, env=self.env,
+                              capture_output=True, text=True, timeout=30)
+
     def test_preexisting_dirt_is_not_flagged(self):
-        out = subprocess.run(["make", "generate-check"], cwd=self.repo, env=self.env,
-                             capture_output=True, text=True, timeout=30)
+        self._write("@true")  # no-op generator leaves the pre-existing dirt untouched
+        out = self._run()
         self.assertEqual(0, out.returncode,
                          f"pre-existing dirt must not be flagged stale: {out.stdout}{out.stderr}")
+
+    def test_generate_failure_is_surfaced(self):
+        self._write("@echo boom >&2; exit 3")  # codegen errors, tree unchanged
+        out = self._run()
+        self.assertNotEqual(0, out.returncode,
+                            "a failing `make generate` must fail generate-check, not pass silently")
+
+    def test_same_status_content_change_is_detected(self):
+        # committed.txt is already ` M`; the generator changes its content AGAIN. The
+        # porcelain string stays ` M committed.txt` either way — only the diff reveals it.
+        self._write("@printf 'more\\n' >> committed.txt")
+        out = self._run()
+        self.assertNotEqual(0, out.returncode,
+                            "a content change to an already-dirty file must be caught via diff")
+        self.assertIn("STALE", out.stdout)
 
 
 if __name__ == "__main__":

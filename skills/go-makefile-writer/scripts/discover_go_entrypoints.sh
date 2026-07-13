@@ -33,20 +33,42 @@ done
 
 cd "$root" || { echo "# cannot cd to $root" >&2; exit 2; }
 
-# --modules: list Go workspace module directories from go.work `use` directives.
-# Prefer the toolchain; fall back to parsing go.work so it works without `go`
-# installed. Modules NOT listed under `use` (examples/, tools/, vendored) are
-# excluded — this is what a bare `rg --files go.mod` gets wrong.
+# --modules: list the repo's module directories. Three tiers, in order:
+#   1. go.work workspace via the toolchain (authoritative — exact `use` set);
+#   2. go.work parsed by hand when `go` is absent (block + single-line forms,
+#      strips `//` comments, unquotes quoted paths);
+#   3. NO go.work — a traditional multi-module repo: scoped `go.mod` search
+#      excluding vendor/testdata/examples/tool-only modules.
+# A bare `rg --files go.mod` gets tier 1/2 wrong by including modules the
+# workspace deliberately omits; tier 3 is the only place a file search belongs.
 if $modules_mode; then
   if command -v go >/dev/null 2>&1 && [ -n "$(go env GOWORK 2>/dev/null)" ]; then
     go list -m -f '{{.Dir}}' 2>/dev/null || true
   elif [ -f go.work ]; then
     awk '
-      /^[[:space:]]*use[[:space:]]*\(/  { inblk=1; next }
-      inblk && /^[[:space:]]*\)/        { inblk=0; next }
-      inblk                             { gsub(/[[:space:]]/,""); if ($0 != "") print; next }
-      /^[[:space:]]*use[[:space:]]/     { sub(/^[[:space:]]*use[[:space:]]+/,""); gsub(/[[:space:]]/,""); print }
+      { sub(/\/\/.*/, "") }                                    # strip line comments
+      /^[[:space:]]*use[[:space:]]*\(/ { inblk=1; next }        # block: use (
+      inblk && /^[[:space:]]*\)[[:space:]]*$/ { inblk=0; next } # block: )
+      inblk {
+        sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, "")      # trim (keeps inner spaces)
+        sub(/^"/, ""); sub(/"$/, "")                            # unquote
+        if ($0 != "") print
+        next
+      }
+      /^[[:space:]]*use[[:space:]]/ {                           # single-line: use ./x
+        sub(/^[[:space:]]*use[[:space:]]+/, "")
+        sub(/^[[:space:]]+/, ""); sub(/[[:space:]]+$/, "")
+        sub(/^"/, ""); sub(/"$/, "")
+        if ($0 != "") print
+      }
     ' go.work
+  else
+    # Tier 3: traditional multi-module repo (no go.work).
+    if command -v rg >/dev/null 2>&1; then
+      rg --files -g 'go.mod' 2>/dev/null | while IFS= read -r f; do dirname "$f"; done
+    else
+      find . -name go.mod -type f 2>/dev/null | while IFS= read -r f; do dirname "$f"; done
+    fi | grep -Ev '(^|/)(vendor|testdata|examples?)(/|$)' | sort -u
   fi
   exit 0
 fi
