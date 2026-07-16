@@ -116,6 +116,17 @@ class GoldenYamlTests(unittest.TestCase):
                 self.assertIn("go-version-file", text,
                               f"{name}: setup-go without go-version-file")
 
+    def test_matrix_module_setup_has_cache_dependency_path(self) -> None:
+        """A setup-go step reading a matrix/subdirectory go.mod must also set
+        cache-dependency-path, or every module shares one wrong cache key
+        (see workflow-quality-guide.md §3)."""
+        for name, text in yaml_blocks():
+            if re.search(r"go-version-file:\s*\$\{\{\s*matrix\.", text):
+                self.assertIn(
+                    "cache-dependency-path", text,
+                    f"{name}: matrix go-version-file without cache-dependency-path",
+                )
+
     def test_actionlint_when_available(self) -> None:
         if not shutil.which("actionlint"):
             self.skipTest("actionlint not installed")

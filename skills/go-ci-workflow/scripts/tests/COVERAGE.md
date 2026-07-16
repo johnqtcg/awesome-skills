@@ -1,116 +1,62 @@
 # Go-CI-Workflow Skill — Test Coverage Matrix
 
-## Contract Tests (`test_skill_contract.py`)
+Counts below are re-derived from the suite, not hand-maintained. Re-run
+`python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v` after any
+change and update the table.
 
-Reorganized into 10 focused test classes (previously: 1 monolithic class with 43 tests).
+## Test Files and Counts
 
-### `TestFrontmatter` (1 test)
+| File | Tests | What it validates |
+|------|------:|-------------------|
+| `test_skill_contract.py` | 60 | Frontmatter, SKILL.md structure, all reference-file contracts, action-version currency, run-regression fail-closed behaviour, discovery-script surface |
+| `test_golden_scenarios.py` | 28 | 12 golden fixtures: rule-presence coverage + per-scenario behavioural field assertions |
+| `test_golden_yaml.py` | 10 | Structural validation of the concrete workflow YAML in the golden references (+ actionlint when installed) |
+| `test_discover_script.py` | 12 | `discover_ci_needs.sh` behaviour against real fixture repos |
+| **Total** | **110** | 1 test (`test_actionlint_when_available`) skips when `actionlint` is not on PATH |
 
-| Test | Validates |
-|------|-----------|
-| `test_frontmatter_name_and_description` | SKILL.md frontmatter name + GitHub Actions keyword |
+## What Each Layer Proves — and What It Does Not
 
-### `TestSkillMdStructure` (12 tests)
+The suite validates the skill's **authored artifacts** (SKILL.md, references, scripts). It is deterministic and offline. It does **not** run a model to generate a workflow from a scenario and then grade that output — see Known Gaps.
 
-| Test | Validates |
-|------|-----------|
-| `test_skill_md_under_line_budget` | SKILL.md ≤ 350 lines |
-| `test_priority_and_fallback_exist` | Execution Priority + inline fallback + Mandatory Gates + Degraded Output Gate |
-| `test_skill_has_5_mandatory_gates` | All 5 gate headings present |
-| `test_repository_shape_gate_lists_all_shapes` | All 6 repository shapes listed in Shape Gate |
-| `test_local_parity_gate_has_3_execution_paths` | make target / repo task / inline fallback |
-| `test_security_gate_covers_events_and_permissions` | Events (PR/push/workflow_call) + fork secrets + minimum permissions |
-| `test_execution_integrity_gate_requires_not_run_language` | "Not run in this environment" + exact commands |
-| `test_output_contract_has_9_fields` | All 9 output contract fields present |
-| `test_advanced_rules_reference_new_patterns` | composite actions + service containers + path filters |
-| `test_operating_model_has_5_steps` | All 5 workflow steps present |
-| `test_skill_references_discover_script` | discover_ci_needs.sh referenced |
-| `test_skill_cross_references_go_makefile_writer` | $go-makefile-writer cross-reference |
+### `test_skill_contract.py` (60)
 
-### `TestReferenceFiles` (1 test)
+- `TestFrontmatter` — `name`/`description` present; **no unsupported frontmatter keys** (`disable-model-invocation` was removed so `quick_validate` passes and the runner can fail closed).
+- `TestSkillMdStructure` — 350-line budget, 5 mandatory gates, 6 repository shapes, execution paths, security gate, output contract, cross-reference to `$go-makefile-writer`.
+- `TestWorkflowQualityGuide` — 15 baseline sections **plus §16 Action Version & Supply-Chain Pinning** (both pinning tiers, Dependabot, `releases/latest` re-verify step) and `cache-dependency-path` guidance.
+- `TestAdvancedPatterns` — 9 advanced sections (permissions, fork-PR, reusable/composite, service containers, timeouts).
+- `TestRepositoryShapes` — 6 shapes; multi-module matrix sets `cache-dependency-path`; `go.work` workspace documented; path-filter job carries `pull-requests: read`; path-filter × **required-status-check** interaction documented (`ci-required` always-run aggregation job).
+- `TestActionVersionCurrency` — the §16 policy table is the single source of truth; **every `uses:` pin in every reference must match it**, and a denylist guards against regressing to the stale majors the review flagged (`checkout@v4/5/6`, `setup-go@v4/5/6`, `paths-filter@v3`). SHA-pinned examples are exempt.
+- `TestRunRegression` — runner is fail-closed (`set -euo pipefail`, no error-swallowing); actionlint absence is surfaced as a WARNING; a failing validator aborts with its exit code instead of printing success.
+- `TestDiscoveryScript` — 8 categories; vendored/generated trees pruned; `go-workspace`, `toolchain`, and app-vs-library signals present.
 
-| Test | Validates |
-|------|-----------|
-| `test_all_references_and_scripts_exist` | All 9 reference files and scripts exist on disk |
+### `test_golden_yaml.py` (10)
 
-### `TestWorkflowQualityGuide` (6 tests)
+Extracts every ```yaml``` block from the three golden-example references and asserts: parses, has name+trigger+jobs, every job has `runs-on`+`timeout-minutes`, permissions declared, no `@latest`, no hardcoded Go version, and **matrix/subdir setup-go sets `cache-dependency-path`**. When `actionlint` is installed it additionally lints each complete workflow; otherwise that one test skips (the WARNING in `run_regression.sh` makes the skip visible).
 
-| Test | Validates |
-|------|-----------|
-| `test_wqg_has_toc` | Table of Contents present |
-| `test_wqg_has_all_15_sections` | All 15 section headings exist |
-| `test_wqg_core_gate_delegates_to_make` | `make ci COVER_MIN=80` + delegation pattern |
-| `test_wqg_robustness_and_anti_patterns_have_substantive_rules` | Robustness rules + anti-pattern list |
-| `test_wqg_tool_version_currency_note` | Version currency warning present |
-| `test_wqg_mentions_monorepo` | monorepo coverage |
+### `test_golden_scenarios.py` (28) and `test_discover_script.py` (12)
 
-### `TestAdvancedPatterns` (9 tests)
-
-| Test | Validates |
-|------|-----------|
-| `test_gap_has_all_9_sections` | All 9 section headings exist |
-| `test_gap_fork_pr_has_if_condition_yaml` | Concrete fork PR guard `if:` condition |
-| `test_gap_fork_pr_warns_about_pull_request_target` | pull_request_target danger warning |
-| `test_gap_permissions_has_github_token_section` | GITHUB_TOKEN vs custom PAT guidance |
-| `test_gap_permissions_has_escalation_table` | contents:write / packages:write / pull-requests:write |
-| `test_gap_composite_actions_has_comparison_table` | Composite vs Reusable comparison table |
-| `test_gap_service_containers_has_health_checks` | health-cmd + pg_isready + redis-cli |
-| `test_gap_service_containers_has_common_images_table` | 5 databases (PG/MySQL/Redis/Kafka/MongoDB) |
-| `test_gap_timeout_table_exists` | Timeout recommendations (15/20/30 min) |
-
-### `TestGoldenExamples` (5 tests) · `TestRepositoryShapes` (5 tests) · `TestChecklist` (2 tests) · `TestFallback` (1 test) · `TestDiscoveryScript` (2 tests)
-
-_(unchanged from prior version — see individual test files for details)_
-
-**Contract test count: 46** (43 original + 1 line-budget test + 2 new golden-examples tests, split into 10 classes)
-
-## Golden Fixture Tests (`test_golden_scenarios.py`)
-
-### Scenario Fixtures and Behavioral Assertions
-
-| Fixture | Scenario Type | Rules Coverage | Behavioral Assertions |
-|---------|--------------|----------------|-----------------------|
-| `001_single_module_service.json` | `single_module_service` | ✅ | ✅ full parity + make target paths |
-| `002_single_module_library.json` | `single_module_library` | ✅ | ✅ matrix in rules |
-| `003_multi_module_repo.json` | `multi_module` | ✅ | ✅ **expected_shape == multi-module + gate list** |
-| `004_monorepo_path_filters.json` | `monorepo` | ✅ | ✅ path filter in rules |
-| `005_docker_heavy_repo.json` | `docker_heavy` | ✅ | ✅ **expected_shape == Docker-heavy + separate jobs** |
-| `006_no_makefile_fallback.json` | `no_makefile` | ✅ | ✅ partial parity + Degraded Output Gate |
-| `007_fork_pr_security.json` | `fork_pr_security` | ✅ | ✅ Security Gate required |
-| `008_service_containers_integration.json` | `service_containers` | ✅ | ✅ **api-integration in expected_jobs + service container** |
-| `009_e2e_job.json` | `e2e_test` | ✅ | ✅ **ci+e2e jobs + schedule trigger + 30min timeout** |
-| `010_static_analysis_job.json` | `static_analysis` | ✅ | ✅ **govulncheck job + Vulnerability Scanning + Static Analysis** |
-| `011_reusable_workflow.json` | `reusable_workflow` | ✅ | ✅ **reusable-workflow shape + workflow_call + Composite vs Reusable decision** |
-| `012_self_hosted_runner.json` | `self_hosted_runner` | ✅ | ✅ **Security Gate + self-hosted label + no silent GitHub-hosted assumptions** |
-
-**Golden fixture count: 12**
-**Golden test count: 28** (12 rules-coverage + 4 integrity + 12 behavioral assertions)
+Fixture rule-coverage + behavioural field assertions, and probe-script behaviour on real temp repos (vendored-module, workspace, toolchain, app/library, empty, bad-root).
 
 ## Coverage Summary
 
 | Category | Total | Tested | Coverage |
 |---------|-------|--------|----------|
-| Mandatory gates (5) | 5 | 5 | 100% |
-| Repository shapes (6) | 6 | 6 | 100% |
-| Job types (core/docker/integration/e2e/vuln/static) | 6 | **6** | **100%** |
-| Trigger types (PR/push/schedule/workflow_call) | 4 | **4** | **100%** |
-| Execution paths (make target/repo task/inline fallback) | 3 | 3 | 100% |
-| Parity levels (full/partial/scaffold) | 3 | 3 | 100% |
-| Output contract fields (9) | 9 | 9 | 100% |
-| WQG sections (15) | 15 | 15 | 100% |
-| Advanced pattern sections (9) | 9 | 9 | 100% |
-| Golden examples (4) | 4 | 4 | 100% |
-| PR checklist sections (10) | 10 | 10 | 100% |
-| Fallback levels (3) | 3 | 3 | 100% |
-| Discover script categories (8) | 8 | 8 | 100% |
-| Golden fixtures: scenario types (12) | 12 | 12 | 100% |
-| Behavioral assertions per fixture | 12 | 12 | 100% |
-
-**Total tests: 73** (46 contract + 27 golden)
+| Mandatory gates | 5 | 5 | 100% |
+| Repository shapes | 6 | 6 | 100% |
+| Job types (core/docker/integration/e2e/vuln/static) | 6 | 6 | 100% |
+| Trigger types (PR/push/schedule/workflow_call) | 4 | 4 | 100% |
+| Execution paths (make/repo-task/inline) | 3 | 3 | 100% |
+| WQG sections (incl. §16 pinning) | 16 | 16 | 100% |
+| Advanced pattern sections | 9 | 9 | 100% |
+| Golden fixtures | 12 | 12 | 100% |
+| Golden example workflows (structural) | 5 | 5 | 100% |
+| Discover-script categories | 8 | 8 | 100% |
 
 ## Known Gaps
 
-| Gap | Priority |
-|-----|----------|
-| Integration test: run discover_ci_needs.sh against mock repo | Low |
-| Golden fixture for tag-triggered release workflow | Low |
+| Gap | Priority | Notes |
+|-----|----------|-------|
+| No model-in-the-loop generation eval | Medium | The suite grades authored artifacts, not freshly generated workflows. End-to-end "generate then validate" belongs in the eval-harness, not this offline unit suite. Do not read "100% covered" as "generation quality guaranteed". |
+| actionlint is optional, not required | Medium | When `actionlint` is absent, Actions expression/context/shell semantics are unverified. The run is honest about this (WARNING + qualified success line), but CI that wants real semantic validation must install actionlint. |
+| Action versions are point-in-time | Low | Pins verified 2026-07-16. `TestActionVersionCurrency` keeps examples internally consistent with §16, but neither the test nor the skill can detect that upstream shipped a newer major — re-verify at generation time. |
+| discover script is a probe, not a classifier | Low | app-vs-library is a heuristic; Taskfile/mage task bodies, CGO, codegen, private modules, and cross-platform needs are not inferred. The skill body requires manual confirmation. |

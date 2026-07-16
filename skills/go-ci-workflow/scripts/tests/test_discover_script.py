@@ -72,6 +72,58 @@ class DiscoverScriptTests(unittest.TestCase):
         self.assertEqual(0, proc.returncode, proc.stderr)
         self.assertEqual("", proc.stdout)
 
+    # --- shape-detection accuracy (probe must not over-classify) ---
+
+    def test_vendored_go_mod_does_not_trigger_multi_module(self) -> None:
+        """A vendored dependency's go.mod must not read as a nested module."""
+        (self.repo / "go.mod").write_text("module app\n\ngo 1.23\n")
+        vendor = self.repo / "vendor" / "github.com" / "x" / "y"
+        vendor.mkdir(parents=True)
+        (vendor / "go.mod").write_text("module y\n\ngo 1.20\n")
+        proc = run_discovery(self.repo)
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        rows = tsv_rows(proc)
+        self.assertIn(("shape", "single-root-module", "go.mod"), rows)
+        self.assertNotIn(("shape", "multi-module", "find go.mod"), rows)
+        # the vendored go.mod must not appear as a discovered module version
+        self.assertFalse(
+            any(r[0] == "config" and r[1] == "go-version" and "vendor/" in r[2] for r in rows),
+            "vendored go.mod leaked into go-version discovery",
+        )
+
+    def test_go_workspace_detected(self) -> None:
+        (self.repo / "go.work").write_text("go 1.23\n\nuse (\n  .\n  ./svc/api\n)\n")
+        (self.repo / "go.mod").write_text("module root\n\ngo 1.23\n")
+        api = self.repo / "svc" / "api"
+        api.mkdir(parents=True)
+        (api / "go.mod").write_text("module root/api\n\ngo 1.23\n")
+        proc = run_discovery(self.repo)
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        rows = tsv_rows(proc)
+        self.assertIn(("shape", "go-workspace", "go.work"), rows)
+        self.assertIn(("shape", "multi-module", "find go.mod"), rows)
+
+    def test_toolchain_directive_detected(self) -> None:
+        (self.repo / "go.mod").write_text("module app\n\ngo 1.23\n\ntoolchain go1.23.4\n")
+        proc = run_discovery(self.repo)
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        rows = tsv_rows(proc)
+        self.assertIn(("config", "toolchain", "go.mod (go1.23.4)"), rows)
+
+    def test_application_heuristic_flags_package_main(self) -> None:
+        (self.repo / "go.mod").write_text("module app\n\ngo 1.23\n")
+        (self.repo / "main.go").write_text("package main\n\nfunc main() {}\n")
+        proc = run_discovery(self.repo)
+        rows = tsv_rows(proc)
+        self.assertIn(("shape", "likely-application", "main.go"), rows)
+
+    def test_library_heuristic_when_no_package_main(self) -> None:
+        (self.repo / "go.mod").write_text("module lib\n\ngo 1.23\n")
+        (self.repo / "lib.go").write_text("package lib\n\nfunc F() {}\n")
+        proc = run_discovery(self.repo)
+        rows = tsv_rows(proc)
+        self.assertIn(("shape", "likely-library-or-unknown", "no package main found"), rows)
+
     # --- full-featured repo: every probe category fires ---
 
     def test_rich_repo_fires_all_categories(self) -> None:

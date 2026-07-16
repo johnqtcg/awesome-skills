@@ -1,7 +1,6 @@
 ---
 name: go-ci-workflow
 description: Use when creating or refactoring GitHub Actions CI workflows for Go repositories. Covers repository-shape detection, Make-driven delegation with formal fallbacks, Go setup, caching, tool pinning, permissions, reusable workflows, and quality gate design.
-disable-model-invocation: true
 allowed-tools: Read, Write, Grep, Glob, Bash(go version*), Bash(go install*), Bash(go test*), Bash(go build*), Bash(make*), Bash(gosec*), Bash(govulncheck*), Bash(docker build*)
 ---
 
@@ -169,6 +168,8 @@ Do not force all expensive jobs onto every PR unless the repository risk profile
 - Use `go-version-file: go.mod` — never hardcode Go version.
 - Pin `go install` tool versions exactly, never `@latest`.
 - Keep tool versions aligned with Makefile or repo-native install scripts when those exist.
+- Pin third-party actions and **re-verify the latest major at generation time** — do not trust an embedded version number. Standard repos pin the major tag (`@v7`); high-security repos pin a full commit SHA with a `# vX.Y.Z` comment and let Dependabot/Renovate bump it. See `references/workflow-quality-guide.md` §16.
+- When `go.mod`/`go.sum` is not at the repo root (sub-directory module, matrix over modules, `go.work` workspace), set `cache-dependency-path` on `setup-go` — otherwise the cache key is wrong or missing. Treat a `go.work` repo as one workspace, not as independent modules.
 
 ## Advanced GitHub Actions Rules
 

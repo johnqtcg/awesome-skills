@@ -116,8 +116,8 @@ jobs:
   ci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: ${{ inputs.go-mod-path }}
           cache: true
@@ -152,8 +152,8 @@ inputs:
 runs:
   using: composite
   steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-go@v5
+    - uses: actions/checkout@v7
+    - uses: actions/setup-go@v7
       with:
         go-version-file: ${{ inputs.go-mod-path }}
         cache: true
@@ -222,7 +222,7 @@ Publish artifacts when they help diagnosis:
 ```yaml
 - name: Upload coverage
   if: always()
-  uses: actions/upload-artifact@v4
+  uses: actions/upload-artifact@v7
   with:
     name: coverage-report
     path: coverage.out
@@ -275,8 +275,8 @@ api-integration:
         --health-timeout=5s
         --health-retries=5
   steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-go@v5
+    - uses: actions/checkout@v7
+    - uses: actions/setup-go@v7
       with:
         go-version-file: go.mod
         cache: true

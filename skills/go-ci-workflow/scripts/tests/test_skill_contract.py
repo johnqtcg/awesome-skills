@@ -1,19 +1,35 @@
+import os
 import re
+import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
 
 SKILL_DIR = Path(__file__).resolve().parents[2]
 SKILL_MD = SKILL_DIR / "SKILL.md"
-WORKFLOW_GUIDE = SKILL_DIR / "references" / "workflow-quality-guide.md"
-PR_CHECKLIST = SKILL_DIR / "references" / "pr-checklist.md"
-REPO_SHAPES = SKILL_DIR / "references" / "repository-shapes.md"
-ADVANCED = SKILL_DIR / "references" / "github-actions-advanced-patterns.md"
-FALLBACK = SKILL_DIR / "references" / "fallback-and-scaffolding.md"
-GOLDEN_EXAMPLES = SKILL_DIR / "references" / "golden-examples.md"
-GOLDEN_MONOREPO = SKILL_DIR / "references" / "golden-example-monorepo.md"
-GOLDEN_SERVICE_CONTAINERS = SKILL_DIR / "references" / "golden-example-service-containers.md"
+REF_DIR = SKILL_DIR / "references"
+WORKFLOW_GUIDE = REF_DIR / "workflow-quality-guide.md"
+PR_CHECKLIST = REF_DIR / "pr-checklist.md"
+REPO_SHAPES = REF_DIR / "repository-shapes.md"
+ADVANCED = REF_DIR / "github-actions-advanced-patterns.md"
+FALLBACK = REF_DIR / "fallback-and-scaffolding.md"
+GOLDEN_EXAMPLES = REF_DIR / "golden-examples.md"
+GOLDEN_MONOREPO = REF_DIR / "golden-example-monorepo.md"
+GOLDEN_SERVICE_CONTAINERS = REF_DIR / "golden-example-service-containers.md"
 DISCOVER_SCRIPT = SKILL_DIR / "scripts" / "discover_ci_needs.sh"
+RUN_REGRESSION = SKILL_DIR / "scripts" / "run_regression.sh"
+
+# §16 pinning-policy table rows: | `actions/checkout` | `v7` | 2026-07-16 |
+POLICY_ROW_RE = re.compile(
+    r"^\|\s*`(?P<action>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)`\s*\|\s*`(?P<major>v\d+)`\s*\|",
+    re.MULTILINE,
+)
+# `uses: owner/repo@ref` occurrences in the reference YAML examples.
+USES_RE = re.compile(
+    r"uses:\s*(?P<action>[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+)@(?P<ref>[A-Za-z0-9_.-]+)"
+)
+SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def frontmatter(text: str) -> str:
@@ -41,6 +57,13 @@ class TestFrontmatter(unittest.TestCase):
         fm = frontmatter(self.skill_text)
         self.assertIn("name: go-ci-workflow", fm)
         self.assertIn("GitHub Actions", fm)
+
+    def test_frontmatter_has_no_unsupported_fields(self) -> None:
+        """Only validator-recognised keys may appear (name/description/license/
+        allowed-tools/metadata/compatibility). `disable-model-invocation` is
+        rejected by quick_validate and previously made the runner fail."""
+        fm = frontmatter(self.skill_text)
+        self.assertNotIn("disable-model-invocation", fm)
 
 
 # ------------------------------------------------------------------
@@ -209,6 +232,19 @@ class TestWorkflowQualityGuide(unittest.TestCase):
     def test_wqg_mentions_monorepo(self) -> None:
         self.assertIn("monorepo", self.wqg_text.lower())
 
+    def test_wqg_has_pinning_and_supply_chain_section(self) -> None:
+        self.assertIn("## 16. Action Version & Supply-Chain Pinning", self.wqg_text)
+        # both pinning tiers documented
+        self.assertIn("major tag", self.wqg_text)
+        self.assertIn("commit SHA", self.wqg_text)
+        # automated bumping
+        self.assertIn("dependabot", self.wqg_text.lower())
+        # re-verify guidance, not a frozen number
+        self.assertIn("releases/latest", self.wqg_text)
+
+    def test_wqg_documents_cache_dependency_path(self) -> None:
+        self.assertIn("cache-dependency-path", self.wqg_text)
+
 
 # ------------------------------------------------------------------
 # TestAdvancedPatterns
@@ -365,6 +401,21 @@ class TestRepositoryShapes(unittest.TestCase):
     def test_rs_no_makefile_has_fallback_marking(self) -> None:
         self.assertIn("# INLINE FALLBACK", self.rs_text)
 
+    def test_rs_multi_module_sets_cache_dependency_path(self) -> None:
+        self.assertIn("cache-dependency-path: ${{ matrix.module }}/go.sum", self.rs_text)
+
+    def test_rs_documents_go_work_workspace(self) -> None:
+        self.assertIn("go.work", self.rs_text)
+        self.assertIn("go-workspace", self.rs_text)
+
+    def test_rs_path_filter_job_has_pull_requests_read(self) -> None:
+        self.assertIn("pull-requests: read", self.rs_text)
+
+    def test_rs_documents_required_status_check_interaction(self) -> None:
+        self.assertIn("Required Status Checks", self.rs_text)
+        self.assertIn("ci-required", self.rs_text)
+        self.assertIn("if: always()", self.rs_text)
+
 
 # ------------------------------------------------------------------
 # TestChecklist
@@ -414,9 +465,104 @@ class TestDiscoveryScript(unittest.TestCase):
             self.assertIn(category, self.content, f"missing category: {category}")
 
     def test_discover_script_handles_shapes(self) -> None:
-        self.assertIn("find . -name go.mod", self.content)
+        self.assertIn("find . -type f -name go.mod", self.content)
         self.assertIn("single-root-module", self.content)
         self.assertIn("multi-module", self.content)
+
+    def test_discover_script_prunes_vendored_trees(self) -> None:
+        """Vendored/generated go.mod must not read as first-party modules."""
+        self.assertIn("-not -path '*/vendor/*'", self.content)
+        self.assertIn("-not -path '*/testdata/*'", self.content)
+
+    def test_discover_script_detects_workspace_toolchain_and_app_signal(self) -> None:
+        for token in ("go-workspace", "toolchain", "likely-application",
+                      "likely-library-or-unknown"):
+            self.assertIn(token, self.content, f"discover script missing: {token}")
+
+
+# ------------------------------------------------------------------
+# TestActionVersionCurrency — points 1 & 2: examples must match the §16 policy
+# ------------------------------------------------------------------
+
+class TestActionVersionCurrency(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.policy = {
+            m.group("action"): m.group("major")
+            for m in POLICY_ROW_RE.finditer(WORKFLOW_GUIDE.read_text())
+        }
+        cls.ref_files = sorted(REF_DIR.glob("*.md"))
+
+    def test_policy_table_lists_core_actions(self) -> None:
+        for action in ("actions/checkout", "actions/setup-go",
+                       "dorny/paths-filter", "actions/upload-artifact"):
+            self.assertIn(action, self.policy, f"{action} missing from §16 pinning table")
+
+    def test_every_example_pin_matches_policy_major(self) -> None:
+        """Every `uses: <action>@vN` in the references must use the major the
+        §16 table declares. SHA-pinned examples (40 hex) are exempt. This is the
+        tripwire that turns a stale golden template into a red test."""
+        mismatches = []
+        for path in self.ref_files:
+            for m in USES_RE.finditer(path.read_text()):
+                action, ref = m.group("action"), m.group("ref")
+                if action not in self.policy or SHA_RE.match(ref):
+                    continue
+                if ref != self.policy[action]:
+                    mismatches.append(f"{path.name}: {action}@{ref} != policy {self.policy[action]}")
+        self.assertFalse(mismatches, "action pins drifted from §16 policy:\n" + "\n".join(mismatches))
+
+    def test_no_known_stale_majors_remain(self) -> None:
+        """Guard against regressing to the versions the review flagged."""
+        stale = {"actions/checkout": {"v4", "v5", "v6"},
+                 "actions/setup-go": {"v4", "v5", "v6"},
+                 "dorny/paths-filter": {"v3"},
+                 "actions/upload-artifact": {"v4", "v5", "v6"}}
+        found = []
+        for path in self.ref_files:
+            for m in USES_RE.finditer(path.read_text()):
+                action, ref = m.group("action"), m.group("ref")
+                if ref in stale.get(action, set()):
+                    found.append(f"{path.name}: {action}@{ref}")
+        self.assertFalse(found, "stale action majors still present:\n" + "\n".join(found))
+
+
+# ------------------------------------------------------------------
+# TestRunRegression — point 6: the runner must fail closed
+# ------------------------------------------------------------------
+
+class TestRunRegression(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.text = RUN_REGRESSION.read_text()
+
+    def test_runner_is_fail_closed(self) -> None:
+        self.assertIn("set -euo pipefail", self.text)
+        # the old error-swallowing path must be gone
+        self.assertNotIn("continuing", self.text.lower())
+
+    def test_runner_surfaces_actionlint_skip(self) -> None:
+        self.assertIn("actionlint", self.text)
+        self.assertIn("WARNING", self.text)
+
+    def test_runner_stops_when_validator_fails(self) -> None:
+        """A failing validator must abort with its exit code, not print
+        'regression checks passed'."""
+        with tempfile.TemporaryDirectory() as tmp:
+            validator = Path(tmp) / "fail_validator.py"
+            validator.write_text("raise SystemExit(7)\n")
+            env = dict(os.environ)
+            env["SKILL_CREATOR_VALIDATOR"] = str(validator)
+            result = subprocess.run(
+                ["bash", str(RUN_REGRESSION)],
+                cwd=str(SKILL_DIR),
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(7, result.returncode)
+        self.assertNotIn("[3/3]", result.stdout)
+        self.assertNotIn("regression checks passed", result.stdout)
 
 
 if __name__ == "__main__":

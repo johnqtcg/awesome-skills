@@ -17,6 +17,7 @@
 13. [Matrix Strategy](#13-matrix-strategy)
 14. [Robustness and Anti-Pattern Rules](#14-robustness-and-anti-pattern-rules)
 15. [Validation Checklist](#15-validation-checklist)
+16. [Action Version & Supply-Chain Pinning](#16-action-version--supply-chain-pinning)
 
 ## 1. Job Set
 
@@ -66,7 +67,7 @@ Always use `go-version-file` to read Go version from `go.mod`:
 
 ```yaml
 - name: Set up Go
-  uses: actions/setup-go@v5
+  uses: actions/setup-go@v7
   with:
     go-version-file: go.mod
     cache: true
@@ -74,6 +75,26 @@ Always use `go-version-file` to read Go version from `go.mod`:
 
 Never hardcode Go version in the workflow. The `go.mod` file is the single source of truth.
 For multi-module repositories, be explicit about which `go.mod` governs each job.
+
+**Cache key correctness — `cache-dependency-path`.** `setup-go`'s built-in cache derives its key by hashing `go.sum`. It only finds `go.sum` in the working directory by default. Whenever the module lives in a subdirectory, a workspace has several `go.sum` files, or `go-version-file` points anywhere other than the root, set `cache-dependency-path` explicitly — otherwise the key is computed from the wrong (or a missing) `go.sum`, producing cross-module cache poisoning or a permanent cache miss:
+
+```yaml
+# Module in a subdirectory (e.g. matrix over modules)
+- uses: actions/setup-go@v7
+  with:
+    go-version-file: ${{ matrix.module }}/go.mod
+    cache: true
+    cache-dependency-path: ${{ matrix.module }}/go.sum
+
+# go.work workspace — hash every module's go.sum so the key changes when any moves
+- uses: actions/setup-go@v7
+  with:
+    go-version-file: go.mod
+    cache: true
+    cache-dependency-path: |
+      go.work.sum
+      **/go.sum
+```
 
 ## 4. Core Gate Job
 
@@ -84,10 +105,10 @@ ci:
   name: Format · Test · Lint · Build
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
         go-version-file: go.mod
         cache: true
@@ -114,7 +135,7 @@ docker-build:
   name: Docker Image Build
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Build image
       run: make docker-build
@@ -139,10 +160,10 @@ api-integration:
   name: API Integration
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
         go-version-file: go.mod
         cache: true
@@ -166,10 +187,10 @@ e2e:
   runs-on: ubuntu-latest
   if: github.event_name == 'push' || github.event_name == 'schedule'
   steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
         go-version-file: go.mod
         cache: true
@@ -191,10 +212,10 @@ govulncheck:
   name: Dependency Vulnerability Check
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
         go-version-file: go.mod
         cache: true
@@ -217,10 +238,10 @@ fieldalignment:
   name: Struct Field Alignment Check
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v7
 
     - name: Set up Go
-      uses: actions/setup-go@v5
+      uses: actions/setup-go@v7
       with:
         go-version-file: go.mod
         cache: true
@@ -239,7 +260,7 @@ Other useful extras:
 
 ## 10. Caching Strategy
 
-`actions/setup-go@v5` handles Go module cache automatically when `cache: true` is set.
+`actions/setup-go@v7` handles Go module cache automatically when `cache: true` is set.
 
 For additional cache control (custom GOCACHE, lint cache), pass via environment:
 
@@ -308,7 +329,7 @@ ci:
       go-version: ['1.22', '1.23']
   runs-on: ubuntu-latest
   steps:
-    - uses: actions/setup-go@v5
+    - uses: actions/setup-go@v7
       with:
         go-version: ${{ matrix.go-version }}
 ```
@@ -351,3 +372,60 @@ Recommended:
 - Push to a test branch and verify all jobs pass.
 - Verify conditional jobs (`if:`) trigger correctly.
 - Confirm cache is working (check "Post Set up Go" step logs).
+
+## 16. Action Version & Supply-Chain Pinning
+
+Third-party actions run with access to your repository token. Their versions move, and a "golden example" that hard-codes a version silently rots the moment upstream ships a new major. Treat the versions below as a **starting point that must be re-verified at generation time**, not as permanent truth.
+
+### Pinned versions used throughout this skill (single source of truth)
+
+| Action | Pinned major | Latest verified |
+|--------|--------------|-----------------|
+| `actions/checkout` | `v7` | 2026-07-16 |
+| `actions/setup-go` | `v7` | 2026-07-16 |
+| `dorny/paths-filter` | `v4` | 2026-07-16 |
+| `actions/upload-artifact` | `v7` | 2026-07-16 |
+
+Every YAML example in this skill uses these majors. When you bump a row here, bump every example too — `scripts/tests/test_skill_contract.py::TestActionVersionCurrency` fails if they drift apart, and that failure is the reminder to re-verify.
+
+> `setup-go@v6+` reads the `toolchain` directive from `go.mod` and changed its cache-key behaviour; it also requires a reasonably recent runner. Do not pair a `v7` example with a pinned ancient runner image.
+
+### Re-verify before generating
+
+Newer majors ship often. Before writing a workflow, confirm the current release rather than trusting any embedded number:
+
+```bash
+# Latest release tag for an action (needs gh auth or a token)
+gh api repos/actions/setup-go/releases/latest --jq .tag_name
+gh api repos/actions/checkout/releases/latest --jq .tag_name
+```
+
+Or read the releases page (e.g. `https://github.com/actions/setup-go/releases`). If the latest major is higher than the table, prefer it and update the table + examples together.
+
+### Two pinning tiers — pick by repository risk
+
+- **Standard repositories — pin the major tag** (`actions/checkout@v7`). Simple, readable, and auto-receives patch/minor security fixes. This is what the examples use.
+- **High-security / regulated repositories — pin the full 40-char commit SHA, with the human-readable version in a trailing comment.** A moved tag cannot then swap the code under you (tags are mutable; a SHA is not):
+
+  ```yaml
+  - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+  - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+  ```
+
+  Resolve the SHA for a tag with `gh api repos/actions/checkout/git/refs/tags/v7.0.0 --jq .object.sha` (dereference annotated tags to the commit). GitHub org/repo policy can *require* SHA pins for all actions — honour that setting when it is on.
+
+### Keep pins fresh automatically
+
+SHA pins are safe but freeze you on old code unless something bumps them. Commit a Dependabot config so upgrades arrive as reviewable PRs (Dependabot preserves the `# vX.Y.Z` comment when it rewrites the SHA):
+
+```yaml
+# .github/dependabot.yml
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+```
+
+Renovate is an equivalent choice with finer-grained grouping. Either way, never let a SHA-pinned repo run for months with no update path — an unpatched action is its own supply-chain risk.

@@ -2,6 +2,8 @@
 
 Use these as shape references for final output. Each example includes full context, job architecture, and annotated workflow YAML.
 
+> **Action versions** in these examples (`checkout@v7`, `setup-go@v7`, …) were verified current on 2026-07-16. They are a starting point, not permanent truth — re-verify the latest major and choose your pinning tier (major tag vs. full commit SHA) per `workflow-quality-guide.md` §16 before copying into a repository.
+
 ## Table of Contents
 
 1. [Standard Service Repository (Full Parity)](#1-standard-service-repository-full-parity)
@@ -49,10 +51,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -68,7 +70,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Build image
         run: make docker-build
@@ -79,10 +81,10 @@ jobs:
     if: github.event_name == 'push' || github.event_name == 'schedule'
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -143,10 +145,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -215,10 +217,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true

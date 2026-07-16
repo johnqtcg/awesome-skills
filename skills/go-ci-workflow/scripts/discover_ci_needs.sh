@@ -10,7 +10,20 @@
 # caller may treat the partial TSV as a complete discovery. So: `set -u`
 # only, explicit error handling for the genuinely fatal case (bad root),
 # and an explicit `exit 0` at the end.
+#
+# LIMITS (the skill body must confirm these by manual inspection, never treat
+# this output as an authoritative repo classification):
+#   - app-vs-library is a heuristic (presence of `package main`), not a verdict;
+#   - it does NOT parse Taskfile/mage task bodies, only detects their presence;
+#   - CGO, codegen, cross-platform, and private-module needs are not inferred;
+#   - TSV assumes paths contain no literal tab or newline (true for ~all Go repos).
 set -u
+
+# Directories that never indicate first-party module structure. Vendored and
+# generated trees carry their own go.mod files; counting them as "nested
+# modules" would misclassify an ordinary single-module repo as multi-module.
+# Kept as quoted -not -path filters at each find call site (an unquoted glob
+# list would be pathname-expanded by the shell before find ever sees it).
 
 root="${1:-.}"
 cd "$root" || { printf 'error\tcannot-cd\t%s\n' "$root" >&2; exit 2; }
@@ -58,19 +71,43 @@ for cfg in .goreleaser.yaml .goreleaser.yml; do
   [ -f "$cfg" ] && printf "config\tgoreleaser\t%s\n" "$cfg" && break
 done
 
-# 6. Go module detection
+# 6. Go module detection (vendored / generated trees pruned — see PRUNE)
 while IFS= read -r gomod; do
   rel="${gomod#./}"
   go_ver=$(awk '/^go / {print $2}' "$gomod" 2>/dev/null)
   printf "config\tgo-version\t%s (%s)\n" "$rel" "${go_ver:-unknown}"
+  # toolchain directive (Go 1.21+) pins the exact toolchain independently of
+  # the language `go` line; setup-go honours it, so CI must not fight it.
+  toolchain=$(awk '/^toolchain / {print $2}' "$gomod" 2>/dev/null)
+  [ -n "$toolchain" ] && printf "config\ttoolchain\t%s (%s)\n" "$rel" "$toolchain"
   [ "$rel" != "go.mod" ] && has_nested_go_mod=1
-done < <(find . -name go.mod -type f 2>/dev/null | sort)
+done < <(find . -type f -name go.mod \
+  -not -path '*/vendor/*' -not -path '*/testdata/*' \
+  -not -path '*/third_party/*' -not -path '*/node_modules/*' \
+  -not -path '*/.git/*' 2>/dev/null | sort)
 
 if [ -f go.mod ]; then
   printf "shape\tsingle-root-module\tgo.mod\n"
 fi
 if [ "$has_nested_go_mod" -eq 1 ]; then
   printf "shape\tmulti-module\tfind go.mod\n"
+fi
+# go.work turns nested modules into one workspace; cache keys and build
+# commands differ from independent multi-module repos.
+if [ -f go.work ]; then
+  printf "shape\tgo-workspace\tgo.work\n"
+fi
+
+# 6b. Application-vs-library signal (HEURISTIC — confirm manually).
+# A `package main` anywhere outside vendored/generated trees suggests a
+# buildable binary (application); its absence suggests a library. This does
+# not classify the repo — it only tells the skill which questions to ask.
+main_pkg=$(grep -rlE '^package main$' --include='*.go' . 2>/dev/null \
+  | grep -vE '/(vendor|testdata|third_party|node_modules)/' | head -1)
+if [ -n "$main_pkg" ]; then
+  printf "shape\tlikely-application\t%s\n" "${main_pkg#./}"
+elif [ -f go.mod ]; then
+  printf "shape\tlikely-library-or-unknown\tno package main found\n"
 fi
 
 # 7. Existing workflows
