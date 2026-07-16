@@ -4,6 +4,10 @@
   "scenario_type": "high_risk",
   "expected_confidence": "confirmed",
   "expected_pr_mode": "ready",
+  "expected_publish": true,
+  "gate_results": [
+    {"gate": "Gate C", "status": "PASS", "evidence": "high risk documented"}
+  ],
   "skill_rules_that_must_fire": [
     "auth/authz, payment, migration, concurrency, public API, infra config, secrets.",
     "If high-risk areas are touched, require explicit risk and rollback notes in PR body.",

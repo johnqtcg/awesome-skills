@@ -1,5 +1,7 @@
+import os
 import re
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -53,6 +55,12 @@ class CreatePRSkillContractTests(unittest.TestCase):
         fm = frontmatter(self.skill_text)
         self.assertIn("name: create-pr", fm)
         self.assertIn("evidence-backed pull requests", fm)
+        keys = {
+            line.split(":", 1)[0].strip()
+            for line in fm.splitlines()
+            if line and not line.startswith((" ", "\t")) and ":" in line
+        }
+        self.assertEqual({"name", "description"}, keys)
 
     def test_skill_references_all_supporting_files(self) -> None:
         for path in (
@@ -78,7 +86,9 @@ class CreatePRSkillContractTests(unittest.TestCase):
     def test_quick_reference_covers_all_gates(self) -> None:
         for gate in ("Gate A", "Gate B", "Gate C", "Gate D", "Gate E", "Gate F", "Gate G", "Gate H"):
             self.assertIn(gate, self.skill_text)
-        self.assertContainsNormalized("Confidence → State: confirmed → ready | likely → ready | suspected → draft", self.skill_text)
+        self.assertContainsNormalized("confirmed → ready", self.skill_text)
+        self.assertContainsNormalized("likely → ready only for low-residual-risk suppressions", self.skill_text)
+        self.assertContainsNormalized("suspected → draft", self.skill_text)
 
     def test_non_negotiables_capture_release_safety_rules(self) -> None:
         for phrase in (
@@ -112,7 +122,7 @@ class CreatePRSkillContractTests(unittest.TestCase):
             "Run `Gate F`: documentation and compatibility checks.",
             "Run `Gate G`: commit hygiene and commit message quality.",
             "Prepare PR title/body with structured evidence.",
-            "Push branch and create PR to `main`.",
+            "If no hard publication blocker exists, push branch and create PR to `main`; otherwise stop before push.",
             "Run `Gate H`: post-create verification.",
             "Decide `draft` vs `ready` from gate results.",
             "Report findings first, then PR link, then follow-up actions.",
@@ -124,6 +134,7 @@ class CreatePRSkillContractTests(unittest.TestCase):
         for cmd in (
             "git rev-parse --is-inside-work-tree",
             "git remote -v",
+            "git remote get-url origin",
             "gh auth status -h github.com",
             "gh repo view --json nameWithOwner,isPrivate,viewerPermission,defaultBranchRef",
             "git ls-remote --heads origin main",
@@ -131,6 +142,7 @@ class CreatePRSkillContractTests(unittest.TestCase):
         ):
             self.assertIn(cmd, self.skill_text)
         self.assertContainsNormalized("If branch protection query fails (404/403), record in Uncovered Risk List and continue.", self.skill_text)
+        self.assertContainsNormalized("origin repository identity must match", self.skill_text)
 
     def test_gate_b_covers_branch_hygiene_and_no_auto_rebase(self) -> None:
         for phrase in (
@@ -166,11 +178,16 @@ class CreatePRSkillContractTests(unittest.TestCase):
 
     def test_gate_e_covers_secret_scans_and_go_security_tools(self) -> None:
         for phrase in (
-            "git diff --name-only origin/main...HEAD",
+            "git diff --name-only --diff-filter=ACMR origin/main...HEAD",
             "git diff origin/main...HEAD",
+            ".env",
+            ".pem",
+            ".key",
+            ".p12",
+            "comments",
             "gosec ./...",
             "govulncheck ./...",
-            "Any unresolved high-confidence issue keeps PR in `draft`.",
+            "Any surviving high-confidence filename or content match is a hard publication blocker",
         ):
             self.assertContainsNormalized(phrase, self.skill_text)
 
@@ -186,6 +203,9 @@ class CreatePRSkillContractTests(unittest.TestCase):
         for phrase in (
             "All commits should use Conventional Commit format",
             "PR title must also follow Conventional Commits format",
+            "subject ≤ 50 characters",
+            "body line must be ≤ 72 characters",
+            "--confirm-self-review",
             "If no commit exists, create one before PR creation.",
             "Perform a self-review of the full diff",
         ):
@@ -196,7 +216,7 @@ class CreatePRSkillContractTests(unittest.TestCase):
             "Confirm PR points to `base=main` and `head=<feature branch>`.",
             "Confirm title/body rendered correctly.",
             "Confirm draft/ready state matches gate outcomes.",
-            "gh pr view --json number,url,state,isDraft,baseRefName,headRefName",
+            "gh pr view --json number,url,state,isDraft,baseRefName,headRefName,title,body",
             "gh pr checks <pr-number>",
         ):
             self.assertContainsNormalized(phrase, self.skill_text)
@@ -273,19 +293,20 @@ class CreatePRSkillContractTests(unittest.TestCase):
         for phrase in (
             "bash skills/create-pr/scripts/run_regression.sh",
             "Contract tests cover gate ordering, readiness confidence, output contract, and reference links",
-            "Golden scenarios cover ready/draft decisions, suppressions, blockers, and PR update rules",
+            "Golden scenarios execute the script decision functions for ready/draft, suppression, blocker, and publication outcomes",
         ):
             self.assertContainsNormalized(phrase, self.checklists_text)
 
     def test_bundled_script_guide_covers_behavior_examples_and_exit_codes(self) -> None:
         for phrase in (
             "updates title/body instead of creating a duplicate PR",
-            "Draft/ready state is reconciled from gate confidence",
+            "Draft/ready state is reconciled from gate results",
+            "Hard publication blockers are checked before `git push`",
             "python \"<path-to-skill>/scripts/create_pr.py\"",
             "bash \"<path-to-skill>/scripts/run_regression.sh\"",
             "`0`: all required gates passed (ready).",
-            "`1`: at least one gate suppressed/uncovered (draft recommended).",
-            "`2`: at least one gate failed.",
+            "`1`: at least one gate is suppressed/uncovered",
+            "`2`: at least one gate failed. Hard publication failures stop before push",
         ):
             self.assertContainsNormalized(phrase, self.bundled_text)
 
@@ -325,6 +346,25 @@ class CreatePRSkillContractTests(unittest.TestCase):
             "python3 -m unittest discover -s \"${SKILL_DIR}/scripts/tests\" -p \"test_*.py\" -v",
         ):
             self.assertIn(phrase, self.run_regression_text)
+        self.assertNotIn("continuing", self.run_regression_text.lower())
+        self.assertIn('python3 "${VALIDATOR}" "${SKILL_DIR}"', self.run_regression_text)
+
+    def test_run_regression_stops_when_validator_fails(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            validator = Path(tmp) / "fail_validator.py"
+            validator.write_text("raise SystemExit(7)\n")
+            env = dict(os.environ)
+            env["SKILL_CREATOR_VALIDATOR"] = str(validator)
+            result = subprocess.run(
+                ["bash", str(RUN_REGRESSION)],
+                cwd=SKILL_DIR,
+                env=env,
+                capture_output=True,
+                text=True,
+            )
+        self.assertEqual(7, result.returncode)
+        self.assertNotIn("[2/3]", result.stdout)
+        self.assertNotIn("regression checks passed", result.stdout)
 
     def test_bundled_script_exposes_exit_codes_and_main_returns_all_three(self) -> None:
         self.assertContainsNormalized("Exit Codes", self.bundled_text)
@@ -442,11 +482,10 @@ class ProseScriptConsistencyTests(unittest.TestCase):
             self.assertIn(token, self.skill_text,
                           f"prose Gate E missing the script's {token!r} exemption")
 
-    def test_allowed_tools_have_no_broad_cp(self) -> None:
+    def test_frontmatter_has_only_portable_skill_fields(self) -> None:
         fm = frontmatter(self.skill_text)
-        self.assertNotIn("Bash(cp*)", fm,
-                         "cp must be scoped to the config example, not arbitrary copies")
-        self.assertIn("Bash(cp *create-pr-config*)", fm)
+        self.assertNotIn("disable-model-invocation", fm)
+        self.assertNotIn("allowed-tools", fm)
 
 
 if __name__ == "__main__":

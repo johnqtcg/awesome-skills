@@ -62,6 +62,13 @@ def make_args(**overrides) -> Namespace:
         "secret_scan": None,
         "conflict_scan": None,
         "update_existing_pr": None,
+        "problem": None,
+        "approach": None,
+        "risk": None,
+        "rollback": None,
+        "monitoring": None,
+        "migration_notes": None,
+        "confirm_self_review": False,
     }
     base.update(overrides)
     return Namespace(**base)
@@ -103,7 +110,9 @@ class GateIntegrationTests(unittest.TestCase):
 
     def commit_on_feature(self, branch: str, filename: str, content: str, msg: str) -> None:
         git(self.repo, "checkout", "-b", branch)
-        (self.repo / filename).write_text(content)
+        target = self.repo / filename
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
         git(self.repo, "add", "-A")
         git(self.repo, "commit", "-m", msg)
 
@@ -149,6 +158,18 @@ class GateIntegrationTests(unittest.TestCase):
         self.assertIn("behind", b.evidence)
         self.assertEqual("suspected", create_pr.determine_confidence([b]))
 
+    def test_requested_head_must_match_checked_out_branch(self) -> None:
+        self.commit_on_feature(
+            "feature/actual", "feature.go",
+            "package main\n\nfunc Feature() {}\n",
+            "feat: add feature",
+        )
+        ctx, settings = gate_env(self.repo, "feature/different")
+        b = create_pr.gate_b_branch_sync(ctx, settings)
+        self.assertEqual(create_pr.FAIL, b.status)
+        self.assertTrue(b.blocks_publish)
+        self.assertIn("does not match", b.evidence)
+
     # --- golden 009: planted secret in an added line → Gate E blocker ---
 
     def test_planted_secret_fails_gate_e(self) -> None:
@@ -171,6 +192,43 @@ class GateIntegrationTests(unittest.TestCase):
             "feat: read token from env",
         )
         ctx, settings = gate_env(self.repo, "feature/env-config")
+        e = create_pr.gate_e_security(ctx, settings)
+        self.assertEqual(create_pr.PASS, e.status, e.evidence)
+
+    def test_dotenv_filename_is_a_secret_blocker(self) -> None:
+        self.commit_on_feature(
+            "feature/leaky-dotenv", ".env",
+            "PASSWORD=supersecretpassword\n",
+            "feat: add runtime config",
+        )
+        ctx, settings = gate_env(self.repo, "feature/leaky-dotenv")
+        e = create_pr.gate_e_security(ctx, settings)
+        self.assertEqual(create_pr.FAIL, e.status)
+        self.assertTrue(e.blocks_publish)
+        self.assertTrue(any("sensitive_filename" in detail for detail in e.details))
+
+    def test_secret_in_docs_comment_is_a_blocker(self) -> None:
+        self.commit_on_feature(
+            "docs/leaky-runbook", "docs/runbook.md",
+            "# Emergency credential\n# password = supersecretpassword\n",
+            "docs: add recovery runbook",
+        )
+        ctx, settings = gate_env(self.repo, "docs/leaky-runbook")
+        e = create_pr.gate_e_security(ctx, settings)
+        self.assertEqual(create_pr.FAIL, e.status)
+        self.assertTrue(any("docs/runbook.md" in detail for detail in e.details))
+
+    def test_deleting_sensitive_file_is_not_a_new_secret_finding(self) -> None:
+        (self.repo / ".env").write_text("PASSWORD=supersecretpassword\n")
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-m", "chore: add legacy config")
+        git(self.repo, "push", "origin", "main")
+        git(self.repo, "checkout", "-b", "fix/remove-legacy-config")
+        (self.repo / ".env").unlink()
+        git(self.repo, "add", "-A")
+        git(self.repo, "commit", "-m", "fix: remove legacy config")
+
+        ctx, settings = gate_env(self.repo, "fix/remove-legacy-config")
         e = create_pr.gate_e_security(ctx, settings)
         self.assertEqual(create_pr.PASS, e.status, e.evidence)
 
@@ -203,6 +261,62 @@ class GateIntegrationTests(unittest.TestCase):
         b = create_pr.gate_b_branch_sync(ctx, settings)
         self.assertEqual(create_pr.FAIL, b.status)
         self.assertIn("conflict markers", b.evidence)
+
+    def test_gate_g_rejects_user_supplied_non_conventional_title(self) -> None:
+        self.commit_on_feature(
+            "feature/title-check", "title.go",
+            "package main\n\nfunc Title() {}\n",
+            "feat: add title check",
+        )
+        settings = create_pr.resolve_settings(
+            make_args(title="random title", confirm_self_review=True),
+            self.repo,
+            "feature/title-check",
+        )
+        ctx = create_pr.Context(repo=self.repo, base=settings.base, branch=settings.branch)
+        g = create_pr.gate_g_commit_hygiene(ctx, settings)
+        self.assertEqual(create_pr.FAIL, g.status)
+        self.assertTrue(g.blocks_publish)
+        self.assertIn("PR title", g.evidence)
+
+    def test_gate_g_requires_explicit_scope_and_self_review_confirmation(self) -> None:
+        self.commit_on_feature(
+            "feature/self-review", "review.go",
+            "package main\n\nfunc Review() {}\n",
+            "feat: add review helper",
+        )
+        settings = create_pr.resolve_settings(
+            make_args(title="feat: add review helper"),
+            self.repo,
+            "feature/self-review",
+        )
+        ctx = create_pr.Context(repo=self.repo, base=settings.base, branch=settings.branch)
+        g = create_pr.gate_g_commit_hygiene(ctx, settings)
+        self.assertEqual(create_pr.SUPPRESSED, g.status)
+        self.assertTrue(g.blocks_ready)
+        self.assertIn("self-review", g.evidence)
+
+    def test_gate_g_rejects_commit_body_lines_over_72_characters(self) -> None:
+        git(self.repo, "checkout", "-b", "feature/long-body")
+        (self.repo / "body.go").write_text("package main\n\nfunc Body() {}\n")
+        git(self.repo, "add", "-A")
+        git(
+            self.repo,
+            "commit",
+            "-m",
+            "feat: add body helper",
+            "-m",
+            "x" * 73,
+        )
+        settings = create_pr.resolve_settings(
+            make_args(title="feat: add body helper", confirm_self_review=True),
+            self.repo,
+            "feature/long-body",
+        )
+        ctx = create_pr.Context(repo=self.repo, base=settings.base, branch=settings.branch)
+        g = create_pr.gate_g_commit_hygiene(ctx, settings)
+        self.assertEqual(create_pr.FAIL, g.status)
+        self.assertIn("72", g.evidence)
 
 
 if __name__ == "__main__":

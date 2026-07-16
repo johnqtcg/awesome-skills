@@ -1,8 +1,6 @@
 ---
 name: create-pr
 description: Create evidence-backed pull requests to the GitHub main branch with strict preflight, quality, and security gates. Use when users ask to create/submit/open/update a PR to main (including private repos), decide draft vs ready state, and provide reviewer-ready context for team review.
-disable-model-invocation: true
-allowed-tools: Read, Grep, Glob, Bash(git diff*), Bash(git log*), Bash(git status*), Bash(git push*), Bash(git branch*), Bash(git rev-parse*), Bash(git remote*), Bash(git ls-remote*), Bash(git fetch*), Bash(git merge-base*), Bash(gh pr*), Bash(gh auth*), Bash(gh repo*), Bash(gh api*), Bash(go test*), Bash(golangci-lint*), Bash(make test*), Bash(make lint*), Bash(make build*), Bash(make check*), Bash(gosec*), Bash(govulncheck*), Bash(python *create_pr.py*), Bash(python3 *create_pr.py*), Bash(cp *create-pr-config*), Bash(grep*)
 ---
 
 # Create PR
@@ -12,6 +10,8 @@ Create a high-quality PR to `main` that is easy to review, safe to merge, and ex
 ## Canonical Implementation
 
 The bundled `scripts/create_pr.py` is the **preferred execution path** for Gates A–H: when Python 3 is available, run the gates through it (`references/bundled-script-guide.md`) instead of hand-executing the prose commands below. The prose workflow serves two roles — the **specification** the script must implement, and the **fallback** for environments without Python. If the two ever disagree, the prose specification wins and the script is the side to fix. Shared constants (size thresholds, confidence levels, gate statuses, secret-scan semantics) are consistency-tested in `scripts/tests/test_skill_contract.py` — update both sides together.
+
+The script distinguishes `blocks_publish` from `blocks_ready`. Repository identity/auth failures, publishing from `main`, unsafe branch state, incomplete diff/security evidence, high-confidence secret findings, and invalid PR titles are hard publication blockers: stop before `git push`. Quality, documentation, narrative, or compatibility gaps may still publish a draft, but never a ready PR.
 
 ## Quick Reference
 
@@ -24,18 +24,19 @@ The bundled `scripts/create_pr.py` is the **preferred execution path** for Gates
 | 5 | **D** | Tests, lint, build | Yes |
 | 6 | **E** | Secret scan, gosec, govulncheck | Yes (high-confidence) |
 | 7 | **F** | Docs/changelog, backward compatibility, breaking changes | Yes |
-| 8 | **G** | Conventional Commits (commits + PR title), self-review | Yes |
+| 8 | **G** | Conventional Commits (commits + PR title), scope confirmation, self-review | Yes |
 | 9 | — | Compose PR title/body | — |
-| 10 | — | `git push -u` + `gh pr create` | — |
-| 11 | **H** | Post-create: base/head, title/body render, draft/ready state | Informational |
+| 10 | — | If no hard blocker: `git push -u` + `gh pr create` | — |
+| 11 | **H** | Assert base/head, title/body render, open state, draft/ready state | Yes |
 
-**Confidence → State**: `confirmed` → ready | `likely` → ready | `suspected` → draft
+**Confidence → State**: `confirmed` → ready | `likely` → ready only for low-residual-risk suppressions | `likely` → draft when a suppression can hide a merge-blocking defect | `suspected` → draft. A hard publication blocker creates no PR.
 
 ## Non-Negotiables
 
 - Never open a PR from `main` as the head branch.
 - Never push secrets, credentials, or local-only configuration.
 - Never claim a gate passed without command or code evidence.
+- Never call `git push`, `gh pr create`, or `gh pr edit` after a hard publication blocker.
 - Fail closed: if a mandatory gate cannot run, keep the PR as `draft` and record the gap.
 - Prefer non-interactive commands for reproducibility.
 - **One PR = one problem.** A single feature, a single bug fix, or a single refactor. Do not mix unrelated changes.
@@ -76,7 +77,7 @@ Run the following process in order.
 7. Run `Gate F`: documentation and compatibility checks.
 8. Run `Gate G`: commit hygiene and commit message quality.
 9. Prepare PR title/body with structured evidence.
-10. Push branch and create PR to `main`.
+10. If no hard publication blocker exists, push branch and create PR to `main`; otherwise stop before push.
 11. Run `Gate H`: post-create verification.
 12. Decide `draft` vs `ready` from gate results.
 13. Report findings first, then PR link, then follow-up actions.
@@ -90,6 +91,7 @@ If a mandatory gate cannot execute, explicitly mark it as uncovered and do not c
 ```bash
 git rev-parse --is-inside-work-tree
 git remote -v
+git remote get-url origin
 gh auth status -h github.com
 gh repo view --json nameWithOwner,isPrivate,viewerPermission,defaultBranchRef
 git ls-remote --heads origin main
@@ -97,13 +99,14 @@ git ls-remote --heads origin main
 gh api repos/{owner}/{repo}/branches/main/protection
 ```
 
-Blocker: not authenticated, no `origin` remote, no permission, or `main` missing on remote.
+Blocker: not authenticated, no `origin` remote, no permission, `main` missing on remote, or repository identity mismatch. The `origin` repository identity must match `gh repo view`'s `nameWithOwner`; normalize SSH/HTTPS GitHub URLs before comparing.
 If branch protection query fails (404/403), record in Uncovered Risk List and continue.
 
 ### Gate B: Branch Hygiene and Sync (Mandatory)
 
 - Ensure head branch is not `main`:
   - `git rev-parse --abbrev-ref HEAD`
+- If `--head` is supplied, require it to equal the checked-out branch; `git push origin HEAD` must never target a different branch than `gh pr create --head`.
 - **Branch naming check**: verify the branch name matches `<type>/<short-description>` (e.g. `feature/oauth-login`, `fix/nil-pointer-getuser`, `refactor/db-pool`).
   - Type prefixes: `feature`, `fix`, `refactor`, `hotfix`, `release`, `docs`, `chore`, `test`, `perf`, `ci`.
   - If the name does not match, report as a **warning** (non-blocking) suggesting the user rename with `git branch -m <new-name>`.
@@ -119,6 +122,7 @@ If branch protection query fails (404/403), record in Uncovered Risk List and co
 Blocker conditions:
 
 - Current branch is `main`.
+- Requested head does not match the checked-out branch.
 - Working tree is not clean (uncommitted changes).
 - Branch is behind `origin/main` (rebase or merge required).
 - Unresolved merge entries or conflict markers detected.
@@ -160,8 +164,8 @@ Rules:
 ### Gate E: Security and Secret Checks (Mandatory)
 
 ```bash
-# Filename risk scan
-git diff --name-only origin/main...HEAD | grep -Ei '(\.env(\..*)?|id_rsa|id_dsa|\.pem|\.p12|\.key)$'
+# Filename risk scan (added/copied/modified/renamed files; do not flag deletions)
+git diff --name-only --diff-filter=ACMR origin/main...HEAD | grep -Ei '(^|/)(\.env(\..*)?|id_(rsa|dsa|ecdsa|ed25519)|[^/]+\.(pem|key|p12|pfx))$'
 # Content risk scan — ADDED LINES ONLY (same semantics as the bundled script:
 # removed lines are already in history and are a history-rewrite concern, not a PR gate)
 git diff origin/main...HEAD | grep '^+[^+]' | grep -En '(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY-----|ghp_[A-Za-z0-9]{36}|gho_[A-Za-z0-9]{36}|xox[baprs]-|AIza[0-9A-Za-z_-]{35}|password[[:space:]]*[:=]|secret[[:space:]]*[:=]|token[[:space:]]*[:=])'
@@ -170,25 +174,32 @@ gosec ./...
 govulncheck ./...
 ```
 
-Triage matches with the same exemptions the bundled script applies: environment/config **references** (`os.Getenv(...)`, `process.env.*`, `${VAR}`) are not leaks; placeholder values (`example`, `dummy`, `changeme`, `redacted`) are not leaks; patterns listed in `.create-pr.yaml` `secret_scan.allow_patterns` are exempt. Any surviving match requires explicit resolution before marking ready. Any unresolved high-confidence issue keeps PR in `draft`.
+The canonical script scans added lines in all changed text diffs by default, including docs, comments, extensionless files, `.env` variants, and `.pem`/`.key`/`.p12`/`.pfx` files. It does not skip alphabetic-only assigned values merely because they lack digits or symbols. Filename checks run independently of content-extension filtering.
+
+Triage matches with the same exemptions the bundled script applies: environment/config **references** (`os.Getenv(...)`, `process.env.*`, `${VAR}`) are not leaks; placeholder values (`example`, `dummy`, `changeme`, `redacted`) are not leaks; patterns listed in `.create-pr.yaml` `secret_scan.allow_patterns` are exempt. Any surviving high-confidence filename or content match is a hard publication blocker: do not push it, even as a draft.
+
+The built-in scan is a high-signal heuristic, not a complete secret-scanning engine. If the repository provides a dedicated scanner such as Gitleaks or secretlint, run it as a project security check and record the command/result.
 
 ### Gate F: Documentation and Compatibility (Mandatory)
 
 - Ensure docs/changelog/readme updates for externally visible behavior changes.
 - Check backward compatibility and migration impact.
 - If breaking change exists, mark clearly in PR title/body and include rollout/rollback notes.
+- Require concrete `Problem/Context` and `Why This Approach` content. For high-risk changes, require change-specific risk and rollback text. For breaking changes, require executable migration notes; never substitute generic “revert and redeploy” guidance.
 
 ### Gate G: Commit Hygiene and PR Title (Mandatory)
 
 - Ensure commit set matches the scoped change only — no unrelated commits in the range.
 - All commits should use **Conventional Commit** format: `<type>(<scope>): <subject>`.
-  - Subject: imperative mood, ≤ 50 chars, no trailing period.
-  - Body (when present): explains **why**, each line ≤ 72 chars.
+  - Subject ≤ 50 characters, imperative mood, no trailing period.
+  - Every body line must be ≤ 72 characters and explain **why** when a body is present.
   - Footer (when present): `BREAKING CHANGE:`, `Closes #`, `Refs:`.
 - **PR title** must also follow Conventional Commits format. For Squash-and-merge workflows the PR title becomes the sole commit message on `main`, so its quality is critical.
+- Validate the effective PR title, including a user-supplied `--title`; never validate only commit subjects.
+- Warn when the branch does not match `<type>/<short-description>`.
 - Do not amend existing commits unless user explicitly asks.
 - If no commit exists, create one before PR creation.
-- Perform a **self-review** of the full diff (`git diff origin/main...HEAD`) before proceeding to PR creation. Fix any obvious issues found.
+- Perform a self-review of the full diff: run `git diff --check origin/main...HEAD`, inspect the changed-path list and full diff, and confirm every commit belongs to the scoped change. Pass `--confirm-self-review` only after that semantic review. Without this explicit confirmation, Gate G is `SUPPRESSED` and the PR remains draft.
 
 ### Gate H: Post-Create Verification (Mandatory)
 
@@ -200,9 +211,9 @@ After creation:
 - Optionally check CI status with `gh pr checks` (non-blocking; reported as informational).
   CI results are logged but do not change the gate verdict — CI may still be running.
 
-Use:
+Use and assert every expected value:
 
-- `gh pr view --json number,url,state,isDraft,baseRefName,headRefName`
+- `gh pr view --json number,url,state,isDraft,baseRefName,headRefName,title,body`
 - `gh pr checks <pr-number>` (optional, informational)
 
 ## Draft vs Ready Decision
@@ -215,9 +226,13 @@ Keep `draft` when:
 - important evidence is missing,
 - unresolved design/security/performance questions remain.
 
+Do not publish at all when any gate has a hard publication blocker. A draft is not a safe destination for secrets, an invalid repository identity, `main` as the head, an unsafe/out-of-sync branch, an unavailable secret patch, or an invalid effective PR title.
+
 ## Required PR Body Structure
 
 Use the template in `references/pr-body-template.md`.
+
+Supply real content with `--problem`, `--approach`, `--risk`, `--rollback`, `--monitoring`, and (for breaking changes) `--migration-notes`. Missing mandatory narrative prevents ready state; generated text must expose the gap instead of inventing a generic rationale or rollback.
 
 Minimum sections:
 
@@ -254,7 +269,7 @@ git push -u origin HEAD
 gh pr create --base main --head "$(git rev-parse --abbrev-ref HEAD)" \
   --title "<type(scope): subject>" --body-file /tmp/pr_body.md
 gh pr edit <pr-number> --add-reviewer <user1>,<user2> --add-label <label>
-gh pr view --json number,url,state,isDraft,baseRefName,headRefName
+gh pr view --json number,url,state,isDraft,baseRefName,headRefName,title,body
 ```
 
 ## Output Contract

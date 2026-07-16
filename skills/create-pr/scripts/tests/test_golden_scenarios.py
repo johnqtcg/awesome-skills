@@ -1,5 +1,7 @@
 import json
+import importlib.util
 import re
+import sys
 import unittest
 from pathlib import Path
 
@@ -8,6 +10,12 @@ SKILL_DIR = Path(__file__).resolve().parents[2]
 SKILL_MD = SKILL_DIR / "SKILL.md"
 REF_DIR = SKILL_DIR / "references"
 GOLDEN_DIR = Path(__file__).resolve().parent / "golden"
+SCRIPT = SKILL_DIR / "scripts" / "create_pr.py"
+spec = importlib.util.spec_from_file_location("create_pr_golden", SCRIPT)
+create_pr = importlib.util.module_from_spec(spec)
+assert spec and spec.loader
+sys.modules[spec.name] = create_pr
+spec.loader.exec_module(create_pr)
 
 REQUIRED_FIELDS = {
     "id",
@@ -15,6 +23,8 @@ REQUIRED_FIELDS = {
     "scenario_type",
     "expected_confidence",
     "expected_pr_mode",
+    "expected_publish",
+    "gate_results",
     "skill_rules_that_must_fire",
     "reference_files",
 }
@@ -143,6 +153,15 @@ class GoldenScenarioRuleCoverageTests(unittest.TestCase):
         for path in sorted(GOLDEN_DIR.glob("*.json")):
             with self.subTest(path=path.name):
                 self.assertRulesCovered(json.loads(path.read_text()))
+
+    def test_all_fixtures_execute_the_script_decision_model(self) -> None:
+        for path in sorted(GOLDEN_DIR.glob("*.json")):
+            with self.subTest(path=path.name):
+                fixture = json.loads(path.read_text())
+                gates = [create_pr.GateResult(**item) for item in fixture["gate_results"]]
+                self.assertEqual(fixture["expected_confidence"], create_pr.determine_confidence(gates))
+                self.assertEqual(fixture["expected_pr_mode"], create_pr.determine_pr_mode(gates))
+                self.assertEqual(fixture["expected_publish"], create_pr.can_publish(gates))
 
 
 if __name__ == "__main__":

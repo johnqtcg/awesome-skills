@@ -4,6 +4,10 @@
   "scenario_type": "quality_gap",
   "expected_confidence": "likely",
   "expected_pr_mode": "draft",
+  "expected_publish": true,
+  "gate_results": [
+    {"gate": "Gate D", "status": "SUPPRESSED", "evidence": "quality unavailable", "blocks_ready": true}
+  ],
   "skill_rules_that_must_fire": [
     "Fail closed: if a mandatory gate cannot run, keep the PR as `draft` and record the gap.",
     "If a command is unavailable, mark uncovered risk.",

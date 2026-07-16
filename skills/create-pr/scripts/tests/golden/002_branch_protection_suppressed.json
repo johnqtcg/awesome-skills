@@ -4,6 +4,10 @@
   "scenario_type": "protection_suppression",
   "expected_confidence": "likely",
   "expected_pr_mode": "ready",
+  "expected_publish": true,
+  "gate_results": [
+    {"gate": "Gate A", "status": "SUPPRESSED", "evidence": "branch protection unavailable"}
+  ],
   "skill_rules_that_must_fire": [
     "If branch protection query fails (404/403), record in Uncovered Risk List and continue.",
     "likely: one non-blocking gate could not run, with explicit follow-up owner.",

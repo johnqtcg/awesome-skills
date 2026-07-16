@@ -4,6 +4,10 @@
   "scenario_type": "sync_blocker",
   "expected_confidence": "suspected",
   "expected_pr_mode": "draft",
+  "expected_publish": false,
+  "gate_results": [
+    {"gate": "Gate B", "status": "FAIL", "evidence": "behind main", "blocks_ready": true, "blocks_publish": true}
+  ],
   "skill_rules_that_must_fire": [
     "If behind, report as blocker — the user must rebase or merge manually.",
     "Do NOT auto-rebase; an unattended rebase can leave the tree in a conflicted state.",

@@ -16,13 +16,13 @@
 
 ## 3) Why This Approach
 
-- Key design choice and rationale
-- Tradeoffs considered
+- Key design choice and change-specific rationale (do not describe the create-pr workflow)
+- Alternatives/tradeoffs considered
 
 ## 4) Risk and Rollback Plan
 
 - Main risks:
-- Rollback strategy:
+- Rollback strategy (must fit this change; do not assume revert/redeploy is sufficient):
 - Monitoring/alerts after merge:
 
 ## 5) Test Evidence
@@ -43,7 +43,7 @@
 ## 7) Breaking Changes / Migration Notes
 
 - Breaking change: yes/no
-- Migration steps:
+- Migration steps (required and executable when breaking):
 - Compatibility statement:
 
 ## 8) Reviewer Checklist

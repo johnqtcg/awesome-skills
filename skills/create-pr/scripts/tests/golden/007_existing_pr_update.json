@@ -4,6 +4,10 @@
   "scenario_type": "existing_pr_update",
   "expected_confidence": "confirmed",
   "expected_pr_mode": "ready",
+  "expected_publish": true,
+  "gate_results": [
+    {"gate": "Gate A", "status": "PASS", "evidence": "existing PR may be updated"}
+  ],
   "skill_rules_that_must_fire": [
     "If the current branch already has an open PR to `main`, the script updates title/body instead of creating a duplicate PR.",
     "One-click: run gates, generate body, then create-or-update PR to main",

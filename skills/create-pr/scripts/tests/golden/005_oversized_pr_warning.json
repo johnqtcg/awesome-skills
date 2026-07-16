@@ -4,6 +4,10 @@
   "scenario_type": "oversized",
   "expected_confidence": "confirmed",
   "expected_pr_mode": "ready",
+  "expected_publish": true,
+  "gate_results": [
+    {"gate": "Gate C", "status": "PASS", "evidence": "size warning recorded"}
+  ],
   "skill_rules_that_must_fire": [
     "Target 200–400 changed lines per PR.",
     "401–800 lines: warn the user that review quality may suffer; suggest splitting if feasible.",

@@ -8,6 +8,14 @@ create_pr: false
 dry_run: false
 update_existing_pr: true
 
+# Prefer per-run CLI flags for these fields so each PR contains real context.
+problem: ""
+approach: ""
+risk: ""
+rollback: ""
+monitoring: ""
+migration_notes: ""
+
 check_cmd:
   - make test
   - make lint
@@ -29,19 +37,9 @@ branch_protection:
 
 secret_scan:
   enabled: true
-  include_extensions:
-    - .go
-    - .yaml
-    - .yml
-    - .json
-    - .env
-    - .toml
-    - .sh
-    - .sql
-  exclude_paths:
-    - "^docs/"
-    - "^vendor/"
-    - "^testdata/"
+  # Empty lists are the secure defaults: scan all added text lines and paths.
+  include_extensions: []
+  exclude_paths: []
   allow_patterns:
     - "(?i)(dummy|example|placeholder|redacted)"
 

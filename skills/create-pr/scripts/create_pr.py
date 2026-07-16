@@ -30,7 +30,15 @@ SIZE_THRESHOLD_WARN = 400    # lines: review quality degrades above this
 SIZE_THRESHOLD_STRONG = 800  # lines: strong recommendation to split
 
 CONVENTIONAL_RE = re.compile(
-    r"^(feat|fix|chore|docs|refactor|perf|test|build|ci|style|revert)(\([^)]+\))?: .+"
+    r"^(feat|fix|chore|docs|refactor|perf|test|build|ci|style|revert)(\([^)]+\))?!?: ([^\r\n]+)$"
+)
+BRANCH_NAME_RE = re.compile(
+    r"^(feature|fix|refactor|hotfix|release|docs|chore|test|perf|ci)/[a-z0-9][a-z0-9._-]*$"
+)
+NON_IMPERATIVE_PREFIX_RE = re.compile(
+    r"(?i)^(added|adds|adding|fixed|fixes|fixing|updated|updates|updating|"
+    r"implemented|implements|implementing|changed|changes|changing|removed|"
+    r"removes|removing|supported|supports|supporting|used|uses|using)\b"
 )
 
 DEFAULT_SECRET_INCLUDE_EXTENSIONS = [
@@ -51,6 +59,10 @@ DEFAULT_SECRET_INCLUDE_EXTENSIONS = [
     ".sh",
     ".sql",
     ".tf",
+    ".pem",
+    ".key",
+    ".p12",
+    ".pfx",
 ]
 
 DEFAULT_CONFLICT_INCLUDE_EXTENSIONS = [
@@ -98,8 +110,11 @@ DEFAULT_CONFIG = {
     },
     "secret_scan": {
         "enabled": True,
-        "include_extensions": DEFAULT_SECRET_INCLUDE_EXTENSIONS,
-        "exclude_paths": [r"^docs/", r"^vendor/", r"^third_party/", r"^testdata/"],
+        # Empty means scan added lines in every text diff. Repositories may opt
+        # into a narrower list, but the secure default must not skip docs,
+        # extensionless files, or key material.
+        "include_extensions": [],
+        "exclude_paths": [],
         "allow_patterns": DEFAULT_SECRET_ALLOW_PATTERNS,
     },
     "conflict_scan": {
@@ -127,7 +142,11 @@ SECRET_PLACEHOLDER_RE = re.compile(
     r"(?i)^(example|dummy|sample|placeholder|redacted|changeme|todo|tbd|none|null|nil|xxxx+|test([_-]|$))"
 )
 SECRET_REFERENCE_RE = re.compile(
-    r"(\$\{?[A-Z_][A-Z0-9_]*\}?|os\.getenv\(|getenv\(|process\.env\.|viper\.get|string\(|fmt\.sprint\()"
+    r"(\$\{?[A-Z_][A-Z0-9_]*\}?|os\.getenv\(|getenv\(|process\.env\.|viper\.get|string\(|fmt\.sprint\()",
+    re.IGNORECASE,
+)
+SENSITIVE_FILENAME_RE = re.compile(
+    r"(?i)(^|/)(\.env(?:\..+)?|id_(?:rsa|dsa|ecdsa|ed25519)|[^/]+\.(?:pem|key|p12|pfx))$"
 )
 CONFLICT_START_RE = re.compile(r"^\s*<<<<<<<\s")
 CONFLICT_MID_RE = re.compile(r"^\s*=======$")
@@ -148,6 +167,8 @@ class GateResult:
     status: str
     evidence: str
     details: List[str] = field(default_factory=list)
+    blocks_ready: bool = False
+    blocks_publish: bool = False
 
 
 @dataclass
@@ -183,6 +204,13 @@ class Settings:
     conflict_exclude_regex: List[re.Pattern[str]]
     conflict_scan_changed_files_only: bool
     config_source: str
+    problem: str = ""
+    approach: str = ""
+    risk: str = ""
+    rollback: str = ""
+    monitoring: str = ""
+    migration_notes: str = ""
+    confirm_self_review: bool = False
 
 
 @dataclass
@@ -195,6 +223,7 @@ class Context:
     uncovered_risks: List[dict] = field(default_factory=list)
     high_risk_areas: List[str] = field(default_factory=list)
     pr_meta: Dict[str, Any] = field(default_factory=dict)
+    pr_title: str = ""
 
 
 @dataclass
@@ -378,6 +407,12 @@ def resolve_settings(args: argparse.Namespace, repo: Path, branch: str) -> Setti
     pr_body_out = Path(args.pr_body_out).expanduser().resolve() if args.pr_body_out else None
     json_out = Path(args.json_out).expanduser().resolve() if args.json_out else None
 
+    def narrative(name: str) -> str:
+        value = getattr(args, name, None)
+        if value is not None:
+            return str(value).strip()
+        return str(config.get(name, "")).strip()
+
     return Settings(
         repo=repo,
         base=base,
@@ -410,6 +445,13 @@ def resolve_settings(args: argparse.Namespace, repo: Path, branch: str) -> Setti
         conflict_exclude_regex=conflict_exclude_regex,
         conflict_scan_changed_files_only=bool(conflict_scan_changed_files_only),
         config_source=source,
+        problem=narrative("problem"),
+        approach=narrative("approach"),
+        risk=narrative("risk"),
+        rollback=narrative("rollback"),
+        monitoring=narrative("monitoring"),
+        migration_notes=narrative("migration_notes"),
+        confirm_self_review=bool(getattr(args, "confirm_self_review", False)),
     )
 
 
@@ -424,17 +466,52 @@ def filter_files(
         s = str(path).replace("\\", "/")
         if match_any(exclude_regex, s):
             continue
+        name = path.name.lower()
         suffix = path.suffix.lower()
-        if include_set and suffix and suffix not in include_set:
-            continue
-        if include_set and not suffix:
+        matches_dotfile_family = any(
+            ext.startswith(".") and (name == ext or name.startswith(ext + "."))
+            for ext in include_set
+        )
+        if include_set and suffix not in include_set and not matches_dotfile_family:
             continue
         results.append(path)
     return results
 
 
+def scan_sensitive_filenames(
+    files: Sequence[Path],
+    allow_regex: Sequence[re.Pattern[str]],
+) -> List[str]:
+    findings: List[str] = []
+    for path in files:
+        normalized = str(path).replace("\\", "/")
+        if match_any(allow_regex, normalized):
+            continue
+        if SENSITIVE_FILENAME_RE.search(normalized):
+            findings.append(f"{normalized} [sensitive_filename]")
+    return findings
+
+
+def parse_github_slug(remote_url: str) -> str:
+    value = remote_url.strip()
+    patterns = (
+        r"^git@github\.com:([^/]+/[^/]+?)(?:\.git)?$",
+        r"^https?://github\.com/([^/]+/[^/]+?)(?:\.git)?/?$",
+        r"^ssh://git@github\.com/([^/]+/[^/]+?)(?:\.git)?/?$",
+    )
+    for pattern in patterns:
+        match = re.match(pattern, value, re.IGNORECASE)
+        if match:
+            return match.group(1).lower()
+    return ""
+
+
 def list_changed_files(repo: Path, base: str, timeout: int) -> Tuple[List[Path], CommandResult]:
-    result = run_cmd(["git", "diff", "--name-only", f"origin/{base}...HEAD"], repo, timeout)
+    result = run_cmd(
+        ["git", "diff", "--name-only", "--diff-filter=ACMR", f"origin/{base}...HEAD"],
+        repo,
+        timeout,
+    )
     if result.rc != 0:
         return [], result
     files = [Path(line.strip()) for line in result.stdout.splitlines() if line.strip()]
@@ -575,8 +652,7 @@ def scan_secrets_in_added_lines(
         if re.fullmatch(r"[0-9]+", value):
             return False
         has_alpha = any(ch.isalpha() for ch in value)
-        has_symbol_or_digit = any((not ch.isalpha()) for ch in value)
-        return has_alpha and has_symbol_or_digit
+        return has_alpha
 
     findings: List[str] = []
     for entry in entries:
@@ -584,10 +660,6 @@ def scan_secrets_in_added_lines(
         if not line:
             continue
         if match_any(allow_regex, line):
-            continue
-
-        lowered = line.lower()
-        if lowered.startswith("//") or lowered.startswith("#"):
             continue
 
         matched = None
@@ -617,6 +689,7 @@ def gate_a_preflight(ctx: Context, settings: Settings) -> GateResult:
     blockers: List[str] = []
     suppressed = False
     repo_meta: Dict[str, Any] = {}
+    origin_slug = ""
 
     r = run_cmd(["git", "rev-parse", "--is-inside-work-tree"], ctx.repo, settings.timeout)
     details.append(f"{r.cmd}: rc={r.rc} ({short_output(r)})")
@@ -627,6 +700,15 @@ def gate_a_preflight(ctx: Context, settings: Settings) -> GateResult:
     details.append(f"{r.cmd}: rc={r.rc} ({short_output(r)})")
     if r.rc != 0 or "origin" not in r.stdout:
         blockers.append("origin remote missing")
+
+    r = run_cmd(["git", "remote", "get-url", "origin"], ctx.repo, settings.timeout)
+    details.append(f"{r.cmd}: rc={r.rc} ({short_output(r)})")
+    if r.rc != 0 or not r.stdout.strip():
+        blockers.append("cannot read origin repository identity")
+    else:
+        origin_slug = parse_github_slug(r.stdout)
+        if not origin_slug:
+            blockers.append("cannot verify origin repository identity as github.com owner/repo")
 
     r = run_cmd(["gh", "auth", "status", "-h", "github.com"], ctx.repo, settings.timeout)
     details.append(f"{r.cmd}: rc={r.rc} ({short_output(r)})")
@@ -647,6 +729,11 @@ def gate_a_preflight(ctx: Context, settings: Settings) -> GateResult:
             perm = str(repo_meta.get("viewerPermission", "")).upper()
             if perm in {"READ", "TRIAGE", ""}:
                 blockers.append(f"insufficient permission for push/PR ({perm})")
+            gh_slug = str(repo_meta.get("nameWithOwner", "")).lower()
+            if origin_slug and gh_slug and origin_slug != gh_slug:
+                blockers.append(
+                    f"origin repository identity mismatch: origin={origin_slug}, gh={gh_slug}"
+                )
         except json.JSONDecodeError:
             blockers.append("unable to parse repository metadata")
 
@@ -746,7 +833,14 @@ def gate_a_preflight(ctx: Context, settings: Settings) -> GateResult:
                     )
 
     if blockers:
-        return GateResult("Gate A", FAIL, "; ".join(blockers), details)
+        return GateResult(
+            "Gate A",
+            FAIL,
+            "; ".join(blockers),
+            details,
+            blocks_ready=True,
+            blocks_publish=True,
+        )
     if suppressed:
         return GateResult("Gate A", SUPPRESSED, "preflight passed with uncovered branch protection risks", details)
     return GateResult("Gate A", PASS, "repo/auth/base preflight passed", details)
@@ -756,8 +850,22 @@ def gate_b_branch_sync(ctx: Context, settings: Settings) -> GateResult:
     details: List[str] = []
     blockers: List[str] = []
 
+    actual_branch = run_cmd(["git", "rev-parse", "--abbrev-ref", "HEAD"], ctx.repo, settings.timeout)
+    details.append(f"{actual_branch.cmd}: rc={actual_branch.rc} ({short_output(actual_branch)})")
+    if actual_branch.rc != 0:
+        blockers.append("cannot resolve current branch")
+    elif actual_branch.stdout.strip() != ctx.branch:
+        blockers.append(
+            f"requested head {ctx.branch!r} does not match checked-out branch {actual_branch.stdout.strip()!r}"
+        )
+
     if ctx.branch == ctx.base:
         blockers.append(f"head branch is {ctx.base}")
+    elif not BRANCH_NAME_RE.fullmatch(ctx.branch):
+        details.append(
+            "warning: branch name does not match <type>/<short-description>; "
+            "consider renaming before publication"
+        )
 
     r = run_cmd(["git", "status", "--porcelain"], ctx.repo, settings.timeout)
     details.append(f"{r.cmd}: rc={r.rc} ({short_output(r)})")
@@ -802,7 +910,14 @@ def gate_b_branch_sync(ctx: Context, settings: Settings) -> GateResult:
             details.extend(conflict_hits[:8])
 
     if blockers:
-        return GateResult("Gate B", FAIL, "; ".join(blockers), details)
+        return GateResult(
+            "Gate B",
+            FAIL,
+            "; ".join(blockers),
+            details,
+            blocks_ready=True,
+            blocks_publish=True,
+        )
     return GateResult("Gate B", PASS, "branch hygiene and sync passed", details)
 
 
@@ -812,7 +927,14 @@ def gate_c_change_risk(ctx: Context, settings: Settings) -> GateResult:
     r1 = run_cmd(["git", "diff", "--name-status", f"origin/{ctx.base}...HEAD"], ctx.repo, settings.timeout)
     details.append(f"{r1.cmd}: rc={r1.rc} ({short_output(r1, limit=280)})")
     if r1.rc != 0:
-        return GateResult("Gate C", FAIL, f"cannot compute diff against origin/{ctx.base}", details)
+        return GateResult(
+            "Gate C",
+            FAIL,
+            f"cannot compute diff against origin/{ctx.base}",
+            details,
+            blocks_ready=True,
+            blocks_publish=True,
+        )
 
     r2 = run_cmd(["git", "diff", "--stat", f"origin/{ctx.base}...HEAD"], ctx.repo, settings.timeout)
     details.append(f"{r2.cmd}: rc={r2.rc} ({short_output(r2, limit=280)})")
@@ -910,7 +1032,7 @@ def gate_d_quality(ctx: Context, settings: Settings) -> GateResult:
             "enable quality checks before marking ready",
             "repo owner",
         )
-        return GateResult("Gate D", SUPPRESSED, "quality checks skipped", details)
+        return GateResult("Gate D", SUPPRESSED, "quality checks skipped", details, blocks_ready=True)
 
     commands = settings.check_cmd[:] if settings.check_cmd else default_quality_commands(ctx.repo, ctx.changed_files)
     if not commands:
@@ -922,7 +1044,13 @@ def gate_d_quality(ctx: Context, settings: Settings) -> GateResult:
             "configure check_cmd in .create-pr.yaml",
             "change author",
         )
-        return GateResult("Gate D", SUPPRESSED, "no quality commands configured", details)
+        return GateResult(
+            "Gate D",
+            SUPPRESSED,
+            "no quality commands configured",
+            details,
+            blocks_ready=True,
+        )
 
     failures = []
     for cmd in commands:
@@ -933,7 +1061,13 @@ def gate_d_quality(ctx: Context, settings: Settings) -> GateResult:
             failures.append(cmd)
 
     if failures:
-        return GateResult("Gate D", FAIL, "quality command failed: " + ", ".join(failures), details)
+        return GateResult(
+            "Gate D",
+            FAIL,
+            "quality command failed: " + ", ".join(failures),
+            details,
+            blocks_ready=True,
+        )
     return GateResult("Gate D", PASS, "all quality commands passed", details)
 
 
@@ -943,13 +1077,19 @@ def gate_e_security(ctx: Context, settings: Settings) -> GateResult:
     suppressed = False
 
     if settings.secret_scan_enabled:
-        if not ctx.changed_files:
-            changed, changed_cmd = list_changed_files(ctx.repo, ctx.base, settings.timeout)
-            details.append(f"{changed_cmd.cmd}: rc={changed_cmd.rc} ({short_output(changed_cmd)})")
-            if changed_cmd.rc == 0:
-                ctx.changed_files = changed
+        scan_files, changed_cmd = list_changed_files(ctx.repo, ctx.base, settings.timeout)
+        details.append(f"{changed_cmd.cmd}: rc={changed_cmd.rc} ({short_output(changed_cmd)})")
+        if changed_cmd.rc != 0:
+            blockers.append("unable to list added/modified paths for secret scan")
+            scan_files = []
+        elif not ctx.changed_files:
+            ctx.changed_files = scan_files
 
-        candidate_files = filter_files(ctx.changed_files, settings.secret_include_extensions, settings.secret_exclude_regex)
+        candidate_files = filter_files(scan_files, settings.secret_include_extensions, settings.secret_exclude_regex)
+        filename_findings = scan_sensitive_filenames(scan_files, settings.secret_allow_regex)
+        if filename_findings:
+            blockers.append(f"sensitive filename scan matched {len(filename_findings)} file(s)")
+            details.extend(filename_findings[:10])
         diff = run_cmd(["git", "diff", "--unified=0", "--no-color", f"origin/{ctx.base}...HEAD"], ctx.repo, settings.timeout)
         details.append(f"{diff.cmd}: rc={diff.rc} ({short_output(diff, limit=280)})")
         if diff.rc != 0:
@@ -960,7 +1100,7 @@ def gate_e_security(ctx: Context, settings: Settings) -> GateResult:
             scoped = [x for x in added if x.path in allowed_set]
             findings = scan_secrets_in_added_lines(scoped, settings.secret_allow_regex)
             if findings:
-                blockers.append(f"secret scan matched {len(findings)} line(s)")
+                blockers.append(f"content secret scan matched {len(findings)} line(s)")
                 details.extend(findings[:10])
             else:
                 details.append("secret scan: no high-signal matches on added lines")
@@ -1014,9 +1154,22 @@ def gate_e_security(ctx: Context, settings: Settings) -> GateResult:
         )
 
     if blockers:
-        return GateResult("Gate E", FAIL, "; ".join(blockers), details)
+        return GateResult(
+            "Gate E",
+            FAIL,
+            "; ".join(blockers),
+            details,
+            blocks_ready=True,
+            blocks_publish=True,
+        )
     if suppressed:
-        return GateResult("Gate E", SUPPRESSED, "partial security coverage; see uncovered risks", details)
+        return GateResult(
+            "Gate E",
+            SUPPRESSED,
+            "partial security coverage; see uncovered risks",
+            details,
+            blocks_ready=True,
+        )
     return GateResult("Gate E", PASS, "security checks passed", details)
 
 
@@ -1026,8 +1179,41 @@ def gate_f_docs_compat(ctx: Context, settings: Settings) -> GateResult:
         f"compat-status={settings.compat_status}",
     ]
 
+    failures: List[str] = []
     if settings.docs_status == "no":
-        return GateResult("Gate F", FAIL, "docs not updated for user-visible change", details)
+        failures.append("docs not updated for user-visible change")
+
+    missing_narrative: List[str] = []
+    if not settings.problem:
+        missing_narrative.append("problem/context")
+    if not settings.approach:
+        missing_narrative.append("approach rationale")
+    if ctx.high_risk_areas and not settings.risk:
+        missing_narrative.append("high-risk assessment")
+    if ctx.high_risk_areas and not settings.rollback:
+        missing_narrative.append("high-risk rollback plan")
+    if settings.compat_status == "breaking" and not settings.migration_notes:
+        missing_narrative.append("breaking-change migration notes")
+
+    if missing_narrative:
+        failures.append("missing required PR narrative: " + ", ".join(missing_narrative))
+        add_uncovered(
+            ctx,
+            "PR narrative",
+            "required reviewer context was not supplied",
+            "reviewers cannot assess design, risk, rollback, or migration safety",
+            "provide the missing create_pr.py narrative flags and rerun",
+            "change author",
+        )
+
+    if failures:
+        return GateResult(
+            "Gate F",
+            FAIL,
+            "; ".join(failures),
+            details,
+            blocks_ready=True,
+        )
 
     if settings.compat_status == "unknown":
         add_uncovered(
@@ -1038,12 +1224,45 @@ def gate_f_docs_compat(ctx: Context, settings: Settings) -> GateResult:
             "set compat_status=compatible|breaking",
             "change author",
         )
-        return GateResult("Gate F", SUPPRESSED, "compatibility not confirmed", details)
+        return GateResult(
+            "Gate F",
+            SUPPRESSED,
+            "compatibility not confirmed",
+            details,
+            blocks_ready=True,
+        )
 
     if settings.compat_status == "breaking":
-        details.append("breaking change declared; ensure migration notes in PR body")
+        details.append("breaking change declared; migration notes supplied")
 
     return GateResult("Gate F", PASS, "docs/compatibility gate passed", details)
+
+
+def conventional_title_errors(value: str) -> List[str]:
+    match = CONVENTIONAL_RE.fullmatch(value.strip())
+    if not match:
+        return ["must match <type>(<scope>): <subject>"]
+
+    subject = match.group(3).strip()
+    errors: List[str] = []
+    if len(subject) > 50:
+        errors.append(f"subject exceeds 50 characters ({len(subject)})")
+    if subject.endswith("."):
+        errors.append("subject has a trailing period")
+    if NON_IMPERATIVE_PREFIX_RE.match(subject):
+        errors.append("subject appears non-imperative")
+    return errors
+
+
+def parse_commit_messages(payload: str) -> List[Tuple[str, str]]:
+    messages: List[Tuple[str, str]] = []
+    for record in payload.split("\x1e"):
+        record = record.strip("\n\r")
+        if not record or "\x1f" not in record:
+            continue
+        sha, body = record.split("\x1f", 1)
+        messages.append((sha.strip(), body.strip("\n\r")))
+    return messages
 
 
 def gate_g_commit_hygiene(ctx: Context, settings: Settings) -> GateResult:
@@ -1074,16 +1293,93 @@ def gate_g_commit_hygiene(ctx: Context, settings: Settings) -> GateResult:
     details.append(f"{r.cmd}: rc={r.rc} ({short_output(r, limit=260)})")
     if r.rc == 0:
         subjects = [x.strip() for x in r.stdout.splitlines() if x.strip()]
-        invalid = [s for s in subjects if not CONVENTIONAL_RE.match(s)]
-        if invalid:
-            blockers.append(f"non-conventional commit subject(s): {len(invalid)}")
-            details.extend([f"invalid subject: {s}" for s in invalid[:5]])
+        for subject in subjects:
+            errors = conventional_title_errors(subject)
+            if errors:
+                blockers.append(f"invalid commit subject: {subject}")
+                details.append(f"commit subject errors ({subject}): {', '.join(errors)}")
     else:
+        subjects = []
         blockers.append("cannot read commit subjects")
 
+    effective_title = settings.title.strip() if settings.title else (subjects[0] if subjects else "")
+    ctx.pr_title = effective_title
+    title_errors = conventional_title_errors(effective_title) if effective_title else ["title is empty"]
+    if title_errors:
+        blockers.append("PR title is invalid")
+        details.append(f"PR title errors ({effective_title or '(empty)'}): {', '.join(title_errors)}")
+
+    messages = run_cmd(
+        ["git", "log", "--format=%H%x1f%B%x1e", f"origin/{ctx.base}..HEAD"],
+        ctx.repo,
+        settings.timeout,
+    )
+    details.append(f"{messages.cmd}: rc={messages.rc} ({short_output(messages, limit=260)})")
+    if messages.rc != 0:
+        blockers.append("cannot read commit bodies")
+    else:
+        long_lines: List[str] = []
+        for sha, body in parse_commit_messages(messages.stdout):
+            for line_no, line in enumerate(body.splitlines()[1:], start=2):
+                if len(line) > 72:
+                    long_lines.append(f"{sha[:12]}:{line_no} is {len(line)} characters")
+        if long_lines:
+            blockers.append(f"commit body line(s) exceed 72 characters: {len(long_lines)}")
+            details.extend(long_lines[:10])
+
+    self_review = run_cmd(
+        ["git", "diff", "--check", f"origin/{ctx.base}...HEAD"],
+        ctx.repo,
+        settings.timeout,
+    )
+    details.append(f"{self_review.cmd}: rc={self_review.rc} ({short_output(self_review, limit=260)})")
+    if self_review.rc != 0:
+        blockers.append("self-review diff check found whitespace/errors")
+
+    scope = run_cmd(
+        ["git", "diff", "--name-status", f"origin/{ctx.base}...HEAD"],
+        ctx.repo,
+        settings.timeout,
+    )
+    details.append(f"{scope.cmd}: rc={scope.rc} ({short_output(scope, limit=320)})")
+    if scope.rc != 0:
+        blockers.append("cannot inspect changed paths for scope review")
+
+    if not BRANCH_NAME_RE.fullmatch(ctx.branch):
+        details.append(
+            "warning: branch name does not match <type>/<short-description>; "
+            "rename with git branch -m if practical"
+        )
+
     if blockers:
-        return GateResult("Gate G", FAIL, "; ".join(blockers), details)
-    return GateResult("Gate G", PASS, "commit hygiene passed", details)
+        return GateResult(
+            "Gate G",
+            FAIL,
+            "; ".join(blockers),
+            details,
+            blocks_ready=True,
+            blocks_publish=True,
+        )
+
+    if not settings.confirm_self_review:
+        add_uncovered(
+            ctx,
+            "commit scope and self-review",
+            "--confirm-self-review was not provided",
+            "the script cannot prove that every commit is relevant or that semantic review occurred",
+            "review git log and the full diff, then rerun with --confirm-self-review",
+            "change author",
+        )
+        return GateResult(
+            "Gate G",
+            SUPPRESSED,
+            "commit scope/self-review confirmation missing",
+            details,
+            blocks_ready=True,
+        )
+
+    details.append("author/agent confirmed all commits are relevant and the full diff was self-reviewed")
+    return GateResult("Gate G", PASS, "commit, title, scope, and self-review checks passed", details)
 
 
 def determine_confidence(gates: Sequence[GateResult]) -> str:
@@ -1093,6 +1389,20 @@ def determine_confidence(gates: Sequence[GateResult]) -> str:
     if any(s == SUPPRESSED for s in statuses):
         return "likely"
     return "confirmed"
+
+
+def determine_pr_mode(gates: Sequence[GateResult]) -> str:
+    if any(g.status == FAIL or g.blocks_ready for g in gates if g.gate != "Gate H"):
+        return "draft"
+    return "ready"
+
+
+def publication_blockers(gates: Sequence[GateResult]) -> List[GateResult]:
+    return [g for g in gates if g.gate != "Gate H" and g.blocks_publish]
+
+
+def can_publish(gates: Sequence[GateResult]) -> bool:
+    return not publication_blockers(gates)
 
 
 def build_body(settings: Settings, ctx: Context, gates: Sequence[GateResult], confidence: str) -> str:
@@ -1114,7 +1424,16 @@ def build_body(settings: Settings, ctx: Context, gates: Sequence[GateResult], co
     risk_text = ", ".join(ctx.high_risk_areas) if ctx.high_risk_areas else "no high-risk heuristics triggered"
     compat_line = "breaking" if settings.compat_status == "breaking" else "non-breaking"
     issue_line = settings.issue if settings.issue else "N/A"
-    title = settings.title or "<type(scope): concise summary>"
+    title = ctx.pr_title or settings.title or "<type(scope): concise summary>"
+    problem = settings.problem or "Not provided — add concrete user/system impact before marking ready."
+    approach = settings.approach or "Not provided — explain the design choice and rejected alternatives before marking ready."
+    risk = settings.risk or "Not provided — describe change-specific failure modes before marking ready."
+    rollback = settings.rollback or "Not provided — define a change-specific, operationally valid rollback before marking ready."
+    monitoring = settings.monitoring or "Not provided — identify post-merge signals or state why monitoring is unnecessary."
+    if settings.compat_status == "breaking":
+        migration = settings.migration_notes or "Not provided — breaking changes require executable migration steps."
+    else:
+        migration = settings.migration_notes or "No migration required; compatibility assessed as non-breaking."
 
     return f"""# PR Title
 
@@ -1122,6 +1441,7 @@ def build_body(settings: Settings, ctx: Context, gates: Sequence[GateResult], co
 
 ## 1) Problem / Context
 
+- {problem}
 - Linked issue/ticket: {issue_line}
 - Gate confidence: `{confidence}`
 - Config source: `{settings.config_source}`
@@ -1132,13 +1452,14 @@ def build_body(settings: Settings, ctx: Context, gates: Sequence[GateResult], co
 
 ## 3) Why This Approach
 
-- Uses the `create-pr` gated workflow to provide consistent merge readiness evidence.
-- Keeps draft/ready decision tied to measurable gates.
+- {approach}
 
 ## 4) Risk and Rollback Plan
 
 - Risk profile: {risk_text}
-- Rollback strategy: revert PR commit set and redeploy previous build.
+- Change-specific risks: {risk}
+- Rollback strategy: {rollback}
+- Post-merge monitoring: {monitoring}
 
 ## 5) Test Evidence
 
@@ -1158,7 +1479,7 @@ Uncovered Risk List:
 ## 7) Breaking Changes / Migration Notes
 
 - Compatibility: `{compat_line}`
-- Migration notes: {'required' if settings.compat_status == 'breaking' else 'not required'}
+- Migration notes: {migration}
 
 ## 8) Reviewer Checklist
 
@@ -1166,6 +1487,7 @@ Uncovered Risk List:
 - [ ] Test evidence is sufficient for touched code paths.
 - [ ] Security findings are addressed or tracked.
 - [ ] Rollback strategy is practical.
+- [ ] Every commit is relevant and the full diff has been self-reviewed.
 """
 
 
@@ -1208,9 +1530,22 @@ def gate_h_create_or_update_pr(
     settings: Settings,
     ctx: Context,
     body_path: Path,
-    confidence: str,
+    pr_mode: str,
+    pre_publish_gates: Sequence[GateResult],
 ) -> GateResult:
     details: List[str] = []
+
+    hard_blockers = publication_blockers(pre_publish_gates)
+    if hard_blockers:
+        names = ", ".join(g.gate for g in hard_blockers)
+        return GateResult(
+            "Gate H",
+            NA,
+            f"publication blocked before push by {names}",
+            [f"{g.gate}: {g.evidence}" for g in hard_blockers],
+            blocks_ready=True,
+            blocks_publish=True,
+        )
 
     if not settings.create_pr:
         return GateResult("Gate H", NA, "PR creation/update not requested", details)
@@ -1218,18 +1553,17 @@ def gate_h_create_or_update_pr(
     if settings.dry_run:
         return GateResult("Gate H", SUPPRESSED, "dry-run mode; PR create/update skipped", details)
 
-    push = run_cmd(["git", "push", "-u", "origin", "HEAD"], ctx.repo, timeout=settings.timeout)
-    details.append(f"{push.cmd}: rc={push.rc} ({short_output(push, limit=320)})")
-    if push.rc != 0:
-        return GateResult("Gate H", FAIL, "git push failed", details)
-
-    title = settings.title
+    title = ctx.pr_title or settings.title.strip()
     if not title:
-        head_msg = run_cmd(["git", "log", "-1", "--format=%s"], ctx.repo, timeout=settings.timeout)
-        details.append(f"{head_msg.cmd}: rc={head_msg.rc} ({short_output(head_msg)})")
-        title = head_msg.stdout.strip() if head_msg.rc == 0 and head_msg.stdout.strip() else "chore: update branch"
+        return GateResult("Gate H", FAIL, "resolved PR title is empty; push skipped", details)
+    try:
+        expected_body = body_path.read_text()
+    except OSError as exc:
+        return GateResult("Gate H", FAIL, f"cannot read PR body; push skipped: {exc}", details)
 
-    desired_ready = confidence == "confirmed"
+    if pr_mode not in {"ready", "draft"}:
+        return GateResult("Gate H", FAIL, f"invalid PR mode {pr_mode!r}; push skipped", details)
+    desired_ready = pr_mode == "ready"
 
     existing = None
     query = None
@@ -1237,7 +1571,12 @@ def gate_h_create_or_update_pr(
         existing, query = find_existing_pr(ctx, settings)
         details.append(f"{query.cmd}: rc={query.rc} ({short_output(query, limit=320)})")
         if query.rc not in (0,):
-            return GateResult("Gate H", FAIL, "failed to query existing PR", details)
+            return GateResult("Gate H", FAIL, "failed to query existing PR; push skipped", details)
+
+    push = run_cmd(["git", "push", "-u", "origin", "HEAD"], ctx.repo, timeout=settings.timeout)
+    details.append(f"{push.cmd}: rc={push.rc} ({short_output(push, limit=320)})")
+    if push.rc != 0:
+        return GateResult("Gate H", FAIL, "git push failed", details)
 
     pr_ref = ""
     if existing:
@@ -1284,6 +1623,8 @@ def gate_h_create_or_update_pr(
         if create.rc != 0:
             return GateResult("Gate H", FAIL, "gh pr create failed", details)
         pr_ref = create.stdout.splitlines()[-1].strip() if create.stdout else ""
+        if not pr_ref:
+            return GateResult("Gate H", FAIL, "gh pr create returned no PR reference", details)
 
     if settings.reviewers:
         rr = run_cmd(["gh", "pr", "edit", pr_ref, "--add-reviewer", settings.reviewers], ctx.repo, timeout=settings.timeout)
@@ -1298,7 +1639,14 @@ def gate_h_create_or_update_pr(
             details.append("warning: failed to add labels (non-blocking)")
 
     view = run_cmd(
-        ["gh", "pr", "view", pr_ref, "--json", "number,url,state,isDraft,baseRefName,headRefName,title"],
+        [
+            "gh",
+            "pr",
+            "view",
+            pr_ref,
+            "--json",
+            "number,url,state,isDraft,baseRefName,headRefName,title,body",
+        ],
         ctx.repo,
         timeout=settings.timeout,
     )
@@ -1308,10 +1656,55 @@ def gate_h_create_or_update_pr(
 
     try:
         meta = json.loads(view.stdout)
-        if isinstance(meta, dict):
-            ctx.pr_meta = meta
     except json.JSONDecodeError:
-        pass
+        return GateResult("Gate H", FAIL, "unable to parse verified PR metadata", details)
+    if not isinstance(meta, dict):
+        return GateResult("Gate H", FAIL, "verified PR metadata has unexpected shape", details)
+    ctx.pr_meta = meta
+
+    def normalize_body(value: Any) -> str:
+        return str(value).replace("\r\n", "\n").rstrip()
+
+    verification_errors: List[str] = []
+    required_fields = {
+        "number",
+        "url",
+        "state",
+        "isDraft",
+        "baseRefName",
+        "headRefName",
+        "title",
+        "body",
+    }
+    missing_fields = sorted(required_fields - set(meta))
+    if missing_fields:
+        verification_errors.append("metadata missing: " + ", ".join(missing_fields))
+    if meta.get("baseRefName") != settings.base:
+        verification_errors.append(
+            f"base mismatch: expected {settings.base!r}, got {meta.get('baseRefName')!r}"
+        )
+    if meta.get("headRefName") != ctx.branch:
+        verification_errors.append(
+            f"head mismatch: expected {ctx.branch!r}, got {meta.get('headRefName')!r}"
+        )
+    if meta.get("title") != title:
+        verification_errors.append(
+            f"title mismatch: expected {title!r}, got {meta.get('title')!r}"
+        )
+    expected_draft = not desired_ready
+    if bool(meta.get("isDraft")) != expected_draft:
+        verification_errors.append(
+            f"draft mismatch: expected {expected_draft}, got {meta.get('isDraft')!r}"
+        )
+    if normalize_body(meta.get("body", "")) != normalize_body(expected_body):
+        verification_errors.append("body mismatch: rendered body differs from body file")
+    if str(meta.get("state", "")).upper() != "OPEN":
+        verification_errors.append(f"state mismatch: expected 'OPEN', got {meta.get('state')!r}")
+
+    if verification_errors:
+        details.extend(verification_errors)
+        fields = ", ".join(error.split(" ", 1)[0] for error in verification_errors)
+        return GateResult("Gate H", FAIL, f"PR verification failed: {fields}", details)
 
     # Optional: report CI check status (informational, does not change gate verdict).
     pr_number = str(ctx.pr_meta.get("number", pr_ref))
@@ -1331,6 +1724,7 @@ def print_report(gates: Sequence[GateResult], body_path: Path, confidence: str, 
     print("\nReadiness:")
     print(f"- confidence: {confidence}")
     print(f"- recommended_pr_mode: {pr_mode}")
+    print(f"- publication_allowed: {can_publish(gates)}")
     print(f"- pr_body: {body_path}")
     print(f"- config_source: {settings.config_source}")
 
@@ -1364,8 +1758,20 @@ def parse_args() -> argparse.Namespace:
 
     parser.add_argument("--create-pr", action="store_true", help="push branch and create/update PR")
     parser.add_argument("--dry-run", action="store_true", help="do not push/create/update PR")
-    parser.add_argument("--pr-body-out", default="", help="outputexample path for generated PR body")
-    parser.add_argument("--json-out", default="", help="optional JSON summary outputexample path")
+    parser.add_argument("--pr-body-out", default="", help="output path for generated PR body")
+    parser.add_argument("--json-out", default="", help="optional JSON summary output path")
+
+    parser.add_argument("--problem", default=None, help="concrete problem/context for the PR body")
+    parser.add_argument("--approach", default=None, help="design choice and rationale for the PR body")
+    parser.add_argument("--risk", default=None, help="change-specific failure modes")
+    parser.add_argument("--rollback", default=None, help="change-specific rollback procedure")
+    parser.add_argument("--monitoring", default=None, help="post-merge monitoring or explicit N/A rationale")
+    parser.add_argument("--migration-notes", default=None, help="executable migration steps or explicit N/A")
+    parser.add_argument(
+        "--confirm-self-review",
+        action="store_true",
+        help="confirm all commits are relevant and the full diff was semantically self-reviewed",
+    )
 
     parser.add_argument("--docs-status", choices=["yes", "no", "na"], default=None)
     parser.add_argument("--compat-status", choices=["compatible", "breaking", "unknown"], default=None)
@@ -1405,6 +1811,25 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def run_pre_publish_gates(ctx: Context, settings: Settings) -> List[GateResult]:
+    gate_functions = (
+        gate_a_preflight,
+        gate_b_branch_sync,
+        gate_c_change_risk,
+        gate_d_quality,
+        gate_e_security,
+        gate_f_docs_compat,
+        gate_g_commit_hygiene,
+    )
+    results: List[GateResult] = []
+    for gate_function in gate_functions:
+        result = gate_function(ctx, settings)
+        results.append(result)
+        if result.blocks_publish:
+            break
+    return results
+
+
 def main() -> int:
     args = parse_args()
     repo = Path(args.repo).resolve()
@@ -1427,23 +1852,22 @@ def main() -> int:
 
     ctx = Context(repo=repo, base=settings.base, branch=settings.branch)
 
-    gates: List[GateResult] = []
-    gates.append(gate_a_preflight(ctx, settings))
-    gates.append(gate_b_branch_sync(ctx, settings))
-    gates.append(gate_c_change_risk(ctx, settings))
-    gates.append(gate_d_quality(ctx, settings))
-    gates.append(gate_e_security(ctx, settings))
-    gates.append(gate_f_docs_compat(ctx, settings))
-    gates.append(gate_g_commit_hygiene(ctx, settings))
+    gates = run_pre_publish_gates(ctx, settings)
 
     confidence = determine_confidence(gates)
-    pr_mode = "ready" if confidence == "confirmed" else "draft"
+    pr_mode = determine_pr_mode(gates)
 
     body_path = settings.pr_body_out or Path(f"/tmp/pr_body_{settings.branch.replace('/', '_')}.md")
     body = build_body(settings, ctx, gates, confidence)
     body_path.write_text(body)
 
-    gate_h = gate_h_create_or_update_pr(settings, ctx, body_path, confidence)
+    gate_h = gate_h_create_or_update_pr(
+        settings,
+        ctx,
+        body_path,
+        pr_mode=pr_mode,
+        pre_publish_gates=gates,
+    )
     gates.append(gate_h)
 
     print_report(gates, body_path, confidence, pr_mode, ctx, settings)
@@ -1452,6 +1876,7 @@ def main() -> int:
         payload = {
             "confidence": confidence,
             "recommended_pr_mode": pr_mode,
+            "publication_allowed": can_publish(gates),
             "pr_body": str(body_path),
             "config_source": settings.config_source,
             "gates": [g.__dict__ for g in gates],

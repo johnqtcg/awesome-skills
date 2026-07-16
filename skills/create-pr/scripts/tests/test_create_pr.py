@@ -41,6 +41,13 @@ class CreatePRSkillTests(unittest.TestCase):
             "secret_scan": None,
             "conflict_scan": None,
             "update_existing_pr": None,
+            "problem": None,
+            "approach": None,
+            "risk": None,
+            "rollback": None,
+            "monitoring": None,
+            "migration_notes": None,
+            "confirm_self_review": False,
         }
         base.update(overrides)
         return Namespace(**base)
@@ -77,7 +84,7 @@ index 111..222 100644
         self.assertIn("a.go:2", findings[0])
 
     def test_scan_secrets_ignores_env_reference_assignment(self):
-        entries = [create_pr.AddedLine(path="cfg.go", line_no=12, text='token := os.Getenv("API_TOKEN")')]
+        entries = [create_pr.AddedLine(path="cfg.go", line_no=12, text='token = os.Getenv("API_TOKEN")')]
         findings = create_pr.scan_secrets_in_added_lines(entries, [])
         self.assertEqual([], findings)
 
@@ -87,6 +94,33 @@ index 111..222 100644
         self.assertEqual(1, len(findings))
         self.assertIn("[github_pat]", findings[0])
 
+    def test_scan_secrets_checks_comments_and_alpha_only_passwords(self):
+        entries = [
+            create_pr.AddedLine(
+                path="docs/runbook.md",
+                line_no=4,
+                text="# password = supersecretpassword",
+            )
+        ]
+        findings = create_pr.scan_secrets_in_added_lines(entries, [])
+        self.assertEqual(1, len(findings))
+        self.assertIn("docs/runbook.md:4", findings[0])
+
+    def test_sensitive_filename_scan_covers_dotenv_and_key_material(self):
+        findings = create_pr.scan_sensitive_filenames(
+            [
+                Path(".env"),
+                Path("config/.env.production"),
+                Path("certs/client.pem"),
+                Path("certs/client.key"),
+                Path("certs/client.p12"),
+                Path("README.md"),
+            ],
+            [],
+        )
+        self.assertEqual(5, len(findings))
+        self.assertFalse(any("README.md" in finding for finding in findings))
+
     def test_filter_files_extension_and_exclude(self):
         files = [Path("cmd/main.go"), Path("docs/readme.md"), Path("vendor/a.go")]
         filtered = create_pr.filter_files(
@@ -95,6 +129,22 @@ index 111..222 100644
             [create_pr.re.compile(r"^vendor/")],
         )
         self.assertEqual([Path("cmd/main.go"), Path("docs/readme.md")], filtered)
+
+    def test_filter_files_treats_dotenv_variants_as_env_files(self):
+        files = [Path(".env"), Path("config/.env.local"), Path("notes.txt")]
+        filtered = create_pr.filter_files(files, [".env"], [])
+        self.assertEqual([Path(".env"), Path("config/.env.local")], filtered)
+
+    def test_parse_github_slug_supports_ssh_and_https(self):
+        self.assertEqual("acme/service", create_pr.parse_github_slug("git@github.com:acme/service.git"))
+        self.assertEqual("acme/service", create_pr.parse_github_slug("https://github.com/acme/service.git"))
+        self.assertEqual("", create_pr.parse_github_slug("/tmp/remote.git"))
+
+    def test_conventional_title_rules_cover_length_period_and_imperative_mood(self):
+        self.assertTrue(create_pr.conventional_title_errors("feat: " + "a" * 51))
+        self.assertIn("subject has a trailing period", create_pr.conventional_title_errors("fix: correct leak."))
+        self.assertIn("subject appears non-imperative", create_pr.conventional_title_errors("docs: added runbook"))
+        self.assertEqual([], create_pr.conventional_title_errors("docs: add runbook"))
 
     def test_resolve_settings_reads_repo_config(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -130,6 +180,36 @@ index 111..222 100644
         self.assertEqual("acme", owner)
         self.assertEqual("service", name)
 
+    def test_gate_a_blocks_when_origin_and_gh_repository_do_not_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            ctx = create_pr.Context(repo=repo, base="main", branch="feature/x")
+            settings = create_pr.resolve_settings(self.make_args(), repo, "feature/x")
+
+            def fake_run(cmd, cwd, timeout=1200):
+                key = tuple(cmd)
+                if key[:3] == ("git", "rev-parse", "--is-inside-work-tree"):
+                    return create_pr.CommandResult("git rev-parse", 0, "true", "")
+                if key[:3] == ("git", "remote", "-v"):
+                    return create_pr.CommandResult("git remote -v", 0, "origin git@github.com:other/repo.git", "")
+                if key[:3] == ("git", "remote", "get-url"):
+                    return create_pr.CommandResult("git remote get-url origin", 0, "git@github.com:other/repo.git", "")
+                if key[:4] == ("gh", "auth", "status", "-h"):
+                    return create_pr.CommandResult("gh auth status", 0, "ok", "")
+                if key[:3] == ("gh", "repo", "view"):
+                    meta = {"nameWithOwner": "acme/service", "viewerPermission": "WRITE"}
+                    return create_pr.CommandResult("gh repo view", 0, json.dumps(meta), "")
+                if key[:4] == ("git", "ls-remote", "--heads", "origin"):
+                    return create_pr.CommandResult("git ls-remote", 0, "sha\trefs/heads/main", "")
+                return create_pr.CommandResult("unexpected", 1, "", "unexpected command")
+
+            with patch.object(create_pr, "run_cmd", side_effect=fake_run):
+                result = create_pr.gate_a_preflight(ctx, settings)
+
+            self.assertEqual(create_pr.FAIL, result.status)
+            self.assertTrue(result.blocks_publish)
+            self.assertIn("identity", result.evidence)
+
     def test_gate_a_branch_protection_missing_becomes_suppressed(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
@@ -142,6 +222,8 @@ index 111..222 100644
                     return create_pr.CommandResult("git rev-parse --is-inside-work-tree", 0, "true", "")
                 if key[:3] == ("git", "remote", "-v"):
                     return create_pr.CommandResult("git remote -v", 0, "origin git@github.com:acme/x.git (fetch)", "")
+                if key[:3] == ("git", "remote", "get-url"):
+                    return create_pr.CommandResult("git remote get-url origin", 0, "git@github.com:acme/service.git", "")
                 if key[:4] == ("gh", "auth", "status", "-h"):
                     return create_pr.CommandResult("gh auth status -h github.com", 0, "ok", "")
                 if key[:3] == ("gh", "repo", "view"):
@@ -187,6 +269,8 @@ index 111..222 100644
                     return create_pr.CommandResult("git rev-parse --is-inside-work-tree", 0, "true", "")
                 if key[:3] == ("git", "remote", "-v"):
                     return create_pr.CommandResult("git remote -v", 0, "origin x", "")
+                if key[:3] == ("git", "remote", "get-url"):
+                    return create_pr.CommandResult("git remote get-url origin", 0, "git@github.com:acme/service.git", "")
                 if key[:4] == ("gh", "auth", "status", "-h"):
                     return create_pr.CommandResult("gh auth status -h github.com", 0, "ok", "")
                 if key[:3] == ("gh", "repo", "view"):
@@ -258,18 +342,138 @@ index 111..222 100644
                     meta = {
                         "number": 12,
                         "url": "https://example/pr/12",
-                        "isDraft": True,
+                        "state": "OPEN",
+                        "isDraft": False,
                         "baseRefName": "main",
                         "headRefName": "feature/x",
+                        "title": "feat(test): demo",
+                        "body": "body\n",
                     }
                     return create_pr.CommandResult("gh pr view", 0, json.dumps(meta), "")
                 return create_pr.CommandResult("unknown", 1, "", "unexpected command")
 
             with patch.object(create_pr, "run_cmd", side_effect=fake_run):
-                result = create_pr.gate_h_create_or_update_pr(settings, ctx, Path("/tmp/body.md"), confidence="likely")
+                body_path = repo / "body.md"
+                body_path.write_text("body\n")
+                result = create_pr.gate_h_create_or_update_pr(
+                    settings,
+                    ctx,
+                    body_path,
+                    pr_mode="ready",
+                    pre_publish_gates=[create_pr.GateResult("Gate A", create_pr.SUPPRESSED, "low risk")],
+                )
 
             self.assertEqual(create_pr.PASS, result.status)
             self.assertIn("updated", result.evidence)
+
+    def test_gate_h_does_not_push_when_a_hard_blocker_exists(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            ctx = create_pr.Context(repo=repo, base="main", branch="feature/x")
+            settings = create_pr.resolve_settings(self.make_args(create_pr=True), repo, "feature/x")
+            body_path = repo / "body.md"
+            body_path.write_text("body\n")
+            blocker = create_pr.GateResult(
+                "Gate E",
+                create_pr.FAIL,
+                "secret matched",
+                blocks_ready=True,
+                blocks_publish=True,
+            )
+
+            with patch.object(create_pr, "run_cmd") as mocked_run:
+                result = create_pr.gate_h_create_or_update_pr(
+                    settings,
+                    ctx,
+                    body_path,
+                    pr_mode="draft",
+                    pre_publish_gates=[blocker],
+                )
+
+            mocked_run.assert_not_called()
+            self.assertEqual(create_pr.NA, result.status)
+            self.assertIn("blocked", result.evidence)
+
+    def test_gate_h_does_not_push_when_existing_pr_query_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            ctx = create_pr.Context(
+                repo=repo,
+                base="main",
+                branch="feature/x",
+                pr_title="feat: demo",
+            )
+            settings = create_pr.resolve_settings(
+                self.make_args(create_pr=True, title="feat: demo"),
+                repo,
+                "feature/x",
+            )
+            body_path = repo / "body.md"
+            body_path.write_text("body\n")
+            calls = []
+
+            def fake_run(cmd, cwd, timeout=1200):
+                calls.append(tuple(cmd))
+                if tuple(cmd)[:3] == ("gh", "pr", "list"):
+                    return create_pr.CommandResult("gh pr list", 1, "", "API unavailable")
+                return create_pr.CommandResult("unexpected", 1, "", "unexpected command")
+
+            with patch.object(create_pr, "run_cmd", side_effect=fake_run):
+                result = create_pr.gate_h_create_or_update_pr(
+                    settings,
+                    ctx,
+                    body_path,
+                    pr_mode="ready",
+                    pre_publish_gates=[create_pr.GateResult("Gate A", create_pr.PASS, "ok")],
+                )
+
+            self.assertEqual(create_pr.FAIL, result.status)
+            self.assertFalse(any(call[:3] == ("git", "push", "-u") for call in calls))
+
+    def test_gate_h_fails_when_verified_metadata_does_not_match(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            ctx = create_pr.Context(repo=repo, base="main", branch="feature/x", pr_title="feat: demo")
+            settings = create_pr.resolve_settings(
+                self.make_args(create_pr=True, title="feat: demo", update_existing_pr=False),
+                repo,
+                "feature/x",
+            )
+            body_path = repo / "body.md"
+            body_path.write_text("expected body\n")
+
+            def fake_run(cmd, cwd, timeout=1200):
+                key = tuple(cmd)
+                if key[:3] == ("git", "push", "-u"):
+                    return create_pr.CommandResult("git push", 0, "", "")
+                if key[:3] == ("gh", "pr", "create"):
+                    return create_pr.CommandResult("gh pr create", 0, "https://example/pr/7", "")
+                if key[:3] == ("gh", "pr", "view"):
+                    payload = {
+                        "number": 7,
+                        "url": "https://example/pr/7",
+                        "state": "OPEN",
+                        "isDraft": False,
+                        "baseRefName": "develop",
+                        "headRefName": "feature/x",
+                        "title": "feat: demo",
+                        "body": "wrong body",
+                    }
+                    return create_pr.CommandResult("gh pr view", 0, json.dumps(payload), "")
+                return create_pr.CommandResult("unexpected", 1, "", "unexpected command")
+
+            with patch.object(create_pr, "run_cmd", side_effect=fake_run):
+                result = create_pr.gate_h_create_or_update_pr(
+                    settings,
+                    ctx,
+                    body_path,
+                    pr_mode="ready",
+                    pre_publish_gates=[create_pr.GateResult("Gate A", create_pr.PASS, "ok")],
+                )
+
+            self.assertEqual(create_pr.FAIL, result.status)
+            self.assertIn("base", result.evidence)
+            self.assertTrue(any("body" in detail for detail in result.details))
 
     def test_determine_confidence_maps_gate_statuses(self):
         confirmed = create_pr.determine_confidence(
@@ -286,10 +490,50 @@ index 111..222 100644
         self.assertEqual("likely", likely)
         self.assertEqual("suspected", suspected)
 
+    def test_determine_pr_mode_distinguishes_low_and_high_residual_risk(self):
+        low_risk_suppression = [
+            create_pr.GateResult("Gate A", create_pr.SUPPRESSED, "protection unavailable")
+        ]
+        ready_blocking_suppression = [
+            create_pr.GateResult(
+                "Gate D",
+                create_pr.SUPPRESSED,
+                "quality unavailable",
+                blocks_ready=True,
+            )
+        ]
+        self.assertEqual("ready", create_pr.determine_pr_mode(low_risk_suppression))
+        self.assertEqual("draft", create_pr.determine_pr_mode(ready_blocking_suppression))
+
+    def test_gate_f_requires_real_narrative_and_breaking_migration_notes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            settings = create_pr.resolve_settings(
+                self.make_args(docs_status="yes", compat_status="breaking"),
+                repo,
+                "feature/x",
+            )
+            ctx = create_pr.Context(repo=repo, base="main", branch="feature/x")
+            result = create_pr.gate_f_docs_compat(ctx, settings)
+            self.assertEqual(create_pr.FAIL, result.status)
+            self.assertTrue(result.blocks_ready)
+            self.assertIn("migration", result.evidence)
+
     def test_build_body_includes_changed_files_and_uncovered_risk(self):
         with tempfile.TemporaryDirectory() as tmp:
             repo = Path(tmp)
-            settings = create_pr.resolve_settings(self.make_args(), repo, "feature/x")
+            settings = create_pr.resolve_settings(
+                self.make_args(
+                    problem="Quota spikes can exhaust the shared worker pool.",
+                    approach="Reject excess work at the API boundary to protect downstream capacity.",
+                    risk="Valid burst traffic may be throttled.",
+                    rollback="Disable the quota guard flag; no data rollback is required.",
+                    monitoring="Watch rejection rate and worker saturation.",
+                    migration_notes="No migration is required.",
+                ),
+                repo,
+                "feature/x",
+            )
             ctx = create_pr.Context(
                 repo=repo,
                 base="main",
@@ -315,6 +559,10 @@ index 111..222 100644
             self.assertIn("public_api", body)
             self.assertIn("Area: branch protection", body)
             self.assertIn("go test ./...", body)
+            self.assertIn("Reject excess work at the API boundary", body)
+            self.assertIn("Disable the quota guard flag", body)
+            self.assertNotIn("Uses the `create-pr` gated workflow", body)
+            self.assertNotIn("revert PR commit set and redeploy", body)
 
 
 if __name__ == "__main__":

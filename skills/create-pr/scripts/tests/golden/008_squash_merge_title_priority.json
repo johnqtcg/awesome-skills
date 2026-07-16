@@ -4,6 +4,10 @@
   "scenario_type": "merge_strategy",
   "expected_confidence": "confirmed",
   "expected_pr_mode": "ready",
+  "expected_publish": true,
+  "gate_results": [
+    {"gate": "Gate G", "status": "PASS", "evidence": "title valid"}
+  ],
   "skill_rules_that_must_fire": [
     "PR title must follow Conventional Commits format",
     "PR title = final commit message",

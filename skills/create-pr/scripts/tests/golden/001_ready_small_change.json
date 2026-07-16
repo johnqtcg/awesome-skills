@@ -4,6 +4,10 @@
   "scenario_type": "ready_flow",
   "expected_confidence": "confirmed",
   "expected_pr_mode": "ready",
+  "expected_publish": true,
+  "gate_results": [
+    {"gate": "Gate A", "status": "PASS", "evidence": "preflight passed"}
+  ],
   "skill_rules_that_must_fire": [
     "confirmed: all mandatory gates executed and passed, no unresolved high-risk item.",
     "Do not mark a PR `ready` with `suspected` confidence.",
