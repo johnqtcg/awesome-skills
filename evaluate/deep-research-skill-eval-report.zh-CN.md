@@ -8,6 +8,8 @@
 
 快照说明：本报告评估的是 **2026-03-12** 时点的 `deep-research` skill。当前仓库已将该 skill 扩展为 9-section 输出契约，并新增了 `references/` 与辅助脚本。下文中的结构描述、行数和 token 估算均对应当时被评估的快照，非当前最新版本。
 
+> **评估后更新 — 2026-07-18：** 当前实现已在文档和报告生成器中统一为唯一九节合同；Web/Hybrid 的验证与报告强制要求 `content.json`；每条 Web 证据校验精确正文摘录；报告自动执行验证；High-confidence 采用唯一规则；来源质量采用保守的 T1–T5 元数据。仓库结论会回读真实 Git 对象与 blob，或校验受根目录约束的未固定工作区内容。测试命令只在宿主权限层执行一次，helper 仅导入版本化 receipt。Runtime High 会先校验完整引用代码集：每项都必须验证成功并固定到同一 commit/tree，再由一个 receipt 覆盖 finding、全部 code ID 与全部 tested paths。只读 `snapshot-codebase` 可输出 HEAD/tree/dirty 身份且不执行测试，并拒绝会把被测仓库写脏的输出路径；原命令代理和 replay 参数已删除。模式预算在跨进程锁保护的会话账本中累计，外部工具调用有预算预留入口，报告只输出被可用 finding 引用的证据并强制来源上限。离线回归现包含 286 项测试，覆盖 request → decision、伪造证据、通用成功命令拒绝、未解析引用/unpinned 混入/receipt 拼接/快照负向场景、真实多进程预算竞争和来源上限。Receipt 仍是宿主 attestation 而非密码学执行证明；账本是运行约束而非防篡改日志；Windows 锁仍需 Windows CI。这些改进不属于 2026-03-12 原始评分，后续应通过全新 benchmark 重新评估。
+
 `deep-research` 是一个面向事实型与分析型研究任务的 source-backed research skill，适合用于技术调研、方案比较、观点核验和跨来源综合分析，强调先检索证据、再形成结论。在被评估的那个快照中，它最突出的三个亮点是：内置证据链要求和 hallucination-aware 校验流程，能显著降低无依据结论；输出采用稳定的 7-section 模板，适合沉淀为可复用研究报告；同时要求编号引用、来源可信度标注和执行完整性说明，让研究结果更容易核查、复盘和继续扩展。
 
 ## 一、评估概览

@@ -70,7 +70,7 @@ _FIXTURE_NAMES = [
     "codebase_research",
     "performance_benchmark",
     "security_research",
-    "ai_tool_selection",
+    "tool_selection_principles",
     "evidence_chain",
 ]
 
@@ -96,8 +96,9 @@ class TestCommonScenarios(unittest.TestCase):
         for tier in ["T1", "T2", "T3", "T4", "T5"]:
             self.assertIn(tier, self.all_text)
 
-    def test_perplexity_mentioned(self):
-        self.assertIn("Perplexity", self.all_text)
+    def test_no_unsourced_named_ai_tool_ranking(self):
+        self.assertNotIn("Perplexity", self.all_text)
+        self.assertNotIn("AI Tool Selection for Deep Research", self.all_text)
 
     def test_duckduckgo_in_script_context(self):
         self.assertIn("DDG", self.skill)
@@ -131,22 +132,21 @@ class TestCommonScenarios(unittest.TestCase):
 
 
 class TestBehavioralScenarios(unittest.TestCase):
-    """Behavioral regression tests that verify SKILL.md contains the decision
-    rules needed to produce correct mode selection, false-positive prevention,
-    and suppression decisions — not just that keywords exist.
-
-    Schema for behavioral fixtures:
-      expected_mode       Quick | Standard | Deep
-      user_override       bool — user explicitly specified a mode
-      is_deep_research_needed  bool — false = Deep would be over-research
-      is_web_research_needed   bool — false = web retrieval not needed
-      coverage_rules      list[str] — must appear in all_text (SKILL + refs)
-    """
+    """Feed fixture requests into executable decisions and assert outcomes."""
 
     @classmethod
     def setUpClass(cls):
         cls.skill_text = _read(SKILL_MD)
         cls.all_text = _all_skill_text()
+        import importlib.util
+        import sys
+
+        script = SKILL_ROOT / "scripts" / "deep_research.py"
+        spec = importlib.util.spec_from_file_location("deep_research_golden", script)
+        cls.deep_research = importlib.util.module_from_spec(spec)
+        assert spec and spec.loader
+        sys.modules[spec.name] = cls.deep_research
+        spec.loader.exec_module(cls.deep_research)
 
     def _load(self, filename: str) -> dict:
         path = GOLDEN_DIR / filename
@@ -169,20 +169,24 @@ class TestBehavioralScenarios(unittest.TestCase):
     def test_behavior_001_quick_mode_single_fact(self) -> None:
         """Single factual question should trigger Quick mode, not over-research."""
         f = self._load("behavior_mode_quick.json")
-        self.assertEqual(f["expected_mode"], "Quick")
-        self._assert_coverage(f)
+        actual = self.deep_research.plan_research(f["user_request"])
+        self.assertEqual(f["expected_mode"].lower(), actual["mode"])
 
     def test_behavior_002_deep_mode_security_decision(self) -> None:
         """Security-sensitive multi-vendor decision should trigger Deep mode."""
         f = self._load("behavior_mode_deep_security.json")
-        self.assertEqual(f["expected_mode"], "Deep")
-        self._assert_coverage(f)
+        actual = self.deep_research.plan_research(f["user_request"])
+        self.assertEqual(f["expected_mode"].lower(), actual["mode"])
 
     def test_behavior_003_user_override_standard(self) -> None:
         """Explicit user mode specification overrides auto-selection."""
         f = self._load("behavior_mode_user_override.json")
         self.assertTrue(f.get("user_override"), "fixture must declare user_override=true")
-        self._assert_coverage(f)
+        actual = self.deep_research.plan_research(
+            f["user_request"], explicit_mode=f["expected_mode"]
+        )
+        self.assertEqual(f["expected_mode"].lower(), actual["mode"])
+        self.assertEqual("user", actual["mode_basis"])
 
     # ------------------------------------------------------------------
     # False-positive prevention
@@ -195,8 +199,8 @@ class TestBehavioralScenarios(unittest.TestCase):
             f.get("is_deep_research_needed", True),
             "fixture must declare is_deep_research_needed=false",
         )
-        self.assertEqual(f.get("correct_mode"), "Quick")
-        self._assert_coverage(f)
+        actual = self.deep_research.plan_research(f["user_request"])
+        self.assertEqual(f.get("correct_mode", "").lower(), actual["mode"])
 
     def test_fp_002_codebase_no_web_retrieval(self) -> None:
         """Internal codebase question must not trigger external web retrieval."""
@@ -205,7 +209,9 @@ class TestBehavioralScenarios(unittest.TestCase):
             f.get("is_web_research_needed", True),
             "fixture must declare is_web_research_needed=false",
         )
-        self._assert_coverage(f)
+        actual = self.deep_research.plan_research(f["user_request"])
+        self.assertFalse(actual["requires_web_content"])
+        self.assertEqual("codebase", actual["research_kind"])
 
     # ------------------------------------------------------------------
     # Degradation decision
@@ -214,8 +220,14 @@ class TestBehavioralScenarios(unittest.TestCase):
     def test_behavior_004_blocked_degradation(self) -> None:
         """Budget exhaustion / unreachable sources must produce Blocked degradation."""
         f = self._load("behavior_degradation_blocked.json")
-        self.assertEqual(f["expected_degradation"], "Blocked")
-        self._assert_coverage(f)
+        actual = self.deep_research.assess_degradation(
+            required_inputs_present=True,
+            usable_findings=0,
+            total_findings=1,
+            extraction_failures=1,
+            budget_exhausted=True,
+        )
+        self.assertEqual(f["expected_degradation"], actual)
 
     # ------------------------------------------------------------------
     # Confidence assignment
@@ -224,14 +236,93 @@ class TestBehavioralScenarios(unittest.TestCase):
     def test_behavior_005_confidence_high(self) -> None:
         """Official source + verified content must yield High confidence."""
         f = self._load("behavior_confidence_high.json")
-        self.assertEqual(f["expected_confidence"], "High")
-        self._assert_coverage(f)
+        source = self.deep_research.SearchResult(
+            query="q",
+            title="Go context",
+            url="https://go.dev/pkg/context",
+            normalized_url="https://go.dev/pkg/context",
+            domain="go.dev",
+            source_type="official",
+            source_tier="T1",
+            classification_basis="explicit",
+        )
+        content = self.deep_research.ContentResult(
+            url=source.url,
+            title=source.title,
+            content="WithTimeout returns a copy of the parent context.",
+            word_count=8,
+        )
+        finding = {
+            "title": "Return value",
+            "claim_type": "single_fact",
+            "confidence": "high",
+            "analysis": "It returns a derived context.",
+            "evidence": [{
+                "kind": "web",
+                "url": source.url,
+                "excerpt": "WithTimeout returns a copy of the parent context",
+            }],
+        }
+        actual = self.deep_research.validate_research_bundle(
+            research_kind="web",
+            results=[source],
+            contents=[content],
+            code_evidence={},
+            findings={"findings": [finding]},
+        )
+        self.assertEqual(
+            f["expected_confidence"].lower(),
+            actual["findings"][0]["effective_confidence"],
+        )
 
     def test_behavior_006_confidence_medium(self) -> None:
         """Technology comparison requiring 3+ independent benchmarks yields Medium."""
         f = self._load("behavior_confidence_medium.json")
-        self.assertEqual(f["expected_confidence"], "Medium")
-        self._assert_coverage(f)
+        sources = []
+        contents = []
+        evidence = []
+        for idx in range(3):
+            url = f"https://benchmark{idx}.example/result"
+            sources.append(self.deep_research.SearchResult(
+                query="q",
+                title=f"Benchmark {idx}",
+                url=url,
+                normalized_url=url,
+                domain=f"benchmark{idx}.example",
+                source_type="benchmark",
+                source_tier="T3",
+                classification_basis="explicit",
+                methodology="disclosed",
+            ))
+            contents.append(self.deep_research.ContentResult(
+                url=url,
+                title=f"Benchmark {idx}",
+                content=f"Benchmark {idx} reports measured write throughput.",
+                word_count=7,
+            ))
+            evidence.append({
+                "kind": "web",
+                "url": url,
+                "excerpt": f"Benchmark {idx} reports measured write throughput",
+            })
+        finding = {
+            "title": "OLTP comparison",
+            "claim_type": "comparison",
+            "confidence": "medium",
+            "analysis": "Results depend on workload.",
+            "evidence": evidence,
+        }
+        actual = self.deep_research.validate_research_bundle(
+            research_kind="web",
+            results=sources,
+            contents=contents,
+            code_evidence={},
+            findings={"findings": [finding]},
+        )
+        self.assertEqual(
+            f["expected_confidence"].lower(),
+            actual["findings"][0]["effective_confidence"],
+        )
 
 
 if __name__ == "__main__":

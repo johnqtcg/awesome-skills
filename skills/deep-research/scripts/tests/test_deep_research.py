@@ -150,10 +150,10 @@ class TestDecodeDuckLink(unittest.TestCase):
 
 class TestInferSourceType(unittest.TestCase):
     def test_gov(self):
-        self.assertEqual("official", deep_research.infer_source_type("data.gov"))
+        self.assertEqual("government", deep_research.infer_source_type("data.gov"))
 
     def test_edu(self):
-        self.assertEqual("official", deep_research.infer_source_type("mit.edu"))
+        self.assertEqual("institutional", deep_research.infer_source_type("mit.edu"))
 
     def test_academic_arxiv(self):
         self.assertEqual("academic", deep_research.infer_source_type("arxiv.org"))
@@ -180,7 +180,18 @@ class TestInferSourceType(unittest.TestCase):
         self.assertEqual("blog", deep_research.infer_source_type("dev.to"))
 
     def test_docs_subdomain(self):
-        self.assertEqual("official", deep_research.infer_source_type("docs.python.org"))
+        self.assertEqual("website", deep_research.infer_source_type("docs.python.org"))
+
+    def test_docs_subdomain_is_not_automatically_t1(self):
+        source_type, tier, basis = deep_research.infer_source_quality("docs.example.com")
+        self.assertEqual("website", source_type)
+        self.assertEqual("T4", tier)
+        self.assertIn("unverified", basis)
+
+    def test_edu_is_institutional_t2_not_official_product_docs(self):
+        source_type, tier, _ = deep_research.infer_source_quality("mit.edu")
+        self.assertEqual("institutional", source_type)
+        self.assertEqual("T2", tier)
 
     def test_generic_website(self):
         self.assertEqual("website", deep_research.infer_source_type("randomsite.io"))
@@ -323,70 +334,42 @@ class TestValidateUrlFormat(unittest.TestCase):
 # ---------------------------------------------------------------------------
 
 class TestValidateFindings(unittest.TestCase):
-    def test_high_confidence_requires_independent_domains(self):
-        src1 = deep_research.SearchResult(
-            query="q", title="A", url="https://a.example.com/1",
-            normalized_url="https://a.example.com/1", domain="example.com", source_type="website",
-        )
-        src2 = deep_research.SearchResult(
-            query="q", title="B", url="https://b.example.com/2",
-            normalized_url="https://b.example.com/2", domain="example.com", source_type="website",
-        )
-        findings = {
-            "findings": [{
-                "title": "Same-domain",
-                "confidence": "high",
-                "analysis": "x",
-                "citations": [src1.url, src2.url],
-            }]
-        }
-        issues = deep_research.validate_findings(
-            findings, {src1.normalized_url: src1, src2.normalized_url: src2}
-        )
-        self.assertTrue(any("independent domains" in x for x in issues))
-
-    def test_missing_citations(self):
+    def test_missing_evidence(self):
         findings = {"findings": [{"title": "No cite", "confidence": "low", "analysis": "x"}]}
         issues = deep_research.validate_findings(findings, {})
-        self.assertTrue(any("missing citations" in x for x in issues))
+        self.assertTrue(any("missing evidence" in x for x in issues))
 
-    def test_citation_not_in_retrieval_set(self):
+    def test_legacy_citation_is_unverified(self):
         findings = {
             "findings": [{
-                "title": "Bad ref",
+                "title": "Legacy",
                 "confidence": "low",
                 "analysis": "x",
-                "citations": ["https://unknown.com"],
+                "citations": ["https://example.com"],
             }]
         }
         issues = deep_research.validate_findings(findings, {})
-        self.assertTrue(any("not found in retrieval set" in x for x in issues))
+        self.assertTrue(any("legacy citations are unverified" in x for x in issues))
 
     def test_non_dict_finding_flagged(self):
         findings = {"findings": ["bad"]}
         issues = deep_research.validate_findings(findings, {})
         self.assertTrue(any("must be an object" in x for x in issues))
 
-    def test_passes_with_valid_high_confidence(self):
-        s1 = deep_research.SearchResult(
-            query="q", title="A", url="https://a.com/1",
-            normalized_url="https://a.com/1", domain="a.com", source_type="website",
-        )
-        s2 = deep_research.SearchResult(
-            query="q", title="B", url="https://b.com/2",
-            normalized_url="https://b.com/2", domain="b.com", source_type="website",
-        )
+    def test_typed_evidence_passes_legacy_shape_check(self):
         findings = {
             "findings": [{
                 "title": "OK",
                 "confidence": "high",
                 "analysis": "x",
-                "citations": ["https://a.com/1", "https://b.com/2"],
+                "evidence": [{
+                    "kind": "web",
+                    "url": "https://a.com/1",
+                    "excerpt": "support",
+                }],
             }]
         }
-        issues = deep_research.validate_findings(
-            findings, {s1.normalized_url: s1, s2.normalized_url: s2}
-        )
+        issues = deep_research.validate_findings(findings, {})
         self.assertEqual([], issues)
 
     def test_empty_findings_returns_no_issues(self):
@@ -415,7 +398,7 @@ class TestBuildSourcesIndex(unittest.TestCase):
             normalized_url="https://x.com", domain="x.com", source_type="website",
         )
         index = deep_research.build_sources_index([src])
-        self.assertIn("n/a", index)
+        self.assertIn("unknown", index)
 
     def test_multiple_sources_numbered(self):
         sources = [
@@ -442,7 +425,8 @@ class TestRenderAnalysisMd(unittest.TestCase):
             "analysis_sections": [{
                 "title": "Section A",
                 "content": "Analysis body",
-                "citations": ["https://example.com"],
+                "verified_evidence": [{"kind": "web", "url": normalized}],
+                "usable": True,
             }]
         }
         url_map = {normalized: 1}
@@ -452,7 +436,7 @@ class TestRenderAnalysisMd(unittest.TestCase):
 
     def test_empty_sections(self):
         md = deep_research.render_analysis_md({}, {})
-        self.assertIn("No additional analysis sections", md)
+        self.assertIn("No analysis section had verified", md)
 
     def test_citation_not_in_map_omitted(self):
         findings = {
@@ -476,9 +460,10 @@ class TestRenderFindingsMd(unittest.TestCase):
         findings = {
             "findings": [{
                 "title": "F1",
-                "confidence": "high",
+                "effective_confidence": "high",
                 "analysis": "Detail",
-                "citations": ["https://example.com"],
+                "verified_evidence": [{"kind": "web", "url": normalized}],
+                "usable": True,
             }]
         }
         url_map = {normalized: 1}
@@ -489,7 +474,7 @@ class TestRenderFindingsMd(unittest.TestCase):
 
     def test_empty_findings(self):
         md = deep_research.render_findings_md({}, {})
-        self.assertIn("No structured findings", md)
+        self.assertIn("No finding had verified", md)
 
 
 # ---------------------------------------------------------------------------
@@ -545,23 +530,51 @@ class TestGenerateReport(unittest.TestCase):
     def test_contains_required_sections(self):
         src = deep_research.SearchResult(
             query="q", title="Source", url="https://example.com",
-            normalized_url="https://example.com", domain="example.com", source_type="website",
+            normalized_url="https://example.com", domain="example.com",
+            source_type="official", source_tier="T1",
+        )
+        content = deep_research.ContentResult(
+            url="https://example.com",
+            title="Source",
+            content="Verified support sentence for the finding.",
+            word_count=7,
         )
         findings = {
             "executive_summary": "Summary text",
-            "findings": [{"title": "F1", "confidence": "high", "analysis": "Detail", "citations": ["https://example.com"]}],
-            "analysis_sections": [{"title": "S1", "content": "Body", "citations": ["https://example.com"]}],
-            "consensus": "All agree",
-            "debate": "No major debate",
+            "findings": [{
+                "title": "F1",
+                "claim_type": "single_fact",
+                "confidence": "high",
+                "analysis": "Detail",
+                "evidence": [{
+                    "kind": "web",
+                    "url": "https://example.com",
+                    "excerpt": "Verified support sentence",
+                }],
+            }],
+            "analysis_sections": [{
+                "title": "S1",
+                "content": "Body",
+                "evidence": [{
+                    "kind": "web",
+                    "url": "https://example.com",
+                    "excerpt": "Verified support sentence",
+                }],
+            }],
+            "consensus": [],
+            "debate": [],
             "gaps": ["Gap 1"],
         }
-        md = deep_research.generate_report("Question", findings, [src], depth="standard")
-        self.assertIn("## Research Question", md)
-        self.assertIn("## Executive Summary", md)
-        self.assertIn("## Key Findings", md)
-        self.assertIn("## Detailed Analysis", md)
-        self.assertIn("## Sources", md)
-        self.assertIn("## Gaps & Limitations", md)
+        md = deep_research.generate_report(
+            "Question", findings, [src], depth="standard", contents=[content]
+        )
+        self.assertIn("## 1) Research Question", md)
+        self.assertIn("## 3) Executive Summary", md)
+        self.assertIn("## 4) Key Findings", md)
+        self.assertIn("## 5) Detailed Analysis", md)
+        self.assertIn("## 7) Source Quality Notes", md)
+        self.assertIn("## 8) Sources", md)
+        self.assertIn("## 9) Gaps & Limitations", md)
         self.assertIn("[1]", md)
         self.assertIn("Gap 1", md)
 
@@ -571,7 +584,8 @@ class TestGenerateReport(unittest.TestCase):
             normalized_url="https://example.com", domain="example.com", source_type="website",
         )
         md = deep_research.generate_report("Q", {}, [src], depth="quick")
-        self.assertIn("Research summary not provided", md)
+        self.assertIn("Research is blocked:", md)
+        self.assertIn("No finding had verified", md)
         self.assertIn("`quick`", md)
 
     def test_depth_mode_in_report(self):

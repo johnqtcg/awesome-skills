@@ -11,6 +11,7 @@
     - [6.7 Honest Degradation](#67-honest-degradation)
     - [6.8 Degrees of Freedom](#68-degrees-of-freedom)
     - [6.9 Five Execution-Orchestration Patterns (from Anthropic's Official Guide)](#69-five-execution-orchestration-patterns-from-anthropics-official-guide)
+    - [6.10 Boundary-Verified Evidence](#610-boundary-verified-evidence)
 - [7. Common Pitfalls and Anti-Patterns](#7-common-pitfalls-and-anti-patterns)
     - [7.1 Description Determines Whether a Skill Lives or Dies](#71-description-determines-whether-a-skill-lives-or-dies)
     - [7.2 `SKILL.md` Exceeds 500 Lines](#72-skillmd-exceeds-500-lines)
@@ -35,7 +36,7 @@
 
 ## 6. Design Patterns for High-Quality Skills
 
-From a systematic review of 10 production-grade, high-quality skills, we can extract **8 quality-assurance patterns** (6.1-6.8). In addition, Anthropic's official guide summarizes **5 execution-orchestration patterns** (6.9). The two are complementary: the first set governs **how well** the skill works, while the second governs **how execution is organized**.
+From production-grade skill reviews, we can extract **9 quality-assurance patterns** (6.1-6.8 and 6.10). In addition, Anthropic's official guide summarizes **5 execution-orchestration patterns** (6.9). The two are complementary: the first set governs **how well** the skill works, while the second governs **how execution is organized**.
 
 | # | Pattern | One-Line Summary | Frequency |
 |---|---------|------------------|-----------|
@@ -47,6 +48,7 @@ From a systematic review of 10 production-grade, high-quality skills, we can ext
 | 6.6 | Version/platform awareness | Recommendations are filtered based on the project's actual runtime version | 6/10 |
 | 6.7 | Honest degradation | When conditions are incomplete, return a clearly marked partial result instead of pretending it is complete | 5/10 |
 | 6.8 | Degrees of freedom | Use exact scripts for fragile actions and natural language for flexible ones | Official guidance |
+| 6.10 | Boundary-verified evidence | Treat structured records as claims until Git, filesystem, API, or process state independently verifies them | `deep-research` |
 
 ### 6.1 Mandatory Gate Architecture
 
@@ -397,6 +399,31 @@ The 8 patterns above focus on **quality assurance**: gates, anti-examples, score
 | **Domain-expertise injection** | The skill provides professional knowledge beyond raw tool access | Embedded domain rules, pre-action gates, audit trails, governance records |
 
 **Real-world mapping**: `go-code-reviewer` combines sequential workflow orchestration (10 serial gates), context-aware tool selection (loading different references based on code traits), and domain-expertise injection (2,100+ lines of expert knowledge across 8 domains). When designing a skill, first pick the orchestration pattern, then layer on the quality-assurance patterns.
+
+### 6.10 Boundary-Verified Evidence
+
+A well-formed artifact is not automatically trustworthy evidence. JSON such
+as `{"commit":"deadbee","status":"passed"}` proves only that fields were
+written. A production skill must cross the relevant authority boundary before
+using the record:
+
+| Claim | Authority check |
+|---|---|
+| Code belongs to a revision | Resolve the commit, read the declared blob, and compare path/line/excerpt |
+| Current file observation | Bound the path to the declared root and label it unpinned when dirty or untracked |
+| Test supports a runtime claim | Execute once through the host permission layer; require one receipt to cover the claim and the complete same-snapshot pinned code set, tested paths, and relevance review |
+| Session budget remains | Reserve usage in locked persistent state, not a per-command counter |
+
+Keep collection and verification separate. A broadly allowed validator must
+not become a generic command proxy; it should import a host-created receipt
+and perform static boundary checks. Render reports from normalized verified
+records, not from the original untrusted summaries. This prevents a convincing
+schema or an unrelated exit code 0 from becoming fabricated execution state.
+Validate the whole cited evidence set before filtering by quality: otherwise
+one pinned item can hide an unpinned item, or several partial receipts can be
+composed into a confidence level that no single execution supports. A narrow
+read-only snapshot helper may expose commit/tree/dirty identity, but it must
+not execute recorded commands or claim to prove historical execution.
 
 ---
 

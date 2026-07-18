@@ -2,7 +2,7 @@
 title: deep-research skill design rationale
 owner: awesome-skills maintainers
 status: active
-last_updated: 2026-03-27
+last_updated: 2026-07-18
 applicable_versions: current repository version
 ---
 
@@ -124,7 +124,7 @@ This addresses one of the most common and least visible research errors:
 - page titles often carry marketing language that does not reflect evidence strength,
 - secondary writeups frequently omit methodology, version boundaries, or experimental conditions.
 
-That is why the skill requires `fetch-content` before synthesis. If extraction fails for a critical source, the failure should be recorded in gaps instead of being silently treated as sufficient evidence.
+That is why the skill requires `fetch-content` before synthesis. More importantly, `content.json` is now a required `validate` and `report` input for web and hybrid work. A web evidence object must carry an exact excerpt that the validator can locate in successfully extracted content. If extraction fails, the URL cannot support the finding.
 
 This creates a sharp distinction between `deep-research` and ordinary "search-and-summarize" workflows. The requirement is not merely "locate sources." It is "actually read sources."
 
@@ -161,7 +161,7 @@ Without a degradation model, the model usually falls into one of two bad behavio
 
 ### 4.8 Output Contract for Consensus, Debate, Source Quality, and Gaps
 
-The current Output Contract requires 9 sections for `Standard` and `Deep` modes; `Quick` mode may omit sections 5 and 6. In the full report structure, the most design-significant among them are:
+The current Output Contract requires the same 9 top-level sections for `Quick`, `Standard`, and `Deep`. Quick may shorten Detailed Analysis and Consensus vs Debate, but it cannot omit or rename them. The most design-significant sections include:
 
 - `Consensus vs Debate`,
 - `Source Quality Notes`,
@@ -186,7 +186,7 @@ This shows that the skill does not interpret research as "search the web." In en
 - then validate options or best practices externally,
 - finally combine internal constraints and external evidence into a recommendation.
 
-Including codebase research and hybrid research in the same framework makes the skill fit real technical decision work rather than only public-information gathering.
+Including codebase research and hybrid research in the same framework makes the skill fit real technical decision work rather than only public-information gathering. Code lines, commits, and actual test results are first-class evidence records; pure codebase research does not invent or require web URLs.
 
 ### 4.10 References Use a "Base Always Loaded + Details On Demand" Pattern
 
@@ -202,16 +202,48 @@ This is a classic production-grade skill pattern: the base workflow and output c
 
 ### 4.11 The Workflow Is Bound to Subcommands vs. Pure Natural-Language Advice
 
-`deep-research` is not only a document of recommendations. It is explicitly tied to subcommands such as `retrieve`, `fetch-content`, `search-codebase`, `validate`, and `report`.
+`deep-research` is not only a document of recommendations. It is explicitly tied to `plan`, `reserve-budget`, `retrieve`, `fetch-content`, `search-codebase`, `snapshot-codebase`, `import-test-receipt`, `validate`, and `report`.
 
 That design matters because it turns research method into an executable process:
 
 - retrieval and extraction can be reproduced,
+- retrieval and extraction use a locked session ledger, so ceilings accumulate across repeated invocations,
+- host WebSearch/WebFetch fallbacks can reserve the same ledger before they run,
+- a read-only snapshot helper records repository root, HEAD, tree, and dirty
+  state without becoming a test runner,
+- test execution stays in the host permission layer; the helper only imports and statically verifies its receipt,
+- report generation selects only cited verified evidence and enforces the mode's source ceiling,
 - validation can be run independently,
-- report generation has explicit inputs and outputs,
+- report generation automatically runs the same evidence validator,
 - future regression testing and automation become much easier.
 
 That is one of the clearest ways it goes beyond an ordinary prompt: it defines not only how to think, but how to execute.
+
+### 4.12 Confidence and Source Quality Use One Conservative Contract
+
+The skill deliberately resolves the former High-confidence conflict:
+
+- a narrow fact can be High with one verified T1 primary source,
+- a direct code fact can be High only after the validator resolves the hexadecimal commit, reads `<commit>:<path>`, and matches the declared line/excerpt,
+- dirty or untracked bytes are labeled `working-tree-unpinned`, never attributed to HEAD,
+- runtime behavior needs every cited code item pinned to one commit/tree plus
+  one reviewed host receipt that covers the finding, complete code-ID set, and
+  all tested paths on that same clean snapshot,
+- every other High finding needs two independent verified units including a primary unit.
+
+Automated source classification is only a preclassification. An arbitrary `docs.*` host is not assumed official, `.edu` is institutional rather than automatically official product documentation, and every source records T1–T5, classification basis, sponsorship, methodology, and a date or `unknown`.
+
+### 4.13 Behavioral Tests Exercise Decisions Instead of Fixture Labels
+
+Golden requests are passed into the real planner, confidence assessor, and degradation state machine. Negative tests prove that missing content, failed extraction, excerpt mismatch, nonexistent paths/commits, mismatched commit subjects, wrong code lines, legacy handwritten test status, missing semantic coverage, a pinned-plus-unpinned runtime code set, split receipts, mixed code snapshots, dirty/mismatched test snapshots, and a 51st query cannot silently pass. Tests also prove that the read-only snapshot helper distinguishes clean and dirty repositories and fails closed outside Git. A real multiprocess race verifies that budgets accumulate safely across commands; external reservations share the ledger, report-source ceilings execute, multilingual repository/deep requests classify correctly, extraction-budget exhaustion propagates, and the exact ordered nine headings are rendered.
+
+### 4.14 Responsibility Modules Limit Cross-Subsystem Regressions
+
+Planning and multilingual classification, session accounting, repository
+snapshot/test-receipt verification, and report-source selection now live in focused modules under
+`scripts/deep_research_lib/`. The CLI remains a compatibility entry point.
+This makes trust boundaries independently testable and avoids adding new
+budget or Git rules directly to unrelated retrieval/report rendering code.
 
 ## 5. Problems This Design Solves
 
@@ -227,7 +259,10 @@ Combining the current `SKILL.md` with its supporting references, the skill addre
 | Research steps are not auditable | Execution Integrity Gate | Makes execution state, depth, and citation count explicit |
 | Thin evidence is stretched into certainty | Honest Degradation | Clearly separates Full / Partial / Blocked |
 | Reports are hard to reuse or compare | Output Contract | Makes research outputs structurally consistent |
-| External research is disconnected from the codebase | Codebase / Hybrid Research categories + `search-codebase` | Makes the workflow fit real engineering decision work |
+| External research is disconnected from the codebase | First-class code / commit / test evidence | Makes the workflow fit pure and hybrid engineering research |
+| Documented budgets are advisory only | Locked session ledger + parser defense-in-depth | Rejects cumulative over-budget retrieval/extraction and over-limit reports |
+| Repository JSON is trusted as execution truth | Git blob reread + bounded working-tree checks + read-only snapshot helper + complete-code-set host-receipt binding | Rejects forged paths, commits, lines, subjects, generic pass states, unpinned mixing, split-receipt coverage, and cross-snapshot claims without turning the helper into a command proxy |
+| Fixtures test their own labels | Executable behavioral scenarios | Verifies input → decision → output |
 
 ## 6. Key Highlights
 
@@ -245,7 +280,7 @@ Mandatory content extraction is one of the skill's strongest quality controls. I
 
 ### 6.4 Its Structured Delivery Is Well Suited to Long-Term Reuse
 
-In `Standard` and `Deep` modes, Research Question, Method, Executive Summary, Key Findings, Detailed Analysis, Consensus vs Debate, Source Quality Notes, Sources, and Gaps & Limitations together create a report shape that is easy to review, compare, and update; `Quick` mode deliberately allows a lighter-weight version for speed.
+Research Question, Method, Executive Summary, Key Findings, Detailed Analysis, Consensus vs Debate, Source Quality Notes, Sources, and Gaps & Limitations together create a report shape that is easy to review, compare, and update in every mode; `Quick` shortens content without changing the contract.
 
 ### 6.5 It Fits Hybrid Engineering Research Especially Well
 
@@ -265,7 +300,7 @@ The existing evaluation report most strongly validates the skill's **structural 
 | External research informed by current codebase state | Yes | Hybrid research is one of its intended scenarios |
 | Producing a reusable research report | Yes | The Output Contract is designed for this |
 | Asking a quick general-knowledge question | Not always necessary | A direct answer may be lighter-weight |
-| Work that depends entirely on private internal material with no external retrieval path | Limited fit | It needs additional data access mechanisms |
+| Work that depends entirely on an accessible private repository | Yes | Pure codebase mode uses code, commit, and test evidence without web retrieval |
 | Purely creative ideation | No | That is outside the skill's design goal |
 
 ## 8. Conclusion
@@ -280,7 +315,7 @@ This document should be updated when:
 
 - the Mandatory Gates, Research Modes, budgets, Safety Rules, or Output Contract in `skills/deep-research/SKILL.md` change,
 - the key protocols in `skills/deep-research/references/output-contract-template.md`, `hallucination-and-verification.md`, or `research-patterns.md` change,
-- the subcommands, execution flow, or output fields in `skills/deep-research/scripts/deep_research.py` change,
+- the subcommands, execution flow, or output fields in `skills/deep-research/scripts/deep_research.py` or `scripts/deep_research_lib/` change,
 - key supporting conclusions in `evaluate/deep-research-skill-eval-report.md` change,
 - the skill evolves further and the gap between the evaluation snapshot and the current implementation becomes materially larger.
 
@@ -293,4 +328,5 @@ Review quarterly; review immediately if the gate structure, reference set, or sc
 - `skills/deep-research/references/hallucination-and-verification.md`
 - `skills/deep-research/references/research-patterns.md`
 - `skills/deep-research/scripts/deep_research.py`
+- `skills/deep-research/scripts/deep_research_lib/`
 - `evaluate/deep-research-skill-eval-report.md`

@@ -2,7 +2,7 @@
 title: deep-research skill 设计解析
 owner: awesome-skills maintainers
 status: active
-last_updated: 2026-03-27
+last_updated: 2026-07-18
 applicable_versions: current repository version
 ---
 
@@ -124,7 +124,7 @@ applicable_versions: current repository version
 - 页面标题容易带营销语气，不能代表正文证据强度
 - 二手文章会丢失 benchmark 方法学、版本范围或实验条件
 
-因此，skill 要求先通过 `fetch-content` 提取页面正文，再进行 synthesis。它甚至明确规定：关键来源提取失败时，应该把问题记入 gaps，而不是假装证据已经成立。
+因此，skill 要求先通过 `fetch-content` 提取页面正文，再进行 synthesis。更重要的是，`content.json` 现在是 Web 和 Hybrid 研究中 `validate` 与 `report` 的强制输入。每条 Web 证据必须携带精确摘录，验证器会确认该摘录确实存在于成功提取的正文中；提取失败的 URL 不能支撑 finding。
 
 这让 `deep-research` 和“会搜索”的普通工作流形成了本质区别。它要求的不是“看到来源”，而是“真的读过来源”。
 
@@ -161,7 +161,7 @@ applicable_versions: current repository version
 
 ### 4.8 拆分共识、争议、来源质量与缺口的输出合同
 
-当前 skill 在 `Standard` 和 `Deep` 模式下要求 9 个部分；`Quick` 模式可以省略第 5、6 部分。在完整报告结构里，最有设计价值的几块是：
+当前 skill 在 `Quick`、`Standard` 和 `Deep` 三种模式下都要求同一套 9 个顶层部分。Quick 可以缩短 Detailed Analysis 与 Consensus vs Debate，但不能省略或改名。最有设计价值的部分包括：
 
 - `Consensus vs Debate`
 - `Source Quality Notes`
@@ -186,7 +186,7 @@ applicable_versions: current repository version
 - 再用外部资料校验最佳实践或替代方案
 - 最后把内部约束和外部证据拼起来形成建议
 
-把 codebase research 和 hybrid research 纳入同一框架，能让 skill 直接覆盖更接近真实研发决策的场景，而不只适合做公开信息收集。
+把 codebase research 和 hybrid research 纳入同一框架，能让 skill 直接覆盖更接近真实研发决策的场景，而不只适合做公开信息收集。代码行、commit 和真实测试结果都是一等证据记录；纯代码库研究无需虚构或强制添加 Web URL。
 
 ### 4.10 references 采用“基础必载 + 细则按需”的加载方式
 
@@ -202,16 +202,46 @@ applicable_versions: current repository version
 
 ### 4.11 把研究流程做成脚本化子命令 vs 只写自然语言步骤
 
-`deep-research` 不只是文档规则，还显式绑定了 `retrieve`、`fetch-content`、`search-codebase`、`validate`、`report` 这些子命令。
+`deep-research` 不只是文档规则，还显式绑定了 `plan`、`reserve-budget`、`retrieve`、`fetch-content`、`search-codebase`、`snapshot-codebase`、`import-test-receipt`、`validate`、`report` 这些子命令。
 
 这层设计的价值在于，它把“研究方法”从抽象建议落到可执行步骤：
 
 - 检索与提取可以复现
+- 检索与提取使用加锁的会话账本，重复调用会累计消耗同一预算
+- 宿主 WebSearch/WebFetch 回退可在执行前预留同一账本预算
+- 只读 snapshot helper 可记录仓库 root、HEAD、tree 与 dirty 状态，而不会变成测试执行器
+- 测试命令由宿主权限层直接执行；研究 helper 只导入并静态校验 receipt
+- 报告只选择被引用且验证通过的证据，并执行模式来源上限
 - 验证步骤可以独立运行
-- 报告生成有明确输入输出
+- 报告生成会自动调用同一套证据验证器
 - 后续可以更容易做自动化测试和回归验证
 
 这也是它比普通提示词更强的一点：不仅规定“应该怎么想”，还规定“应该怎么执行”。
+
+### 4.12 置信度与来源质量采用一套保守合同
+
+Skill 明确解决了此前 High-confidence 规则冲突：
+
+- 狭义单一事实可由一份已验证的 T1 一手来源达到 High
+- 直接代码事实只有在验证器解析十六进制 commit、回读 `<commit>:<path>` 并匹配声明行与摘录后才能达到 High
+- 脏文件或未跟踪内容会标记为 `working-tree-unpinned`，不会被错误归属到 HEAD
+- 运行时行为要求每个被引用代码项都固定到同一 commit/tree，并由一个
+  宿主 receipt 覆盖 finding、完整 code-ID 集合和全部 tested paths，
+  通过相关性审核且绑定该干净快照
+- 其他 High finding 必须有两份独立的已验证证据，且至少一份是一手证据
+
+自动来源分类只用于预分类。任意 `docs.*` 不会自动变成官方来源，`.edu` 只标记为机构来源；每个来源都输出 T1–T5、分类依据、赞助关系、方法学，以及日期或 `unknown`。
+
+### 4.13 行为测试验证真实决策，而不是 fixture 标签
+
+Golden request 会被直接交给真实的 planner、置信度评估器和降级状态机。负向测试证明：缺少正文、提取失败、摘录不匹配、不存在的路径/commit、错误 commit subject、错误代码行、旧式手写通过状态、缺少语义覆盖、pinned 与 unpinned 代码混入、多个 receipt 拼接覆盖、代码跨快照、脏或错配测试快照以及第 51 个查询都不能静默通过。测试还证明只读 snapshot helper 能区分干净/脏仓库，并在非 Git 目录 fail closed；真实多进程竞争则验证预算跨命令安全累计、外部预留进入同一账本、报告来源上限可执行、多语言仓库/深度请求分类正确、提取预算耗尽会传入报告，并断言九个顶层标题完整且有序。
+
+### 4.14 按职责拆分模块，限制跨子系统回归
+
+规划与多语言分类、会话预算、仓库 snapshot/测试 receipt 验证、报告来源选择已经拆到
+`scripts/deep_research_lib/` 下的独立模块；CLI 保留兼容入口。这样每个
+信任边界都可以独立测试，也避免继续把 Git 或预算规则直接堆进无关的
+检索和报告渲染代码。
 
 ## 5. 这个设计解决了哪些具体问题
 
@@ -227,7 +257,10 @@ applicable_versions: current repository version
 | 研究步骤不可审计 | 执行真实性门禁 | 交代是否执行、执行到哪一步、引用了多少来源 |
 | 证据不足时硬凑结论 | Honest Degradation | 明确区分 Full / Partial / Blocked |
 | 报告难以复用和比较 | 输出契约 | 固定结构便于横向比较和沉淀 |
-| 只会做外部检索，不会结合代码库 | Codebase / Hybrid Research 分类 + `search-codebase` | 让研究更贴近真实研发决策 |
+| 只会做外部检索，不会结合代码库 | 一等 code / commit / test 证据 | 同时支持纯代码库与混合研发研究 |
+| 文档预算只是建议 | 加锁会话账本 + parser 纵深校验 | 拒绝累计超预算检索/提取和来源超限报告 |
+| 把仓库 JSON 当作执行事实 | Git blob 回读 + 受根目录约束的工作区校验 + 只读 snapshot helper + 完整代码集 receipt 绑定 | 拒绝伪造路径、commit、行号、subject、通用通过状态、unpinned 混入、receipt 拼接覆盖和跨快照主张，同时避免 helper 变成命令代理 |
+| fixture 只验证自己的标签 | 可执行行为场景 | 验证输入 → 决策 → 输出 |
 
 ## 6. 主要亮点
 
@@ -245,7 +278,7 @@ applicable_versions: current repository version
 
 ### 6.4 结构化交付非常适合沉淀为长期资产
 
-在 `Standard` 和 `Deep` 模式下，Research Question、Method、Executive Summary、Key Findings、Detailed Analysis、Consensus vs Debate、Source Quality Notes、Sources、Gaps & Limitations 这套结构天然适合复盘、复用和更新；`Quick` 模式则允许为速度省略其中的部分展开区段。
+Research Question、Method、Executive Summary、Key Findings、Detailed Analysis、Consensus vs Debate、Source Quality Notes、Sources、Gaps & Limitations 在所有模式下都保持一致，天然适合复盘、复用和更新；`Quick` 只缩短内容，不改变合同。
 
 ### 6.5 很适合做混合型研发研究
 
@@ -265,7 +298,7 @@ applicable_versions: current repository version
 | 结合代码库现状做外部调研 | 适合 | Hybrid research 正是它的重点场景 |
 | 需要形成可复用研究报告 | 适合 | 输出契约 很适合沉淀 |
 | 只想随手问一个常识问题 | 不一定需要 | 直接回答通常更轻量 |
-| 完全依赖内部私有资料、无法外部检索 | 适用性有限 | 需要额外数据接入方式 |
+| 完全依赖可访问的内部私有代码库 | 适合 | 纯代码库模式使用代码、commit 和测试证据，不做 Web 检索 |
 | 只需要主观创意发散 | 不适合 | 这不是它的设计目标 |
 
 ## 8. 结论
@@ -280,7 +313,7 @@ applicable_versions: current repository version
 
 - `skills/deep-research/SKILL.md` 中的 强制门禁、研究模式、预算、安全规则 或 输出契约 发生变化。
 - `skills/deep-research/references/output-contract-template.md`、`hallucination-and-verification.md`、`research-patterns.md` 中的关键协议发生变化。
-- `skills/deep-research/scripts/deep_research.py` 的子命令、执行方式或输出字段发生变化。
+- `skills/deep-research/scripts/deep_research.py` 或 `scripts/deep_research_lib/` 的子命令、执行方式或输出字段发生变化。
 - `evaluate/deep-research-skill-eval-report.zh-CN.md` 中支撑本文判断的关键结论发生变化。
 - skill 的结构再次演进，导致评估快照与当前实现差异继续扩大。
 
@@ -293,4 +326,5 @@ applicable_versions: current repository version
 - `skills/deep-research/references/hallucination-and-verification.md`
 - `skills/deep-research/references/research-patterns.md`
 - `skills/deep-research/scripts/deep_research.py`
+- `skills/deep-research/scripts/deep_research_lib/`
 - `evaluate/deep-research-skill-eval-report.zh-CN.md`

@@ -37,6 +37,11 @@ RESULTS_FIXTURE = {
             "url": "https://go.dev/doc/database/manage-connections",
             "snippet": "SetMaxOpenConns sets the maximum number of open connections.",
             "date": "2025-01-01",
+            "source_type": "official",
+            "source_tier": "T1",
+            "classification_basis": "explicit",
+            "sponsorship": "none",
+            "methodology": "primary documentation",
         },
         {
             "query": "go connection pool",
@@ -63,8 +68,60 @@ class SubcommandSmokeTests(unittest.TestCase):
         self._tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmp.cleanup)
         self.tmp = Path(self._tmp.name)
+        self.session = self.tmp / "session.json"
+        plan_proc = run_cli(
+            "plan",
+            "--request",
+            "Research Go connection pooling.",
+            "--mode",
+            "standard",
+            "--output",
+            str(self.session),
+        )
+        self.assertEqual(0, plan_proc.returncode, plan_proc.stderr)
         self.results = self.tmp / "results.json"
         self.results.write_text(json.dumps(RESULTS_FIXTURE), encoding="utf-8")
+        self.content = self.tmp / "content.json"
+        self.content.write_text(
+            json.dumps({
+                "items": [{
+                    "url": "https://go.dev/doc/database/manage-connections",
+                    "title": "Managing connections",
+                    "content": (
+                        "SetMaxOpenConns sets the maximum number of open "
+                        "connections to the database."
+                    ),
+                    "word_count": 12,
+                    "error": "",
+                }]
+            }),
+            encoding="utf-8",
+        )
+        self.findings = self.tmp / "findings.json"
+        self.findings.write_text(
+            json.dumps({
+                "executive_summary": "Go exposes explicit connection-pool limits.",
+                "findings": [{
+                    "title": "Open connection limit",
+                    "claim_type": "single_fact",
+                    "confidence": "high",
+                    "analysis": "SetMaxOpenConns caps open database connections.",
+                    "evidence": [{
+                        "kind": "web",
+                        "url": "https://go.dev/doc/database/manage-connections",
+                        "excerpt": (
+                            "SetMaxOpenConns sets the maximum number of open "
+                            "connections"
+                        ),
+                    }],
+                }],
+                "analysis_sections": [],
+                "consensus": [],
+                "debate": [],
+                "gaps": [],
+            }),
+            encoding="utf-8",
+        )
 
     @unittest.skipUnless(shutil.which("rg"),
                          "ripgrep not installed — the subcommand itself "
@@ -98,7 +155,17 @@ class SubcommandSmokeTests(unittest.TestCase):
 
     def test_validate_writes_output(self) -> None:
         out = self.tmp / "validate.json"
-        proc = run_cli("validate", "--results", str(self.results), "--output", str(out))
+        proc = run_cli(
+            "validate",
+            "--results",
+            str(self.results),
+            "--content",
+            str(self.content),
+            "--findings",
+            str(self.findings),
+            "--output",
+            str(out),
+        )
         self.assertEqual(0, proc.returncode, proc.stderr)
         payload = json.loads(out.read_text(encoding="utf-8"))
         self.assertEqual(2, payload["checked_count"])
@@ -106,10 +173,15 @@ class SubcommandSmokeTests(unittest.TestCase):
     def test_report_writes_markdown(self) -> None:
         out = self.tmp / "report.md"
         proc = run_cli("report", "--question", "How does Go pool DB connections?",
-                       "--results", str(self.results), "--output", str(out))
+                       "--results", str(self.results),
+                       "--content", str(self.content),
+                       "--findings", str(self.findings),
+                       "--session", str(self.session),
+                       "--output", str(out))
         self.assertEqual(0, proc.returncode, proc.stderr)
         text = out.read_text(encoding="utf-8")
         self.assertIn("How does Go pool DB connections?", text)
+        self.assertIn("## 7) Source Quality Notes", text)
         self.assertIn("go.dev", text)
 
     def test_fetch_content_unreachable_url_still_writes_output(self) -> None:
@@ -118,12 +190,30 @@ class SubcommandSmokeTests(unittest.TestCase):
         # All-URLs-failed returns rc=2 by design, but the output JSON with the
         # per-URL error records must already be on disk (write before verdict).
         proc = run_cli("fetch-content", "--url", "http://127.0.0.1:9/x",
-                       "--timeout", "1", "--workers", "1", "--output", str(out))
+                       "--timeout", "1", "--workers", "1",
+                       "--session", str(self.session), "--output", str(out))
         self.assertEqual(2, proc.returncode, proc.stderr)
         payload = json.loads(out.read_text(encoding="utf-8"))
         self.assertEqual(1, payload["count"])
         self.assertTrue(payload["items"][0]["error"], "error must be recorded for the failed URL")
         self.assertIn("output=", proc.stdout)
+
+    def test_reserve_budget_writes_receipt(self) -> None:
+        out = self.tmp / "budget.json"
+        proc = run_cli(
+            "reserve-budget",
+            "--session",
+            str(self.session),
+            "--budget",
+            "retrieval_calls",
+            "--count",
+            "1",
+            "--output",
+            str(out),
+        )
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        payload = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(1, payload["reserved"])
 
 
 class ParserHandlerDriftGuards(unittest.TestCase):
@@ -131,11 +221,37 @@ class ParserHandlerDriftGuards(unittest.TestCase):
     subcommand must expose `args.output`, matching what handlers read."""
 
     CASES = {
-        "retrieve": ["retrieve", "--query", "q", "--output", "/tmp/x.json"],
-        "validate": ["validate", "--results", "r.json", "--output", "/tmp/x.json"],
-        "report": ["report", "--question", "q", "--results", "r.json", "--output", "/tmp/x.md"],
-        "fetch-content": ["fetch-content", "--url", "http://e.com", "--output", "/tmp/x.json"],
+        "retrieve": [
+            "retrieve", "--query", "q", "--session", "/tmp/session.json",
+            "--output", "/tmp/x.json",
+        ],
+        "validate": [
+            "validate", "--results", "r.json", "--content", "c.json",
+            "--findings", "f.json", "--output", "/tmp/x.json",
+        ],
+        "report": [
+            "report", "--question", "q", "--results", "r.json",
+            "--content", "c.json", "--findings", "f.json",
+            "--session", "/tmp/session.json", "--output", "/tmp/x.md",
+        ],
+        "fetch-content": [
+            "fetch-content", "--url", "http://e.com",
+            "--session", "/tmp/session.json", "--output", "/tmp/x.json",
+        ],
         "search-codebase": ["search-codebase", "--pattern", "p", "--output", "/tmp/x.json"],
+        "snapshot-codebase": [
+            "snapshot-codebase", "--root", ".", "--output", "/tmp/x.json",
+        ],
+        "import-test-receipt": [
+            "import-test-receipt", "--receipt", "receipt.json",
+            "--code-evidence", "code.json", "--output", "/tmp/x.json",
+        ],
+        "reserve-budget": [
+            "reserve-budget", "--session", "/tmp/session.json",
+            "--budget", "retrieval_calls", "--count", "1",
+            "--output", "/tmp/x.json",
+        ],
+        "plan": ["plan", "--request", "q", "--output", "/tmp/x.json"],
     }
 
     def test_every_subcommand_accepts_output_flag(self) -> None:

@@ -147,40 +147,70 @@ When researching security practices, vulnerabilities, or compliance:
 
 ## 8. Codebase Research Patterns
 
-When combining internal codebase analysis with external research:
+Choose the research kind before collecting evidence.
 
-**Workflow**:
-1. Use `search-codebase` to identify internal patterns
-2. Formulate external queries based on patterns found
-3. Cross-reference internal implementation with external best practices
-4. Report deviations with evidence
+- `codebase`: answer only from code, commits, and actual test runs; do not retrieve web sources.
+- `hybrid`: inspect the repository first, then collect only the external evidence needed for comparison or recommendation.
 
-**Query Strategy**:
+**Repository evidence**:
+
+The `search-codebase` helper uses ripgrep and emits structured matches.
+
 ```bash
-# Internal patterns
 python3 scripts/deep_research.py search-codebase \
-  --pattern "error handling" --root /path/to/repo --glob "*.go"
-
-# Then external validation
-python3 scripts/deep_research.py retrieve \
-  --query "Go error handling best practices 2024" \
-  --query "Go error wrapping vs sentinel errors"
+  --pattern "error handling" \
+  --root /path/to/repo \
+  --glob "*.go" \
+  --output /tmp/code_evidence.json
 ```
 
-## 9. AI Tool Selection for Deep Research
+Use the emitted `code-*` and `commit-head` IDs in findings. Inspect each
+record's `snapshot`: dirty or untracked bytes are deliberately labeled
+`working-tree-unpinned`; never rewrite that label to the current HEAD.
 
-Different AI tools have distinct strengths for research:
+Run a focused test once through the host's normal permission path, then import
+the versioned receipt:
 
-| Research Need | Primary Tool | Fallback | Why |
-|--------------|-------------|----------|-----|
-| Source-backed facts with citations | Perplexity | ChatGPT (web) | Perplexity attaches source links to every claim |
-| Deep technical analysis | Claude / ChatGPT Deep Research | Each other | Strong reasoning + comprehensive source coverage |
-| Broadest source coverage | Gemini Deep Research | ChatGPT | Google search index is the widest |
-| Real-time social/community signals | Grok | Perplexity | X platform data access |
-| Chinese-language research | Gemini / Baidu | Perplexity | Better Chinese content coverage |
-| Private document analysis | NotebookLM / Claude | ChatGPT | Upload-based Q&A without hallucination risk |
+```bash
+python3 scripts/deep_research.py snapshot-codebase \
+  --root /path/to/repo \
+  --output /tmp/repository_snapshot_before.json
 
-**Best Practice**: For important research, run Deep Research on 2 different tools and compare conclusions. Differences highlight the key decision points.
+go test -run TestAuth ./internal/auth
+
+python3 scripts/deep_research.py snapshot-codebase \
+  --root /path/to/repo \
+  --output /tmp/repository_snapshot_after.json
+
+python3 scripts/deep_research.py import-test-receipt \
+  --receipt /tmp/host_test_receipt.json \
+  --code-evidence /tmp/code_evidence.json \
+  --output /tmp/code_and_test_evidence.json
+```
+
+The snapshots are read-only identity metadata, not test proof. For High they
+must be clean and unchanged. One receipt must name the framework selector,
+every cited code path, the stable finding and complete code-ID set in
+`covers`, matching commit/tree and dirty state, plus an approved relevance
+rationale. Separate receipts cannot collectively satisfy this rule.
+`validate` and `report` consume the receipt statically and do not execute it
+again. A commit alone proves history, and exit code 0 alone proves only process
+success, not claim coverage.
+
+## 9. Tool Selection Principles
+
+Choose tools based on the artifact required, availability, and access constraints:
+
+| Required artifact | Capability |
+|---|---|
+| Search candidates | Current web search |
+| Static page text | Direct content fetch |
+| JavaScript-rendered text | Browser-capable extraction |
+| Code fact | Repository search/read |
+| Runtime behavior | Local test execution |
+| Commit fact | Version-control inspection |
+
+Record which capability ran and whether it produced the artifact. Do not publish an unsourced ranking of named AI research products or treat a tool-generated citation as proof that its page was read.
 
 ## Quick Reference: Query Syntax
 

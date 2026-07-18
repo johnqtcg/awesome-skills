@@ -4,7 +4,8 @@
     "Evidence Requirements",
     "Minimum Evidence Chain",
     "Target Confidence",
-    "re:(?i)high.*confidence.*2.*independent|independent.*domain.*2",
+    "one verified T1 primary web source",
+    "typed evidence",
     "Numeric Claim Labels"
   ]
 }

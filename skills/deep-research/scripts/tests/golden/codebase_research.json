@@ -1,9 +1,11 @@
 {
-  "scenario": "Combining internal codebase analysis with external research",
+  "scenario": "Using first-class repository evidence for codebase and hybrid research",
   "required_keywords": [
     "Codebase Research",
     "search-codebase",
     "ripgrep",
-    "re:(?i)internal.*pattern|pattern.*internal"
+    "code evidence",
+    "commit",
+    "test"
   ]
 }

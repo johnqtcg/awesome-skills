@@ -1,287 +1,402 @@
 ---
 name: deep-research
 description: |
-  Real-time research workflow for source-backed analysis.
-  Use when users ask to research a topic, compare options, investigate claims, analyze trends, or produce synthesis with real citations.
-  Handles web research, codebase research, and hybrid (web + codebase) scenarios with mandatory content extraction, hallucination-aware verification, and structured report delivery.
-allowed-tools: Read, Grep, Glob, WebSearch, WebFetch, Bash(*deep_research.py*), Bash(git log*), Bash(go test*), Bash(python -c*), Bash(python3 -c*)
+  Perform auditable research with executable mode budgets, mandatory source-content verification, typed web and repository evidence, confidence assessment, honest degradation, and one fixed nine-section report.
+  Use for web research, claim verification, technical comparisons, trend analysis, pure codebase research, and hybrid codebase-plus-web investigations that need traceable conclusions rather than search-result summaries.
+allowed-tools: Read, Write, Grep, Glob, WebSearch, WebFetch, Bash(*deep_research.py plan*), Bash(*deep_research.py reserve-budget*), Bash(*deep_research.py retrieve*), Bash(*deep_research.py fetch-content*), Bash(*deep_research.py search-codebase*), Bash(*deep_research.py snapshot-codebase*), Bash(*deep_research.py import-test-receipt*), Bash(*deep_research.py validate*), Bash(*deep_research.py report*), Bash(git log*), Bash(go test*), Bash(python3 -m unittest*), Bash(python3 -m pytest*)
 ---
 
 # Deep Research
 
-Source-backed research workflow with mandatory content extraction and hallucination-aware verification.
+Produce research whose claims can be traced to content actually read or repository artifacts actually observed.
 
 ## Quick Reference
 
-| If you need to… | Go to |
+| Need | Action |
 |---|---|
-| Understand mode budget limits (Quick 5–10 / Standard 15–25 / Deep 30–50 calls) | §4 Research Mode Gate |
-| Understand what the 9-section output must include | §Output Contract + Load `references/output-contract-template.md` |
-| Verify claims or guard against hallucination | Load `references/hallucination-and-verification.md` |
-| Research error messages, API docs, or Go/Python/JS code | Load `references/research-patterns.md` |
+| Classify `web | codebase | hybrid` and `quick | standard | deep` | Run `plan` before retrieval |
+| Enforce cumulative query, extraction, and report-source ceilings | Reuse the session artifact created by `plan --output` |
+| Author findings JSON | Load `references/output-contract-template.md` |
+| Assess hallucination, confidence, or source quality | Load `references/hallucination-and-verification.md` |
+| Apply programmer-specific query/evidence patterns | Load `references/research-patterns.md` |
+| Claim runtime behavior from tests | Load `references/test-receipt-schema.md` |
 
 ## Mandatory Gates
 
-Gates execute in strict serial order. Any gate failure blocks all subsequent steps.
+Execute gates in strict order. Stop when a gate blocks later work.
 
 ```
-1) Scope        2) Ambiguity     3) Evidence      4) Research
-   Classification → Resolution  → Requirements  → Mode
-   │                │              │               │
-   category+goal    unclear?       what proof?     quick/std/deep?
-   → classify       → STOP+ASK   → define chain   → auto-select
-        │                │              │               │
-        5) Hallucination 6) Budget      7) Content      8) Execution
-           Awareness   →    Control  →    Extraction →    Integrity
-           │                │              │               │
-           verify claims    max calls      read sources    actually ran?
-           → never trust    → enforce      → mandatory     → report honestly
+1) Scope → 2) Ambiguity → 3) Evidence → 4) Research Mode
+    → 5) Hallucination Awareness → 6) Budget Control
+    → 7) Content Extraction → 8) Execution Integrity
 ```
 
 ### 1) Scope Classification Gate
 
-Map the request into one primary category and one goal before any retrieval.
+Select one research kind and one goal.
 
-**Categories**:
-- Comparative research: tools, technologies, vendors, frameworks
-- Trend analysis: market trends, technology adoption, industry shifts
-- Claim verification: fact-checking specific assertions with sources
-- Technical deep-dive: architecture analysis, performance investigation, protocol study
-- Codebase research: internal code patterns, dependency analysis, refactoring impact
-- Hybrid research: codebase evidence enriched with external web sources
+- Research kind: `web | codebase | hybrid`
+- Category: comparison, trend, claim verification, technical deep-dive, codebase audit
+- Goal: Know, Compare, Verify, Recommend, or Audit
 
-**Goals**: Know | Compare | Verify | Recommend | Audit
+Run the executable classifier:
+
+```bash
+python3 scripts/deep_research.py plan \
+  --request "<user request>" \
+  --output /tmp/research_plan.json
+```
+
+The output is a versioned session ledger, not a disposable plan. Reuse that
+exact file for every budget-consuming command in the research run.
+
+Use `codebase` when the answer depends only on local code, commits, or test results. Do not perform web retrieval merely to manufacture URLs. Use `hybrid` only when external evidence is part of the question.
 
 ### 2) Ambiguity Resolution Gate
 
-**STOP and ASK** if:
-- The research scope is too broad (e.g., "research microservices")
-- The comparison dimensions are unclear
-- The time frame is unspecified for trend analysis
-- The success criteria for the research are not defined
-
-Confirm scope, dimensions, and depth before proceeding.
+**STOP and ASK** when scope, comparison dimensions, time window, or success criteria would materially change the research. Do not ask again for constraints already supplied.
 
 ### 3) Evidence Requirements Gate
 
-Before any retrieval, define the minimum evidence chain:
+Define the evidence chain before retrieval.
 
 | Conclusion Type | Minimum Evidence Chain | Target Confidence |
-|----------------|----------------------|-------------------|
-| Single factual claim | 1 official or primary source + content verified | High |
-| Best practice recommendation | 1 official basis + 2 practitioner reports | Medium-High |
-| Technology comparison | 3+ independent benchmarks or reviews | Medium |
-| Trend or adoption claim | 2+ data sources from different time periods | Medium |
-| Disputed or fast-moving topic | 4+ sources from different tiers + conflict resolution | Tiered with ranges |
+|---|---|---|
+| Narrow single fact | 1 T1 primary source + successful content extraction + exact supporting excerpt | High |
+| Direct code fact | Code line/excerpt verified by reading the declared Git blob at an existing hexadecimal commit | High |
+| Runtime code behavior | Every cited code item is pinned to one commit/tree + one host test receipt covers the finding and every code ID, names every tested path, passes relevance review, and matches that clean snapshot | High |
+| Best-practice recommendation | 1 primary basis + 2 independent practitioner or empirical sources | Medium–High |
+| Technology comparison | 3 independent benchmarks/reviews with methodology | Medium |
+| Trend/adoption claim | 2 data sources from different periods | Medium |
+| Disputed or fast-moving topic | 4 sources across tiers + explicit conflict treatment | Tiered |
 
-The evidence chain determines minimum retrieval targets. Do not write conclusions until the chain is satisfied, or explicitly degrade (see Honest Degradation).
+Use typed evidence:
+
+- Web: `{"kind":"web","url":"...","excerpt":"exact text from content.json"}`
+- Code: `{"kind":"code","id":"code-1"}`
+- Commit: `{"kind":"commit","id":"commit-head"}`
+- Test: `{"kind":"test","id":"test-1"}`
+
+Bare `citations` URLs are legacy inputs. Treat them as unverified because they do not prove extraction or claim support.
 
 ### 4) Research Mode Gate
 
-Auto-select mode based on task signals, then state the selection in output:
+Auto-select mode with `plan`; pass an explicit user mode as `--mode`.
 
 | Signal | → Mode |
-|--------|--------|
-| "quick check", single claim verification, one factual question | Quick |
-| Default for most research | **Standard** |
-| User says "thorough", "comprehensive", "deep dive" | Deep |
-| Multi-vendor comparison, architecture decision, trend report | Deep |
+|---|---|
+| Single factual question, "quick check" | Quick |
+| Default research task | Standard |
+| Thorough/deep request, multi-vendor decision, architecture/trend report | Deep |
 | Security-sensitive or production-impacting decision | Deep |
 
-**Mode definitions**:
+| Mode | Retrieval Calls | Content Extractions | Report Sources |
+|---|---:|---:|---:|
+| Quick | 5–10 | max 5 | 3–8 |
+| Standard | 15–25 | max 10 | 8–20 |
+| Deep | 30–50 | max 15 | 15–40 |
 
-| Mode | Retrieval Calls | Content Extraction | Sources in Report | Output |
-|------|----------------|-------------------|-------------------|--------|
-| Quick | 5–10 | Top 5 sources | 3–8 | Concise findings + sources |
-| Standard | 15–25 | Top 10 sources | 8–20 | Full report (all 9 sections) |
-| Deep | 30–50 | Top 15 sources | 15–40 | Full report + source comparison table |
-
-If the user explicitly requests a specific mode, use that mode.
+If the user explicitly requests a mode, use it. Classification is deterministic and behavior-tested.
 
 ### 5) Hallucination Awareness Gate
 
-AI-generated research is susceptible to hallucination. This gate enforces verification discipline.
+Never fabricate citations, URLs, source metadata, code locations, commits, or test results.
 
-**Never trust without verification**:
-- Never fabricate citations, URLs, or source metadata
-- Never present unverified claims as fact
-- Never use AI tools to verify AI-generated claims — use original sources
-- Every key finding must include real URL citations from retrieved sources
+| Risk Level | Information | Verification Method |
+|---|---|---|
+| High | API signature/configuration | Official primary documentation + extracted excerpt |
+| High | Benchmark/statistic | Original data and disclosed methodology |
+| High | Security/compliance | Official advisory, standard, or regulator |
+| High | Repository behavior | Code evidence and, for runtime behavior, a passing test |
+| Medium | Architecture recommendation | Independent sources with limitations |
 
-**Verification priority by risk level**:
-
-| Risk Level | Information Type | Verification Method |
-|-----------|-----------------|-------------------|
-| High | API signatures, function behavior, config values | Official documentation |
-| High | Statistics, performance benchmarks, adoption numbers | Primary data source |
-| High | Security practices, compliance requirements | Official security guides |
-| Medium | Architecture recommendations, design patterns | 2+ independent sources |
-| Low | Conceptual explanations, general principles | Cross-check if contradicted |
-
-Read `references/hallucination-and-verification.md` for the full verification protocol.
+Read `references/hallucination-and-verification.md` for confidence and source-quality rules.
 
 ### 6) Budget Control Gate
 
-Enforce bounded retrieval budgets per mode:
-- Quick: max 10 retrieval calls
-- Standard: max 25 retrieval calls (Round 1: 15, Round 2: 10)
-- Deep: max 50 retrieval calls (Round 1: 20, Round 2: 20, Round 3: 10)
+Use the selected mode as an executable ceiling:
 
-Hard ceiling: 50 calls per session. If reached, stop retrieval and report remaining gaps.
+```bash
+python3 scripts/deep_research.py retrieve \
+  --session /tmp/research_plan.json \
+  --query "<subtopic 1>" \
+  --query "<subtopic 2>" \
+  --output /tmp/results.json
+```
 
-Content extraction budget: Quick=5, Standard=10, Deep=15 most relevant sources.
+The parser also rejects more than 10, 25, or 50 queries in one Quick,
+Standard, or Deep invocation. The session ledger atomically enforces those
+same ceilings across repeated invocations, so two calls cannot each consume
+the full allowance. The hard ceiling is 50 retrieval calls per Deep session.
+One query consumes one retrieval call.
+
+`fetch-content` defaults to the remaining session extraction allowance and
+rejects an explicitly larger per-invocation `--limit`.
+When more candidate URLs exist than the ceiling permits, it records `budget_exhausted=true`; bundled `validate` and `report` commands consume that state automatically.
+
+Before bypassing `retrieve` or `fetch-content` with a host `WebSearch` or
+`WebFetch` tool, reserve the equivalent count in the same ledger:
+
+```bash
+python3 scripts/deep_research.py reserve-budget \
+  --session /tmp/research_plan.json \
+  --budget retrieval_calls \
+  --count 1 \
+  --output /tmp/budget_reservation.json
+```
+
+The ledger is an operational concurrency-safe constraint, not a tamper-proof
+audit log. It cannot account for tool calls that bypass both the bundled
+commands and `reserve-budget`. `plan` refuses to overwrite an existing ledger.
+Locking uses `fcntl` on POSIX and `msvcrt` byte locking on Windows, failing
+closed if neither exists. The regression suite performs a real multi-process
+contention test on fork-capable POSIX; the Windows backend still requires
+Windows CI coverage.
 
 ### 7) Content Extraction Gate
 
-**Mandatory**: Read actual source content before forming findings. Search snippets alone are insufficient.
+For `web` and `hybrid`, fetch actual content before synthesis:
 
-Use `fetch-content` subcommand after retrieval:
 ```bash
 python3 scripts/deep_research.py fetch-content \
-  --results /tmp/research_results.json \
-  --limit 10 --workers 4 \
+  --session /tmp/research_plan.json \
+  --results /tmp/results.json \
   --output /tmp/content.json
 ```
 
-If content extraction fails for a critical source, record in gaps — do not synthesize from titles/snippets alone.
+Each web evidence object must identify an exact excerpt found in a successfully extracted item. A search snippet, reachable URL, or failed/low-yield page cannot support a finding.
+
+Content extraction is mandatory for web and hybrid research.
+
+For `codebase`, use `search-codebase`; content extraction is not required:
+
+```bash
+python3 scripts/deep_research.py search-codebase \
+  --pattern "verifyToken" \
+  --root /path/to/repo \
+  --output /tmp/code_evidence.json
+```
+
+`search-codebase` checks provenance per matched file. Clean tracked content is
+pinned to the real HEAD object ID. Modified, staged, or untracked content is
+emitted as `working-tree-unpinned` and cannot support a High direct-code
+finding. The validator independently checks that commits exist, reads
+`<commit>:<path>`, and compares the declared line and excerpt. It also verifies
+commit subjects against Git.
+
+Execute a focused test once through the host's normal permission path. Then
+create a `deep-research/host-test-receipt-v2` receipt and import it:
+
+```bash
+python3 scripts/deep_research.py snapshot-codebase \
+  --root /path/to/repo \
+  --output /tmp/repository_snapshot_before.json
+
+go test -run TestVerifyToken ./auth
+
+python3 scripts/deep_research.py snapshot-codebase \
+  --root /path/to/repo \
+  --output /tmp/repository_snapshot_after.json
+
+python3 scripts/deep_research.py import-test-receipt \
+  --receipt /tmp/host_test_receipt.json \
+  --code-evidence /tmp/code_evidence.json \
+  --output /tmp/code_and_test_evidence.json
+```
+
+`snapshot-codebase` only reads repository root, HEAD, tree hash, and dirty
+state; it does not run tests or create execution proof. Write its output
+outside the repository. The host should compare before/after snapshots and
+copy the unchanged clean identity into the receipt. The helper never executes
+receipt argv. It checks the versioned schema, real commit/tree and tested
+paths, result metadata, and relevance decision.
+
+Runtime High treats the finding's complete code evidence set as atomic: every
+cited code item must be pinned, all must use one commit/tree, and one receipt
+must cover the finding plus every code ID and tested path. Multiple receipts
+cannot be combined to satisfy that coverage. Dirty, mismatched, unreviewed,
+uncovered, or failed receipts are retained for audit context but cannot
+support High.
+
+This skill directly pre-approves only Go, pytest, and unittest test commands.
+The receipt schema can describe Cargo, npm, Maven, Gradle, and .NET tests, but
+those commands require normal host authorization. `Write` permits authoring
+findings and receipt JSON; the host integration remains responsible for
+truthful timestamps, complete-output hashes, and execution metadata.
+Load `references/test-receipt-schema.md` for the full contract.
 
 ### 8) Execution Integrity Gate
 
-Never claim research was performed unless it actually ran.
-- If retrieval was not executed, do not present hypothetical findings
-- If source content was not fetched, do not claim verified conclusions
-- Distinguish between "source says X" and "snippet mentions X"
-- Report the actual number of sources retrieved, extracted, and cited
+- Do not present hypothetical findings if retrieval or repository inspection did not run.
+- Distinguish "source says X" from "snippet mentions X".
+- Report the actual number of retrieved, successfully extracted, repository, and cited evidence units.
+- Run `validate` before manual synthesis checks.
+- Always let `report` auto-run the same validation path.
+- Omit unsupported findings from substantive report sections and expose the reason in Gaps.
 
-## Workflow
+## Unified Workflow
 
-After passing all gates:
+1. Run `plan`; record kind, mode, and budgets.
+2. Split the question into 2–4 subtopics.
+3. Collect required artifacts:
+   - `web`: `retrieve` → `fetch-content`
+   - `codebase`: `search-codebase`; for runtime claims, snapshot the repository, execute one focused host test, snapshot again, and `import-test-receipt`
+   - `hybrid`: both paths
+4. Author `findings.json` with typed evidence and exact excerpts.
+5. Run `validate` with every required artifact.
+6. Run `report`; it automatically repeats validation, derives the executive summary from usable findings, and renders the canonical contract.
+7. Deliver the report without renaming, splitting, or omitting top-level sections.
 
-1. **Scope & Split** — Normalize the question, split into 2–4 subtopics
-2. **Retrieve** — Run `retrieve` subcommand per subtopic. For codebase research, use `search-codebase`
-3. **Extract Content** — Run `fetch-content` on top N sources (mandatory)
-4. **Validate** — Run `validate` to check URL format and citation quality
-5. **Synthesize** — Build findings with citations from extracted content
-6. **Report** — Generate structured report via `report` subcommand
-7. **Deliver** — Follow `references/output-contract-template.md`
+Web validation:
 
-For programmer-specific research patterns, read `references/research-patterns.md`.
+```bash
+python3 scripts/deep_research.py validate \
+  --research-kind web \
+  --results /tmp/results.json \
+  --content /tmp/content.json \
+  --findings /tmp/findings.json \
+  --output /tmp/validation.json
+```
 
-## Anti-Examples — DO NOT Do These
+Pure codebase report:
 
-1. **Synthesizing from snippets without reading sources** — snippets are previews, not evidence. Fetch the actual page content.
-   ```
-   BAD: Based on search results, Framework X is faster than Y.
-   GOOD: According to [TechEmpower Round 23, 2025-02], Framework X handles 1.2M req/s vs Y's 890K req/s.
-   ```
+```bash
+python3 scripts/deep_research.py report \
+  --question "<question>" \
+  --research-kind codebase \
+  --code-evidence /tmp/code_evidence.json \
+  --findings /tmp/findings.json \
+  --session /tmp/research_plan.json \
+  --validation-output /tmp/validation.json \
+  --output /tmp/report.md
+```
 
-2. **Fabricating citations** — never invent URLs, paper titles, or author names. If you cannot find a source, say so.
+## Confidence Rule
 
-3. **Presenting AI-generated analysis as source-backed finding** — your reasoning is not a citation. Every finding needs a real URL.
-   ```
-   BAD: Finding (High): X is better than Y because of architectural advantages.
-   GOOD: Finding (High): X outperforms Y by 34% in write-heavy workloads [1][2].
-   ```
+Use one rule everywhere:
 
-4. **Running one query and declaring research complete** — always split into subtopics and use multiple query variants.
+- Allow `High` for a narrow single fact with one verified T1 primary web source.
+- Allow `High` for a direct code fact only after the validator rereads and matches pinned Git content.
+- Allow `High` for runtime behavior only when every cited code item is pinned to one Git commit/tree and one reviewed host receipt covers the finding, all code IDs, and all tested paths on that same clean snapshot.
+- Require two independent verified units, including a primary unit, for all other `High` findings.
+- Downgrade to `Medium` when some verified support exists but the High rule is unmet.
+- Use `Low` only for deliberately tentative claims that still have verified support.
+- Mark unusable and omit when no evidence validates.
 
-5. **Ignoring contradictory evidence** — if sources disagree, surface the disagreement. Do not cherry-pick the convenient conclusion.
-
-6. **Skipping content extraction for "obvious" topics** — even well-known topics have nuances. The Gate 7 mandate has no exceptions.
-
-7. **Treating all sources equally** — a vendor's marketing page is not equivalent to an independent benchmark. Source type matters.
-
-8. **Exceeding budget without stopping** — respect the retrieval budget. 50 calls without satisfactory results means the question needs reframing, not more searching.
+The CLI records requested and effective confidence plus downgrade reasons.
+Unpinned working-tree evidence may remain useful at Medium or Low when its
+current file content validates, but it is never represented as belonging to
+HEAD.
 
 ## Honest Degradation
 
-When research cannot be completed fully, degrade explicitly:
+| Level | Executable Condition | Action |
+|---|---|---|
+| **Full** | Required artifacts exist; every included finding meets requested confidence; no extraction failure | Deliver all nine sections |
+| **Partial** | Usable findings remain, but a finding is downgraded, extraction partially fails, or the budget ends with non-critical gaps | Deliver all nine sections and name gaps |
+| **Blocked** | A required artifact is missing, no finding has usable evidence, or budget exhaustion prevents the core chain | Stop claiming conclusions; emit or report only the blocked state and next evidence needed |
 
-| Level | Condition | Action |
-|-------|-----------|--------|
-| **Full** | Evidence chain satisfied, content extracted, sources verified | Complete report with all 9 sections |
-| **Partial** | Some subtopics lack strong sources, or content extraction partially failed | Report with explicit gaps section, lower confidence on affected findings |
-| **Blocked** | Critical sources unreachable, topic requires paywalled/non-indexed content, or budget exhausted without core evidence | State what was not found + recommend alternative research approaches (e.g., "use Perplexity Pro Search for real-time data", "search directly on WeChat for Chinese sources") |
+Bundled content artifacts propagate budget exhaustion automatically. Pass `--budget-exhausted` to `validate` or `report` when an external or manually assembled artifact reached its ceiling.
 
-Never fabricate content to fill gaps. Transparency about limitations is more valuable than false completeness.
+## Canonical Output Contract
+
+Every Quick, Standard, and Deep report must use these exact 9 sections and top-level headings in this order:
+
+1. `Research Question`
+2. `Method`
+3. `Executive Summary`
+4. `Key Findings`
+5. `Detailed Analysis`
+6. `Consensus vs Debate`
+7. `Source Quality Notes`
+8. `Sources`
+9. `Gaps & Limitations`
+
+Quick mode may keep Detailed Analysis and Consensus vs Debate concise; it must not omit them. Load `references/output-contract-template.md` before authoring findings or delivering a report.
+
+## Source Quality
+
+Treat automated classification as conservative preclassification:
+
+- Do not classify arbitrary `docs.*` hosts as official.
+- Classify `.edu` as institutional, not automatically official product documentation.
+- Emit T1–T5, classification basis, date or `unknown`, sponsorship, and methodology for each web source.
+- Allow explicit reviewed metadata to override heuristics.
+- Surface unknown sponsorship/methodology rather than guessing.
+
+Use the default tiers in `references/hallucination-and-verification.md`.
 
 ## Safety Rules
 
-1. Never fabricate citations, URLs, or source metadata
-2. Never present unverified claims as fact — every finding needs citations
-3. Contradictory evidence must be surfaced, not hidden
-4. Always read source content before synthesizing — snippets are insufficient
-5. For factual claims, verify against official documentation when available
-6. For security-related research, cite official security guides, not blog posts alone
-7. Mark findings with appropriate confidence levels (High/Medium/Low)
+1. Never fabricate evidence or execution state.
+2. Require typed support for every substantive claim.
+3. Ensure contradictory evidence is surfaced under Consensus vs Debate.
+4. Do not convert repository artifacts into fake web citations.
+5. Stop or degrade when required evidence is missing.
 
-## Output Contract
+## Anti-Examples — DO NOT Do These
 
-Every completed research must include these 9 sections (see `references/output-contract-template.md`):
+1. **Synthesize from snippets** — extract the page and cite an exact supporting excerpt.
+2. **Attach a URL without support text** — a URL proves location, not claim support.
+3. **Call one generic source "official" because its host starts with docs** — record the classification basis.
+4. **Call every High finding a two-domain claim** — apply the narrow T1 single-fact exception.
+5. **Call every one-source claim High** — the exception requires T1 primary content and a narrow fact.
+6. **Force repository facts into fake web citations** — cite code, commit, and test evidence IDs.
+7. **Treat exit code 0 or partial receipt coverage as semantic proof** — require a focused selector and one receipt covering the finding plus the complete same-snapshot code set.
+8. **Generate a report without content for web research** — the parser must stop.
+9. **Split Consensus and Debate into top-level headings** — keep both under section 6.
+10. **Exceed a mode budget** — stop, mark budget exhaustion, and degrade honestly.
 
-1. **Research Question** — normalized question + scope + depth mode
-2. **Method** — retrieval plan, dedup strategy, validation checks
-3. **Executive Summary** — 2–4 sentences answering the question directly
-4. **Key Findings** — each with confidence level and citations
-5. **Detailed Analysis** — per-subtopic analysis with citations
-6. **Consensus vs Debate** — areas of agreement and disagreement
-7. **Source Quality Notes** — bias, single-source claims, unverified claims
-8. **Sources** — numbered list with title, URL, source type, date
-9. **Gaps & Limitations** — missing evidence + follow-up recommendations
+```
+BAD: Finding (High): X is faster. citations=["https://example.com"]
+GOOD: Finding (Medium): X was faster in this benchmark, with method limits. evidence=[{"kind":"web","url":"...","excerpt":"..."}]
+```
 
 ## Load References Selectively
 
-For every research task, before generating the final report:
-→ Load `references/output-contract-template.md` for the mandatory 9-section output structure (Research Question, Methodology, Executive Summary, Findings, Evidence Chain, Gaps & Limitations, Reusable Queries, Gate Log, Conclusion) with Quick/Standard/Deep mode field requirements.
+For every report:
+→ Load `references/output-contract-template.md` for the one nine-section structure, findings schema, and evidence examples.
 
-When any source makes quantitative claims, model-generated content is suspected, or findings are high-stakes:
-→ Load `references/hallucination-and-verification.md` for AI hallucination type taxonomy, detection methods per type, cross-checking protocols, and confidence-degradation rules when verification fails.
+For quantitative, high-stakes, disputed, sponsored, or model-generated claims:
+→ Load `references/hallucination-and-verification.md` for verification, confidence, T1–T5, sponsorship, methodology, and degradation rules.
 
-When the research topic is programmer-specific (error debugging, library evaluation, performance comparison, RFC lookup, GitHub code search):
-→ Load `references/research-patterns.md` for query patterns per technical research category, Stack Overflow / GitHub / official-docs source tiers, and programmer-specific evidence quality criteria.
+For debugging, APIs, code search, comparisons, benchmarks, standards, or security:
+→ Load `references/research-patterns.md` for topic-specific query and evidence patterns.
+
+For any runtime-behavior finding backed by a test:
+→ Load `references/test-receipt-schema.md`; execute through the host once, then import and statically validate the receipt.
 
 ## Subcommands Reference
 
 | Subcommand | Purpose | Key Flags |
-|------------|---------|-----------|
-| `retrieve` | Search DDG lite, dedupe, save results | `--query`, `--delay`, `--limit-per-query`, `--output` |
-| `fetch-content` | Fetch page text (parallel) | `--results` or `--url`, `--limit`, `--workers`, `--output` |
-| `search-codebase` | ripgrep search with structured output | `--pattern`, `--root`, `--glob`, `--context`, `--output` |
-| `validate` | URL format + citation quality checks | `--results`, `--findings`, `--check-live`, `--output` |
-| `report` | Generate markdown report | `--question`, `--results`, `--findings`, `--depth`, `--output` |
+|---|---|---|
+| `plan` | Classify kind/mode and initialize a session ledger | `--request`, `--mode`, `--research-kind`, `--output` |
+| `reserve-budget` | Reserve ledger usage before external host search/fetch | `--session`, `--budget`, `--count`, `--output` |
+| `retrieve` | Search DDG Lite under cumulative budget | `--query`, `--session`, `--limit-per-query`, `--output` |
+| `fetch-content` | Extract content under cumulative budget | `--results` or `--url`, `--session`, `--limit`, `--output` |
+| `search-codebase` | Produce per-file pinned or unpinned repository evidence | `--pattern`, `--root`, `--glob`, `--output` |
+| `snapshot-codebase` | Read repository root, HEAD, tree, and dirty state without executing tests | `--root`, `--output` |
+| `import-test-receipt` | Statically verify and append one host-created receipt | `--receipt`, `--code-evidence`, `--output` |
+| `validate` | Re-read typed evidence and assess confidence/degradation | `--research-kind`, `--results`, `--content`, `--code-evidence`, `--findings`, `--output` |
+| `report` | Auto-validate, enforce cited-source ceiling, and render nine sections | `--question`, `--research-kind`, `--session`, evidence flags, `--validation-output`, `--output` |
 
-## Search Fallback Strategy
+## Search and Extraction Fallbacks
 
-The `retrieve` subcommand uses DuckDuckGo Lite with retry logic and anti-bot resilience. When DDG is unavailable or rate-limited, use these fallbacks **in order**:
-
-1. **WebSearch tool** (built-in) — Use Claude Code's native `WebSearch` for the same queries
-2. **Firecrawl search** — If the `firecrawl-search` skill is available, use `firecrawl-search` for broader coverage
-3. **WebFetch + known URLs** — If you know the target domains, fetch them directly with `WebFetch`
-4. **Manual URL list** — Ask the user to provide relevant URLs, then use `fetch-content --url <URL>` to extract content
-
-When degrading to a fallback, report which search method was used in the "Method" section of the report.
-
-## Content Extraction Quality
-
-The `fetch-content` subcommand includes:
-
-- **Content-area detection**: Prioritizes `<main>` and `<article>` elements over full-page text
-- **Noise removal**: Strips `<nav>`, `<footer>`, `<aside>`, `<header>`, `<menu>` elements before extraction
-- **Anti-bot resilience**: Rotates realistic User-Agent strings, retries on 429/503 with exponential backoff, detects Cloudflare/WAF block pages
-- **Quality checks**: Flags pages with low content yield (likely JS-rendered) or WAF blocks in the error field
-
-When `fetch-content` reports errors for critical sources:
-- **WAF/anti-bot blocked**: Try `WebFetch` tool as fallback (it uses a real browser)
-- **Low content yield**: The page likely requires JavaScript — use `WebFetch` or `firecrawl-scrape`
-- **Network errors**: Retry after delay, or skip and document in gaps
+If DDG Lite fails, use an available search tool with the same query plan and preserve its result metadata. If static extraction fails, use an available browser-capable fetcher, then save equivalent content records. Report the actual method used; do not rank tools or claim one is universally best.
 
 ## Bundled Assets
 
-- Script: `scripts/deep_research.py` — retrieval, extraction, validation, codebase search, report
-- Unit tests: `scripts/tests/test_deep_research.py` — script internals (URL normalization, dedup, extraction)
-- Smoke tests: `scripts/tests/test_subcommand_smoke.py` — every subcommand executed end-to-end, offline
-- Contract tests: `scripts/tests/test_skill_contract.py` (structural integrity)
-- Golden tests: `scripts/tests/test_golden_scenarios.py` (keyword coverage)
-- Output contract: `references/output-contract-template.md`
-- Verification protocol: `references/hallucination-and-verification.md`
-- Research patterns: `references/research-patterns.md`
+- `scripts/deep_research.py`: compatibility CLI plus shared Web validation/report engine
+- `scripts/deep_research_lib/planning.py`: multilingual classification and mode budgets
+- `scripts/deep_research_lib/session.py`: cross-process locked, cumulative session-budget ledger
+- `scripts/deep_research_lib/repository.py`: Git provenance, read-only snapshot metadata, and static host-receipt verification
+- `scripts/deep_research_lib/reporting.py`: cited-source selection and ceiling enforcement
+- `scripts/tests/test_evidence_integrity.py`: evidence-chain and negative behavioral tests
+- `scripts/tests/test_repository_integrity.py`: dirty-tree, forged Git, receipt binding, and command-proxy negative tests
+- `scripts/tests/test_session_budget.py`: cumulative/multiprocess budget and report-source ceiling tests
+- `scripts/tests/test_golden_scenarios.py`: fixture request → executable decision tests
+- `scripts/tests/test_subcommand_smoke.py`: offline CLI end-to-end tests
+- `references/output-contract-template.md`: canonical schema and report template
+- `references/hallucination-and-verification.md`: verification/confidence/source-quality protocol
+- `references/research-patterns.md`: programmer-focused research patterns
+- `references/test-receipt-schema.md`: host receipt schema, snapshot binding, and relevance rules

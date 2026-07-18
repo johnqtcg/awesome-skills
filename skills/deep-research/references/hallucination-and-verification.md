@@ -1,107 +1,163 @@
 # Hallucination Awareness and Verification Protocol
 
-## AI Hallucination Types
+## Contents
 
-Understand these failure modes to detect them during research:
+1. Hallucination types
+2. Cross-validation protocol
+3. Confidence contract
+4. Source Tier Ranking
+5. Source-quality assessment
+6. Numeric claims
+7. Insufficient evidence
 
-| Type | Description | Example | Detection Method |
-|------|-------------|---------|-----------------|
-| **Fabricated Citation** | AI invents a URL, paper title, or author | "According to Smith et al. (2024)..." with no such paper | Verify URL is reachable; search for the actual paper |
-| **Stale Information** | AI uses outdated facts as if current | "Go 1.18 is the latest version" (when 1.24 is current) | Check official release pages; add `after:YYYY` to searches |
-| **Confidence Inflation** | AI presents uncertain claims as definitive | "Redis is always faster than PostgreSQL for caching" | Look for qualifiers; check if benchmarks support the absolute claim |
-| **Phantom Feature** | AI describes an API/function that doesn't exist | "Use `sync.OrderedMap` in Go" (no such type) | Verify against official API docs |
-| **Cherry-Picked Evidence** | AI selects supporting evidence while ignoring contradictions | "Kubernetes adoption is declining" (citing one negative article, ignoring growth data) | Search for counter-arguments explicitly |
-| **Conflation** | AI merges distinct concepts or products | Confusing Apache Kafka with Confluent Platform | Verify the exact product/version being discussed |
+## Hallucination Types
+
+| Type | Example failure | Detection |
+|---|---|---|
+| **Fabricated Citation** | Invented URL, paper, code path, commit, or test | Resolve the typed evidence against collected artifacts |
+| **Stale Information** | Old version presented as current | Check date/version in a primary source |
+| **Confidence Inflation** | Thin evidence labeled High | Recompute effective confidence |
+| **Phantom Feature** | Nonexistent API or configuration | Read primary docs or direct code |
+| **Unsupported Paraphrase** | Page exists but does not support the conclusion | Require an exact extracted excerpt |
+| **Cherry-Picked Evidence** | Contradictory sources omitted | Search for counterevidence and populate Debate |
+| **Conflation** | Product/community edition or versions mixed | Record exact identity and boundary |
+| **Execution Invention** | Handwritten `status: passed` or a generic success command treated as behavioral proof | Require a host-attested receipt with target, selector, covered claim/code IDs, snapshot identity, and relevance review |
 
 ## Cross-Validation Protocol
 
-### Mandatory for High-Confidence Findings
+For each finding:
 
-Every finding marked `High` confidence must pass:
+1. Identify the claim type before assigning confidence.
+2. Resolve every typed evidence reference.
+3. For web evidence, require:
+   - URL in retrieval results,
+   - successful content extraction,
+   - exact supporting excerpt present in extracted text,
+   - source tier and classification basis.
+4. For repository evidence, require:
+   - `code`: an in-root path and exact line/excerpt; for pinned evidence,
+     prove the commit exists and reread `<commit>:<path>` rather than the
+     working tree,
+   - `commit`: prove the object exists and compare the declared subject to
+     `git show`,
+   - `test`: require `host-test-receipt-v2`; verify its commit/tree and tested
+     paths, then require one receipt to bind its `covers` and approved
+     relevance rationale to the runtime finding and the complete cited-code
+     set. The research helper must not execute receipt argv.
+5. Check independence only when the confidence rule requires it.
+6. Check recency for time-sensitive facts.
+7. Search for contradictory evidence when the topic is disputed or consequential.
+8. Record requested and effective confidence separately.
 
-1. **Primary Source Check** — Can the claim be traced to an official document, specification, or primary dataset?
-2. **Independent Domain Check** — Is the claim supported by sources from ≥2 independent domains?
-3. **Recency Check** — Is the information current? Add `after:YYYY-MM` to verification searches for time-sensitive claims
-4. **Content Extraction Check** — Was the claim verified from extracted page content, not just search snippets?
+## Confidence Contract
 
-### Recommended for Medium-Confidence Findings
+Use this contract everywhere:
 
-1. Cross-reference with at least 1 independent source
-2. Check if the claim is contested in forums or issue trackers
-3. Note any version/time dependency
+| Claim type | High requirement |
+|---|---|
+| Narrow `single_fact` | One verified T1 primary web source |
+| Direct `code_fact` | Direct code reread successfully from the declared Git blob |
+| `runtime_behavior` | Every cited code item pinned to one commit/tree plus one passed, reviewed host receipt covering the finding, all code IDs, and all tested paths on that clean snapshot |
+| Any other claim | At least two independent verified evidence units, including one primary unit |
 
-### What To Verify — Priority Matrix
+Then apply:
 
-| Risk Level | Information Type | Verification Action |
-|-----------|-----------------|-------------------|
-| Critical | API signatures, function parameters, config syntax | Read official documentation directly |
-| Critical | Performance numbers, benchmark results | Find the original benchmark report with methodology |
-| Critical | Security configurations, encryption standards | Check official security advisories |
-| High | Version compatibility, migration paths | Check release notes and changelogs |
-| High | License terms, pricing, quotas | Go to the vendor's official page |
-| Medium | Best practice recommendations | Verify with 2+ independent practitioner sources |
-| Medium | Architecture comparisons | Check for recency and disclosed methodology |
-| Low | General conceptual explanations | Trust if consistent across sources; flag if contradicted |
+- If High requirements are unmet but verified evidence exists, downgrade to Medium.
+- Preserve Low for deliberately tentative claims with verified support.
+- If no evidence validates, mark the finding unusable and omit it.
+- Do not use two domains as a universal High rule; the narrow T1 single-fact exception is intentional.
+- Do not use one source as a universal High rule; it must be a narrow fact and verified T1 primary content.
+- Do not treat `HEAD`, `working-tree`, or another label as a pinned commit; use an abbreviated or full hexadecimal object ID.
+- Do not infer that current working-tree bytes belong to HEAD. Modified,
+  staged, and untracked paths must be labeled `working-tree-unpinned`.
+- Do not trust receipt fields merely because their JSON shape is valid.
+- Do not treat exit code 0 alone as evidence that a test covers the claim.
+- Do not bind a test run from a dirty or different snapshot to pinned code.
+- Do not ignore an unpinned code item because another cited item is pinned.
+- Do not combine partial coverage from multiple receipts to manufacture High.
 
-## Verification Query Patterns
+## Verification Priority
 
-When a finding needs verification, construct targeted queries:
-
-```
-# Verify an API claim
-"<exact function name>" site:official-docs-domain.com
-
-# Verify a performance claim
-"<product>" benchmark "methodology" after:2024
-
-# Verify a version-specific claim
-"<product> <version>" changelog OR "release notes"
-
-# Check for contradicting evidence
-"<claim subject>" "however" OR "but" OR "actually" OR "myth"
-```
-
-## Numeric Claim Labels
-
-When reporting numeric claims (statistics, benchmarks, adoption rates):
-
-| Confidence | Format | Example |
-|-----------|--------|---------|
-| Verified primary source | **Value [source]** | 1.2M req/s [TechEmpower Round 23] |
-| Cross-checked secondary | Value ± range [sources] | ~850K–1.1M req/s [source1, source2] |
-| Single unverified source | "~Value (unverified, single source)" | ~70% adoption (unverified, single survey) |
-| AI estimation, no source | Mark as inference, not finding | Not used — omit or flag as gap |
-
-## Tool-Specific Verification Guidance
-
-### When To Recommend Alternative Tools
-
-During the research process, certain findings may benefit from verification with specialized tools:
-
-| Situation | Recommended Tool | Why |
-|-----------|-----------------|-----|
-| Claim requires real-time data | Perplexity Pro Search | Live web search with citations |
-| Need to verify Chinese-language claims | Baidu/WeChat/Zhihu search | Google may not index walled-garden content |
-| Need to verify code behavior | Local execution (`go test`, `python -c`) | Running code is the ultimate verification |
-| Academic paper claims | Google Scholar, arxiv.org | Dedicated academic indexes |
-| GitHub-specific data (stars, issues, releases) | GitHub API / `gh` CLI | Authoritative source for repo metadata |
-
-### Insufficient Evidence Protocol
-
-When the evidence chain cannot be satisfied:
-1. Do not fabricate or stretch existing sources
-2. State explicitly what evidence is missing and why
-3. Lower confidence to `Low` or remove the finding entirely
-4. Suggest alternative research approaches in the Gaps section
+| Risk | Information | Preferred evidence |
+|---|---|---|
+| Critical | API/configuration syntax | Primary documentation plus extracted excerpt |
+| Critical | Benchmark/statistic | Original report, disclosed method/environment |
+| Critical | Security/compliance | Standard, regulator, official advisory |
+| High | Version/license/pricing/quota | Current first-party source with date |
+| High | Runtime repository behavior | One same-snapshot pinned code set plus one host receipt with complete semantic coverage and approved relevance |
+| Medium | Best practice/architecture | Primary basis plus independent experience |
+| Low | Conceptual explanation | Cross-check if contested |
 
 ## Source Tier Ranking
 
-Default credibility order for research sources:
+Tiers describe evidence weight, not truth. Automated assignments are provisional.
 
-| Tier | Source Types | Notes |
-|------|-------------|-------|
-| T1 (Authoritative) | Official docs, RFCs, specifications, `.gov`, `.edu`, peer-reviewed papers | Highest weight |
-| T2 (Authoritative-adjacent) | Release notes, changelogs, official blogs, conference talks by maintainers | High weight with recency check |
-| T3 (Expert) | Independent benchmarks with methodology, reputable tech publications | Medium-high weight |
-| T4 (Community) | Stack Overflow (high-vote), HN discussions, experienced practitioners' blogs | Medium weight, verify claims |
-| T5 (Supplementary) | Medium posts, dev.to, tutorial sites, vendor marketing | Low weight, never sole source for findings |
+| Tier | Typical source | Required checks |
+|---|---|---|
+| T1 (Primary authoritative) | Standards text, official primary docs, government data, original peer-reviewed study, direct code/test artifact | Identity, version/date, direct support |
+| T2 (Primary-adjacent) | Official release notes/blog, institutional publication, preprint, maintainer talk | Recency, review status, owner |
+| T3 (Independent expert/empirical) | Reputable reporting, independent benchmark with method, systematic practitioner study | Method, sponsorship, reproducibility |
+| T4 (Community/context) | Issue discussion, Stack Overflow, practitioner blog, forum | Author expertise, corroboration |
+| T5 (Discovery/marketing) | Tutorial farm, generic publishing platform, vendor marketing, unsourced roundup | Never use alone for substantive findings |
+
+Conservative preclassification rules:
+
+- Treat `docs.*` as an unverified website unless ownership is established.
+- Treat `.edu` as institutional, not automatically official product documentation.
+- Treat academic repositories/publishers as T2 until publication/review status is known.
+- Treat vendor marketing as T5 even when hosted on a first-party domain.
+- Allow a reviewed explicit classification to override the heuristic, and record the basis.
+
+## Source-Quality Assessment
+
+For each source, record:
+
+| Field | Values / guidance |
+|---|---|
+| `source_tier` | T1–T5 |
+| `classification_basis` | explicit rationale or named heuristic |
+| `date` | publication/update date or `unknown` |
+| `sponsorship` | none, independent, vendor, sponsored, or unknown |
+| `methodology` | disclosed summary or unknown |
+
+Assess:
+
+- ownership and editorial control,
+- primary vs secondary status,
+- sponsorship and conflicts of interest,
+- sample, environment, comparison baseline, and reproducibility,
+- recency and version scope,
+- whether conclusions exceed the method.
+
+Do not infer "independent" from silence. Use `unknown`.
+
+## Numeric Claim Labels
+
+| Evidence | Reporting form |
+|---|---|
+| Verified primary source and method | Exact value with source and method |
+| Multiple compatible sources | Range with sources and boundary explanation |
+| One non-primary source | Approximate, single-source, effective confidence at most Medium |
+| No verified source | Omit as a finding; record the gap |
+
+Never report a benchmark number without version, workload, environment, and method when those affect interpretation.
+
+## Tool Fallback Principles
+
+Select available tools by the evidence requirement:
+
+- Use a current web search surface for discovery.
+- Use direct fetch or a browser-capable extractor for page content.
+- Use local execution for code behavior.
+- Use authoritative indexes/APIs for papers, standards, or repository metadata.
+
+Do not claim a tool is universally best. Record which tool ran and whether it produced the required artifact.
+
+## Insufficient Evidence Protocol
+
+1. Stop stretching titles, snippets, or weak sources.
+2. Record the missing artifact or failed verification.
+3. Downgrade supported findings or omit unsupported ones.
+4. Set `Partial` if usable findings remain.
+5. Set `Blocked` if required artifacts are absent or no finding remains usable.
+6. Recommend the next evidence or query, not a branded tool ranking.

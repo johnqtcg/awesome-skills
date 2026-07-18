@@ -9,7 +9,9 @@ SKILL_MD = SKILL_ROOT / "SKILL.md"
 OUTPUT_CONTRACT = SKILL_ROOT / "references" / "output-contract-template.md"
 HALLUCINATION_REF = SKILL_ROOT / "references" / "hallucination-and-verification.md"
 RESEARCH_PATTERNS = SKILL_ROOT / "references" / "research-patterns.md"
+TEST_RECEIPT_SCHEMA = SKILL_ROOT / "references" / "test-receipt-schema.md"
 SCRIPT = SKILL_ROOT / "scripts" / "deep_research.py"
+REPOSITORY_LIB = SKILL_ROOT / "scripts" / "deep_research_lib" / "repository.py"
 UNIT_TESTS = SKILL_ROOT / "scripts" / "tests" / "test_deep_research.py"
 
 
@@ -43,19 +45,27 @@ class TestFrontmatter(unittest.TestCase):
         m = re.search(r"allowed-tools:\s*(.+)", self.text)
         self.assertIsNotNone(m)
         tools = m.group(1).lower()
-        for tool in ["read", "bash", "webfetch"]:
+        for tool in ["read", "write", "bash", "webfetch"]:
             self.assertIn(tool, tools, f"allowed-tools should include {tool}")
 
-    def test_allowed_tools_permit_helper_script_execution(self):
+    def test_allowed_tools_scope_helper_script_by_safe_subcommand(self):
         m = re.search(r"allowed-tools:\s*(.+)", self.text)
         self.assertIsNotNone(m)
         tools = m.group(1)
-        self.assertIn(
-            "Bash(*deep_research.py*)",
-            tools,
-            "allowed-tools must permit the helper script regardless of install path "
-            "(a relative-path pattern fails to match when invoked from ~/.claude/skills/)",
-        )
+        self.assertNotIn("Bash(*deep_research.py*)", tools)
+        for command in [
+            "plan",
+            "retrieve",
+            "fetch-content",
+            "search-codebase",
+            "snapshot-codebase",
+            "import-test-receipt",
+            "reserve-budget",
+            "validate",
+            "report",
+        ]:
+            self.assertIn(f"deep_research.py {command}", tools)
+        self.assertNotRegex(tools, r"Bash\(python3? -c")
         self.assertIn(
             "WebSearch",
             tools,
@@ -183,6 +193,23 @@ class TestOutputContract(unittest.TestCase):
         for i in range(1, 10):
             self.assertRegex(self.contract, rf"## {i}\)")
 
+    def test_contract_has_one_exact_heading_set(self):
+        headings = re.findall(r"(?m)^## \d+\) .+$", self.contract)
+        self.assertEqual(
+            [
+                "## 1) Research Question",
+                "## 2) Method",
+                "## 3) Executive Summary",
+                "## 4) Key Findings",
+                "## 5) Detailed Analysis",
+                "## 6) Consensus vs Debate",
+                "## 7) Source Quality Notes",
+                "## 8) Sources",
+                "## 9) Gaps & Limitations",
+            ],
+            headings,
+        )
+
     def test_contract_has_quality_gates(self):
         self.assertIn("## Quality Gates", self.contract)
 
@@ -220,6 +247,9 @@ class TestReferenceFiles(unittest.TestCase):
     def test_research_patterns_exists(self):
         self.assertTrue(RESEARCH_PATTERNS.exists())
 
+    def test_test_receipt_schema_exists(self):
+        self.assertTrue(TEST_RECEIPT_SCHEMA.exists())
+
     def test_script_exists(self):
         self.assertTrue(SCRIPT.exists())
 
@@ -246,8 +276,10 @@ class TestHallucinationReference(unittest.TestCase):
     def test_has_numeric_claim_labels(self):
         self.assertIn("Numeric Claim Labels", self.text)
 
-    def test_has_tool_recommendation_table(self):
-        self.assertIn("Recommended Tool", self.text)
+    def test_has_tool_fallback_principles_without_product_ranking(self):
+        self.assertIn("Tool Fallback Principles", self.text)
+        self.assertNotIn("Recommended Tool", self.text)
+        self.assertNotIn("Perplexity", self.text)
 
 
 class TestResearchPatterns(unittest.TestCase):
@@ -275,8 +307,9 @@ class TestResearchPatterns(unittest.TestCase):
     def test_has_codebase_section(self):
         self.assertIn("Codebase Research", self.text)
 
-    def test_has_ai_tool_selection(self):
-        self.assertIn("AI Tool Selection", self.text)
+    def test_has_artifact_based_tool_selection(self):
+        self.assertIn("Tool Selection Principles", self.text)
+        self.assertNotIn("Perplexity", self.text)
 
     def test_has_query_syntax_reference(self):
         self.assertIn("Query Syntax", self.text)
@@ -329,8 +362,56 @@ class TestSubcommandTable(unittest.TestCase):
         self.assertIn("## Subcommands Reference", self.text)
 
     def test_all_subcommands_listed(self):
-        for cmd in ["retrieve", "fetch-content", "search-codebase", "validate", "report"]:
+        for cmd in [
+            "plan",
+            "retrieve",
+            "fetch-content",
+            "search-codebase",
+            "snapshot-codebase",
+            "import-test-receipt",
+            "reserve-budget",
+            "validate",
+            "report",
+        ]:
             self.assertIn(f"`{cmd}`", self.text)
+
+
+class TestExecutableContractBridges(unittest.TestCase):
+    def setUp(self):
+        self.skill = _read(SKILL_MD)
+        self.script = _read(SCRIPT)
+
+    def test_content_is_required_by_validate_and_report(self):
+        self.assertIn("--content", self.skill)
+        self.assertIn("required_content_missing", self.script)
+        self.assertIn("validate_research_bundle", self.script)
+
+    def test_report_auto_validates(self):
+        report_handler = self.script.split("def cmd_report", 1)[1].split(
+            "def cmd_fetch_content", 1
+        )[0]
+        self.assertIn("validate_research_bundle", report_handler)
+
+    def test_mode_budgets_are_executable(self):
+        self.assertIn("MODE_BUDGETS", self.script)
+        self.assertIn("retrieval_max", self.script)
+        self.assertIn("content_max", self.script)
+
+    def test_repository_evidence_is_first_class(self):
+        for kind in ['"code"', '"commit"', '"test"']:
+            self.assertIn(kind, self.script)
+        self.assertIn("--code-evidence", self.skill)
+
+    def test_helper_has_no_generic_test_command_execution_proxy(self):
+        combined = self.script + _read(REPOSITORY_LIB)
+        self.assertNotIn("def run_test_command", combined)
+        self.assertNotIn('"run-test"', combined)
+        self.assertNotIn("--replay-tests", combined)
+
+    def test_single_t1_fact_rule_is_unique(self):
+        combined = self.skill + _read(OUTPUT_CONTRACT) + _read(HALLUCINATION_REF)
+        self.assertIn("one verified T1 primary web source", combined)
+        self.assertNotIn("Every finding marked `High`", combined)
 
 
 class TestLineCount(unittest.TestCase):
