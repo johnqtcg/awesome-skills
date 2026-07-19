@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import concurrent.futures
 import datetime as dt
+import hashlib
 import html
 import json
 import random
@@ -52,6 +53,12 @@ from deep_research_lib.session import (  # noqa: E402
     load_session,
     record_report_sources,
     reserve_session_budget,
+)
+from deep_research_lib.web import (  # noqa: E402
+    PublicWebResponse,
+    UnsafeWebTargetError,
+    fetch_public_url,
+    resolve_public_target,
 )
 
 TRACKING_PARAMS = {
@@ -176,6 +183,14 @@ class ContentResult:
     content: str
     word_count: int
     error: str = ""
+    final_url: str = ""
+    http_status: int = 0
+    fetched_at: str = ""
+    raw_sha256: str = ""
+    content_sha256: str = ""
+    resolved_ips: Tuple[str, ...] = ()
+    capture_method: str = ""
+    live_verified: bool = False
 
 
 # ---------------------------------------------------------------------------
@@ -221,13 +236,18 @@ def utc_now_iso() -> str:
 
 
 def normalize_url(url: str) -> str:
-    parsed = urllib.parse.urlparse(url.strip())
+    try:
+        parsed = urllib.parse.urlparse(url.strip())
+        port = parsed.port
+    except ValueError:
+        return ""
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return ""
+    if parsed.username is not None or parsed.password is not None:
         return ""
 
     scheme = parsed.scheme.lower()
     hostname = parsed.hostname.lower() if parsed.hostname else ""
-    port = parsed.port
     if port and not ((scheme == "https" and port == 443) or (scheme == "http" and port == 80)):
         host = f"{hostname}:{port}"
     else:
@@ -323,15 +343,15 @@ def _is_blocked_response(body: str) -> bool:
     return any(marker.lower() in lower for marker in CLOUDFLARE_MARKERS)
 
 
-def _fetch_with_retry(
+def _fetch_response_with_retry(
     url: str,
     *,
     headers: Optional[Dict[str, str]] = None,
     timeout: float = 15.0,
     max_retries: int = MAX_RETRIES,
     max_bytes: int = 0,
-) -> bytes:
-    """Fetch URL with retry, exponential backoff, and block detection."""
+) -> PublicWebResponse:
+    """Fetch a public URL with retry, pinned DNS, and block detection."""
     if headers is None:
         headers = _browser_headers()
 
@@ -341,21 +361,26 @@ def _fetch_with_retry(
             backoff = RETRY_BACKOFF_BASE ** (attempt - 1) + random.uniform(0, 0.5)
             time.sleep(backoff)
 
-        req = urllib.request.Request(url, headers=headers)
         try:
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                body = resp.read(max_bytes) if max_bytes > 0 else resp.read()
-                text = body.decode("utf-8", errors="ignore")
-                if _is_blocked_response(text) and attempt < max_retries:
-                    last_error = Exception(
-                        f"blocked by WAF/anti-bot (attempt {attempt}/{max_retries})"
-                    )
-                    continue
-                return body
+            response = fetch_public_url(
+                url,
+                headers=headers,
+                timeout=timeout,
+                max_bytes=max_bytes,
+            )
+            text = response.body.decode("utf-8", errors="ignore")
+            if _is_blocked_response(text) and attempt < max_retries:
+                last_error = Exception(
+                    f"blocked by WAF/anti-bot (attempt {attempt}/{max_retries})"
+                )
+                continue
+            return response
         except urllib.error.HTTPError as exc:
             if int(exc.code) in RETRY_STATUS_CODES and attempt < max_retries:
                 last_error = exc
                 continue
+            raise
+        except UnsafeWebTargetError:
             raise
         except (urllib.error.URLError, OSError, TimeoutError) as exc:
             if attempt < max_retries:
@@ -364,6 +389,24 @@ def _fetch_with_retry(
             raise
 
     raise last_error or Exception("max retries exceeded")
+
+
+def _fetch_with_retry(
+    url: str,
+    *,
+    headers: Optional[Dict[str, str]] = None,
+    timeout: float = 15.0,
+    max_retries: int = MAX_RETRIES,
+    max_bytes: int = 0,
+) -> bytes:
+    """Compatibility wrapper returning only the safely fetched body."""
+    return _fetch_response_with_retry(
+        url,
+        headers=headers,
+        timeout=timeout,
+        max_retries=max_retries,
+        max_bytes=max_bytes,
+    ).body
 
 
 # ---------------------------------------------------------------------------
@@ -523,12 +566,19 @@ def extract_text_from_html(raw_html: str, max_chars: int = CONTENT_MAX_CHARS) ->
     return text
 
 
-def fetch_page_content(url: str, timeout: float = 15.0, max_bytes: int = CONTENT_MAX_BYTES) -> ContentResult:
+def fetch_page_content(
+    url: str,
+    timeout: float = 15.0,
+    max_bytes: int = CONTENT_MAX_BYTES,
+    *,
+    capture_method: str = "deep-research-fetch",
+) -> ContentResult:
     """Fetch a URL and return extracted text content with anti-bot resilience."""
     try:
-        raw_bytes = _fetch_with_retry(
+        response = _fetch_response_with_retry(
             url, headers=_browser_headers(), timeout=timeout, max_bytes=max_bytes,
         )
+        raw_bytes = response.body
         raw = raw_bytes.decode("utf-8", errors="ignore")
     except Exception as exc:
         return ContentResult(url=url, title="", content="", word_count=0, error=str(exc))
@@ -548,19 +598,38 @@ def fetch_page_content(url: str, timeout: float = 15.0, max_bytes: int = CONTENT
     elif word_count < MIN_CONTENT_WORDS and len(raw) > 1000:
         error = "low content yield (page may require JavaScript rendering)"
 
-    return ContentResult(url=url, title=title, content=text, word_count=word_count, error=error)
+    return ContentResult(
+        url=url,
+        title=title,
+        content=text,
+        word_count=word_count,
+        error=error,
+        final_url=response.final_url,
+        http_status=response.status,
+        fetched_at=utc_now_iso(),
+        raw_sha256=hashlib.sha256(raw_bytes).hexdigest(),
+        content_sha256=hashlib.sha256(text.encode("utf-8")).hexdigest(),
+        resolved_ips=response.resolved_ips,
+        capture_method=capture_method,
+        live_verified=True,
+    )
 
 
 def fetch_contents_parallel(
     urls: Sequence[str],
     timeout: float = 15.0,
     max_workers: int = CONTENT_FETCH_WORKERS,
+    *,
+    capture_method: str = "deep-research-fetch",
 ) -> List[ContentResult]:
     """Fetch multiple URLs concurrently and return results in input order."""
     results: Dict[str, ContentResult] = {}
 
     def _fetch_one(target_url: str) -> ContentResult:
-        return fetch_page_content(target_url, timeout=timeout)
+        result = fetch_page_content(target_url, timeout=timeout)
+        if result.live_verified:
+            result.capture_method = capture_method
+        return result
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         future_map = {executor.submit(_fetch_one, u): u for u in urls}
@@ -591,11 +660,15 @@ def validate_url_format(url: str) -> Tuple[bool, str]:
 
 def check_reachability(url: str, timeout: float) -> Tuple[bool, int, str]:
     """HEAD request with automatic GET fallback on 405."""
-    req = urllib.request.Request(url, method="HEAD", headers=_browser_headers())
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            status = getattr(resp, "status", 200)
-            return True, int(status), ""
+        response = fetch_public_url(
+            url,
+            method="HEAD",
+            headers=_browser_headers(),
+            timeout=timeout,
+            max_bytes=1,
+        )
+        return True, int(response.status), ""
     except urllib.error.HTTPError as exc:
         if exc.code == 405:
             return _check_reachability_get(url, timeout)
@@ -605,11 +678,15 @@ def check_reachability(url: str, timeout: float) -> Tuple[bool, int, str]:
 
 
 def _check_reachability_get(url: str, timeout: float) -> Tuple[bool, int, str]:
-    req = urllib.request.Request(url, method="GET", headers=_browser_headers())
     try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            status = getattr(resp, "status", 200)
-            return True, int(status), ""
+        response = fetch_public_url(
+            url,
+            method="GET",
+            headers=_browser_headers(),
+            timeout=timeout,
+            max_bytes=1,
+        )
+        return True, int(response.status), ""
     except urllib.error.HTTPError as exc:
         return False, int(exc.code), str(exc)
     except Exception as exc:  # pragma: no cover
@@ -628,11 +705,10 @@ def load_results(path: Path) -> List[SearchResult]:
         if not isinstance(row, dict):
             continue
         normalized = normalize_url(str(row.get("normalized_url", ""))) or normalize_url(str(row.get("url", "")))
-        domain = row.get("domain") or registrable_domain(urllib.parse.urlparse(normalized).hostname or "")
+        domain = registrable_domain(
+            urllib.parse.urlparse(normalized).hostname or ""
+        )
         inferred_type, inferred_tier, inferred_basis = infer_source_quality(domain)
-        tier = str(row.get("source_tier", "")).upper() or inferred_tier
-        if tier not in VALID_TIERS:
-            tier = inferred_tier
         out.append(
             SearchResult(
                 query=str(row.get("query", "")),
@@ -640,11 +716,11 @@ def load_results(path: Path) -> List[SearchResult]:
                 url=str(row.get("url", "")),
                 normalized_url=normalized,
                 domain=domain,
-                source_type=str(row.get("source_type", "")) or inferred_type,
+                source_type=inferred_type,
                 snippet=str(row.get("snippet", "")),
                 date=str(row.get("date", "")),
-                source_tier=tier,
-                classification_basis=str(row.get("classification_basis", "")) or inferred_basis,
+                source_tier=inferred_tier,
+                classification_basis=inferred_basis,
                 sponsorship=str(row.get("sponsorship", "")) or "unknown",
                 methodology=str(row.get("methodology", "")) or "unknown",
             )
@@ -670,13 +746,38 @@ def load_content_artifact(
         if not isinstance(row, dict):
             continue
         content = str(row.get("content", ""))
+        try:
+            word_count = int(
+                row.get("word_count", len(content.split())) or 0
+            )
+        except (TypeError, ValueError):
+            word_count = len(content.split())
+        try:
+            http_status = int(row.get("http_status", 0) or 0)
+        except (TypeError, ValueError):
+            http_status = 0
+        raw_resolved_ips = row.get("resolved_ips", [])
+        if not isinstance(raw_resolved_ips, (list, tuple)):
+            raw_resolved_ips = []
         out.append(
             ContentResult(
                 url=normalize_url(str(row.get("url", ""))) or str(row.get("url", "")),
                 title=str(row.get("title", "")),
                 content=content,
-                word_count=int(row.get("word_count", len(content.split())) or 0),
+                word_count=word_count,
                 error=str(row.get("error", "")),
+                final_url=normalize_url(str(row.get("final_url", ""))),
+                http_status=http_status,
+                fetched_at=str(row.get("fetched_at", "")),
+                raw_sha256=str(row.get("raw_sha256", "")),
+                content_sha256=str(row.get("content_sha256", "")),
+                resolved_ips=tuple(
+                    str(item)
+                    for item in raw_resolved_ips
+                    if str(item).strip()
+                ),
+                capture_method=str(row.get("capture_method", "")),
+                live_verified=False,
             )
         )
     metadata = (
@@ -812,17 +913,40 @@ def _validate_evidence_refs(
                 )
                 continue
             source = by_url[url]
+            live_verified = bool(content.live_verified)
+            effective_url = (
+                normalize_url(content.final_url)
+                if live_verified and content.final_url
+                else url
+            )
+            effective_domain = registrable_domain(
+                urllib.parse.urlparse(effective_url).hostname or ""
+            )
+            source_type, source_tier, classification_basis = (
+                infer_source_quality(effective_domain)
+            )
             verified.append(
                 {
                     "kind": "web",
                     "url": url,
+                    "final_url": effective_url,
                     "excerpt": excerpt,
-                    "domain": source.domain,
-                    "source_tier": source.source_tier,
-                    "primary": source.source_tier == "T1",
+                    "domain": effective_domain,
+                    "source_type": source_type,
+                    "source_tier": source_tier,
+                    "classification_basis": classification_basis,
+                    "declared_source_tier": source.source_tier,
+                    "live_verified": live_verified,
+                    "capture_method": content.capture_method,
+                    "http_status": content.http_status,
+                    "fetched_at": content.fetched_at,
+                    "raw_sha256": content.raw_sha256,
+                    "content_sha256": content.content_sha256,
+                    "resolved_ips": list(content.resolved_ips),
+                    "primary": live_verified and source_tier == "T1",
                 }
             )
-            independence.append(f"web:{source.domain}")
+            independence.append(f"web:{effective_domain}")
             continue
 
         if kind in {"code", "commit", "test"}:
@@ -898,8 +1022,25 @@ def _effective_confidence(
     if requested == "high":
         if qualifies_high:
             return "high", reasons
+        if claim_type == "single_fact":
+            web_units = [
+                item for item in verified if item.get("kind") == "web"
+            ]
+            if web_units and not any(
+                bool(item.get("live_verified")) for item in web_units
+            ):
+                reasons.append(
+                    "High requires live Web verification controlled by "
+                    "validate/report; serialized content is not execution proof"
+                )
+            elif web_units and not has_t1_web:
+                reasons.append(
+                    "High requires a validator-derived T1 source from the "
+                    "effective final URL; caller tier labels are not authoritative"
+                )
         reasons.append(
-            "High requires one verified T1 primary source for a narrow single fact, "
+            "High requires one current-process live-verified T1 primary Web "
+            "source for a narrow single fact, "
             "direct code evidence for a code fact, code plus a passing test for runtime "
             "behavior, or two independent verified units including a primary source"
         )
@@ -1400,7 +1541,7 @@ def build_sources_index(
         date = r.date if r.date else "unknown"
         lines.append(
             f"[{i}] {r.title} — {r.normalized_url} — "
-            f"{r.source_type} ({r.source_tier}) — date: {date}; "
+            f"{r.source_type} (preclassified {r.source_tier}) — date: {date}; "
             f"basis: {r.classification_basis}; sponsorship: {r.sponsorship}; "
             f"methodology: {r.methodology}"
         )
@@ -1569,6 +1710,27 @@ def _source_quality_notes(
     unverified = sum(
         1 for row in validation.get("findings", []) if not row.get("usable")
     )
+    validated_statements = []
+    for field in ("findings", "analysis_sections", "consensus", "debate"):
+        rows = validation.get(field, [])
+        if isinstance(rows, list):
+            validated_statements.extend(
+                row for row in rows if isinstance(row, dict)
+            )
+    verified_web = [
+        item
+        for row in validated_statements
+        for item in row.get("verified_evidence", [])
+        if isinstance(item, dict) and item.get("kind") == "web"
+    ]
+    live_web = sum(
+        1 for item in verified_web if bool(item.get("live_verified"))
+    )
+    live_t1 = sum(
+        1
+        for item in verified_web
+        if bool(item.get("live_verified")) and item.get("source_tier") == "T1"
+    )
     repository_rows = (
         code_evidence.get("evidence", [])
         if isinstance(code_evidence, dict)
@@ -1598,8 +1760,9 @@ def _source_quality_notes(
     )
     if results and repository_rows:
         classification_basis = (
-            "- Classification basis: web domain heuristics are provisional; "
-            "explicit metadata wins; repository artifacts are assessed directly."
+            "- Classification basis: caller-provided web tier/type labels are ignored; "
+            "the validator re-derives authority from the effective final URL, while "
+            "repository artifacts are assessed directly."
         )
     elif repository_rows:
         classification_basis = (
@@ -1608,12 +1771,20 @@ def _source_quality_notes(
         )
     else:
         classification_basis = (
-            "- Classification basis: domain heuristics are provisional; explicit metadata wins."
+            "- Classification basis: caller-provided web tier/type labels are ignored; "
+            "domain heuristics are re-derived from normalized URLs, and only a fresh "
+            "validator-controlled capture may establish primary-source status."
         )
     return "\n".join(
         [
             f"- Source tier distribution: {tier_line}",
             classification_basis,
+            (
+                "- Live Web verification: "
+                f"{live_web}/{len(verified_web)} verified Web evidence references "
+                f"were freshly captured; validator-derived live T1: {live_t1}. "
+                "Serialized content artifacts are audit inputs, not execution proof."
+            ),
             (
                 "- Potential bias / sponsorship requiring review: "
                 + (", ".join(potential_bias) if potential_bias else "none identified")
@@ -1902,6 +2073,58 @@ def cmd_retrieve(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cited_web_urls(findings: Dict[str, Any]) -> List[str]:
+    urls: List[str] = []
+    if not isinstance(findings, dict):
+        return urls
+    for field in ("findings", "analysis_sections", "consensus", "debate"):
+        rows = findings.get(field, [])
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            evidence = row.get("evidence", [])
+            if not isinstance(evidence, list):
+                continue
+            for item in evidence:
+                if (
+                    not isinstance(item, dict)
+                    or str(item.get("kind", "")).strip().lower() != "web"
+                ):
+                    continue
+                url = normalize_url(str(item.get("url", "")))
+                if url:
+                    urls.append(url)
+    return list(dict.fromkeys(urls))
+
+
+def _live_verify_web_contents(
+    findings: Dict[str, Any],
+    loaded_contents: Sequence[ContentResult],
+    *,
+    timeout: float,
+    workers: int = CONTENT_FETCH_WORKERS,
+) -> List[ContentResult]:
+    """Replace cited serialized content with fresh safe in-process captures."""
+    cited_urls = _cited_web_urls(findings)
+    if not cited_urls:
+        return list(loaded_contents)
+    fresh = fetch_contents_parallel(
+        cited_urls,
+        timeout=timeout,
+        max_workers=workers,
+        capture_method="validator-live-fetch",
+    )
+    merged = {
+        normalize_url(item.url) or item.url: item
+        for item in loaded_contents
+    }
+    for item in fresh:
+        merged[normalize_url(item.url) or item.url] = item
+    return list(merged.values())
+
+
 def cmd_validate(args: argparse.Namespace) -> int:
     results = load_results(Path(args.results)) if args.results else []
     contents, content_metadata = (
@@ -1915,6 +2138,12 @@ def cmd_validate(args: argparse.Namespace) -> int:
         else {}
     )
     findings = load_findings(Path(args.findings))
+    if args.live_web and args.research_kind in {"web", "hybrid"}:
+        contents = _live_verify_web_contents(
+            findings,
+            contents,
+            timeout=args.timeout,
+        )
     url_issues: List[Dict[str, Any]] = []
     details = []
 
@@ -1998,6 +2227,12 @@ def cmd_report(args: argparse.Namespace) -> int:
         else {}
     )
     findings = load_findings(Path(args.findings))
+    if args.live_web and args.research_kind in {"web", "hybrid"}:
+        contents = _live_verify_web_contents(
+            findings,
+            contents,
+            timeout=args.timeout,
+        )
     validation = validate_research_bundle(
         research_kind=args.research_kind,
         results=results,
@@ -2055,6 +2290,13 @@ def cmd_fetch_content(args: argparse.Namespace) -> int:
         urls = list(args.url)
     else:
         print("provide --results or --url", file=sys.stderr)
+        return 2
+
+    try:
+        for url in urls:
+            resolve_public_target(url)
+    except UnsafeWebTargetError as exc:
+        print(f"unsafe Web target: {exc}", file=sys.stderr)
         return 2
 
     input_count = len(urls)
@@ -2366,6 +2608,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_validate.add_argument("--findings", required=True, help="findings JSON path")
     p_validate.add_argument("--budget-exhausted", action="store_true")
     p_validate.add_argument("--check-live", action="store_true", help="perform runtime reachability checks")
+    p_validate.add_argument(
+        "--live-web",
+        action="store_true",
+        help="securely refetch cited Web pages so they may qualify for High",
+    )
     p_validate.add_argument("--timeout", type=float, default=8.0)
     p_validate.add_argument("--output", default="", help="optional validation JSON path")
     p_validate.set_defaults(func=cmd_validate)
@@ -2380,6 +2627,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_report.add_argument("--session", required=True, help="plan/session JSON path")
     p_report.add_argument("--mode", "--depth", dest="mode", choices=VALID_MODES, default="")
     p_report.add_argument("--budget-exhausted", action="store_true")
+    p_report.add_argument(
+        "--live-web",
+        action="store_true",
+        help="securely refetch cited Web pages so they may qualify for High",
+    )
+    p_report.add_argument("--timeout", type=float, default=8.0)
     p_report.add_argument("--validation-output", default="", help="optional validation JSON path")
     p_report.add_argument("--output", required=True, help="output markdown path")
     p_report.set_defaults(func=cmd_report)

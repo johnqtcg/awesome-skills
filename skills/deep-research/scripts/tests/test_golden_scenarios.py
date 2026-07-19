@@ -238,19 +238,27 @@ class TestBehavioralScenarios(unittest.TestCase):
         f = self._load("behavior_confidence_high.json")
         source = self.deep_research.SearchResult(
             query="q",
-            title="Go context",
-            url="https://go.dev/pkg/context",
-            normalized_url="https://go.dev/pkg/context",
-            domain="go.dev",
+            title="NIST example",
+            url="https://www.nist.gov/example",
+            normalized_url="https://www.nist.gov/example",
+            domain="www.nist.gov",
             source_type="official",
             source_tier="T1",
-            classification_basis="explicit",
+            classification_basis="government domain",
         )
         content = self.deep_research.ContentResult(
             url=source.url,
             title=source.title,
             content="WithTimeout returns a copy of the parent context.",
             word_count=8,
+            final_url=source.url,
+            http_status=200,
+            fetched_at="2026-07-19T00:00:00Z",
+            raw_sha256="a" * 64,
+            content_sha256="b" * 64,
+            resolved_ips=("129.6.13.49",),
+            capture_method="validator-live-fetch",
+            live_verified=True,
         )
         finding = {
             "title": "Return value",

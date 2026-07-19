@@ -2,7 +2,7 @@
 title: deep-research skill 设计解析
 owner: awesome-skills maintainers
 status: active
-last_updated: 2026-07-18
+last_updated: 2026-07-19
 applicable_versions: current repository version
 ---
 
@@ -126,6 +126,11 @@ applicable_versions: current repository version
 
 因此，skill 要求先通过 `fetch-content` 提取页面正文，再进行 synthesis。更重要的是，`content.json` 现在是 Web 和 Hybrid 研究中 `validate` 与 `report` 的强制输入。每条 Web 证据必须携带精确摘录，验证器会确认该摘录确实存在于成功提取的正文中；提取失败的 URL 不能支撑 finding。
 
+保存下来的 artifact 不被视为独立执行证明：它由调用方控制，加载时无条件清除
+`live_verified`。精确摘录匹配后，它可用于编写 finding 并支撑 Medium；Web
+High 必须由当前 `validate/report` 进程通过公网限定传输重新抓取、匹配摘录，
+并根据有效最终 URL 重新推导权威等级。
+
 这让 `deep-research` 和“会搜索”的普通工作流形成了本质区别。它要求的不是“看到来源”，而是“真的读过来源”。
 
 ### 4.6 执行真实性 要单独强调
@@ -222,7 +227,8 @@ applicable_versions: current repository version
 
 Skill 明确解决了此前 High-confidence 规则冲突：
 
-- 狭义单一事实可由一份已验证的 T1 一手来源达到 High
+- 狭义 Web 单一事实只有在当前验证器控制的实时抓取中，且有效最终 URL
+  被重新推导为 T1 时，才能达到 High
 - 直接代码事实只有在验证器解析十六进制 commit、回读 `<commit>:<path>` 并匹配声明行与摘录后才能达到 High
 - 脏文件或未跟踪内容会标记为 `working-tree-unpinned`，不会被错误归属到 HEAD
 - 运行时行为要求每个被引用代码项都固定到同一 commit/tree，并由一个
@@ -230,18 +236,33 @@ Skill 明确解决了此前 High-confidence 规则冲突：
   通过相关性审核且绑定该干净快照
 - 其他 High finding 必须有两份独立的已验证证据，且至少一份是一手证据
 
-自动来源分类只用于预分类。任意 `docs.*` 不会自动变成官方来源，`.edu` 只标记为机构来源；每个来源都输出 T1–T5、分类依据、赞助关系、方法学，以及日期或 `unknown`。
+自动来源分类只用于预分类。任意 `docs.*` 不会自动变成官方来源，`.edu`
+只标记为机构来源；每个来源都输出 T1–T5、分类依据、赞助关系、方法学，
+以及日期或 `unknown`。调用方提供的 tier/type/domain 字段不会参与权威决策；
+当前自动 T1 规则有意 fail closed，仅认可已识别的政府命名空间。
 
 ### 4.13 行为测试验证真实决策，而不是 fixture 标签
 
-Golden request 会被直接交给真实的 planner、置信度评估器和降级状态机。负向测试证明：缺少正文、提取失败、摘录不匹配、不存在的路径/commit、错误 commit subject、错误代码行、旧式手写通过状态、缺少语义覆盖、pinned 与 unpinned 代码混入、多个 receipt 拼接覆盖、代码跨快照、脏或错配测试快照以及第 51 个查询都不能静默通过。测试还证明只读 snapshot helper 能区分干净/脏仓库，并在非 Git 目录 fail closed；真实多进程竞争则验证预算跨命令安全累计、外部预留进入同一账本、报告来源上限可执行、多语言仓库/深度请求分类正确、提取预算耗尽会传入报告，并断言九个顶层标题完整且有序。
+Golden request 会被直接交给真实的 planner、置信度评估器和降级状态机。负向测试证明：缺少正文、提取失败、摘录不匹配、调用方伪造 T1/live 标记、不安全 URL scheme、非公网或混合 DNS、私网重定向、不存在的路径/commit、错误 commit subject、错误代码行、旧式手写通过状态、缺少语义覆盖、pinned 与 unpinned 代码混入、多个 receipt 拼接覆盖、代码跨快照、脏或错配测试快照以及第 51 个查询都不能静默通过。测试还证明安全传输只连接已验证 IP，只读 snapshot helper 能区分干净/脏仓库并在非 Git 目录 fail closed；真实多进程竞争则验证预算跨命令安全累计、外部预留进入同一账本、报告来源上限可执行、多语言仓库/深度请求分类正确、提取预算耗尽会传入报告，并断言九个顶层标题完整且有序。
 
 ### 4.14 按职责拆分模块，限制跨子系统回归
 
-规划与多语言分类、会话预算、仓库 snapshot/测试 receipt 验证、报告来源选择已经拆到
+规划与多语言分类、会话预算、仓库 snapshot/测试 receipt 验证、报告来源选择和安全 Web 传输已经拆到
 `scripts/deep_research_lib/` 下的独立模块；CLI 保留兼容入口。这样每个
 信任边界都可以独立测试，也避免继续把 Git 或预算规则直接堆进无关的
 检索和报告渲染代码。
+
+### 4.15 Web 证据采用同一套边界验证原则
+
+Web 与仓库证据现在遵循同一条规则：结构化记录只是声明，验证器必须跨过
+对应的权威边界。Git 事实从 Git 重新推导；Web High 从当前 HTTP(S) 响应
+重新推导。启用 `--live-web` 后，验证器忽略调用方来源标签，重新抓取引用
+页面，记录 hash 与网络 provenance，并按有效最终 URL 分类。
+
+出站边界同样关键。Helper 只接受公网 HTTP(S)，拒绝 URL 凭据和任一非公网
+DNS 答案，使用已经验证的 IP 建连并保留 TLS 主机名校验，每个重定向都重新
+验证。因此被广泛允许的研究 helper 不会变成本地文件读取器或私网/云元数据
+SSRF 代理。
 
 ## 5. 这个设计解决了哪些具体问题
 
@@ -260,6 +281,8 @@ Golden request 会被直接交给真实的 planner、置信度评估器和降级
 | 只会做外部检索，不会结合代码库 | 一等 code / commit / test 证据 | 同时支持纯代码库与混合研发研究 |
 | 文档预算只是建议 | 加锁会话账本 + parser 纵深校验 | 拒绝累计超预算检索/提取和来源超限报告 |
 | 把仓库 JSON 当作执行事实 | Git blob 回读 + 受根目录约束的工作区校验 + 只读 snapshot helper + 完整代码集 receipt 绑定 | 拒绝伪造路径、commit、行号、subject、通用通过状态、unpinned 混入、receipt 拼接覆盖和跨快照主张，同时避免 helper 变成命令代理 |
+| 把 Web JSON 当作权威/执行事实 | 当前进程实时抓取 + 最终 URL 等级推导 | 调用方伪造 T1、type、domain、live 字段不能制造 Web High |
+| 研究 URL 变成 SSRF/文件读取通道 | 公网限定、DNS/IP 固定传输 + 每跳重定向验证 | 在建连前拒绝本地 scheme、私网/元数据地址、混合 DNS 和不安全重定向 |
 | fixture 只验证自己的标签 | 可执行行为场景 | 验证输入 → 决策 → 输出 |
 
 ## 6. 主要亮点
@@ -274,7 +297,8 @@ Golden request 会被直接交给真实的 planner、置信度评估器和降级
 
 ### 6.3 对“证据是否真的读过”要求很严格
 
-强制 content extraction 是这个 skill 最重要的质量控制点之一。它直接抬高了研究结论的可靠性下限。
+强制 content extraction 是这个 skill 最重要的质量控制点之一。对于 Web
+High，验证器还会执行当前安全实时抓取，而不是信任序列化提取 artifact。
 
 ### 6.4 结构化交付非常适合沉淀为长期资产
 
@@ -323,6 +347,7 @@ Research Question、Method、Executive Summary、Key Findings、Detailed Analysi
 
 - `skills/deep-research/SKILL.md`
 - `skills/deep-research/references/output-contract-template.md`
+- `skills/deep-research/references/web-evidence-and-egress.md`
 - `skills/deep-research/references/hallucination-and-verification.md`
 - `skills/deep-research/references/research-patterns.md`
 - `skills/deep-research/scripts/deep_research.py`

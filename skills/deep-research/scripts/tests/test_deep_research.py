@@ -17,6 +17,22 @@ sys.modules[spec.name] = deep_research
 spec.loader.exec_module(deep_research)
 
 
+def public_response(
+    body: bytes = b"",
+    *,
+    status: int = 200,
+    url: str = "https://example.com/",
+):
+    return deep_research.PublicWebResponse(
+        requested_url=url,
+        final_url=url,
+        status=status,
+        headers={},
+        body=body,
+        resolved_ips=("93.184.216.34",),
+    )
+
+
 # ---------------------------------------------------------------------------
 # normalize_url
 # ---------------------------------------------------------------------------
@@ -605,19 +621,11 @@ class TestFetchPageContent(unittest.TestCase):
     def test_extracts_title_and_content(self):
         html_doc = b"<html><head><title>Test Page</title></head><body><p>Content here</p></body></html>"
 
-        class FakeResponse:
-            status = 200
-
-            def read(self, n=-1):
-                return html_doc[:n] if n > 0 else html_doc
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                pass
-
-        with patch("urllib.request.urlopen", return_value=FakeResponse()):
+        with patch.object(
+            deep_research,
+            "fetch_public_url",
+            return_value=public_response(html_doc),
+        ):
             result = deep_research.fetch_page_content("https://example.com")
 
         self.assertEqual("Test Page", result.title)
@@ -626,7 +634,11 @@ class TestFetchPageContent(unittest.TestCase):
         self.assertGreater(result.word_count, 0)
 
     def test_returns_error_on_failure(self):
-        with patch("urllib.request.urlopen", side_effect=Exception("network down")):
+        with patch.object(
+            deep_research,
+            "fetch_public_url",
+            side_effect=OSError("network down"),
+        ):
             result = deep_research.fetch_page_content("https://example.com")
 
         self.assertEqual("", result.content)
@@ -707,40 +719,30 @@ class TestSearchCodebase(unittest.TestCase):
 
 class TestCheckReachability(unittest.TestCase):
     def test_head_success(self):
-        class FakeResponse:
-            status = 200
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                pass
-
-        with patch("urllib.request.urlopen", return_value=FakeResponse()):
+        with patch.object(
+            deep_research,
+            "fetch_public_url",
+            return_value=public_response(),
+        ):
             ok, status, err = deep_research.check_reachability("https://example.com", timeout=5)
 
         self.assertTrue(ok)
         self.assertEqual(200, status)
 
     def test_fallback_to_get_on_405(self):
-        class FakeResponse:
-            status = 200
-
-            def __enter__(self):
-                return self
-
-            def __exit__(self, *a):
-                pass
-
         effects = [
             urllib.error.HTTPError(
                 "https://example.com", 405, "Method Not Allowed",
                 {}, io.BytesIO(b""),
             ),
-            FakeResponse(),
+            public_response(),
         ]
 
-        with patch("urllib.request.urlopen", side_effect=effects):
+        with patch.object(
+            deep_research,
+            "fetch_public_url",
+            side_effect=effects,
+        ):
             ok, status, err = deep_research.check_reachability("https://example.com", timeout=5)
 
         self.assertTrue(ok)
@@ -840,38 +842,24 @@ class TestIsBlockedResponse(unittest.TestCase):
 
 class TestFetchWithRetry(unittest.TestCase):
     def test_succeeds_on_first_try(self):
-        class FakeResponse:
-            status = 200
-            def read(self, n=-1):
-                return b"<html>OK</html>"
-            def __enter__(self):
-                return self
-            def __exit__(self, *a):
-                pass
-
-        with patch("urllib.request.urlopen", return_value=FakeResponse()):
+        with patch.object(
+            deep_research,
+            "fetch_public_url",
+            return_value=public_response(b"<html>OK</html>"),
+        ):
             body = deep_research._fetch_with_retry("https://example.com", timeout=5)
         self.assertEqual(b"<html>OK</html>", body)
 
     def test_retries_on_429(self):
         call_count = [0]
 
-        class FakeResponse:
-            status = 200
-            def read(self, n=-1):
-                return b"<html>OK</html>"
-            def __enter__(self):
-                return self
-            def __exit__(self, *a):
-                pass
-
         def side_effect(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
                 raise urllib.error.HTTPError("url", 429, "Too Many Requests", {}, io.BytesIO(b""))
-            return FakeResponse()
+            return public_response(b"<html>OK</html>")
 
-        with patch("urllib.request.urlopen", side_effect=side_effect), \
+        with patch.object(deep_research, "fetch_public_url", side_effect=side_effect), \
              patch("time.sleep"):
             body = deep_research._fetch_with_retry("https://example.com", timeout=5)
         self.assertEqual(b"<html>OK</html>", body)
@@ -880,61 +868,41 @@ class TestFetchWithRetry(unittest.TestCase):
     def test_retries_on_blocked_response(self):
         call_count = [0]
 
-        class BlockedResponse:
-            status = 200
-            def read(self, n=-1):
-                return b"<html><title>Just a moment...</title></html>"
-            def __enter__(self):
-                return self
-            def __exit__(self, *a):
-                pass
-
-        class OkResponse:
-            status = 200
-            def read(self, n=-1):
-                return b"<html><body>Real content</body></html>"
-            def __enter__(self):
-                return self
-            def __exit__(self, *a):
-                pass
-
         def side_effect(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] == 1:
-                return BlockedResponse()
-            return OkResponse()
+                return public_response(
+                    b"<html><title>Just a moment...</title></html>"
+                )
+            return public_response(b"<html><body>Real content</body></html>")
 
-        with patch("urllib.request.urlopen", side_effect=side_effect), \
+        with patch.object(deep_research, "fetch_public_url", side_effect=side_effect), \
              patch("time.sleep"):
             body = deep_research._fetch_with_retry("https://example.com", timeout=5)
         self.assertIn(b"Real content", body)
         self.assertEqual(2, call_count[0])
 
     def test_raises_on_non_retryable_error(self):
-        with patch("urllib.request.urlopen",
-                   side_effect=urllib.error.HTTPError("url", 404, "Not Found", {}, io.BytesIO(b""))):
+        with patch.object(
+            deep_research,
+            "fetch_public_url",
+            side_effect=urllib.error.HTTPError(
+                "url", 404, "Not Found", {}, io.BytesIO(b"")
+            ),
+        ):
             with self.assertRaises(urllib.error.HTTPError):
                 deep_research._fetch_with_retry("https://example.com", timeout=5, max_retries=2)
 
     def test_retries_on_503(self):
         call_count = [0]
 
-        class FakeResponse:
-            status = 200
-            def read(self, n=-1):
-                return b"<html>OK</html>"
-            def __enter__(self):
-                return self
-            def __exit__(self, *a):
-                pass
-
         def side_effect(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] <= 2:
                 raise urllib.error.HTTPError("url", 503, "Service Unavailable", {}, io.BytesIO(b""))
-            return FakeResponse()
+            return public_response(b"<html>OK</html>")
 
-        with patch("urllib.request.urlopen", side_effect=side_effect), \
+        with patch.object(deep_research, "fetch_public_url", side_effect=side_effect), \
              patch("time.sleep"):
             body = deep_research._fetch_with_retry("https://example.com", timeout=5)
         self.assertEqual(b"<html>OK</html>", body)
@@ -990,32 +958,22 @@ class TestFetchPageContentQuality(unittest.TestCase):
     def test_detects_blocked_page(self):
         blocked_html = b"<html><title>Just a moment...</title><body>Checking if the site connection is secure</body></html>"
 
-        class FakeResponse:
-            status = 200
-            def read(self, n=-1):
-                return blocked_html[:n] if n > 0 else blocked_html
-            def __enter__(self):
-                return self
-            def __exit__(self, *a):
-                pass
-
-        with patch("urllib.request.urlopen", return_value=FakeResponse()):
+        with patch.object(
+            deep_research,
+            "fetch_public_url",
+            return_value=public_response(blocked_html),
+        ):
             result = deep_research.fetch_page_content("https://example.com")
         self.assertIn("WAF", result.error)
 
     def test_detects_low_content_yield(self):
         sparse_html = b"<html><head><title>T</title></head><body>" + b"x" * 2000 + b"<p>short</p></body></html>"
 
-        class FakeResponse:
-            status = 200
-            def read(self, n=-1):
-                return sparse_html[:n] if n > 0 else sparse_html
-            def __enter__(self):
-                return self
-            def __exit__(self, *a):
-                pass
-
-        with patch("urllib.request.urlopen", return_value=FakeResponse()):
+        with patch.object(
+            deep_research,
+            "fetch_public_url",
+            return_value=public_response(sparse_html),
+        ):
             result = deep_research.fetch_page_content("https://example.com")
         # Should detect the page has very few words relative to HTML size
         self.assertTrue(result.error == "" or "content yield" in result.error or "WAF" in result.error)

@@ -412,6 +412,7 @@ using the record:
 | Code belongs to a revision | Resolve the commit, read the declared blob, and compare path/line/excerpt |
 | Current file observation | Bound the path to the declared root and label it unpinned when dirty or untracked |
 | Test supports a runtime claim | Execute once through the host permission layer; require one receipt to cover the claim and the complete same-snapshot pinned code set, tested paths, and relevance review |
+| Web page is a primary live source | Ignore imported tier/live labels; fetch in the verifier, match the excerpt, and derive authority from the effective final URL |
 | Session budget remains | Reserve usage in locked persistent state, not a per-command counter |
 
 Keep collection and verification separate. A broadly allowed validator must
@@ -424,6 +425,13 @@ one pinned item can hide an unpinned item, or several partial receipts can be
 composed into a confidence level that no single execution supports. A narrow
 read-only snapshot helper may expose commit/tree/dirty identity, but it must
 not execute recorded commands or claim to prove historical execution.
+
+The same boundary rule applies to network access. A broadly allowed research
+helper must not become an SSRF or local-file proxy. Restrict it to public
+HTTP(S), reject the entire target when any DNS answer is non-public, connect to
+the validated IP while preserving TLS hostname checks, and revalidate every
+redirect. Saved content and its hashes remain auditable inputs, not reusable
+proof that a later validator performed the fetch.
 
 ---
 

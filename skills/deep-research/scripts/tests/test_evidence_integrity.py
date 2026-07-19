@@ -8,6 +8,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "deep_research.py"
 spec = importlib.util.spec_from_file_location("deep_research_integrity", SCRIPT)
@@ -150,21 +151,30 @@ def web_content(
     url: str = "https://go.dev/pkg/context",
     *,
     error: str = "",
+    live_verified: bool = False,
 ) -> object:
     content = (
         "WithTimeout returns a copy of the parent context with the timeout "
         "adjusted to be no later than d."
     )
-    return deep_research.ContentResult(
+    result = deep_research.ContentResult(
         url=url,
         title="context package",
         content=content,
         word_count=len(content.split()),
         error=error,
     )
+    result.live_verified = live_verified
+    result.final_url = url
+    return result
 
 
-def web_finding(*, confidence: str = "high", excerpt: str = "") -> dict:
+def web_finding(
+    *,
+    confidence: str = "high",
+    excerpt: str = "",
+    url: str = "https://go.dev/pkg/context",
+) -> dict:
     return {
         "title": "WithTimeout return value",
         "claim_type": "single_fact",
@@ -173,7 +183,7 @@ def web_finding(*, confidence: str = "high", excerpt: str = "") -> dict:
         "evidence": [
             {
                 "kind": "web",
-                "url": "https://go.dev/pkg/context",
+                "url": url,
                 "excerpt": excerpt
                 or "WithTimeout returns a copy of the parent context",
             }
@@ -245,7 +255,7 @@ class TestExecutableModeStateMachine(unittest.TestCase):
 
 
 class TestWebEvidenceClosure(unittest.TestCase):
-    def test_single_t1_primary_source_can_be_high(self) -> None:
+    def test_caller_authored_t1_cannot_be_high(self) -> None:
         summary = deep_research.validate_research_bundle(
             research_kind="web",
             results=[web_source()],
@@ -254,8 +264,147 @@ class TestWebEvidenceClosure(unittest.TestCase):
             findings={"findings": [web_finding()]},
         )
         assessed = summary["findings"][0]
+        self.assertEqual("medium", assessed["effective_confidence"])
+        self.assertEqual("Partial", summary["degradation"])
+        self.assertIn(
+            "live Web verification",
+            " ".join(assessed["downgrade_reasons"]),
+        )
+
+    def test_serialized_live_flag_and_t1_label_are_not_trusted(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            results_path = root / "results.json"
+            content_path = root / "content.json"
+            results_path.write_text(
+                json.dumps(
+                    {
+                        "results": [
+                            {
+                                "query": "claim",
+                                "title": "Caller-authored source",
+                                "url": "https://example.com/claim",
+                                "source_type": "official",
+                                "source_tier": "T1",
+                                "classification_basis": "explicit",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            content_path.write_text(
+                json.dumps(
+                    {
+                        "items": [
+                            {
+                                "url": "https://example.com/claim",
+                                "title": "Caller-authored content",
+                                "content": "The caller-authored claim is true.",
+                                "word_count": 6,
+                                "error": "",
+                                "live_verified": True,
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            results = deep_research.load_results(results_path)
+            contents, _ = deep_research.load_content_artifact(content_path)
+        finding = {
+            "title": "Caller-authored claim",
+            "claim_type": "single_fact",
+            "confidence": "high",
+            "analysis": "The caller-authored claim is true.",
+            "evidence": [
+                {
+                    "kind": "web",
+                    "url": "https://example.com/claim",
+                    "excerpt": "caller-authored claim is true",
+                }
+            ],
+        }
+        summary = deep_research.validate_research_bundle(
+            research_kind="web",
+            results=results,
+            contents=contents,
+            code_evidence={},
+            findings={"findings": [finding]},
+        )
+        assessed = summary["findings"][0]
+        self.assertEqual("medium", assessed["effective_confidence"])
+        self.assertFalse(assessed["verified_evidence"][0]["live_verified"])
+        self.assertEqual("T4", assessed["verified_evidence"][0]["source_tier"])
+
+    def test_live_verified_validator_derived_t1_can_be_high(self) -> None:
+        url = "https://www.nist.gov/example"
+        summary = deep_research.validate_research_bundle(
+            research_kind="web",
+            results=[web_source(url=url)],
+            contents=[web_content(url=url, live_verified=True)],
+            code_evidence={},
+            findings={"findings": [web_finding(url=url)]},
+        )
+        assessed = summary["findings"][0]
         self.assertEqual("high", assessed["effective_confidence"])
         self.assertEqual("Full", summary["degradation"])
+
+    def test_live_verifier_replaces_serialized_content_before_assessment(self) -> None:
+        url = "https://www.nist.gov/example"
+        loaded = web_content(url)
+        loaded.content = "Caller supplied unrelated text."
+        fresh = web_content(url, live_verified=True)
+        fresh.capture_method = "validator-live-fetch"
+        fresh.http_status = 200
+        with patch.object(
+            deep_research,
+            "fetch_contents_parallel",
+            return_value=[fresh],
+        ) as fetch:
+            contents = deep_research._live_verify_web_contents(
+                {"findings": [web_finding(url=url)]},
+                [loaded],
+                timeout=3,
+            )
+        fetch.assert_called_once_with(
+            [url],
+            timeout=3,
+            max_workers=deep_research.CONTENT_FETCH_WORKERS,
+            capture_method="validator-live-fetch",
+        )
+        summary = deep_research.validate_research_bundle(
+            research_kind="web",
+            results=[web_source(url=url)],
+            contents=contents,
+            code_evidence={},
+            findings={"findings": [web_finding(url=url)]},
+        )
+        self.assertEqual(
+            "high",
+            summary["findings"][0]["effective_confidence"],
+        )
+
+    def test_effective_final_url_controls_live_authority(self) -> None:
+        requested_url = "https://www.nist.gov/example"
+        content = web_content(requested_url, live_verified=True)
+        content.final_url = "https://example.com/redirected"
+        content.capture_method = "validator-live-fetch"
+        summary = deep_research.validate_research_bundle(
+            research_kind="web",
+            results=[web_source(url=requested_url)],
+            contents=[content],
+            code_evidence={},
+            findings={"findings": [web_finding(url=requested_url)]},
+        )
+        assessed = summary["findings"][0]
+        self.assertEqual("medium", assessed["effective_confidence"])
+        verified = assessed["verified_evidence"][0]
+        self.assertEqual(
+            "https://example.com/redirected",
+            verified["final_url"],
+        )
+        self.assertEqual("T4", verified["source_tier"])
 
     def test_missing_content_blocks_web_research(self) -> None:
         summary = deep_research.validate_research_bundle(

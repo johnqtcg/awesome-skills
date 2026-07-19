@@ -22,7 +22,12 @@ Use this exact nine-section structure for Quick, Standard, and Deep reports. Qui
 }
 ```
 
-The URL must exist in retrieval results. Extraction must have succeeded. The normalized excerpt must occur in extracted content.
+The URL must exist in retrieval results. Extraction must have succeeded. The
+normalized excerpt must occur in extracted content. A serialized
+`content.json` record is an untrusted authoring artifact: loading it clears
+`live_verified`, regardless of caller fields. It may support Medium after
+excerpt matching, but Web High requires a fresh `validate/report --live-web`
+capture in the current process.
 
 ### Repository finding
 
@@ -102,6 +107,7 @@ Do not use legacy `citations` arrays as verified evidence. They do not contain p
 - Repository evidence units:
 - Cited evidence units:
 - Validation checks performed:
+- Live Web captures / validator-derived T1 references:
 
 Use observed counts, never planned counts.
 
@@ -138,7 +144,8 @@ Keep both subsections under this single top-level section.
 ## 7) Source Quality Notes
 
 - Source tier T1–T5 distribution:
-- Classification basis and manual overrides:
+- Classification basis, effective final URLs, and live-capture count:
+- Caller tier/type labels ignored:
 - Potential sponsorship / conflicts of interest:
 - Methodology quality and unknowns:
 - Single-source findings:
@@ -153,8 +160,13 @@ Web:
 
 ```text
 [1] Title — URL — source type (T1–T5) — date or unknown;
-    classification basis; sponsorship; methodology
+    preclassification basis; sponsorship; methodology
 ```
+
+For confidence, use the validator's evidence record rather than the serialized
+source row. It records the requested and effective final URL, capture method,
+capture time, HTTP status, resolved public IPs, content hashes,
+`live_verified`, and the tier/type re-derived from the effective URL.
 
 Repository:
 
@@ -181,7 +193,9 @@ identity and eligibility but never executes recorded argv. See
 
 ## Confidence Contract
 
-- `single_fact`: allow High with one verified T1 primary web source.
+- `single_fact`: allow High only with one T1 primary Web source freshly
+  captured by the current validator/report process. The exact excerpt must
+  match that capture, and T1 must be re-derived from its effective final URL.
 - `code_fact`: allow High only when direct code is verified from the declared Git blob.
 - `runtime_behavior`: allow High only when every cited code item verifies as
   pinned to one commit/tree and one passed, reviewed host receipt covers the
@@ -197,6 +211,11 @@ identity and eligibility but never executes recorded argv. See
 - [ ] `report` ran automatic validation.
 - [ ] Every substantive finding and analysis section uses typed verified evidence.
 - [ ] Every web excerpt exists in successfully extracted content.
+- [ ] Every Web High excerpt exists in a fresh validator-controlled capture;
+      serialized `live_verified`, tier, type, domain, and classification fields
+      were not trusted.
+- [ ] Every bundled Web request used public HTTP(S), validated every DNS answer,
+      connected to a validated IP, and revalidated each redirect target.
 - [ ] Every repository reference resolves and is independently checked against Git, the bounded working tree, or a statically verified host receipt.
 - [ ] One Runtime High receipt covers the stable finding and complete code-ID/path set; every cited code item is pinned to the same clean snapshot.
 - [ ] Effective confidence follows the single confidence contract.

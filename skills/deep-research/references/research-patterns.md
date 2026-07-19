@@ -42,6 +42,11 @@ When researching API behavior, configuration, or specifications:
 
 **Pitfall**: Documentation may lag behind actual implementation. Check both docs AND release notes for the specific version.
 
+For High confidence, “official” is not a caller label. The final validator must
+freshly capture the cited page, match the excerpt, and re-derive T1 from the
+effective final URL. A browser-exported or handwritten content record remains
+an authoring artifact capped below High.
+
 ## 3. GitHub Code Search Patterns
 
 When researching how others implement a pattern:
@@ -211,6 +216,16 @@ Choose tools based on the artifact required, availability, and access constraint
 | Commit fact | Version-control inspection |
 
 Record which capability ran and whether it produced the artifact. Do not publish an unsourced ranking of named AI research products or treat a tool-generated citation as proof that its page was read.
+
+### Safe Web boundary
+
+Use the bundled fetch path for all URLs that the helper opens. It accepts only
+public HTTP(S), rejects URL credentials and every non-public DNS answer, pins
+the connection to the validated address, preserves TLS hostname checks, and
+revalidates redirects. Never add an alternate raw `urllib`, `curl`, local-file,
+or browser URL path to work around the boundary. If an external host fetcher
+is used, reserve budget and import the content for authoring, but do not call it
+live execution proof or use it to produce High.
 
 ## Quick Reference: Query Syntax
 

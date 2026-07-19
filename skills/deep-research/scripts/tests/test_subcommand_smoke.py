@@ -184,19 +184,38 @@ class SubcommandSmokeTests(unittest.TestCase):
         self.assertIn("## 7) Source Quality Notes", text)
         self.assertIn("go.dev", text)
 
-    def test_fetch_content_unreachable_url_still_writes_output(self) -> None:
-        out = self.tmp / "content.json"
-        # 127.0.0.1:9 refuses instantly — exercises the full pipeline offline.
-        # All-URLs-failed returns rc=2 by design, but the output JSON with the
-        # per-URL error records must already be on disk (write before verdict).
+    def test_fetch_content_rejects_loopback_before_budget_reservation(self) -> None:
+        out = self.tmp / "rejected-loopback-content.json"
+        before = json.loads(self.session.read_text(encoding="utf-8"))
         proc = run_cli("fetch-content", "--url", "http://127.0.0.1:9/x",
                        "--timeout", "1", "--workers", "1",
                        "--session", str(self.session), "--output", str(out))
         self.assertEqual(2, proc.returncode, proc.stderr)
-        payload = json.loads(out.read_text(encoding="utf-8"))
-        self.assertEqual(1, payload["count"])
-        self.assertTrue(payload["items"][0]["error"], "error must be recorded for the failed URL")
-        self.assertIn("output=", proc.stdout)
+        self.assertFalse(out.exists())
+        after = json.loads(self.session.read_text(encoding="utf-8"))
+        self.assertEqual(
+            before["usage"]["content_extractions"],
+            after["usage"]["content_extractions"],
+        )
+        self.assertIn("non-public", proc.stderr)
+
+    def test_fetch_content_rejects_file_url_before_reading(self) -> None:
+        secret = self.tmp / "secret.txt"
+        secret.write_text("must-not-be-read", encoding="utf-8")
+        out = self.tmp / "rejected-file-content.json"
+        proc = run_cli(
+            "fetch-content",
+            "--url",
+            secret.as_uri(),
+            "--session",
+            str(self.session),
+            "--output",
+            str(out),
+        )
+        self.assertEqual(2, proc.returncode)
+        self.assertFalse(out.exists())
+        self.assertNotIn("must-not-be-read", proc.stdout + proc.stderr)
+        self.assertIn("http/https", proc.stderr)
 
     def test_reserve_budget_writes_receipt(self) -> None:
         out = self.tmp / "budget.json"

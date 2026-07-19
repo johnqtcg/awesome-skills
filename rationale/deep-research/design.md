@@ -2,7 +2,7 @@
 title: deep-research skill design rationale
 owner: awesome-skills maintainers
 status: active
-last_updated: 2026-07-18
+last_updated: 2026-07-19
 applicable_versions: current repository version
 ---
 
@@ -126,6 +126,13 @@ This addresses one of the most common and least visible research errors:
 
 That is why the skill requires `fetch-content` before synthesis. More importantly, `content.json` is now a required `validate` and `report` input for web and hybrid work. A web evidence object must carry an exact excerpt that the validator can locate in successfully extracted content. If extraction fails, the URL cannot support the finding.
 
+The saved artifact is deliberately not treated as independent execution proof:
+it is caller-controlled and loading it always clears `live_verified`. It can
+support authoring and a Medium conclusion after excerpt matching. Web High
+requires the current validator/report process to fetch the cited page again
+through the public-network-only transport, match the excerpt, and re-derive
+authority from the effective final URL.
+
 This creates a sharp distinction between `deep-research` and ordinary "search-and-summarize" workflows. The requirement is not merely "locate sources." It is "actually read sources."
 
 ### 4.6 Execution Integrity Is Called Out Separately
@@ -223,7 +230,8 @@ That is one of the clearest ways it goes beyond an ordinary prompt: it defines n
 
 The skill deliberately resolves the former High-confidence conflict:
 
-- a narrow fact can be High with one verified T1 primary source,
+- a narrow Web fact can be High only with one current validator-controlled
+  capture whose effective final URL re-derives as T1,
 - a direct code fact can be High only after the validator resolves the hexadecimal commit, reads `<commit>:<path>`, and matches the declared line/excerpt,
 - dirty or untracked bytes are labeled `working-tree-unpinned`, never attributed to HEAD,
 - runtime behavior needs every cited code item pinned to one commit/tree plus
@@ -231,19 +239,41 @@ The skill deliberately resolves the former High-confidence conflict:
   all tested paths on that same clean snapshot,
 - every other High finding needs two independent verified units including a primary unit.
 
-Automated source classification is only a preclassification. An arbitrary `docs.*` host is not assumed official, `.edu` is institutional rather than automatically official product documentation, and every source records T1–T5, classification basis, sponsorship, methodology, and a date or `unknown`.
+Automated source classification is only a preclassification. An arbitrary
+`docs.*` host is not assumed official, `.edu` is institutional rather than
+automatically official product documentation, and every source records T1–T5,
+classification basis, sponsorship, methodology, and a date or `unknown`.
+Caller-provided tier/type/domain fields are ignored for authority decisions;
+the current automatic T1 rule fails closed to recognized government
+namespaces.
 
 ### 4.13 Behavioral Tests Exercise Decisions Instead of Fixture Labels
 
-Golden requests are passed into the real planner, confidence assessor, and degradation state machine. Negative tests prove that missing content, failed extraction, excerpt mismatch, nonexistent paths/commits, mismatched commit subjects, wrong code lines, legacy handwritten test status, missing semantic coverage, a pinned-plus-unpinned runtime code set, split receipts, mixed code snapshots, dirty/mismatched test snapshots, and a 51st query cannot silently pass. Tests also prove that the read-only snapshot helper distinguishes clean and dirty repositories and fails closed outside Git. A real multiprocess race verifies that budgets accumulate safely across commands; external reservations share the ledger, report-source ceilings execute, multilingual repository/deep requests classify correctly, extraction-budget exhaustion propagates, and the exact ordered nine headings are rendered.
+Golden requests are passed into the real planner, confidence assessor, and degradation state machine. Negative tests prove that missing content, failed extraction, excerpt mismatch, caller-authored T1/live flags, unsafe URL schemes, non-public or mixed DNS answers, private redirects, nonexistent paths/commits, mismatched commit subjects, wrong code lines, legacy handwritten test status, missing semantic coverage, a pinned-plus-unpinned runtime code set, split receipts, mixed code snapshots, dirty/mismatched test snapshots, and a 51st query cannot silently pass. Tests also prove that the safe transport connects to the validated IP, the read-only snapshot helper distinguishes clean and dirty repositories and fails closed outside Git. A real multiprocess race verifies that budgets accumulate safely across commands; external reservations share the ledger, report-source ceilings execute, multilingual repository/deep requests classify correctly, extraction-budget exhaustion propagates, and the exact ordered nine headings are rendered.
 
 ### 4.14 Responsibility Modules Limit Cross-Subsystem Regressions
 
 Planning and multilingual classification, session accounting, repository
-snapshot/test-receipt verification, and report-source selection now live in focused modules under
+snapshot/test-receipt verification, report-source selection, and safe Web
+transport now live in focused modules under
 `scripts/deep_research_lib/`. The CLI remains a compatibility entry point.
 This makes trust boundaries independently testable and avoids adding new
 budget or Git rules directly to unrelated retrieval/report rendering code.
+
+### 4.15 Web Evidence Uses the Same Boundary-Verification Principle
+
+Web and repository evidence now share one rule: a structured record is a claim
+until the verifier crosses the relevant authority boundary. Git facts are
+re-derived from Git; Web High is re-derived from a current HTTPS/HTTP response.
+The validator ignores caller source labels, fresh-fetches cited pages when
+`--live-web` is selected, records hashes and network provenance, and classifies
+the effective final URL.
+
+The egress side is equally important. The helper accepts only public HTTP(S),
+rejects URL credentials and every non-public DNS answer, connects to an
+already validated IP with TLS hostname verification, and revalidates every
+redirect. This prevents the broadly allowed research helper from becoming a
+local-file reader or private-network/metadata SSRF proxy.
 
 ## 5. Problems This Design Solves
 
@@ -262,6 +292,8 @@ Combining the current `SKILL.md` with its supporting references, the skill addre
 | External research is disconnected from the codebase | First-class code / commit / test evidence | Makes the workflow fit pure and hybrid engineering research |
 | Documented budgets are advisory only | Locked session ledger + parser defense-in-depth | Rejects cumulative over-budget retrieval/extraction and over-limit reports |
 | Repository JSON is trusted as execution truth | Git blob reread + bounded working-tree checks + read-only snapshot helper + complete-code-set host-receipt binding | Rejects forged paths, commits, lines, subjects, generic pass states, unpinned mixing, split-receipt coverage, and cross-snapshot claims without turning the helper into a command proxy |
+| Web JSON is trusted as authority/execution truth | Current-process live capture + final-URL tier derivation | Caller-authored T1, type, domain, and live flags cannot manufacture Web High |
+| Research URL becomes an SSRF/file-read channel | Public-only DNS/IP-pinned transport + per-hop redirect validation | Rejects local schemes, private/metadata addresses, mixed DNS answers, and unsafe redirects before connection |
 | Fixtures test their own labels | Executable behavioral scenarios | Verifies input → decision → output |
 
 ## 6. Key Highlights
@@ -276,7 +308,9 @@ It does not stop at general warnings. It organizes hallucination types, verifica
 
 ### 6.3 It Is Strict About Whether Evidence Was Actually Read
 
-Mandatory content extraction is one of the skill's strongest quality controls. It raises the minimum reliability of the resulting conclusions.
+Mandatory content extraction is one of the skill's strongest quality controls.
+For Web High, the verifier also performs a current safe live capture rather
+than trusting the serialized extraction artifact.
 
 ### 6.4 Its Structured Delivery Is Well Suited to Long-Term Reuse
 
@@ -326,6 +360,7 @@ Review quarterly; review immediately if the gate structure, reference set, or sc
 - `skills/deep-research/SKILL.md`
 - `skills/deep-research/references/output-contract-template.md`
 - `skills/deep-research/references/hallucination-and-verification.md`
+- `skills/deep-research/references/web-evidence-and-egress.md`
 - `skills/deep-research/references/research-patterns.md`
 - `skills/deep-research/scripts/deep_research.py`
 - `skills/deep-research/scripts/deep_research_lib/`

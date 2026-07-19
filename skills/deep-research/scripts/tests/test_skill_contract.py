@@ -10,8 +10,10 @@ OUTPUT_CONTRACT = SKILL_ROOT / "references" / "output-contract-template.md"
 HALLUCINATION_REF = SKILL_ROOT / "references" / "hallucination-and-verification.md"
 RESEARCH_PATTERNS = SKILL_ROOT / "references" / "research-patterns.md"
 TEST_RECEIPT_SCHEMA = SKILL_ROOT / "references" / "test-receipt-schema.md"
+WEB_EVIDENCE_REF = SKILL_ROOT / "references" / "web-evidence-and-egress.md"
 SCRIPT = SKILL_ROOT / "scripts" / "deep_research.py"
 REPOSITORY_LIB = SKILL_ROOT / "scripts" / "deep_research_lib" / "repository.py"
+WEB_LIB = SKILL_ROOT / "scripts" / "deep_research_lib" / "web.py"
 UNIT_TESTS = SKILL_ROOT / "scripts" / "tests" / "test_deep_research.py"
 
 
@@ -250,6 +252,12 @@ class TestReferenceFiles(unittest.TestCase):
     def test_test_receipt_schema_exists(self):
         self.assertTrue(TEST_RECEIPT_SCHEMA.exists())
 
+    def test_web_evidence_reference_exists(self):
+        self.assertTrue(WEB_EVIDENCE_REF.exists())
+
+    def test_safe_web_transport_exists(self):
+        self.assertTrue(WEB_LIB.exists())
+
     def test_script_exists(self):
         self.assertTrue(SCRIPT.exists())
 
@@ -280,6 +288,37 @@ class TestHallucinationReference(unittest.TestCase):
         self.assertIn("Tool Fallback Principles", self.text)
         self.assertNotIn("Recommended Tool", self.text)
         self.assertNotIn("Perplexity", self.text)
+
+
+class TestWebTrustContract(unittest.TestCase):
+    def setUp(self):
+        self.skill = _read(SKILL_MD)
+        self.contract = _read(WEB_EVIDENCE_REF)
+        self.script = _read(SCRIPT)
+        self.transport = _read(WEB_LIB)
+
+    def test_serialized_authority_is_explicitly_untrusted(self):
+        self.assertIn("Loading it always sets", self.contract)
+        self.assertIn("`live_verified=false`", self.contract)
+        self.assertIn("caller-provided `source_tier`", self.contract)
+        self.assertIn("live_verified=False", self.script)
+
+    def test_live_web_flag_is_documented_and_executable(self):
+        self.assertIn("--live-web", self.skill)
+        self.assertIn('"--live-web"', self.script)
+        self.assertIn("validator-live-fetch", self.script)
+
+    def test_safe_egress_controls_are_documented_and_executable(self):
+        for phrase in [
+            "public unicast",
+            "validated IP",
+            "redirect",
+            "TLS",
+        ]:
+            self.assertIn(phrase, self.contract)
+        self.assertIn("resolve_public_target", self.transport)
+        self.assertIn("_PinnedHTTPSConnection", self.transport)
+        self.assertIn("REDIRECT_STATUSES", self.transport)
 
 
 class TestResearchPatterns(unittest.TestCase):
@@ -410,7 +449,10 @@ class TestExecutableContractBridges(unittest.TestCase):
 
     def test_single_t1_fact_rule_is_unique(self):
         combined = self.skill + _read(OUTPUT_CONTRACT) + _read(HALLUCINATION_REF)
-        self.assertIn("one verified T1 primary web source", combined)
+        self.assertIn(
+            "One fresh validator-controlled Web capture",
+            combined,
+        )
         self.assertNotIn("Every finding marked `High`", combined)
 
 

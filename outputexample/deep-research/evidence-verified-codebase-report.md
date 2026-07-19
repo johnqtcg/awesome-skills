@@ -20,6 +20,7 @@ This illustrative output shows the repository evidence format. The code record i
 - Successfully extracted: 0
 - Repository evidence units: 2
 - Cited evidence units: 2
+- Live Web captures / validator-derived T1 references: 0 / 0 (pure codebase mode)
 - Validation checks performed: bounded working-tree path/line/excerpt check, complete cited-code-set binding, host receipt schema/Git identity/relevance checks, confidence, and degradation checks
 
 ## 3) Executive Summary
@@ -52,7 +53,8 @@ High confidence. [1][2]
 ## 7) Source Quality Notes
 
 - Source tier T1–T5 distribution: no web sources
-- Classification basis: direct repository artifacts
+- Classification basis: direct repository artifacts; no serialized Web
+  authority labels or live network claims were consumed
 - Potential sponsorship / conflicts of interest: not applicable
 - Methodology quality and unknowns: targeted offline host test imported once; the receipt is host attestation rather than cryptographic execution proof; working-tree code/test snapshot is not clean and commit-pinned for this claim
 - Single-source findings: 0

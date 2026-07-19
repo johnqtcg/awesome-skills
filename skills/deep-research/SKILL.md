@@ -18,6 +18,7 @@ Produce research whose claims can be traced to content actually read or reposito
 | Enforce cumulative query, extraction, and report-source ceilings | Reuse the session artifact created by `plan --output` |
 | Author findings JSON | Load `references/output-contract-template.md` |
 | Assess hallucination, confidence, or source quality | Load `references/hallucination-and-verification.md` |
+| Understand Web trust boundaries and safe egress | Load `references/web-evidence-and-egress.md` |
 | Apply programmer-specific query/evidence patterns | Load `references/research-patterns.md` |
 | Claim runtime behavior from tests | Load `references/test-receipt-schema.md` |
 
@@ -62,7 +63,7 @@ Define the evidence chain before retrieval.
 
 | Conclusion Type | Minimum Evidence Chain | Target Confidence |
 |---|---|---|
-| Narrow single fact | 1 T1 primary source + successful content extraction + exact supporting excerpt | High |
+| Narrow single fact | 1 validator-controlled live capture + T1 re-derived from its effective final URL + exact supporting excerpt | High |
 | Direct code fact | Code line/excerpt verified by reading the declared Git blob at an existing hexadecimal commit | High |
 | Runtime code behavior | Every cited code item is pinned to one commit/tree + one host test receipt covers the finding and every code ID, names every tested path, passes relevance review, and matches that clean snapshot | High |
 | Best-practice recommendation | 1 primary basis + 2 independent practitioner or empirical sources | Medium–High |
@@ -104,7 +105,7 @@ Never fabricate citations, URLs, source metadata, code locations, commits, or te
 
 | Risk Level | Information | Verification Method |
 |---|---|---|
-| High | API signature/configuration | Official primary documentation + extracted excerpt |
+| High | API signature/configuration | Official primary documentation + validator-controlled live capture + extracted excerpt |
 | High | Benchmark/statistic | Original data and disclosed methodology |
 | High | Security/compliance | Official advisory, standard, or regulator |
 | High | Repository behavior | Code evidence and, for runtime behavior, a passing test |
@@ -167,6 +168,22 @@ python3 scripts/deep_research.py fetch-content \
 Each web evidence object must identify an exact excerpt found in a successfully extracted item. A search snippet, reachable URL, or failed/low-yield page cannot support a finding.
 
 Content extraction is mandatory for web and hybrid research.
+
+`fetch-content` accepts only public `http`/`https` targets. It rejects
+credentials, local/non-HTTP schemes, localhost, and every literal or
+DNS-resolved address that is not public unicast. The transport connects to an
+already validated IP while preserving hostname verification and repeats the
+same validation before every redirect hop. This closes local-file reads,
+metadata/private-network SSRF, mixed-DNS, and DNS-rebinding gaps.
+
+Treat a saved `content.json` as an untrusted authoring and audit artifact.
+Loading it always clears `live_verified`, even if the caller wrote that field.
+It may support a Medium finding after excerpt matching, but it cannot establish
+primary-source status or High confidence. For Web High, the final `validate`
+or `report` command must use `--live-web`; that command freshly retrieves each
+cited URL through the safe transport and derives source tier/type from the
+effective final URL. Caller-provided `source_tier`, `source_type`, domain, and
+classification-basis fields never grant authority.
 
 For `codebase`, use `search-codebase`; content extraction is not required:
 
@@ -232,6 +249,9 @@ Load `references/test-receipt-schema.md` for the full contract.
 - Report the actual number of retrieved, successfully extracted, repository, and cited evidence units.
 - Run `validate` before manual synthesis checks.
 - Always let `report` auto-run the same validation path.
+- For a final Web report, perform live verification once with
+  `report --live-web --validation-output ...`; do not first run
+  `validate --live-web` unless a second fresh network check is intentional.
 - Omit unsupported findings from substantive report sections and expose the reason in Gaps.
 
 ## Unified Workflow
@@ -243,8 +263,12 @@ Load `references/test-receipt-schema.md` for the full contract.
    - `codebase`: `search-codebase`; for runtime claims, snapshot the repository, execute one focused host test, snapshot again, and `import-test-receipt`
    - `hybrid`: both paths
 4. Author `findings.json` with typed evidence and exact excerpts.
-5. Run `validate` with every required artifact.
-6. Run `report`; it automatically repeats validation, derives the executive summary from usable findings, and renders the canonical contract.
+5. Optionally run offline `validate` with every required artifact to catch
+   shape/excerpt errors. Offline serialized Web evidence is capped below High.
+6. Run `report`; for final Web/Hybrid High eligibility, pass `--live-web`.
+   It performs the fresh verification once, writes `--validation-output`,
+   derives the executive summary from usable findings, and renders the
+   canonical contract.
 7. Deliver the report without renaming, splitting, or omitting top-level sections.
 
 Web validation:
@@ -255,7 +279,27 @@ python3 scripts/deep_research.py validate \
   --results /tmp/results.json \
   --content /tmp/content.json \
   --findings /tmp/findings.json \
+  --live-web \
   --output /tmp/validation.json
+```
+
+Use the command above when validation itself is the final deliverable. When a
+report is required, prefer a single `report --live-web` invocation so the same
+pages are not fetched twice.
+
+Final Web report:
+
+```bash
+python3 scripts/deep_research.py report \
+  --question "<question>" \
+  --research-kind web \
+  --results /tmp/results.json \
+  --content /tmp/content.json \
+  --findings /tmp/findings.json \
+  --session /tmp/research_plan.json \
+  --live-web \
+  --validation-output /tmp/validation.json \
+  --output /tmp/report.md
 ```
 
 Pure codebase report:
@@ -275,7 +319,9 @@ python3 scripts/deep_research.py report \
 
 Use one rule everywhere:
 
-- Allow `High` for a narrow single fact with one verified T1 primary web source.
+- Allow `High` for a narrow single fact only when the current validator/report
+  process freshly fetched the cited page, matched the excerpt, and re-derived
+  T1 from the effective final URL.
 - Allow `High` for a direct code fact only after the validator rereads and matches pinned Git content.
 - Allow `High` for runtime behavior only when every cited code item is pinned to one Git commit/tree and one reviewed host receipt covers the finding, all code IDs, and all tested paths on that same clean snapshot.
 - Require two independent verified units, including a primary unit, for all other `High` findings.
@@ -321,7 +367,10 @@ Treat automated classification as conservative preclassification:
 - Do not classify arbitrary `docs.*` hosts as official.
 - Classify `.edu` as institutional, not automatically official product documentation.
 - Emit T1–T5, classification basis, date or `unknown`, sponsorship, and methodology for each web source.
-- Allow explicit reviewed metadata to override heuristics.
+- Ignore caller-provided authority labels during validation. Re-derive
+  tier/type from the normalized URL and, for live evidence, the effective final
+  URL. The current executable automatic T1 rule is intentionally fail-closed
+  to recognized government namespaces.
 - Surface unknown sponsorship/methodology rather than guessing.
 
 Use the default tiers in `references/hallucination-and-verification.md`.
@@ -333,6 +382,10 @@ Use the default tiers in `references/hallucination-and-verification.md`.
 3. Ensure contradictory evidence is surfaced under Consensus vs Debate.
 4. Do not convert repository artifacts into fake web citations.
 5. Stop or degrade when required evidence is missing.
+6. Route every bundled Web request through the public-network-only transport;
+   never add a raw `urlopen` bypass.
+7. Never let serialized Web metadata or content assert that live verification
+   occurred.
 
 ## Anti-Examples — DO NOT Do These
 
@@ -346,6 +399,10 @@ Use the default tiers in `references/hallucination-and-verification.md`.
 8. **Generate a report without content for web research** — the parser must stop.
 9. **Split Consensus and Debate into top-level headings** — keep both under section 6.
 10. **Exceed a mode budget** — stop, mark budget exhaustion, and degrade honestly.
+11. **Trust caller-authored T1 or `live_verified` fields** — re-fetch in the
+    validator and re-derive authority from the effective final URL.
+12. **Fetch `file:`, FTP, localhost, private, link-local, or metadata targets**
+    — reject before reserving budget or opening a connection, including after redirects.
 
 ```
 BAD: Finding (High): X is faster. citations=["https://example.com"]
@@ -373,16 +430,16 @@ For any runtime-behavior finding backed by a test:
 | `plan` | Classify kind/mode and initialize a session ledger | `--request`, `--mode`, `--research-kind`, `--output` |
 | `reserve-budget` | Reserve ledger usage before external host search/fetch | `--session`, `--budget`, `--count`, `--output` |
 | `retrieve` | Search DDG Lite under cumulative budget | `--query`, `--session`, `--limit-per-query`, `--output` |
-| `fetch-content` | Extract content under cumulative budget | `--results` or `--url`, `--session`, `--limit`, `--output` |
+| `fetch-content` | Safely extract public HTTP(S) content under cumulative budget | `--results` or `--url`, `--session`, `--limit`, `--output` |
 | `search-codebase` | Produce per-file pinned or unpinned repository evidence | `--pattern`, `--root`, `--glob`, `--output` |
 | `snapshot-codebase` | Read repository root, HEAD, tree, and dirty state without executing tests | `--root`, `--output` |
 | `import-test-receipt` | Statically verify and append one host-created receipt | `--receipt`, `--code-evidence`, `--output` |
-| `validate` | Re-read typed evidence and assess confidence/degradation | `--research-kind`, `--results`, `--content`, `--code-evidence`, `--findings`, `--output` |
-| `report` | Auto-validate, enforce cited-source ceiling, and render nine sections | `--question`, `--research-kind`, `--session`, evidence flags, `--validation-output`, `--output` |
+| `validate` | Re-read typed evidence and optionally live-verify cited Web pages | `--research-kind`, `--results`, `--content`, `--code-evidence`, `--findings`, `--live-web`, `--timeout`, `--output` |
+| `report` | Auto-validate, optionally live-verify Web evidence, enforce source ceiling, and render nine sections | `--question`, `--research-kind`, `--session`, evidence flags, `--live-web`, `--timeout`, `--validation-output`, `--output` |
 
 ## Search and Extraction Fallbacks
 
-If DDG Lite fails, use an available search tool with the same query plan and preserve its result metadata. If static extraction fails, use an available browser-capable fetcher, then save equivalent content records. Report the actual method used; do not rank tools or claim one is universally best.
+If DDG Lite fails, use an available search tool with the same query plan and preserve its result metadata. If static extraction fails, use an available browser-capable fetcher, then save equivalent content records. Imported records remain untrusted serialized evidence and cannot produce Web High; the bundled validator must still perform its own safe live capture. Report the actual method used; do not rank tools or claim one is universally best.
 
 ## Bundled Assets
 
@@ -391,12 +448,15 @@ If DDG Lite fails, use an available search tool with the same query plan and pre
 - `scripts/deep_research_lib/session.py`: cross-process locked, cumulative session-budget ledger
 - `scripts/deep_research_lib/repository.py`: Git provenance, read-only snapshot metadata, and static host-receipt verification
 - `scripts/deep_research_lib/reporting.py`: cited-source selection and ceiling enforcement
+- `scripts/deep_research_lib/web.py`: public-network-only HTTP(S), DNS/IP pinning, TLS hostname verification, and redirect revalidation
 - `scripts/tests/test_evidence_integrity.py`: evidence-chain and negative behavioral tests
 - `scripts/tests/test_repository_integrity.py`: dirty-tree, forged Git, receipt binding, and command-proxy negative tests
 - `scripts/tests/test_session_budget.py`: cumulative/multiprocess budget and report-source ceiling tests
 - `scripts/tests/test_golden_scenarios.py`: fixture request → executable decision tests
 - `scripts/tests/test_subcommand_smoke.py`: offline CLI end-to-end tests
+- `scripts/tests/test_web_security.py`: local-scheme, private-address, mixed-DNS, redirect, and DNS-pinning negative tests
 - `references/output-contract-template.md`: canonical schema and report template
 - `references/hallucination-and-verification.md`: verification/confidence/source-quality protocol
+- `references/web-evidence-and-egress.md`: Web provenance state machine and safe-egress contract
 - `references/research-patterns.md`: programmer-focused research patterns
 - `references/test-receipt-schema.md`: host receipt schema, snapshot binding, and relevance rules

@@ -15,11 +15,14 @@ The suite separates normative text checks from executable behavior. A fixture va
 | 51 queries rejected | Parse real `retrieve --mode deep` arguments |
 | Per-mode query ceiling | Parse 11 Quick queries and expect failure |
 | Web content is mandatory | Parse real `report` arguments without `--content` |
-| Extracted excerpt supports claim | Validate URL, extraction success, and exact excerpt |
+| Serialized excerpt supports a bounded claim | Validate URL, extraction success, exact excerpt, and Medium ceiling |
 | Failed/missing extraction blocks High | Validate failed and absent content artifacts |
 | Mixed valid/invalid references cannot be Full | Validate one supported and one unresolved evidence reference |
 | Legacy citation is unverified | Validate a URL-only finding |
-| Single verified T1 fact may be High | Run full confidence assessment |
+| Caller-authored T1/live fields cannot be High | Load hostile results/content JSON and require validator-derived T4 + Medium |
+| Current live T1 fact may be High | Use a validator-controlled capture and run full confidence assessment |
+| Effective final URL controls authority | Redirect a requested T1 URL to a T4 final URL and require downgrade |
+| Live verification replaces serialized content | Mock the current safe capture and assert the caller artifact is not reused |
 | Unpinned code cannot be High | Validate code evidence with `commit=unknown` |
 | Working-tree labels are not commit pins | Validate `working-tree-unpinned` against the real confidence assessor |
 | Single-fact T1 exception is web-only | Pass code evidence to `single_fact` and require downgrade |
@@ -31,6 +34,17 @@ The suite separates normative text checks from executable behavior. A fixture va
 | Exact nine-section report | Compare the ordered top-level heading list |
 | Actual counts and T1–T5 notes | Inspect generated report fields |
 | Codebase source quality is explicit | Inspect commit-pinning and passing-test counts in a generated report |
+
+`test_web_security.py` exercises the Web trust and egress boundary without
+making real network requests.
+
+| Behavior | Verification |
+|---|---|
+| HTTP(S) only | Reject `file:`, FTP, gopher, and URL credentials |
+| Non-public literals rejected | Cover IPv4/IPv6 loopback, private, link-local, metadata, unspecified, reserved, and multicast |
+| Mixed DNS fails closed | Return one public and one private answer; reject the hostname |
+| Redirect targets are revalidated | Public first hop redirects to metadata; assert no second request |
+| DNS rebinding window is closed | Assert the connection uses the IP returned by the validated resolution |
 
 `test_repository_integrity.py` uses temporary real Git repositories rather
 than trusting fixture labels.
@@ -91,6 +105,9 @@ The remaining eight keyword fixtures check reference discoverability for debuggi
 - `validate` and `report` document `--content` and `--code-evidence`;
 - script constants implement Quick/Standard/Deep budgets;
 - the single-T1 High exception is present and the old universal-two-domain wording is absent;
+- serialized Web authority is explicitly untrusted and `--live-web` bridges
+  documentation to the executable validator;
+- the public-network-only transport and Web trust reference exist;
 - code, commit, and test evidence kinds exist;
 - named AI-product rankings are absent;
 - SKILL.md stays within 500 lines.
@@ -108,13 +125,14 @@ The remaining eight keyword fixtures check reference discoverability for debuggi
 - `import-test-receipt`
 - `reserve-budget`
 
-It also introspects the parser so documented flags cannot drift from accepted flags.
+It also rejects file/loopback URLs before budget reservation and introspects
+the parser so documented flags cannot drift from accepted flags.
 
 ## Current Summary
 
 | Metric | Count |
 |---|---:|
-| Total tests | 286 |
+| Total tests | 301 |
 | Golden fixtures | 16 |
 | Behavioral fixtures executed through code | 8 |
 | Keyword fixtures | 8 |
