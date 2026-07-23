@@ -1,0 +1,13 @@
+{
+  "id": "slice_transform",
+  "target": "ExtractIDs",
+  "expected_mode": "Standard",
+  "expected_mode_rationale": "collection transform over a slice — Light excludes slice/map transforms; no Strict risk trigger",
+  "hypothesis_keywords": ["off-by-one", "last element", "drop"],
+  "min_hypothesis_keywords": 2,
+  "package": "sut",
+  "mutation": {
+    "find": "for i := 0; i < len(items); i++ {",
+    "replace": "for i := 0; i < len(items)-1; i++ {"
+  }
+}

@@ -113,17 +113,17 @@ executes real Go to validate the skill's two headline claims on fixed fixtures:
 | `test_killer_case_kills_mutation` | the killer case **fails** on an off-by-one that drops the last element — it really kills the mutation |
 | `test_weak_assertion_misses_mutation` | an existence-only (`len != 0`) assertion **passes** on the same mutation — the concrete reason mutation-resistant assertions (Critical #5) are mandatory |
 | `test_race_detector_catches_real_race` | `go test -race` flags a genuine unsynchronised shared write (validates go-core MUST #10) |
+| `test_pr_discovery_pipeline_resolves_packages` | the SKILL.md PR-discovery pipeline body resolves a changed file → package import path for real (guards the macOS `xargs -d` / bare-path-`go list` bug) |
 
 **What this does NOT prove — read before trusting it.** These tests validate the
-*methodology the skill prescribes*, on hand-authored fixtures. They do **not**
-prove an LLM driving the skill will emit such a test, pick the right
-Light/Standard/Strict mode, or produce a contract-valid report — that needs a
-behavioral LLM eval, out of scope for this zero-LLM suite. They also cover
-exactly two defect shapes (dropped-tail, data race); others (mapping-key swap,
-nil-deref, context leak) are still only asserted as doc text, not executed. The
-value is narrow but real: the skill's central promise — "a killer case catches
-the defect it names; a weak assertion does not" — is now executable and
-regression-guarded instead of asserted in prose.
+*methodology the skill prescribes*, on hand-authored fixtures. They do **not** by
+themselves prove an LLM driving the skill emits such a test — that is what the
+skill-output grader (below) adds, and a full guarantee still needs the opt-in
+live run. They also cover a small set of defect shapes (dropped-tail, data race,
+PR discovery); others (mapping-key swap, nil-deref, context leak) are still only
+asserted as doc text, not executed. The value is narrow but real: the skill's
+central promise — "a killer case catches the defect it names; a weak assertion
+does not" — is executable and regression-guarded instead of asserted in prose.
 
 Skips (never fails) only on genuine **environment** failures — `go` absent, no
 writable temp dir, or a trivial known-good program failing to compile (a broken
@@ -132,6 +132,37 @@ one can't poison the build, and the readiness check is a real `go build` of a
 trivial program, not a version probe. A *fixture* compile/assertion failure is
 never skipped — it surfaces as a real failure. So CI without a working Go
 toolchain stays green, while a real regression still fails loudly.
+
+## Regression Guards (`test_skill_contract.py::EngineeringReliabilityGuardTests`)
+
+Guards for the correctness fixes, so a future edit that breaks them fails loudly
+(the reviewer's point: "the rules are right now, but nothing catches a regression").
+Each pins a rule that was previously wrong:
+
+| Guard | Pins |
+|-------|------|
+| `test_no_xargs_d_in_any_command` | no fenced command uses GNU-only `xargs -d` (prose may still name it as the pitfall) |
+| `test_pr_discovery_uses_portable_readloop` | discovery uses the portable `while IFS= read` + `./`-prefix + `go list "$d"` form |
+| `test_pr_discovery_documents_dot_prefix_reason` | the "bare path = import path" reason is documented |
+| `test_target_count_not_standalone_trigger_in_table` | the Mode-Selection *table cell* says count is not a standalone Strict trigger |
+| `test_mode_rule_says_risk_not_count` | the risk-driven-not-count-driven rule is present |
+| `test_table_driven_requires_two_plus_cases` | table-driven is gated to 2+ cases in both the mode table and the scorecard |
+| `test_race_precedence_documented` | `race.required config > PR scope > mode default` + the `false` override are documented |
+| `test_case_budget_is_soft_ceiling_not_minimum` | budgets are soft ceilings, not minimums to pad to |
+
+## Skill-Output Eval (`test_llm_skill_eval.py`)
+
+Grades an actual **skill-driven response** — the layer the earlier ones could not
+reach. `grade(output, fixture)` scores four dimensions: correct mode, real defect
+hypotheses, a Go test that compiles + PASSES on the correct source + FAILS on the
+mutation (kills it), and a scorecard + JSON. `GraderSelfTest` proves the grader
+discriminates — it PASSES `llm_eval/slice_transform/good.md` and FAILS `bad.md`
+(runs in CI; needs `go`). `LiveSkillEval` runs a real model and grades it, gated
+on `UNIT_TEST_SKILL_EVAL_CMD` (skipped otherwise) — the remaining step to a full
+behavioral eval, now a drop-in. See `llm_eval/README.md`.
+
+**Honesty:** the CI self-test proves the *grader* works; it does not prove a live
+model passes. Only the opt-in live run does — that is the standing ceiling.
 
 ## Coverage Summary
 
@@ -143,9 +174,10 @@ toolchain stays green, while a real regression still fails loudly.
 | Target types covered | 5/5 (Service, Function, Handler, CLI, Middleware) |
 | Modes covered | 3/3 (Light 1, Standard 5, Strict 4+2 excl) |
 | Reference files | 5 |
-| Contract tests | 67 |
+| Contract tests (incl. 8 engineering-reliability guards) | 75 |
 | Golden scenario tests | 17 |
-| Behavioral eval tests (execute real Go; skip w/o toolchain) | 5 |
+| Behavioral eval tests (execute real Go; skip w/o toolchain) | 6 |
+| Skill-output grader self-tests (+ 1 opt-in live, skipped w/o backend) | 2 (+1) |
 
 ## Gap Analysis
 
@@ -159,8 +191,13 @@ When adding a new rule to SKILL.md or references:
 
 | Scenario | Category | Priority |
 |----------|----------|----------|
+| Live LLM skill-output eval wired to a backend (grader + opt-in hook exist; needs a CI-available model) | behavioral | Medium |
+| More skill-output fixtures (mapping-key swap, nil-deref, context leak, concurrency mode) | behavioral | Medium |
 | gRPC handler target type | target_type | Low |
 | Golden file / snapshot test anti-example | anti_example | Low |
 | Fuzzing + unit test collaboration example | technique | Low |
 | Shuffle-dependent test detection | technique | Low |
-| PR-diff scope integration test | workflow | Low |
+
+Closed since last revision: PR-diff scope now has an executable fixture
+(`test_pr_discovery_pipeline_resolves_packages`); the round-2/3 correctness fixes
+now have regression guards; skill-output grading exists (self-tested in CI).

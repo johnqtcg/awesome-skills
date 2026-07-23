@@ -549,5 +549,90 @@ class UnitTestSkillContractTests(unittest.TestCase):
         self.assertIn(">= 4/5", ref)
 
 
+class EngineeringReliabilityGuardTests(unittest.TestCase):
+    """Guards for the round-2/round-3 correctness fixes. Each pins a rule that was
+    wrong before and would silently regress without a guard (the gap the reviewer
+    flagged: 'the rules are right now, but nothing fails if a future edit breaks them')."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.skill = SKILL_MD.read_text()
+        cls.scorecard = BOUNDARY_SCORECARD_REF.read_text()
+        cls.all_text = cls.skill + "\n" + "\n".join(
+            p.read_text() for p in sorted(REFERENCE_DIR.glob("*.md"))
+        )
+
+    # --- PR discovery portability (the macOS xargs -d / go-list ./ bug) ---
+
+    @staticmethod
+    def _code_fences(text: str) -> str:
+        """Concatenate the contents of every ``` fenced code block. Prose is
+        excluded — a pitfall may be *named* in prose but must not appear as an
+        actual command."""
+        parts, inside, buf = [], False, []
+        for line in text.splitlines():
+            if line.lstrip().startswith("```"):
+                if inside:
+                    parts.append("\n".join(buf))
+                    buf = []
+                inside = not inside
+                continue
+            if inside:
+                buf.append(line)
+        return "\n".join(parts)
+
+    def _pr_diff_section(self) -> str:
+        start = self.skill.index("PR-Diff Scoped Testing")
+        end = self.skill.index("### Generated Code Exclusion", start)
+        return self.skill[start:end]
+
+    def test_no_xargs_d_in_any_command(self):
+        # `xargs -d` is GNU-only and errors on BSD/macOS. It may be *named* in
+        # prose as the pitfall to avoid, but no actual command may use it.
+        self.assertNotIn("xargs -d", self._code_fences(self.all_text))
+
+    def test_pr_discovery_uses_portable_readloop(self):
+        code = self._code_fences(self._pr_diff_section())
+        self.assertIn("while IFS= read", code)      # portable, not xargs -d
+        self.assertIn("printf './%s", code)          # ./-prefix so go list sees a dir
+        self.assertIn('go list "$d"', code)
+        self.assertNotIn("xargs -d", code)
+
+    def test_pr_discovery_documents_dot_prefix_reason(self):
+        # The whole point of the ./ prefix: a bare path is read as an import path.
+        self.assertIn("import path", self._pr_diff_section())
+
+    # --- Mode: target count is NOT a standalone Strict trigger ---
+
+    def test_target_count_not_standalone_trigger_in_table(self):
+        start = self.skill.index("Mode Selection")
+        section = self.skill[start:start + 900]
+        self.assertIn("> 8 targets", section)
+        self.assertIn("not a standalone trigger", section)  # in the TABLE cell itself
+
+    def test_mode_rule_says_risk_not_count(self):
+        self.assertIn("risk-driven, not count-driven", self.skill)
+        self.assertIn("Target count alone does not", self.skill)
+
+    # --- Table-driven gated to 2+ cases (not unconditional) ---
+
+    def test_table_driven_requires_two_plus_cases(self):
+        self.assertIn("Required (2+ cases)", self.skill)          # mode requirements
+        self.assertIn("2+ cases", self.scorecard)                # scorecard item 4
+
+    # --- Race detection precedence resolved ---
+
+    def test_race_precedence_documented(self):
+        self.assertIn("config > PR scope > mode default", self.skill)
+        self.assertIn("race.required: false", self.skill)
+
+    # --- Case budget is a soft ceiling, not a minimum to pad to ---
+
+    def test_case_budget_is_soft_ceiling_not_minimum(self):
+        self.assertIn("soft ceiling", self.skill)
+        self.assertIn("NOT minimums to pad to", self.skill)
+        self.assertIn("distinct logic paths", self.skill)
+
+
 if __name__ == "__main__":
     unittest.main()

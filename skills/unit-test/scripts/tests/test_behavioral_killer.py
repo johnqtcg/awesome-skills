@@ -167,7 +167,9 @@ class BehavioralKillerTests(unittest.TestCase):
             self.skipTest(f"cannot create temp dir: {exc}")
         self.addCleanup(shutil.rmtree, root, ignore_errors=True)
         for name, content in files.items():
-            with open(os.path.join(root, name), "w", encoding="utf-8") as fh:
+            path = os.path.join(root, name)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, "w", encoding="utf-8") as fh:
                 fh.write(content)
         return root
 
@@ -254,6 +256,36 @@ class BehavioralKillerTests(unittest.TestCase):
             self.skipTest("race detector unsupported in this environment")
         self.assertNotEqual(res.returncode, 0, "-race should have flagged the data race")
         self.assertIn("DATA RACE", combined)
+
+    # 6. Executable PR-discovery fixture: the SKILL.md pipeline body must resolve a
+    #    changed file path to its package import path (guards the macOS `xargs -d`
+    #    failure and the bare-path-is-an-import-path `go list` trap for real).
+    def test_pr_discovery_pipeline_resolves_packages(self):
+        root = self._module({
+            "go.mod": "module prdisc\n\ngo 1.22\n",
+            "internal/foo/foo.go": "package foo\n\nfunc F() int { return 1 }\n",
+        })
+        self._preflight()
+        # Passed as one arg to `bash -c`, so inner quotes are NOT escaped — bash
+        # parses them. `\n` stays literal (raw string) for printf to interpret.
+        pipeline = (
+            r'''printf 'internal/foo/foo.go\n' '''
+            r'''| while IFS= read -r f; do printf './%s\n' "$(dirname "$f")"; done '''
+            r'''| sort -u '''
+            r'''| while IFS= read -r d; do go list "$d" 2>/dev/null; done'''
+        )
+        try:
+            res = subprocess.run(
+                ["bash", "-c", pipeline],
+                cwd=root, env=_go_env(root), capture_output=True, text=True, timeout=120,
+            )
+        except OSError as exc:
+            self.skipTest(f"cannot exec bash/go: {exc}")
+        self.assertIn(
+            "prdisc/internal/foo", res.stdout,
+            f"discovery pipeline failed to resolve the changed dir to its package "
+            f"(the ./-prefix / xargs-d bug would show here):\n{res.stdout}\n{res.stderr}",
+        )
 
 
 if __name__ == "__main__":

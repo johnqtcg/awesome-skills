@@ -254,11 +254,19 @@ If this mapping is missing, do not proceed to large test generation.
 
 Avoid generating huge suites with weak assertions.
 
-| Mode | Cases per target | Notes |
+| Mode | Cases per target (typical budget / soft ceiling) | Notes |
 |------|-----------------|-------|
 | Light | 3-6 | Happy path + key error/edge paths |
 | Standard | 5-12 | Full budget below + killer case |
 | Strict | 8-15+ | Extended budget + property-based tests when applicable |
+
+**These ranges are typical budgets and soft ceilings, NOT minimums to pad to.**
+Case count is driven by the target's **distinct logic paths**, not by the number
+in the table. If a target has fewer distinct paths than the range's lower bound,
+stop at the real paths — never manufacture low-value cases (near-duplicate
+inputs, existence-only assertions) just to reach a minimum. A single-scenario
+target may legitimately have one case; a sprawling one may exceed the ceiling
+only when each extra case covers a genuinely distinct path.
 
 Standard/Strict default budget per target:
 
