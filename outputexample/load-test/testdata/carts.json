@@ -1,0 +1,7 @@
+[
+  { "cartId": "c-1001", "items": [{ "sku": "widget-a", "qty": 2 }], "customerId": "u-501" },
+  { "cartId": "c-1002", "items": [{ "sku": "widget-b", "qty": 1 }], "customerId": "u-502" },
+  { "cartId": "c-1003", "items": [{ "sku": "widget-c", "qty": 3 }], "customerId": "u-503" },
+  { "cartId": "c-1004", "items": [{ "sku": "widget-a", "qty": 1 }, { "sku": "widget-d", "qty": 2 }], "customerId": "u-504" },
+  { "cartId": "c-1005", "items": [{ "sku": "widget-e", "qty": 5 }], "customerId": "u-505" }
+]

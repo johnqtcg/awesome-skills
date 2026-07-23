@@ -10,7 +10,7 @@
 
 - **51** 个可安装 Claude Code Skill：覆盖 Go、测试、安全、CI/CD、数据库、缓存、基础设施、调研、文档、规划，以及多智能体评审 / 分析
 - 其中 **16** 个为多智能体组件：9 件套的 Go 评审系统（`go-review-lead` + 8 个纵向评审）和 7 件套的美股分析系统（`stock-analysis-lead` + 6 个纵向评审）
-- **24** 个 skill 配有成对的设计说明（中英双语）→ **48** 份文档；**13** 个具备完整五层交付（rationale + skill + evaluation + 真实产出示例）
+- **24** 个 skill 配有成对的设计说明（中英双语）→ **48** 份文档；**14** 个具备完整五层交付（rationale + skill + evaluation + 真实产出示例）
 - **64** 份量化评审报告（中英双语），含可追溯指标
 - **376** 个 golden JSON 场景 + **93** 个 Python 测试文件，确定性回归保障
 - 测试 skills：`unit-test` · `tdd-workflow` · `api-integration-test` · `e2e-test` · `fuzzing-test`
@@ -43,7 +43,7 @@ npx skills find
 安装范围说明：
 
 - 仓库总计提供 **51** 个可安装 skill。
-- 其中 **24** 个配有成对的设计说明 + 量化评审报告；这 24 个里有 **13** 个还附带真实产出示例（完整五层交付：rationale + skill + evaluation + output example）。
+- 其中 **24** 个配有成对的设计说明 + 量化评审报告；这 24 个里有 **14** 个还附带真实产出示例（完整五层交付：rationale + skill + evaluation + output example）。
 - 另有 **16** 个为多智能体编排组件——9 件套的 Go 评审系统（`go-review-lead` + 8 个纵向评审）和 7 件套的美股分析系统（`stock-analysis-lead` + 6 个纵向评审）；它们可安装、可回归测试。
 
 ### 方式二 — 手动安装

@@ -8,7 +8,7 @@
   "coverage_rules": [
     "No service info, vague request",
     "Generic scenario template",
-    "STOP if target service is unknown",
+    "degrade to §4 Planning",
     "Anything specific"
   ],
   "reference": "SKILL.md"

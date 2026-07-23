@@ -9,7 +9,7 @@ description: >
   function profiling) with macro-level end-to-end service testing. Use proactively
   for any pre-release performance validation, capacity planning, or production
   incident investigation involving latency/throughput.
-allowed-tools: Read, Write, Grep, Glob, Bash(k6 version*), Bash(vegeta -version*), Bash(wrk -v*), Bash(cat *), Bash(jq *)
+allowed-tools: Read, Write, Grep, Glob, Bash(k6 version*), Bash(k6 inspect*), Bash(vegeta -version*), Bash(wrk -v*), Bash(cat *), Bash(jq *)
 ---
 
 ## Quick Reference
@@ -19,7 +19,7 @@ allowed-tools: Read, Write, Grep, Glob, Bash(k6 version*), Bash(vegeta -version*
 | Write a load test from scratch           | §2 Gates -> §5 Checklist -> §6 Scenarios    |
 | Review existing test script              | §2 Gates -> §5.2 Script Quality             |
 | Analyze test results                     | §2 Gates -> §5.3 Analysis -> load ref       |
-| Choose between k6/vegeta/wrk             | §6.1 Tool Selection                         |
+| Choose between k6/vegeta/wrk             | §6.1 Tool Selection (Advise mode)           |
 | Define SLOs for a service                | §5.1 SLO Definition                         |
 | Debug why a test shows bad numbers       | §7 Anti-Examples -> load analysis ref        |
 | Capacity planning                        | §6.2 Scenario Selection -> breakpoint/soak   |
@@ -50,23 +50,33 @@ Gates are serial hard blockers. Failure at any gate stops all subsequent work.
 
 ### Gate 1: Context Collection
 
-Gather before proceeding. STOP if target service is unknown.
+What's required depends on mode (Gate 3): Write verdicts need the endpoint;
+Analyze needs results + SLOs (endpoint is context, not a gate); Review
+needs the script; Advise needs neither. STOP only when info is genuinely
+unobtainable — otherwise degrade to §4 Planning.
 
-| Item              | Example                                    | Required |
-|-------------------|--------------------------------------------|----------|
-| Service endpoint  | `https://api.example.com/v1/orders`        | Yes      |
-| Protocol          | HTTP/1.1, HTTP/2, gRPC                     | Yes      |
-| Current baseline  | p50=12ms, p99=85ms, 2000 RPS              | If known |
-| Deployment        | k8s 3 replicas, 2 CPU / 4Gi each          | If known |
-| Auth mechanism    | Bearer token, API key, mTLS                | If any   |
-| Data dependencies | DB, Redis, external API                    | If known |
+| Item              | Example                                    | Required for          |
+|-------------------|---------------------------------------------|------------------------|
+| Service endpoint  | `https://api.example.com/v1/orders`        | Write verdict          |
+| Protocol          | HTTP/1.1, HTTP/2, gRPC                     | Write verdict          |
+| Current baseline  | p50=12ms, p99=85ms, 2000 RPS              | If known               |
+| Deployment        | k8s 3 replicas, 2 CPU / 4Gi each          | If known               |
+| Auth mechanism    | Bearer token, API key, mTLS                | If any                 |
+| Data dependencies | DB, Redis, external API                    | If known               |
 
-### Gate 2: SLO-First
+### Gate 2: SLO-First (for verdicts)
 
-SLOs MUST exist before writing test scripts. Without SLOs, test results are
-meaningless numbers. If the user has no SLOs, help them define SLOs first.
+A PASS/FAIL verdict requires an SLO to test against — without one, "p99=180ms"
+is a number, not a decision. Help the user define SLOs whenever the goal is
+validation, regression, or capacity sign-off.
 
-STOP and define SLOs if none provided. Minimum SLO set:
+Exploratory work does NOT need a pre-set SLO — baseline measurement,
+breakpoint/ceiling discovery (§6.2), tool calibration, and regression-data
+collection all proceed normally; they just cannot carry a PASS/FAIL verdict
+(§4 Partial mode marks this explicitly).
+
+STOP only when the user wants a pass/fail decision and has no SLO — define
+SLOs first. Minimum SLO set:
 
 - **Latency**: p50 and p99 targets (e.g., p50 < 50ms, p99 < 200ms)
 - **Throughput**: minimum sustained RPS (e.g., 5000 RPS)
@@ -77,17 +87,19 @@ SLOs drive everything: scenario selection, pass/fail criteria, analysis focus.
 
 ### Gate 3: Scope Classification
 
-Classify the task into one of three modes:
+Classify the task into one of four modes:
 
 | Mode       | Trigger                                         | Deliverable                          |
 |------------|--------------------------------------------------|--------------------------------------|
 | **Write**  | "write a load test", "create k6 script"          | Executable test script + run command |
 | **Review** | "review this test", code provided                 | Findings on script + improvements    |
 | **Analyze**| "analyze these results", output/metrics provided  | SLO verdict + bottleneck report      |
+| **Advise** | "k6 or vegeta?", "how many VUs?", SLO-design help — no script/results to act on | Direct recommendation + rationale + trade-off; skips §9 (see §9 note) |
 
 ### Gate 4: Output Completeness
 
-Before delivering, verify all §9 output sections are present. STOP and fill gaps.
+Write/Review/Analyze: verify all §9 sections are present before delivering
+— STOP and fill gaps. Advise has no §9 contract to complete.
 
 ---
 
@@ -108,7 +120,9 @@ tool-appropriate reference.
 ### Deep
 Multi-scenario suite with profiling correlation. Load all references.
 - Triggers: capacity planning, "find the ceiling", production incident, > 5 endpoints
-- Coverage: smoke + load + stress + soak, resource correlation, bottleneck report
+- Coverage: smoke + load + stress + breakpoint escalating suite (§6.2); soak
+  runs separately — flat sustained load doesn't compose with an escalating
+  suite; resource correlation, bottleneck report
 - Force Deep if: soak test requested, breakpoint analysis, multi-service chain
 
 ---
@@ -152,8 +166,9 @@ Never fabricate performance numbers. Never claim SLO compliance without data.
 7. **Steady state duration is sufficient** — minimum 1 minute for smoke, 3-5
    minutes for standard, 15+ minutes for soak. Short runs miss GC pauses,
    connection pool exhaustion, memory leaks.
-8. **Virtual users model real behavior** — include think time (1-5s between
-   requests), realistic payloads, proper connection reuse.
+8. **Virtual users model real behavior** — think time is model-conditional:
+   closed models add it, arrival-rate models skip it (`k6-patterns.md §2`).
+   Realistic payloads and proper connection reuse apply either way.
 9. **Test data is representative** — not the same ID every request (cache hit
    bias). Use parameterized data feeds with realistic distribution.
 10. **Authentication is handled correctly** — pre-generate tokens outside the
@@ -349,8 +364,9 @@ scenarios: {
 // SERVICE under test couldn't sustain the target rate.
 
 # RIGHT: size maxVUs via Little's Law against the SLO
-//   needed VUs = rate × healthy_p95 = 4000 × 0.2s = 800
-//   maxVUs    = 2× needed = 1600
+//   needed VUs = rate × iteration_duration (ALL requests + sleep in one
+//                iteration, not one request's time). 1 req, no sleep here:
+//                4000 × 0.2s = 800; maxVUs = 2× needed = 1600 (§2 for sleep)
 scenarios: {
   writes: {
     executor:        'constant-arrival-rate',
@@ -368,24 +384,21 @@ scenarios: {
 See `references/k6-patterns.md §2` (Little's Law sizing) and `§11` (full
 memory model: VU floor + sample storage + body retention + tag buckets).
 
-### AE-8: `--out csv=` for sustained tests
+### AE-8: `--out csv=`/`--out json=` for sustained high-TPS tests
 
 ```
-# WRONG: streaming per-request CSV
-k6 run --out csv=results.csv -e BASE_URL=... level1-4k-tps.js
-// CSV writes every per-request row to disk. k6 buffers writes;
-// at 4k TPS × 10 min = 2.4M rows × ~200 B = 500 MB-2 GB resident buffer.
-// Adds GB to load-generator memory pressure for no analytical value
-// (you re-aggregate in post anyway).
-
-# RIGHT: aggregated summary export
-k6 run --summary-export=results.json -e BASE_URL=... level1-4k-tps.js
-// Writes the same statistics k6 prints to stdout at end, ~KB JSON.
-// Zero incremental memory cost (data already in memory for stdout).
-//
-// For long-running tests where you DO want per-sample timeseries:
-k6 run --out experimental-prometheus-rw test.js   // pushes off-host
+# WRONG: k6 run --out csv=results.csv ... level1-4k-tps.js
+# RIGHT: handleSummary() for a final verdict, or a remote real-time output
+#        (Prometheus/OTel) when you actually need time-series — see below
 ```
+
+`--out csv=`/`--out json=` stream every per-request row through a buffer
+that backs up under slow disk I/O — up to ~500 MB-2 GB at 4k TPS/10 min.
+That's the memory risk, but not the only question: an aggregated summary
+has no timestamps and can't answer "did stage 2 differ from stage 1" — it's
+a cheaper output for a final verdict, not a drop-in replacement for
+time-series data. Full decision rule + memory model: `k6-patterns.md §10 +
+§11.2`.
 
 ---
 
@@ -413,11 +426,13 @@ Three-tier scoring applied after every test run analysis.
 10. **Baseline comparison** — delta from previous run or production metrics
 11. **Resource metrics correlated** — CPU/mem/connections alongside latency
 12. **Results archived** — raw data + summary stored for regression tracking
-13. **Load-generator memory budgeted** — k6 scripts size `maxVUs` via Little's
-    Law (`rate × healthy_p95 × 2`), opt-in diagnostic Trends, no `--out csv`,
-    `discardResponseBodies` + per-request `responseType:'text'` override in
-    setup. See `k6-patterns.md §2 + §11`. The load generator itself OOMing
-    invalidates the run.
+13. **Load-generator memory budgeted** — `preAllocatedVUs` sized from a
+    *measured* `iteration_duration` (full iteration, not one request's
+    response time) + variance margin; `maxVUs` is an optional cushion
+    bounded by generator memory, not a mandatory multiplier. Also: opt-in
+    diagnostic Trends, no `--out csv`/`--out json` for sustained runs,
+    `discardResponseBodies` + `responseType:'text'` override in setup. See
+    `k6-patterns.md §2 + §11`. Load generator OOMing invalidates the run.
 
 **Verdict**: Critical 3/3 AND Standard >= 4/5 AND Hygiene >= 3/5 = **PASS**
 
@@ -425,8 +440,11 @@ Three-tier scoring applied after every test run analysis.
 
 ## 9 Output Contract
 
-Every response MUST include these sections. Volume rules: FAIL items fully
-detailed; WARN items up to 10; PASS items summary only.
+Applies to **Write / Review / Analyze** modes. Every such response MUST
+include these sections. Volume rules: FAIL items fully detailed; WARN items
+up to 10; PASS items summary only. **Advise mode** (§2 Gate 3) skips this
+contract — answer with a direct recommendation, its rationale, and the main
+trade-off; no fabricated script, results, or verdict.
 
 ### 9.1 Context Summary
 Target service, protocol, deployment, SLOs — table format.

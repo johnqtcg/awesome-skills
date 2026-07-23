@@ -1,12 +1,49 @@
 # load-test Skill — Test Coverage Matrix
 
 Coverage matrix for the load-test skill regression test suite. The suite is
-zero-LLM and has two layers: (1) structure + golden-fixture integrity
+zero-LLM and has four layers: (1) structure + golden-fixture integrity
 (`test_skill_contract.py`, `test_golden_scenarios.py`) validate SKILL.md
-structure and fixture classification, not model behavior; (2) behavioral k6
-checks (`test_k6_scripts_valid.py`) statically validate the reference scripts
-(import completeness, Rate-metric semantics) and run `k6 inspect` when k6 is
-installed.
+structure and fixture classification, not model behavior; (2) static
+behavioral k6 checks (`test_k6_scripts_valid.py`) validate the reference
+scripts (import completeness, Rate-metric semantics, memory/composition
+regressions) and run `k6 inspect` when k6 is installed; (3) two real `k6 run`
+executions against a local HTTP stub (`RealK6RunTests`, skipped without k6)
+that actually execute `default()`; (4) `test_outputexample.py` — syntax,
+`k6 inspect`, a real (rate/VU-shrunk, threshold-stripped) `k6 run`, and
+cross-file consistency checks against `outputexample/load-test/`, the
+skill's own published Write/Analyze-mode output. Layer (4) exists because
+three separate review rounds each found a fresh defect in that directory
+(impossible throughput, a 10x error-threshold mismatch, a wrong technical
+claim, an unearned Hygiene score) that no test caught — it wasn't in the
+suite's scope at all until 2026-07-23. A fourth round then found a
+methodology error *inside* layer (4) itself: the memory-budget writeup
+summed each scenario's VU pool as if they ran concurrently and undercounted
+k6's built-in Trend metrics, both from reasoning about the script's config
+text instead of asking k6 directly. `K6ExecutionRequirementsTests` fixes
+this the same way as the rest of layer (4) — by checking the doc's claims
+against `k6 inspect --execution-requirements`'s actual output, not by
+trusting arithmetic performed by hand (by a model or a human) over config.
+
+**What this suite does NOT validate — read before trusting "100% coverage"
+below.** A 2026-07-22 review found five defects (a duplicate Trend metric, a
+Gauge fed by a VU id, a VU-sizing formula that only holds for
+one-request-no-sleep scripts, a CI example contradicting the skill's own
+memory guidance, and a "breakpoint" composition missing its breakpoint
+scenario) — none of which any existing test caught, because every test here
+checked *presence* of a keyword, section, or fixture field, not *correctness*
+of the example content or *consistency* between two places describing the
+same thing. `k6 inspect` parses a script's init context; it does not execute
+`default()`, so runtime-only errors (undefined variables reached only inside
+the handler, wrong metric semantics) passed silently — this is exactly how
+the §7 Custom Metrics example shipped a dangling `payload` reference for a
+release. All five are now covered by targeted content assertions
+(`MemoryHygieneAndCompositionRegressionTests`, below) written *after* the
+fact as regression guards for the specific bugs found, plus two real `k6
+run` executions (`RealK6RunTests`) that exercise `default()` against a live
+local server for the §7 and §6 scripts specifically. Neither closes the general gap: the
+content assertions guard known failure *shapes*, not new ones, and the real
+runs cover two scripts (§6, §7), not every reference example — most scripts
+still only get static analysis.
 
 ## Contract Tests (`test_skill_contract.py`)
 
@@ -32,10 +69,25 @@ installed.
 | Test Class | Tests | Validates |
 |------------|:-----:|-----------|
 | `ImportCompletenessTests` | 2 | every complete reference script found (>=5); every used k6 module (`k6/http`, `k6/data`, `k6/metrics`, `k6`) is imported — catches copy-paste `ReferenceError`s that `k6 inspect` cannot |
+| `MemoryHygieneAndCompositionRegressionTests` | 4 | no Gauge fed by `__VU` (records a VU id, not a concurrency count — §7); §1 canonical skeleton has no Trend duplicating `http_req_duration` (§11.3); §10 CI example doesn't use `--out csv`/`--out json` (§11.2); §9's "breakpoint" composition actually defines a `ramping-arrival-rate` breakpoint scenario |
 | `RateMetricSemanticsTests` | 1 | a custom `Rate` in a reference script is never fed only literal `1` (the 0%/100% anti-pattern); it must record a boolean every iteration |
 | `K6InspectTests` | 1 | `k6 inspect` parses each local script and runs its init context (skipped when k6 is not installed) |
+| `RealK6RunTests` | 2 | real `k6 run` executes default(): (1) the §7 script against a local HTTP stub, asserting exit 0, the stub received requests, and all four custom metrics appear in `--summary-export` output; (2) the §6 no-remote-dependency `handleSummary()` script, asserting exit 0 and that `results.json` was actually written with valid JSON — skipped when k6 is not installed, or when the sandbox denies binding a local listen socket |
 
-**Behavioral test count: 4** (3 static, always run; 1 `k6 inspect`, skipped without k6)
+**Behavioral test count: 10** (7 static, always run; 3 require a live k6 binary — `K6InspectTests` and both `RealK6RunTests` methods — skipped without it)
+
+## outputexample/load-test/ Tests (`test_outputexample.py`)
+
+| Test Class | Tests | Validates |
+|------------|:-----:|-----------|
+| `FilesExistTests` | 1 | the script and its paired analysis doc both exist on disk |
+| `ScriptSyntaxTests` | 1 | `node --check` on the published script (skipped without node) |
+| `K6InspectTests` | 1 | `k6 inspect` on the published script (skipped without k6) |
+| `RealRunTests` | 1 | real `k6 run` of the published script (rate/VU numbers shrunk, thresholds stripped) against a local stub, proving `default()`/`handleSummary()` execute without a runtime error and `results.json` is written — skipped when k6 is not installed, or when the sandbox denies binding a local listen socket. Does not validate SLO/threshold pass-fail at scale — a local stub can't sustain 2000 req/s, so thresholds are deliberately removed for this run; see the test's docstring |
+| `K6ExecutionRequirementsTests` | 2 | `k6 inspect --execution-requirements` (the ground truth for peak VU count and total wall-clock time, since scenarios reuse VU capacity across non-overlapping windows rather than summing) matches the analysis doc's stated `maxVUs` and total run duration — skipped without k6 |
+| `CrossFileConsistencyTests` | 8 | error-rate threshold matches the declared <0.1% SLO; script's arrival-rate target matches the analysis doc's stated RPS; no `ramping-vus` executor (regression guard — a closed model can't guarantee an exact-RPS SLO); `dropped_iterations` threshold present; all four scenarios (warmup/ramp/load_test/cooldown) present; the Scorecard line's tier scores sum to its stated total; every percentile-table row's verdict (PASS/FAIL) matches what its value vs. SLO threshold actually implies; Hygiene score is capped at 3/5 whenever `discardResponseBodies` is absent from the script (regression guard against an unearned Hygiene #13) |
+
+**outputexample test count: 14** (9 static, always run; 5 require a live k6/node binary, skipped without them; 1 of those additionally skips under a sandbox that denies local socket binding)
 
 ## Golden Fixtures + Per-Fixture Test Classes (`test_golden_scenarios.py`)
 
@@ -71,7 +123,11 @@ installed.
 
 **Golden test count: 54** (8 integrity + 46 behavioral)
 
-## Coverage Summary
+## Coverage Summary (documentation-contract presence, not domain correctness)
+
+Every "100%" below means "a test asserts this section/item exists and
+contains its expected keywords" — not "this content is correct" or "the
+model behaves this way at runtime." See the caveat at the top of this file.
 
 | Category | Covered | Total | Coverage |
 |----------|:-------:|:-----:|:--------:|
@@ -89,8 +145,14 @@ installed.
 | Golden Fixture Types | 4/4 | 4 | 100% |
 | Golden Severity Levels | 3/3 | 3 | 100% |
 
-**Total tests: 133** (75 contract + 54 golden + 4 behavioral k6-script). Without k6
-installed, `K6InspectTests` is skipped, so 132 run + 1 skipped.
+**Total tests: 153** (75 contract + 54 golden + 10 behavioral k6-script + 14
+outputexample). Without k6/node installed, the behavioral `K6InspectTests` +
+both `RealK6RunTests` methods, and the outputexample `ScriptSyntaxTests` +
+`K6InspectTests` + `RealRunTests` + both `K6ExecutionRequirementsTests`
+methods, are all skipped — 145 run + 8 skipped.
+Both `RealK6RunTests` and outputexample's `RealRunTests` also skip (not
+fail) when the sandbox denies binding a local listen socket, even with k6
+present — in that case 150 run + 3 skipped.
 
 ## Known Coverage Gaps
 
@@ -102,4 +164,5 @@ installed, `K6InspectTests` is skipped, so 132 run + 1 skipped.
 | wrk scripting fixture | Low | SKILL §1 marks wrk "partial coverage"; no wrk/Lua reference pattern or fixture. |
 | Scorecard Standard #5 (error rate monitored) dedicated fixture | Low | Validated in contract tests but no golden fixture targets missing error classification (429 vs 503 vs timeout). |
 | CI/CD integration fixture (pipeline gating) | Low | §10 documents CI integration but no fixture exercises pipeline fail/pass gating on threshold results. |
-| Runtime Rate-metric behavior via an executed `k6 run` | Low | LT-015 + `RateMetricSemanticsTests` statically catch the "Rate fed only on failure" bug; a full `k6 run` executing `default()` would additionally verify runtime metric emission, but requires k6 in CI. |
+| Runtime Rate-metric/handleSummary behavior via an executed `k6 run`, for scripts other than §6/§7 | Low | `RealK6RunTests` executes §7's `default()` for real (checks its 4 custom metrics emit) and §6's `handleSummary()` for real (checks `results.json` is actually written); LT-015 + `RateMetricSemanticsTests` statically catch the "Rate fed only on failure" bug elsewhere. Every other reference script (§1, §5, §9, ...) still only gets static/init-context checks. |
+| Advise-mode output-contract exemption | Low | §2 Gate 3 and §9 document Advise mode skipping the nine-section contract, but no test asserts a real Advise-mode response actually omits fabricated sections — that requires behavioral (LLM) evaluation, out of scope for this zero-LLM suite. |

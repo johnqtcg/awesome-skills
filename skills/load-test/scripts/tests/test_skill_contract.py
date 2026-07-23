@@ -63,11 +63,14 @@ class TestMandatoryGates:
 
     def test_gate_2_slo_first(self):
         assert "Gate 2: SLO-First" in SKILL_MD
-        assert "SLOs MUST exist before writing test scripts" in SKILL_MD
+        assert "A PASS/FAIL verdict requires an SLO" in SKILL_MD
+        # exploratory work must remain legitimate without a pre-set SLO —
+        # this is the exact rigidity the skill was reviewed for
+        assert "Exploratory work does NOT need a pre-set SLO" in SKILL_MD
 
     def test_gate_3_scope_classification(self):
         assert "Gate 3: Scope Classification" in SKILL_MD
-        for mode in ("Write", "Review", "Analyze"):
+        for mode in ("Write", "Review", "Analyze", "Advise"):
             assert mode in SKILL_MD, f"mode {mode} missing from Gate 3"
 
     def test_gate_4_output_completeness(self):

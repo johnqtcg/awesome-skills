@@ -12,18 +12,18 @@
 
 ## 1. Skill 概述
 
-`load-test` 定义了 4 条 Mandatory Gates（Context → SLO-First → Scope → Output Completeness）、3 级 Depth 选择（Lite / Standard / Deep）、5 种 Degradation Modes、18 项 Load Test Checklist、6 种场景类型、6 对 Anti-Examples、3 层 Scorecard（Critical / Standard / Hygiene）、以及 9 节 Output Contract。
+`load-test` 定义了 4 条 Mandatory Gates（Context → SLO-First → Scope → Output Completeness）、3 级 Depth 选择（Lite / Standard / Deep）、5 种 Degradation Modes、19 项 Load Test Checklist、6 种场景类型、8 对 Anti-Examples、3 层 Scorecard（Critical / Standard / Hygiene，共 13 项）、以及 9 节 Output Contract。*2026-07-23 更新：本次评估之后新增了第 4 种 Gate 3 模式 Advise（直接给建议，不产出脚本/结果契约），下方 S1–S3 场景结果未覆盖该模式。*
 
 **核心组件**:
 
 | 文件 | 行数 | 职责 |
 |------|------|------|
-| `SKILL.md` | 420 | 主技能定义（4 Gates、3 Depth、5 Degradation、Checklist、6 Anti-Examples AE-1~6、8-item Scorecard、9-section Output Contract） |
-| `references/k6-patterns.md` | ~480 | k6 执行器详细模式：constant-arrival-rate、SharedArray、thresholds、handleSummary、CI 集成 |
-| `references/vegeta-patterns.md` | ~260 | vegeta 固定速率模型、管道组合、Go 集成、二进制结果归档 |
-| `references/analysis-guide.md` | ~350 | 百分位解读、饱和点识别、瓶颈分类（Tier 1/2/3）、SLO 裁决框架、回归检测 |
+| `SKILL.md` | 499 | 主技能定义（4 Gates、3 Depth、5 Degradation、Checklist、8 Anti-Examples AE-1~8、13-item Scorecard、9-section Output Contract） |
+| `references/k6-patterns.md` | 856 | k6 执行器详细模式：constant-arrival-rate、SharedArray、thresholds、handleSummary、CI 集成 |
+| `references/vegeta-patterns.md` | 253 | vegeta 固定速率模型、管道组合、Go 集成、二进制结果归档 |
+| `references/analysis-guide.md` | 309 | 百分位解读、饱和点识别、瓶颈分类（Tier 1/2/3）、SLO 裁决框架、回归检测 |
 
-**回归测试总量：125 项**（75 contract + 50 golden + integrity），14 个 golden fixtures（LT-001~014），所有关键维度覆盖率 100%。
+**回归测试总量：153 项**（75 contract + 54 golden + 10 behavioral + 14 outputexample），15 个 golden fixtures（LT-001~015）。下方覆盖率指的是文档契约覆盖率（结构/关键词是否存在）——具体测什么、不测什么见 `scripts/tests/COVERAGE.md`，不代表运行时正确性的保证。
 
 ---
 
@@ -239,13 +239,15 @@ Without-Skill S1 代理 token 消耗（37,725）高于 With-Skill S1（32,633）
 
 | 组件 | 行数 | 估算 Token 数 | 加载时机 |
 |------|------|:------------:|:--------:|
-| `SKILL.md` | 420 | ~2,100 | 始终加载 |
-| `k6-patterns.md` | ~480 | ~2,400 | Standard+ Write 模式 |
-| `vegeta-patterns.md` | ~260 | ~1,300 | Standard+ Write（vegeta 路径） |
-| `analysis-guide.md` | ~350 | ~1,750 | Analyze / Deep |
-| **Lite 典型（SKILL.md only）** | | **~2,100** | 快速 Review |
-| **Standard Write 典型** | | **~4,500** | SKILL.md + k6-patterns.md |
-| **Standard Analyze 典型** | | **~3,850** | SKILL.md + analysis-guide.md |
+| `SKILL.md` | 499 | ~2,500 | 始终加载 |
+| `k6-patterns.md` | 856 | ~4,280 | Standard+ Write 模式 |
+| `vegeta-patterns.md` | 253 | ~1,300 | Standard+ Write（vegeta 路径） |
+| `analysis-guide.md` | 309 | ~1,550 | Analyze / Deep |
+| **Lite 典型（SKILL.md only）** | | **~2,500** | 快速 Review |
+| **Standard Write 典型** | | **~6,780** | SKILL.md + k6-patterns.md |
+| **Standard Analyze 典型** | | **~4,050** | SKILL.md + analysis-guide.md |
+
+*（行数为 2026-07-23 当前值；token 估算沿用本表原有的 ~5 tokens/行经验系数，未重新用 tokenizer 实测，仅供方向参考。）*
 
 ### 5.3 效费比计算
 
@@ -253,8 +255,8 @@ Without-Skill S1 代理 token 消耗（37,725）高于 With-Skill S1（32,633）
 |------|-----|
 | 核心通过率提升（S2+S3，清洁） | +40pp |
 | 实质性通过率提升（知识维度，S2+S3） | +11pp |
-| Skill 上下文成本（最低，Lite） | ~2,100 tokens |
-| Skill 上下文成本（典型，Standard Write） | ~4,500 tokens |
+| Skill 上下文成本（最低，Lite） | ~2,500 tokens |
+| Skill 上下文成本（典型，Standard Write） | ~6,780 tokens |
 | 运行时额外 token 开销（S2+S3 实测均值） | +14,695 tokens/eval（+107%） |
 | **每 1% 通过率提升的 Token（仅上下文，Lite）** | **~52 tokens/1%** |
 | **每 1% 通过率提升的 Token（仅上下文，Standard）** | **~112 tokens/1%** |
@@ -272,7 +274,7 @@ Without-Skill S1 代理 token 消耗（37,725）高于 With-Skill S1（32,633）
 
 **load-test 效费比特征分析**：
 
-1. **上下文成本偏高（420 行 SKILL.md + 最多 1,090 行 references）**：skills 知识密度大，适合深度专项任务，不适合轻量问答
+1. **上下文成本偏高（499 行 SKILL.md + 最多 1,418 行 references）**：skills 知识密度大，适合深度专项任务，不适合轻量问答
 2. **运行时开销最高（+107%）**：由于工具调用加载 reference files，代理执行时间和总 token 显著增加；但在预加载场景（system prompt 注入）中此开销不存在
 3. **核心价值区窄（Review 模式 +62.5pp；Analyze 模式仅 +14.3pp）**：基线 Claude 在 Analyze 型任务已相当能干，load-test skill 对写作/审查型任务的杠杆更大
 
@@ -320,5 +322,5 @@ Without-Skill S1 代理 token 消耗（37,725）高于 With-Skill S1（32,633）
 
 **改进建议**：
 1. **提高 Analyze 场景增量价值**：analysis-guide.md 可增加「叠加效应分析模板」（GC pause × DB 连接等待的联合概率分析）和「跨 run 回归检测标准」，使分析输出超出基线 Claude 的自然上限
-2. **优化 Token 效率**：SKILL.md 的 Scorecard 模板（约 40 行）和 Output Contract 详细描述（约 30 行）可迁入 reference file，SKILL.md 仅保留指针，预计节省 ~350 tokens，将 Lite 上下文成本从 2,100 降至约 1,750 tokens
+2. **优化 Token 效率**：SKILL.md 的 Scorecard 模板（约 40 行）和 Output Contract 详细描述（约 30 行）可迁入 reference file，SKILL.md 仅保留指针，预计节省 ~350 tokens，将 Lite 上下文成本从 2,500 降至约 2,150 tokens
 3. **评估隔离改进**：未来 A/B 测试中，Without-Skill 代理应通过 `allowed_tools: []` 或独立上下文隔离，防止意外通过工具调用或内存观测加载 skill 内容（S1 污染事件的根因）

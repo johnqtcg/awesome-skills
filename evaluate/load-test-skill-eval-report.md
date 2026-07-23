@@ -12,18 +12,18 @@ The `load-test` skill is a focused performance testing specialist covering HTTP/
 
 ## 1. Skill Overview
 
-`load-test` defines 4 Mandatory Gates (Context → SLO-First → Scope → Output Completeness), 3 depth levels (Lite / Standard / Deep), 5 degradation modes, an 18-item Load Test Checklist, 6 scenario types, 6 anti-example pairs, a 3-tier Scorecard (Critical / Standard / Hygiene), and a 9-section Output Contract.
+`load-test` defines 4 Mandatory Gates (Context → SLO-First → Scope → Output Completeness), 3 depth levels (Lite / Standard / Deep), 5 degradation modes, a 19-item Load Test Checklist, 6 scenario types, 8 anti-example pairs, a 3-tier Scorecard (Critical / Standard / Hygiene, 13 items total), and a 9-section Output Contract. *Updated 2026-07-23: a fourth Gate-3 mode, Advise (direct recommendations, no script/results contract), was added after this evaluation ran and is not reflected in the S1–S3 scenario results below.*
 
 **Core components:**
 
 | File | Lines | Responsibility |
 |------|------:|----------------|
-| `SKILL.md` | 420 | Primary skill definition: 4 Gates, 3 Depth levels, 5 Degradation modes, Checklist, 6 Anti-Examples AE-1~6, 8-item Scorecard, 9-section Output Contract |
-| `references/k6-patterns.md` | ~480 | k6 executor patterns: constant-arrival-rate, SharedArray, thresholds, handleSummary, CI integration |
-| `references/vegeta-patterns.md` | ~260 | vegeta fixed-rate model, pipeline composition, Go integration, binary result archiving |
-| `references/analysis-guide.md` | ~350 | Percentile interpretation, saturation-point identification, bottleneck classification (Tier 1/2/3), SLO verdict framework, regression detection |
+| `SKILL.md` | 499 | Primary skill definition: 4 Gates, 3 Depth levels, 5 Degradation modes, Checklist, 8 Anti-Examples AE-1~8, 13-item Scorecard, 9-section Output Contract |
+| `references/k6-patterns.md` | 856 | k6 executor patterns: constant-arrival-rate, SharedArray, thresholds, handleSummary, CI integration |
+| `references/vegeta-patterns.md` | 253 | vegeta fixed-rate model, pipeline composition, Go integration, binary result archiving |
+| `references/analysis-guide.md` | 309 | Percentile interpretation, saturation-point identification, bottleneck classification (Tier 1/2/3), SLO verdict framework, regression detection |
 
-**Regression test total: 125** (75 contract + 50 golden + integrity), 14 golden fixtures (LT-001–014), 100% coverage across all critical dimensions.
+**Regression test total: 153** (75 contract + 54 golden + 10 behavioral + 14 outputexample), 15 golden fixtures (LT-001–015). Coverage below is documentation-contract coverage (structure/keyword presence) — see `scripts/tests/COVERAGE.md` for what it does and does not validate; it is not a runtime-correctness guarantee.
 
 ---
 
@@ -242,13 +242,15 @@ Without-Skill S1 consumed 37,725 tokens (vs. 32,633 for With-Skill S1), and the 
 
 | Component | Lines | Estimated Tokens | Load Timing |
 |-----------|------:|:----------------:|-------------|
-| `SKILL.md` | 420 | ~2,100 | Always |
-| `k6-patterns.md` | ~480 | ~2,400 | Standard+ Write mode |
-| `vegeta-patterns.md` | ~260 | ~1,300 | Standard+ Write (vegeta path) |
-| `analysis-guide.md` | ~350 | ~1,750 | Analyze / Deep |
-| **Lite typical (SKILL.md only)** | | **~2,100** | Fast review |
-| **Standard Write typical** | | **~4,500** | SKILL.md + k6-patterns.md |
-| **Standard Analyze typical** | | **~3,850** | SKILL.md + analysis-guide.md |
+| `SKILL.md` | 499 | ~2,500 | Always |
+| `k6-patterns.md` | 856 | ~4,280 | Standard+ Write mode |
+| `vegeta-patterns.md` | 253 | ~1,300 | Standard+ Write (vegeta path) |
+| `analysis-guide.md` | 309 | ~1,550 | Analyze / Deep |
+| **Lite typical (SKILL.md only)** | | **~2,500** | Fast review |
+| **Standard Write typical** | | **~6,780** | SKILL.md + k6-patterns.md |
+| **Standard Analyze typical** | | **~4,050** | SKILL.md + analysis-guide.md |
+
+*(Line counts current as of 2026-07-23; token estimates use this table's original ~5 tokens/line heuristic, not a re-run tokenizer measurement — treat as directional.)*
 
 ### 5.3 Cost-Efficiency Calculation
 
@@ -256,8 +258,8 @@ Without-Skill S1 consumed 37,725 tokens (vs. 32,633 for With-Skill S1), and the 
 |--------|-------|
 | Core pass-rate improvement (S2 + S3, clean) | +40pp |
 | Substantive pass-rate improvement (knowledge dimensions, S2 + S3) | +11pp |
-| Skill context cost (minimum, Lite) | ~2,100 tokens |
-| Skill context cost (typical, Standard Write) | ~4,500 tokens |
+| Skill context cost (minimum, Lite) | ~2,500 tokens |
+| Skill context cost (typical, Standard Write) | ~6,780 tokens |
 | Runtime token overhead (S2 + S3 measured average) | +14,695 tokens/eval (+107%) |
 | **Tokens per 1pp improvement (context only, Lite)** | **~52 tokens/1pp** |
 | **Tokens per 1pp improvement (context only, Standard)** | **~112 tokens/1pp** |
@@ -275,7 +277,7 @@ The elevated runtime overhead arises because S2/S3 With-Skill agents each make 4
 
 **load-test cost-efficiency characteristics:**
 
-1. **High context cost (420-line SKILL.md + up to 1,090 lines of references):** Knowledge density is high — well-suited for deep, specialist tasks; less appropriate for lightweight Q&A.
+1. **High context cost (499-line SKILL.md + up to 1,418 lines of references):** Knowledge density is high — well-suited for deep, specialist tasks; less appropriate for lightweight Q&A.
 2. **Highest runtime overhead (+107%):** Tool calls to load reference files significantly increase execution time and total tokens; this cost is absent in pre-load deployments.
 3. **Narrow core-value window (Review mode +62.5pp; Analyze mode only +14.3pp):** The baseline Claude is already capable in Analyze-type tasks. The skill's leverage is strongest in Write/Review tasks.
 
@@ -325,5 +327,5 @@ Without-Skill matches With-Skill in SLO verdict, bottleneck identification, and 
 **Improvement recommendations:**
 
 1. **Increase Analyze mode incremental value**: `analysis-guide.md` could add a "combined-effect analysis template" (joint probability analysis of GC pause × DB connection wait) and "cross-run regression detection standards" to push analysis output beyond the natural baseline ceiling.
-2. **Optimize token efficiency**: The Scorecard template (~40 lines) and Output Contract detail (~30 lines) in SKILL.md could be migrated to a reference file with only a pointer in SKILL.md — estimated saving ~350 tokens, reducing Lite context cost from ~2,100 to ~1,750 tokens.
+2. **Optimize token efficiency**: The Scorecard template (~40 lines) and Output Contract detail (~30 lines) in SKILL.md could be migrated to a reference file with only a pointer in SKILL.md — estimated saving ~350 tokens, reducing Lite context cost from ~2,500 to ~2,150 tokens.
 3. **Improve evaluation isolation**: Future A/B tests should restrict Without-Skill agents via `allowed_tools: []` or independent context isolation to prevent accidental skill-content access via tool calls or memory observations (root cause of the S1 contamination incident).

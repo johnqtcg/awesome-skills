@@ -13,14 +13,14 @@ bestpractice/  →  rationale/  →  skills/  →  evaluate/  →  outputexample
 
 - **`bestpractice/`** — skill design methodology docs (`Fundamentals.md`, `Advanced.md`, `Evaluation.md`, `Iteration.md`, `Integration.md`, `Architecture.md`), bilingual (EN + ZH)
 - **`rationale/`** — per-skill design rationale docs explaining the *why* behind each skill's structure and decisions; each skill has `design.md` + `design.zh-CN.md`
-- **`skills/`** — 51 installable Claude Code skills in total: 24 carry paired `rationale/` + `evaluate/` docs (13 with complete five-layer coverage), plus 16 multi-agent components (a 9-part Go review system and a 7-part US-equity analysis system), each centered on a `SKILL.md` with optional `scripts/`, `references/`, and `agents/` subdirs
+- **`skills/`** — 51 installable Claude Code skills in total: 24 carry paired `rationale/` + `evaluate/` docs (14 with complete five-layer coverage), plus 16 multi-agent components (a 9-part Go review system and a 7-part US-equity analysis system), each centered on a `SKILL.md` with optional `scripts/`, `references/`, and `agents/` subdirs
 - **`evaluate/`** — formal review reports paired EN/ZH (`<skill-name>-skill-eval-report.md` / `.zh-CN.md`)
 - **`outputexample/`** — real task outputs (PDFs, test code, CI configs, screenshots)
 - **`docs/`** — MkDocs Material site source; served at GitHub Pages
 
 Important scope note:
 
-- **13 skills** have full five-layer coverage (`rationale/`, `skills/`, `evaluate/`, `outputexample/`); **24** carry at least paired `rationale/` + `evaluate/`.
+- **14 skills** have full five-layer coverage (`rationale/`, `skills/`, `evaluate/`, `outputexample/`); **24** carry at least paired `rationale/` + `evaluate/`.
 - **16 multi-agent components** support the orchestration architectures: a 9-part Go review system (`go-review-lead` + 8 vertical review skills) and a 7-part US-equity analysis system (`stock-analysis-lead` + 6 vertical review skills). They are installable and regression-tested, but do not yet have standalone `rationale/`, `evaluate/`, or `outputexample/` tracks.
 
 ## Skill Structure Convention

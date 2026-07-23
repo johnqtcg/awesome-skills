@@ -7,7 +7,7 @@
   "violated_rule": "SLO defined before test — thresholds exist, not post-hoc",
   "expected_feedback": "Critical: no SLOs defined. Without SLOs, test results are meaningless numbers — no decision can be made. Define thresholds first: latency (p50, p99), throughput (RPS), error rate. SLOs drive everything: scenario selection, pass/fail criteria, analysis focus.",
   "coverage_rules": [
-    "SLOs MUST exist before writing test scripts",
+    "A PASS/FAIL verdict requires an SLO",
     "SLO defined before test",
     "No SLO",
     "SLOs drive everything"

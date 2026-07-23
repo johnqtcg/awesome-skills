@@ -9,6 +9,8 @@ Representative examples:
   - [中国制造2025目标完成度研究（中文 PDF）](google-search/中国制造2025目标完成度研究.pdf)
 - `unit-test`
   - [Output bundle](unit-test/index.md)
+- `load-test`
+  - [Output bundle](load-test/index.md)
 - `yt-dlp-downloader`
   - [Download screenshots](yt-dlp-downloader/index.md)
 - `deep-research`
