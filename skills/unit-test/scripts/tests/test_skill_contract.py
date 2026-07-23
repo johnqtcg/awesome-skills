@@ -260,7 +260,7 @@ class UnitTestSkillContractTests(unittest.TestCase):
         self.assertIn("PR-Diff Scoped Testing", skill)
         self.assertIn("git diff --name-only", skill)
 
-    # --- New: Machine-readable JSON outputexample ---
+    # --- New: Machine-readable JSON output ---
 
     def test_json_summary_exists(self) -> None:
         skill = SKILL_MD.read_text()

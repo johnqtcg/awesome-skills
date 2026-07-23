@@ -68,10 +68,10 @@ Read `go.mod` for the project's Go version. Adapt patterns:
 
 | Feature | Minimum Go | Adaptation |
 |---------|-----------|------------|
-| `t.Setenv` | 1.17 | Below: use `os.Setenv` + `t.Cleanup` |
+| `t.Setenv` | 1.17 | Below: use `os.Setenv` + `t.Cleanup`. **Panics under `t.Parallel()` on every Go version** (process-wide env) — never combine them |
 | `context.WithTimeout` (no leak) | all | Always `defer cancel()` |
-| Range var capture fix | 1.22 | Below 1.22: copy loop variable in closures |
-| `t.Parallel()` + `t.Setenv` safe | 1.24 | Below 1.24: do NOT combine in same subtest |
+| Range var capture fix | 1.22 | Below 1.22: copy loop variable (`tt := tt`) in closures |
+| `t.Chdir` | 1.24 | Added 1.24 (below: `os.Chdir` + `t.Cleanup`). Like `t.Setenv`, cannot combine with `t.Parallel()` — panics |
 
 If `go.mod` is not found, state `Go version: unknown` and use the most conservative patterns.
 

@@ -252,7 +252,7 @@ A killer case is a fault-injection or boundary-kill test tied to a concrete defe
 // Killer case: dropped-tail in level transform
 // Defect hypothesis: loop uses `i < len(levels)-1` instead of `i < len(levels)`,
 //   causing the last level to be silently dropped.
-// Critical assertion: outputexample length equals input length AND last element ID present.
+// Critical assertion: output length equals input length AND last element ID present.
 // "If this assertion is removed, the known bug can escape detection."
 {
 	name: "killer: last level not dropped",

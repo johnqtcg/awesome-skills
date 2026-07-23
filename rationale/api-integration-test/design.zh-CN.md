@@ -71,7 +71,7 @@ applicable_versions: current repository version
 
 - `t.Setenv` 需要 Go 1.17+
 - 1.22 之前要特别注意 range 变量闭包捕获
-- 1.24 之前不应在同一个子测试里把 `t.Parallel()` 和 `t.Setenv()` 直接混用
+- `t.Parallel()` 与 `t.Setenv()`/`t.Chdir()` 在任何 Go 版本下混用都会 panic(进程级状态),不存在“从某个版本起变安全”,绝不要混用
 
 如果忽略这一步，模型写出来的代码可能语法没问题，但放到项目里并不合适，或者会埋下很细的并发 / 测试隔离问题。
 

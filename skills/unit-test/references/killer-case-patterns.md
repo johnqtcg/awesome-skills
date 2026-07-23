@@ -8,7 +8,7 @@
 
 ```go
 // Defect hypothesis: off-by-one in range bound drops last element.
-// Critical assertion: outputexample length equals input length AND last element ID present.
+// Critical assertion: output length equals input length AND last element ID present.
 // "If this assertion is removed, the known bug can escape detection."
 {
 	name: "killer: last element not dropped in transform",

@@ -352,7 +352,7 @@ Read go.mod → extract Go version → apply rules:
 - < 1.17: do NOT recommend t.Setenv
 - < 1.21: do NOT recommend slog
 - < 1.22: WARN about range variable capture in goroutines
-- < 1.24: do NOT recommend t.Parallel() + t.Setenv combination
+- ALL versions: never combine t.Parallel() with t.Setenv/t.Chdir — it panics (process-wide state), not version-gated
 ```
 
 This looks simple, but it solves one of the most common LLM mistakes: **recommending features the current project version does not support**. Traditional tools such as `golangci-lint` and SonarQube do not offer this kind of version-aware filtering.

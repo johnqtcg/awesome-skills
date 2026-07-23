@@ -1,7 +1,7 @@
 ---
 name: unit-test
 description: 'Use when the user asks for unit tests (e.g, "单元测试", "unit test"), wants to add/fix Go tests, wants table-driven and subtest organization, or wants to enforce a minimum coverage gate (default 80% for logic packages). Prioritize bug discovery (especially boundary, mapping loss, and concurrency defects) over test volume. Do NOT use for benchmarks, fuzz tests, integration tests, E2E tests, load tests, or mock generation.'
-allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go vet*), Bash(git diff*), Bash(go tool cover*)
+allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go vet*), Bash(go list*), Bash(git diff*), Bash(go tool cover*), Bash(dirname *), Bash(sort *)
 ---
 
 # Go Unit Test
@@ -30,12 +30,12 @@ Create and refine Go tests for this repository with table-driven cases and expli
   - **If project uses go-cmp**: use `cmp.Diff` for deep struct comparison. Prefer over field-by-field assertion for complex output.
   - **Detection**: Check existing `_test.go` files for `"github.com/stretchr/testify"` imports. Follow project convention.
 - Keep tests deterministic; isolate time, randomness, environment, and network.
-  - Prefer `t.Setenv` for env changes; avoid leaking global state between tests.
+  - Prefer `t.Setenv` for env changes; avoid leaking global state between tests. Note: `t.Setenv` panics under `t.Parallel()` (see Go Version Gate) — for a parallel subtest that needs env isolation, inject config explicitly instead of mutating the process environment.
 - Prefer stable fakes/stubs over heavy mock chains.
   - Unit tests SHOULD NOT require real external services (DB/Redis/HTTP) unless explicitly requested; that belongs to integration tests.
 - Do NOT test constructors (`NewXxx`) or private helpers unless explicitly requested **OR** they contain non-trivial logic (validation/defaulting/option-merging) that can break runtime invariants.
 - For service-layer code with interfaces, focus on methods declared in the interface. For pure functions/handlers, focus on exported functions/endpoints.
-- Run with race detector: `go test -race ./...`.
+- Run with the race detector (`go test -race`). Scope is the **tested package set**, not always `./...`: PR mode narrows it to changed packages, and a Light pure-function target with no `go`/`chan`/`sync` may run `-race` on just that package rather than the whole repo. **Precedence when the rules below disagree: `race.required` config > PR scope > mode default.** `race.required: false` disables `-race` entirely (state it in the report); otherwise `-race` is required on every tested package.
 - **Killer Case hard constraint (Standard + Strict)**: each test target (interface method / exported function / handler endpoint) must include at least 1 "killer case" (fault-injection or boundary-kill case) that is expected to fail on a known bad mutation/path.
 - In the report, for each killer case, explicitly state: **"if this assertion is removed, the known bug can escape detection."**
 
@@ -90,9 +90,9 @@ Before generating tests, check `go.mod` for the project's Go version. Adapt test
 
 | Feature | Minimum Go Version | Adaptation |
 |---|---|---|
-| `t.Setenv` | 1.17 | Below 1.17: use `os.Setenv` + `t.Cleanup` |
-| Range var capture fix | 1.22 | Below 1.22: copy loop variable in `t.Run` + `t.Parallel()` closures |
-| `t.Parallel()` + `t.Setenv` safe | 1.24 | Below 1.24: do NOT combine `t.Parallel()` with `t.Setenv` in the same subtest |
+| `t.Setenv` | 1.17 | Below 1.17: use `os.Setenv` + `t.Cleanup`. **Never** call it in a test that (or whose ancestor) calls `t.Parallel()` — it panics on **every** Go version, because it mutates process-wide env. This is not version-gated; there is no release where the combination became safe. |
+| Range var capture fix | 1.22 | Below 1.22: copy the loop variable (`tt := tt`) before any `t.Run` + `t.Parallel()` closure. On 1.22+ the per-iteration variable makes this redundant. |
+| `t.Chdir` | 1.24 | Added in Go 1.24 (below 1.24: `os.Chdir` + `t.Cleanup`). Like `t.Setenv`, it changes process-wide state and **cannot** be combined with `t.Parallel()` — it panics if the test has a parallel ancestor. |
 
 If `go.mod` cannot be read, state the assumption and proceed with Go 1.21 defaults.
 
@@ -105,10 +105,20 @@ If `go.mod` cannot be read, state the assumption and proceed with Go 1.21 defaul
 
 When testing in a CI / PR review context:
 
-- Determine changed packages from `git diff --name-only origin/main...HEAD | grep '\.go$' | xargs -I{} dirname {} | sort -u`.
-- Run tests only for changed packages and their direct dependents: `go test -race ./changed/pkg/... ./dependent/pkg/...`.
-- Coverage gate applies only to changed packages (not the entire repo).
-- If a changed package has no `_test.go` file, flag it in the report as a gap.
+- **Base ref is the PR's target branch, not a hardcoded name.** Use `BASE="${PR_BASE:-origin/main}"` with a merge-base three-dot range. Resolve changed files → package patterns with a `./` prefix: a bare `internal/foo` is read by `go` as an *import path* (`package internal/foo is not in std`); the `./` prefix makes it a directory.
+  ```bash
+  BASE="${PR_BASE:-origin/main}"
+  git diff --name-only "$BASE...HEAD" -- '*.go' \
+    | while IFS= read -r f; do printf './%s\n' "$(dirname "$f")"; done \
+    | sort -u \
+    | while IFS= read -r d; do go list "$d" 2>/dev/null; done
+  ```
+  Portable (no GNU-only `xargs -d`, which fails on BSD/macOS `xargs`); `IFS= read -r` keeps paths intact; empty diff yields no packages. Assumes gofmt-standard paths (no newlines in filenames).
+- **Changed packages ≠ their dependents.** `go list` resolves *forward* imports only — there is no flag for "who imports X". Testing changed packages alone can miss a regression in a caller. To include direct dependents, filter `go list -f '{{.ImportPath}} {{join .Imports " "}}' ./...` for each changed import path. If you skip that, run changed packages only and **state explicitly in the report that dependent packages were not covered** — do not imply the command above already includes them.
+- Run `go test -race` on the resulting package set; the coverage gate applies only to changed packages, not the whole repo.
+- If a changed package has no `_test.go` file, flag it as a gap.
+
+Discovery uses `git`, `dirname`, `sort`, and `go list` (all in `allowed-tools`); the optional dependents step also uses `grep`. If your tool policy restricts any, run discovery in your shell and pass the package list in.
 
 ### Generated Code Exclusion
 
@@ -130,7 +140,7 @@ Config keys:
 - `coverage.infra_min`: minimum coverage for infra-heavy packages when policy is stricter than default (optional)
 - `coverage.package_rules`: per-package overrides with explicit rationale
 - `assertion_style`: `auto|testify|stdlib|go-cmp` (prefer `auto`)
-- `race.required`: whether `-race` execution is mandatory in this repo (`true|false`)
+- `race.required`: whether `-race` execution is mandatory in this repo (`true|false`). Highest precedence — `false` overrides the default `-race` requirement (see Hard Rules)
 - `commands.test`: custom test command template
 - `commands.coverage`: custom coverage command template
 - `mode`: `auto|light|standard|strict` — set the minimum mode floor (default `auto`). Auto-selection still runs; if it detects a higher mode than the configured floor, the higher mode wins. For example, `mode: light` allows Light for simple targets but still auto-promotes to Standard/Strict when triggers fire. `mode: strict` forces Strict for all targets.
@@ -145,7 +155,7 @@ Select mode **before** writing tests. Declare the selected mode and rationale at
 
 | Criterion | Light | Standard | Strict |
 |-----------|-------|----------|--------|
-| Target count | ≤ 3 simple targets | 1-8 targets | > 8 targets |
+| Target count | ≤ 3 simple targets | 1-8 targets | > 8 targets (not a standalone trigger — see note) |
 | Concurrency | None (no `go func`, channels, `sync.*`) | Any | Shared mutable state, error fan-in |
 | Dependencies | ≤ 1 failing dependency | Multiple | Complex error chains |
 | Branching | ≤ 3 branches per function | Any | Complex state machines |
@@ -156,7 +166,9 @@ Select mode **before** writing tests. Declare the selected mode and rationale at
 
 - **Light**: ALL Light criteria must be met. For simple pure functions with scalar I/O, utilities, type conversions. NOT for collection/slice/map transforms (these need the full boundary checklist to catch off-by-one and dropped-element bugs).
 - **Standard**: Default. Use when any Light criterion is violated but no Strict trigger fires.
-- **Strict**: ANY Strict criterion triggers this mode. For concurrent, security-sensitive, or high-risk code.
+- **Strict**: ANY Strict *risk* criterion (the rows **below** Target count — concurrency, dependencies, branching, security, context) triggers this mode. Target count alone does not. For concurrent, security-sensitive, or high-risk code.
+
+**Mode is risk-driven, not count-driven.** The `Target count` row is a *signal*, not a hard trigger: the actual Strict triggers are the risk rows (concurrency, complex error chains, security, state machines). Ten trivial getters/pure functions do NOT warrant Strict just for crossing `> 8 targets` — stay at Light/Standard and record the rationale. Promote on risk density (what could break silently), not on how many targets there are.
 
 When in doubt, choose Standard.
 
@@ -164,7 +176,7 @@ When in doubt, choose Standard.
 
 | Feature | Light | Standard | Strict |
 |---------|-------|----------|--------|
-| Table-driven tests | Required | Required | Required |
+| Table-driven tests | Required (2+ cases) | Required (2+ cases) | Required (2+ cases) |
 | Mutation-resistant assertions | Required | Required | Required |
 | Race detection (`-race`) | Required | Required | Required |
 | Coverage gate (80%) | Required | Required | Required |
@@ -193,16 +205,16 @@ Mark each `Covered` or `N/A`:
 | # | Tier | Check |
 |---|------|-------|
 | L1 | Hygiene | File naming and location correct |
-| L2 | Hygiene | Table-driven style used |
+| L2 | Hygiene | Table-driven style used (targets with 2+ cases; single-scenario may be flat) |
 | L3 | **Critical** | Assertions are mutation-resistant (business fields, not existence-only) |
 | L4 | Hygiene | Happy path covered |
 | L5 | Standard | Critical dependency error paths covered (or N/A) |
 | L6 | Standard | `-race` execution result reported (or N/A with rationale) |
 | L7 | **Critical** | Coverage meets gate (logic >= 80%) |
 
-**N/A handling**: Items marked N/A with explicit rationale count as PASS for tier and total calculations (same rule as the full scorecard).
+**N/A handling**: Standard and Hygiene items marked N/A with explicit rationale count as PASS for tier and total calculations (same rule as the full scorecard). The two Critical items follow the full scorecard's restricted rule: **L3 (mutation-resistant assertions) is never N/A**; **L7 (coverage) is N/A only** for `cmd/**` smoke-tested entry points, generated code, or when coverage genuinely can't run and the exact commands are output.
 
-PASS when: both Critical (L3, L7) PASS (or N/A with explicit rationale), Standard >= 1/2, Hygiene >= 2/3, total >= 6/7.
+PASS when: both Critical (L3, L7) PASS (L7 N/A only under the restricted coverage conditions above), Standard >= 1/2, Hygiene >= 2/3, total >= 6/7.
 
 State `Light mode: standard scorecard not applicable` in output.
 
@@ -320,9 +332,10 @@ For Light mode, use the Light Boundary Check (5 items) in Execution Modes.
 
 1. Top-level test naming follows the [Target Type Adaptation](#target-type-adaptation) table.
 2. `t.Run` groups map to test targets (interface methods, exported functions, or endpoints).
-3. Use table-driven cases inside each group.
+3. Use table-driven cases inside each group (subject to the 2+-scenario rule in item 5).
 4. Keep case names defect-oriented and readable in `go test -v`.
-5. Prefer `t.Parallel()` for independent subtests.
+5. Table-driven is required once a target has **2+ meaningful scenarios**. A target with a single genuine scenario may use a flat test — do not manufacture a one-row table to satisfy the form (matches the repo "table-driven for 2+ scenarios" convention).
+6. Prefer `t.Parallel()` for independent subtests.
   - Do NOT use `t.Parallel()` when subtests share mutable globals, temp dirs without isolation, or process-wide resources.
 
 ## Incremental Mode (Fix / Add Tests)

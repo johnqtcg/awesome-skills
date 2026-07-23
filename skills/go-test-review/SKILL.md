@@ -31,10 +31,10 @@ Read `go.mod`. Key version gates:
 
 | Feature | Minimum Go | Caveat |
 |---------|-----------|--------|
-| `t.Setenv` | 1.17 | Cannot combine with `t.Parallel()` |
+| `t.Setenv` | 1.17 | Cannot combine with `t.Parallel()` — panics on every Go version (process-wide env) |
 | Fuzz testing (`testing.F`) | 1.18 | |
 | Loop variable fix | 1.22 | Affects `t.Parallel()` + loop variable capture |
-| `t.Parallel()` + `t.Setenv` safe | 1.24 | Before 1.24, this combination panics |
+| `t.Chdir` | 1.24 | Added 1.24; like `t.Setenv`, panics if combined with `t.Parallel()` |
 
 ### 2) Anti-Example Suppression Gate
 MUST quote specific evidence. Category match alone insufficient.

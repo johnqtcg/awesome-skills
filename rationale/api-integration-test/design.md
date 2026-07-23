@@ -71,7 +71,7 @@ This gate is not about showing off modern Go features. It is about making sure t
 
 - `t.Setenv` requires Go 1.17+
 - before Go 1.22, range-variable closure capture still needs explicit care
-- before Go 1.24, mixing `t.Parallel()` and `t.Setenv()` in the same subtest is unsafe
+- `t.Parallel()` combined with `t.Setenv()`/`t.Chdir()` panics on **every** Go version (process-wide state) — never mix them; there is no release where it became safe
 
 Without this step, the generated code may look idiomatic in isolation but still be mismatched to the target repository or subtly unsafe in test behavior.
 

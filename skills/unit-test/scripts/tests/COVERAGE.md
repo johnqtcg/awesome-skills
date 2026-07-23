@@ -1,6 +1,6 @@
 # Unit-Test Skill — Rule-to-Scenario Coverage Matrix
 
-Maps each core rule/section in SKILL.md to its golden fixture and contract test. Use this to identify coverage gaps when adding new rules.
+Maps each core rule/section in SKILL.md to its golden fixture and contract test, plus a behavioral eval layer (`test_behavioral_killer.py`) that executes real Go to prove the skill's killer-case and `-race` claims actually work — not just that their rule text exists. Use this to identify coverage gaps when adding new rules.
 
 ## Contract Tests (`test_skill_contract.py`)
 
@@ -100,6 +100,39 @@ Maps each core rule/section in SKILL.md to its golden fixture and contract test.
 | 004 | Protobuf generated file | generated_code |
 | 005 | Trivial getter with no logic | anti_example |
 
+## Behavioral Eval (`test_behavioral_killer.py`)
+
+Every test above is a **documentation-contract** check — it asserts a rule
+*string* is present, not that the skill's advice actually works. This layer
+executes real Go to validate the skill's two headline claims on fixed fixtures:
+
+| Test | Proves |
+|------|--------|
+| `test_generated_test_compiles_and_vets` | a killer-case test in the skill's pattern compiles and passes `go vet` |
+| `test_killer_case_passes_on_correct_impl` | the killer case passes on a correct slice-transform |
+| `test_killer_case_kills_mutation` | the killer case **fails** on an off-by-one that drops the last element — it really kills the mutation |
+| `test_weak_assertion_misses_mutation` | an existence-only (`len != 0`) assertion **passes** on the same mutation — the concrete reason mutation-resistant assertions (Critical #5) are mandatory |
+| `test_race_detector_catches_real_race` | `go test -race` flags a genuine unsynchronised shared write (validates go-core MUST #10) |
+
+**What this does NOT prove — read before trusting it.** These tests validate the
+*methodology the skill prescribes*, on hand-authored fixtures. They do **not**
+prove an LLM driving the skill will emit such a test, pick the right
+Light/Standard/Strict mode, or produce a contract-valid report — that needs a
+behavioral LLM eval, out of scope for this zero-LLM suite. They also cover
+exactly two defect shapes (dropped-tail, data race); others (mapping-key swap,
+nil-deref, context leak) are still only asserted as doc text, not executed. The
+value is narrow but real: the skill's central promise — "a killer case catches
+the defect it names; a weak assertion does not" — is now executable and
+regression-guarded instead of asserted in prose.
+
+Skips (never fails) only on genuine **environment** failures — `go` absent, no
+writable temp dir, or a trivial known-good program failing to compile (a broken
+or mismatched toolchain). The harness drops any inherited `GOROOT` so a stale
+one can't poison the build, and the readiness check is a real `go build` of a
+trivial program, not a version probe. A *fixture* compile/assertion failure is
+never skipped — it surfaces as a real failure. So CI without a working Go
+toolchain stays green, while a real regression still fails loudly.
+
 ## Coverage Summary
 
 | Metric | Count |
@@ -112,6 +145,7 @@ Maps each core rule/section in SKILL.md to its golden fixture and contract test.
 | Reference files | 5 |
 | Contract tests | 67 |
 | Golden scenario tests | 17 |
+| Behavioral eval tests (execute real Go; skip w/o toolchain) | 5 |
 
 ## Gap Analysis
 

@@ -10,12 +10,16 @@ Replace `time.Sleep` with channel-based barriers for deterministic test control.
 
 ```go
 func TestConcurrent_ChannelBarrier(t *testing.T) {
+	const workers = 5
 	gate := make(chan struct{})
 	var mu sync.Mutex
 	var results []string
+	var wg sync.WaitGroup
+	wg.Add(workers)
 
-	for i := 0; i < 5; i++ {
-		go func(id int) {
+	for i := 0; i < workers; i++ {
+		go func(id int) { // id passed explicitly — safe on all Go versions
+			defer wg.Done()
 			<-gate // all goroutines block here until gate closes
 			mu.Lock()
 			results = append(results, fmt.Sprintf("worker-%d", id))
@@ -24,7 +28,14 @@ func TestConcurrent_ChannelBarrier(t *testing.T) {
 	}
 
 	close(gate) // release all at once — maximizes contention
-	// Use WaitGroup or other mechanism to wait for completion
+	wg.Wait()   // REQUIRED: without this the test returns before the workers
+	            // finish — results is read half-filled and the goroutines leak
+
+	mu.Lock()
+	defer mu.Unlock()
+	if len(results) != workers {
+		t.Fatalf("got %d results, want %d", len(results), workers)
+	}
 }
 ```
 
@@ -223,7 +234,7 @@ func TestProcessAll_ErrorFanIn(t *testing.T) {
 ### When NOT to use `t.Parallel()`
 
 - Subtests share a mutable fake (e.g., same `fakeRepo` instance with recorded calls)
-- Tests use `t.Setenv` (not safe with `t.Parallel()` in Go < 1.24)
+- Tests use `t.Setenv` or `t.Chdir` — they **panic** under `t.Parallel()` on **every** Go version (both mutate process-wide state; there is no release where this became safe). Inject config explicitly instead.
 - Tests modify package-level variables
 - Tests use shared temp directories without isolation
 - Tests depend on execution order (they shouldn't, but if they do, fix the design first)
@@ -241,7 +252,7 @@ func TestUserService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel() // safe: each iteration gets its own tt copy
+			t.Parallel() // Go 1.22+ scopes tt per iteration. On Go <1.22 add `tt := tt` before t.Run, else all subtests race on the last case.
 
 			// Create fresh fake per subtest
 			fake := &fakeRepo{user: tt.inputUser}
