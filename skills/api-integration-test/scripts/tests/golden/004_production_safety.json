@@ -4,7 +4,7 @@
   "required_keywords": [
     "INTEGRATION_ALLOW_PROD",
     "re:prod.*production",
-    "t.Skip",
-    "refuse prod by default"
+    "t.Fatalf",
+    "refuse production target"
   ]
 }

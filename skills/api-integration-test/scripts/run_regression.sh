@@ -12,12 +12,10 @@ if ! command -v python3 &>/dev/null; then
     exit 1
 fi
 
-echo "Running contract tests..."
-python3 -m unittest "${TESTS_DIR}/test_skill_contract.py" -v
-echo ""
+# Discover ALL test_*.py. Do NOT hardcode a per-file list: it previously omitted
+# the behavioral suite entirely, so a green run proved nothing about it. Discovery
+# guarantees any newly added test file is included in the gate.
+python3 -m unittest discover -s "${TESTS_DIR}" -p "test_*.py" -v
 
-echo "Running golden scenario tests..."
-python3 -m unittest "${TESTS_DIR}/test_golden_scenarios.py" -v
 echo ""
-
 echo "=== All regression tests passed ==="

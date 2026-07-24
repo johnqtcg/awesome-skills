@@ -48,8 +48,8 @@ Gates execute in strict serial order. Any gate failure blocks all subsequent ste
         5) Production   6) Execution    7) Reference
            Safety     ──→  Integrity  ──→  Loading
            │               │               │
-           ENV=prod?       actually ran?   load by trigger
-           → t.Skip        → report        pattern
+           prod? env+host  actually ran?   load by trigger
+           → t.Fatalf      → report        pattern
 ```
 
 ### 1) Scope Validation Gate
@@ -106,8 +106,30 @@ If the user explicitly requests a specific mode, use that mode regardless of sig
 
 ### 5) Production Safety Gate
 
-- If `ENV` resolves to `prod` or `production`, the generated test must `t.Skip` unless `INTEGRATION_ALLOW_PROD=1`.
-- For destructive operations (DELETE, UPDATE, DROP), require additional gate: `INTEGRATION_ALLOW_DESTRUCTIVE=1`.
+**Never trust `ENV` alone** — an endpoint can point at production while `ENV=dev`
+(`ENV=dev API_BASE_URL=https://api.production.internal`). Validate the *resolved
+target host*, not just the label:
+
+- Refuse when `ENV` is `prod`/`production` **OR** the resolved base-URL host matches
+  a production pattern (contains `prod`, `production`, `live`, or a production
+  domain suffix your org uses), unless `INTEGRATION_ALLOW_PROD=1`.
+- Parse the base URL and check the host against a **non-prod allowlist** (preferred)
+  or a prod **denylist** before any call. Fail **closed**: `url.Parse` accepts
+  relative refs (`api.production.internal` parses with no error but empty scheme/host;
+  `prod-host:8080` gets scheme `prod-host`), so require an **absolute `http(s)` URL
+  with a non-empty host** — treat anything else as prod. Checking only the parse error
+  is a bypass.
+- Require a **dedicated test tenant/account** (e.g. `TEST_TENANT_ID`); refuse a target
+  whose tenant is not the designated test tenant.
+- For destructive operations (DELETE, UPDATE, DROP), require `INTEGRATION_ALLOW_DESTRUCTIVE=1`
+  **in addition**. **A destructive write against production is forbidden under EVERY flag
+  combination** — `INTEGRATION_ALLOW_PROD=1` permits READ-only prod tests, never writes. So
+  a prod target + `ALLOW_PROD=1` + `ALLOW_DESTRUCTIVE=1` must still `t.Fatalf`. Destructive
+  ops **require `NONPROD_HOST_ALLOWLIST`** (fail closed on host — a substring denylist would
+  pass `https://api.company.com`) AND a validated non-prod tenant before any destructive call.
+
+**When the run gate is enabled, refusal is a hard failure (`t.Fatalf`), not a silent
+`t.Skip`** — see §Skip vs Fail (CI Integrity).
 
 ### 6) Execution Integrity Gate
 
@@ -119,6 +141,10 @@ Never claim tests were executed unless they actually ran.
   - exact command to reproduce
 - Do not imply pass/fail for tests that did not execute.
 - Never report PASS when tests were actually skipped.
+- **A `(cached)` result is NOT evidence of execution.** `go test` prints `ok … (cached)`
+  when it reuses a prior result without running the binary — so the live service was
+  never contacted. Every real integration run MUST pass `-count=1`; if output shows
+  `(cached)`, report it as "did not run this time" and re-run with `-count=1`.
 
 ### 7) Load References Selectively
 
@@ -130,6 +156,26 @@ Load on condition:
 - `references/checklists.md` — **only when** authoring new tests or triaging failures.
 - `references/internal-api-patterns.md` — **only when** writing HTTP/gRPC test code (not for scope rejection or result reporting).
 - `references/advanced-patterns.md` — **only when** Comprehensive mode, CI integration, httptest adapter tests, or test data lifecycle management.
+
+## Skip vs Fail (CI Integrity)
+
+`t.Skip` on a *misconfigured* run is a false green: `go test` exits 0 when every
+test skips, so a CI job that lost its config — or points at the wrong place —
+passes silently. Distinguish **not requested** from **requested but broken**:
+
+| Situation | Behavior | Why |
+|-----------|----------|-----|
+| Run gate unset (`INTERNAL_API_INTEGRATION != 1`) | `t.Skip` | User did not ask to run — correct to skip |
+| Gate set, a required runtime var missing/empty | `t.Fatalf` | Run requested but misconfigured; skipping false-greens CI |
+| Gate set, target is production (by ENV or host) without `INTEGRATION_ALLOW_PROD=1` | `t.Fatalf` | Loud refusal, before any call — a prod target you didn't authorize is a dangerous mistake, not a quiet skip |
+| Gate set, destructive op without `INTEGRATION_ALLOW_DESTRUCTIVE=1` | `t.Skip` | A deliberate opt-in tier (like the run gate) — keep destructive tests in a separate CI job, NOT the base read-only gate |
+| Scaffold test (a value could not be determined at authoring time) | `t.Skip` + `// TODO` | Incomplete by design — but it MUST be excluded from the official integration gate (separate build tag / not in the CI target) so a scaffold-only suite never reports green |
+
+The line: **Skip = "not opted in / incomplete"** (run gate off, destructive not
+enabled, scaffold); **Fatal = "opted in but broken or dangerous"** (config missing,
+prod target unauthorized). A `t.Skip` that hides a misconfiguration is the bug.
+Destructive and scaffold skips must live in CI jobs the base integration gate does
+not depend on, so nothing false-greens.
 
 ## Execution Modes
 
@@ -148,18 +194,35 @@ Load on condition:
 - Timeout: 30s. Max 2 retries with bounded backoff.
 - Include: concurrent request safety, large payload, pagination, rate limiting.
 
+## Test Taxonomy
+
+Three layers — only the last two are integration tests:
+
+| Layer | Wiring | Integration? | Build tag |
+|-------|--------|:---:|-----------|
+| **Adapter / component test** | stub server (`httptest` with a fake handler) + real client | No — it is a unit test | none |
+| **In-process integration test** | real handler + real dependencies (real DB/cache/queue) wired in-process, often via `httptest.Server` | Yes | `//go:build integration` |
+| **System integration test** | client → a real, separately-deployed endpoint | Yes | `//go:build integration` |
+
+The distinction is what sits *behind* the server: a **stub** handler exercises only
+your client's parsing/transport (adapter test — no build tag, lives with unit tests);
+a **real** handler with real dependencies is an in-process integration test. This
+skill produces the two integration layers. A stub-`httptest` adapter test belongs in
+`$unit-test`, not here.
+
 ## Required Test Pattern
 
 1. Use file name `<domain>_integration_test.go` near the client/package under test.
 2. Add build constraint at file top:
    - `//go:build integration`
    - `// +build integration`
-3. Enforce explicit run gate env var (for example `INTERNAL_API_INTEGRATION=1`), otherwise `t.Skip`.
-4. Validate all required env vars at test start and provide actionable skip message.
-5. Block production by default:
-   - if `ENV` resolves to `prod`/`production`, `t.Skip` unless `INTEGRATION_ALLOW_PROD=1`.
-6. Parse and validate env var payloads where needed (`strconv`, `strings.TrimSpace`, list parsing).
-7. Build real client instance (or real handler + `httptest` server) through production code path.
+3. Enforce explicit run gate env var (for example `INTERNAL_API_INTEGRATION=1`); when unset, `t.Skip` (the run was not requested).
+4. Validate all required env vars at test start. When the gate is set but a required var is missing, `t.Fatalf` with an actionable message — do NOT `t.Skip` (see §Skip vs Fail (CI Integrity)).
+5. Block production by ENV **and** by resolved host (never ENV alone):
+   - refuse if `ENV` is `prod`/`production` OR the base-URL host matches a prod pattern, unless `INTEGRATION_ALLOW_PROD=1`; when the gate is set this refusal is `t.Fatalf`, not `t.Skip`.
+   - require a dedicated test tenant/account and refuse non-test tenants.
+6. Parse and validate env var payloads where needed (`strconv`, `strings.TrimSpace`, `url.Parse`, list parsing).
+7. Build the client through the production code path against a real target. See §Test Taxonomy for what counts as integration vs an adapter/unit test — a stub `httptest` server is an adapter test, not an integration test.
 8. Guard each external call with `context.WithTimeout`.
 9. Use bounded retry policy only when justified:
    - default: no retry
@@ -203,20 +266,29 @@ Load on condition:
 // +build integration
 
 func TestUserProfileIntegration(t *testing.T) {
+    // Run gate OFF → skip: the user did not ask to run. Everything past this
+    // point is "requested, so it must be correct" → t.Fatalf, never t.Skip
+    // (see §Skip vs Fail (CI Integrity)).
     if os.Getenv("INTERNAL_API_INTEGRATION") != "1" {
         t.Skip("set INTERNAL_API_INTEGRATION=1 to run")
     }
 
     env := strings.ToLower(strings.TrimSpace(os.Getenv("ENV")))
-    if (env == "prod" || env == "production") && os.Getenv("INTEGRATION_ALLOW_PROD") != "1" {
-        t.Skip("refuse prod by default: set INTEGRATION_ALLOW_PROD=1 to override")
-    }
-
     cfgDir := strings.TrimSpace(os.Getenv("CONFIG_DIR"))
     userID := strings.TrimSpace(os.Getenv("TEST_USER_ID"))
-    if env == "" || cfgDir == "" || userID == "" {
-        t.Skip("set ENV, CONFIG_DIR, TEST_USER_ID to run")
+    tenant := strings.TrimSpace(os.Getenv("TEST_TENANT_ID"))
+    baseURL := strings.TrimSpace(os.Getenv("API_BASE_URL"))
+    if env == "" || cfgDir == "" || userID == "" || tenant == "" || baseURL == "" {
+        // Gate enabled but misconfigured — FAIL, don't skip, or CI goes green blind.
+        t.Fatalf("integration enabled but config incomplete: need ENV, CONFIG_DIR, TEST_USER_ID, TEST_TENANT_ID, API_BASE_URL")
     }
+
+    // Production safety: refuse by ENV *or* resolved host, before any call.
+    if isProdTarget(env, baseURL) && os.Getenv("INTEGRATION_ALLOW_PROD") != "1" {
+        t.Fatalf("refuse production target (env=%q url=%q): set INTEGRATION_ALLOW_PROD=1 to override, or point at a non-prod endpoint", env, baseURL)
+    }
+    // A dedicated test tenant is mandatory (Safety Rules) — refuse a non-test tenant.
+    assertTestTenant(t, tenant)
 
     cfg := config.MustLoad()
     client, err := NewInternalClient(cfg.InternalAPI)
@@ -248,6 +320,76 @@ func TestUserProfile_NotFound_Integration(t *testing.T) {
     require.NoError(t, err) // HTTP call succeeded
     require.Equal(t, http.StatusNotFound, resp.StatusCode)
 }
+
+// isProdTarget refuses production by label OR resolved host, and FAILS CLOSED.
+// url.Parse accepts relative refs: "api.production.internal" parses with NO error
+// but an empty scheme and empty Hostname(), and "prod-host:8080" yields scheme
+// "prod-host". Checking only err would let both bypass. So require an absolute
+// http(s) URL with a non-empty host; anything else is treated as production.
+// A non-prod host allowlist (NONPROD_HOST_ALLOWLIST) is more reliable than a
+// substring denylist — prefer it when you can enumerate your test hosts.
+func isProdTarget(env, rawURL string) bool {
+    if env == "prod" || env == "production" {
+        return true
+    }
+    u, err := url.Parse(rawURL)
+    if err != nil || !u.IsAbs() || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" {
+        return true // fail closed
+    }
+    host := strings.ToLower(u.Hostname())
+    if allow := strings.TrimSpace(os.Getenv("NONPROD_HOST_ALLOWLIST")); allow != "" {
+        for _, h := range strings.Split(allow, ",") {
+            if host == strings.ToLower(strings.TrimSpace(h)) {
+                return false // explicitly allowed non-prod host
+            }
+        }
+        return true // not on the allowlist → treat as prod
+    }
+    for _, bad := range []string{"prod", "production", "live"} { // fallback denylist
+        if strings.Contains(host, bad) {
+            return true
+        }
+    }
+    return false
+}
+
+// assertTestTenant refuses a non-test tenant. TEST_TENANT_ALLOWLIST is REQUIRED
+// (fail closed): unset → refuse; a tenant not on the list → refuse.
+func assertTestTenant(t *testing.T, tenant string) {
+    t.Helper()
+    // Fail CLOSED: an allowlist of exact test-tenant IDs is REQUIRED. A denylist
+    // ("reject names containing prod/live") is fail-OPEN — a real prod tenant
+    // named "acme-main" or "tenant-001" would slip through. No allowlist → refuse.
+    allow := strings.TrimSpace(os.Getenv("TEST_TENANT_ALLOWLIST"))
+    if allow == "" {
+        t.Fatalf("TEST_TENANT_ALLOWLIST is required: list the exact test tenant IDs permitted to run integration tests")
+    }
+    for _, id := range strings.Split(allow, ",") {
+        if tenant == strings.TrimSpace(id) {
+            return
+        }
+    }
+    t.Fatalf("tenant %q not in TEST_TENANT_ALLOWLIST — refuse", tenant)
+}
+
+// assertDestructiveSafe gates destructive operations. A destructive WRITE is NEVER
+// allowed against production under ANY flag combination (INTEGRATION_ALLOW_PROD
+// permits READ-only prod tests, not writes). It fails CLOSED on the host — requiring
+// an explicit NONPROD_HOST_ALLOWLIST, not the substring denylist (which would pass
+// https://api.company.com) — and confirms the tenant is a designated test tenant.
+func assertDestructiveSafe(t *testing.T, env, baseURL, tenant string) {
+    t.Helper()
+    if os.Getenv("INTEGRATION_ALLOW_DESTRUCTIVE") != "1" {
+        t.Skip("destructive: set INTEGRATION_ALLOW_DESTRUCTIVE=1 to run")
+    }
+    if strings.TrimSpace(os.Getenv("NONPROD_HOST_ALLOWLIST")) == "" {
+        t.Fatalf("destructive operations require NONPROD_HOST_ALLOWLIST (explicit non-prod hosts) — refuse without it")
+    }
+    if isProdTarget(env, baseURL) {
+        t.Fatalf("destructive operations are forbidden against a production target, even with INTEGRATION_ALLOW_PROD=1")
+    }
+    assertTestTenant(t, tenant)
+}
 ```
 
 For Scaffold mode pattern (tests with `t.Skip` + `// TODO:` markers for missing config), see `references/common-integration-gate.md` §Scaffold Mode Example.
@@ -259,23 +401,43 @@ For Scaffold mode pattern (tests with `t.Skip` + `// TODO:` markers for missing 
 3. Prefer read-only or reversible operations; explicitly gate destructive flows.
 4. Refuse production environment by default.
 5. Keep timeout bounded (typically 5-30s) and retries strictly limited.
-6. Skip with actionable instructions when prerequisites are missing.
+6. Distinguish skip from fail (see §Skip vs Fail): `t.Skip` only when the run gate is off (or for a destructive/scaffold opt-in tier); when the gate is set but a prerequisite is missing or the target is prod-unauthorized, `t.Fatalf` with actionable instructions — never a silent skip.
 
 ## Execution Commands
 
 ```bash
 # Smoke mode
-INTERNAL_API_INTEGRATION=1 ENV=dev CONFIG_DIR=/path/to/config TEST_USER_ID=123 \
-  go test -tags=integration ./internal/pkg/client/user -run Integration -v -timeout=30s
+INTERNAL_API_INTEGRATION=1 ENV=dev API_BASE_URL=http://localhost:8080 \
+  CONFIG_DIR=/path/to/config TEST_USER_ID=123 \
+  TEST_TENANT_ID=test-tenant-1 TEST_TENANT_ALLOWLIST=test-tenant-1 \
+  go test -tags=integration ./internal/pkg/client/user -run Integration -v -timeout=30s -count=1
 
 # Standard mode (default)
-INTERNAL_API_INTEGRATION=1 ENV=dev CONFIG_DIR=/path/to/config TEST_USER_ID=123 \
-  go test -tags=integration ./internal/pkg/client/user -run Integration -v -timeout=120s
+INTERNAL_API_INTEGRATION=1 ENV=dev API_BASE_URL=http://localhost:8080 \
+  CONFIG_DIR=/path/to/config TEST_USER_ID=123 \
+  TEST_TENANT_ID=test-tenant-1 TEST_TENANT_ALLOWLIST=test-tenant-1 \
+  go test -tags=integration ./internal/pkg/client/user -run Integration -v -timeout=120s -count=1
 
 # Comprehensive mode
-INTERNAL_API_INTEGRATION=1 ENV=dev CONFIG_DIR=/path/to/config TEST_USER_ID=123 \
+INTERNAL_API_INTEGRATION=1 ENV=dev API_BASE_URL=http://localhost:8080 \
+  CONFIG_DIR=/path/to/config TEST_USER_ID=123 \
+  TEST_TENANT_ID=test-tenant-1 TEST_TENANT_ALLOWLIST=test-tenant-1 \
   go test -tags=integration ./internal/pkg/client/user -run Integration -v -timeout=300s -count=1
 ```
+
+`TEST_TENANT_ALLOWLIST` is mandatory (tenant validation is fail-closed — §Go
+Implementation Baseline). A **destructive** run additionally needs
+`INTEGRATION_ALLOW_DESTRUCTIVE=1` and `NONPROD_HOST_ALLOWLIST=<your test hosts>`
+(destructive is fail-closed on host), and should live in a CI job separate from
+the base read-only gate.
+
+**`-count=1` is mandatory on EVERY real integration run, not just Comprehensive.**
+Go caches a passing package's result keyed on the test binary + consulted env
+vars + files — none of which include the external service. Without `-count=1` a
+second run prints `ok … (cached)` and the test binary never executes, so a
+service that changed (or broke) since the last run is never contacted. Treat a
+`(cached)` line as **"did not run this time"** — never as evidence of a passing
+integration against the live service.
 
 ## Output Contract
 

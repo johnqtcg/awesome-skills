@@ -21,13 +21,13 @@ Apply before writing any test code.
 | C1 | API target identified | Specific endpoint/method name documented |
 | C2 | Gate env var defined | `INTERNAL_API_INTEGRATION=1` (or project equivalent) present |
 | C3 | Build tag isolation | `//go:build integration` at file top |
-| C4 | Production safety gate | `ENV=prod` → `t.Skip` unless `INTEGRATION_ALLOW_PROD=1` |
+| C4 | Production safety gate | Refuse prod by ENV **or** resolved host unless `INTEGRATION_ALLOW_PROD=1`; when the run gate is enabled, `t.Fatalf` (not `t.Skip`) |
 
 ### Standard (≥ 4/5 pass)
 
 | # | Check | Pass Criteria |
 |---|-------|---------------|
-| S1 | All required env vars listed with skip messages | Each missing var → descriptive `t.Skip` |
+| S1 | Required env vars validated | Gate off → `t.Skip`; gate on + required var missing → `t.Fatalf` (actionable), never a silent skip |
 | S2 | Real client wiring (not mocked transport) | Uses production code path for client creation |
 | S3 | Execution mode selected | Smoke / Standard / Comprehensive stated |
 | S4 | Timeout bound documented | `context.WithTimeout` value chosen and justified |
@@ -53,7 +53,7 @@ Apply to review existing or newly generated test code.
 | # | Check | Pass Criteria |
 |---|-------|---------------|
 | C1 | No hardcoded secrets | Zero strings matching token/password/key patterns |
-| C2 | Production gate present | Code refuses `ENV=prod` by default |
+| C2 | Production gate present | Refuses prod by ENV **and** resolved host (not ENV alone); uses a dedicated test tenant |
 | C3 | Context timeout on every external call | Every RPC/HTTP call wrapped in `context.WithTimeout` |
 | C4 | Retry loop is bounded | `maxRetries` constant present; `ctx.Done()` checked in loop |
 

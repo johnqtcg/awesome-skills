@@ -36,7 +36,11 @@ func TestClientAdapter_ParsesResponse(t *testing.T) {
 }
 ```
 
-Note: httptest tests are NOT integration tests. They belong alongside unit tests (no build tag needed). Include this pattern only for adapter-layer validation.
+Note: this **stub-server** pattern (a fake handler you write in the test) is an
+*adapter/component test*, NOT an integration test — it exercises only your client's
+parsing and transport, so it belongs alongside unit tests (no build tag). Wiring the
+**real** handler + real dependencies through `httptest.Server` is a different thing:
+that IS an in-process integration test (build tag required). See SKILL.md §Test Taxonomy.
 
 ## Test Data Lifecycle Pattern
 
@@ -45,7 +49,14 @@ Document data lifecycle explicitly for any test that creates resources:
 ```go
 func TestCreateAndCleanup_Integration(t *testing.T) {
     env, baseURL := requireIntegrationEnv(t)
-    _ = env
+    tenant := strings.TrimSpace(os.Getenv("TEST_TENANT_ID"))
+    // Creates AND deletes data → destructive. assertDestructiveSafe (SKILL.md
+    // §Go Implementation Baseline) skips unless INTEGRATION_ALLOW_DESTRUCTIVE=1,
+    // requires NONPROD_HOST_ALLOWLIST, fatals on a prod target even with
+    // ALLOW_PROD=1, and validates the test tenant — destructive writes are never
+    // allowed against production. Keep destructive tests in a CI job separate
+    // from the base read-only gate.
+    assertDestructiveSafe(t, env, baseURL, tenant)
 
     client := NewClient(baseURL)
     ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -58,11 +69,17 @@ func TestCreateAndCleanup_Integration(t *testing.T) {
     require.NoError(t, err)
     require.NotEmpty(t, created.ID)
 
-    // Cleanup — register immediately after creation
+    // Cleanup — register immediately after creation. Failure must be SURFACED,
+    // not swallowed: a silent `_ = client.DeleteItem(...)` leaves polluted data
+    // that eventually breaks the test environment.
     t.Cleanup(func() {
         cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 5*time.Second)
         defer cleanCancel()
-        _ = client.DeleteItem(cleanCtx, created.ID)
+        if err := client.DeleteItem(cleanCtx, created.ID); err != nil {
+            // t.Errorf marks the test failed so leaked data is visible in CI.
+            // Downgrade to t.Logf only for exploratory local runs — never a release gate.
+            t.Errorf("cleanup failed, data leaked (id=%s): %v", created.ID, err)
+        }
     })
 
     // Verify
@@ -82,7 +99,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       internal-api:
-        image: company/internal-api:latest
+        image: company/internal-api:1.24.0  # pin an exact version or @sha256 digest — never :latest (breaks reproducibility)
         ports: ["8080:8080"]
         options: >-
           --health-cmd "curl -f http://localhost:8080/health || exit 1"
@@ -90,8 +107,8 @@ jobs:
           --health-timeout 3s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7   # pin to a major tag (or a full commit SHA for strict reproducibility)
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
       - name: Run integration tests
@@ -99,7 +116,10 @@ jobs:
           INTERNAL_API_INTEGRATION: "1"
           ENV: test
           API_BASE_URL: http://localhost:8080
-        run: go test -tags=integration -v -timeout=300s ./...
+          TEST_TENANT_ID: test-tenant-1
+          TEST_TENANT_ALLOWLIST: test-tenant-1   # required — tenant validation is fail-closed
+          # destructive jobs also set INTEGRATION_ALLOW_DESTRUCTIVE and NONPROD_HOST_ALLOWLIST
+        run: go test -tags=integration -v -timeout=300s -count=1 ./...   # -count=1: never accept a (cached) result for an integration run
 ```
 
 ### Makefile Target
@@ -107,8 +127,8 @@ jobs:
 ```makefile
 .PHONY: integration-test
 integration-test: ## Run integration tests (requires services running)
-	INTERNAL_API_INTEGRATION=1 ENV=dev \
-	  go test -tags=integration -v -timeout=300s ./...
+	INTERNAL_API_INTEGRATION=1 ENV=dev TEST_TENANT_ID=test-tenant-1 TEST_TENANT_ALLOWLIST=test-tenant-1 \
+	  go test -tags=integration -v -timeout=300s -count=1 ./...
 ```
 
 ### Command Reference
@@ -116,13 +136,16 @@ integration-test: ## Run integration tests (requires services running)
 ```bash
 # Smoke — quick connectivity check
 INTERNAL_API_INTEGRATION=1 ENV=dev API_BASE_URL=http://localhost:8080 \
-  go test -tags=integration ./... -run Integration -v -timeout=30s
+  TEST_TENANT_ID=test-tenant-1 TEST_TENANT_ALLOWLIST=test-tenant-1 \
+  go test -tags=integration ./... -run Integration -v -timeout=30s -count=1
 
 # Standard — default pre-merge gate
 INTERNAL_API_INTEGRATION=1 ENV=dev API_BASE_URL=http://localhost:8080 \
-  go test -tags=integration ./... -run Integration -v -timeout=120s
+  TEST_TENANT_ID=test-tenant-1 TEST_TENANT_ALLOWLIST=test-tenant-1 \
+  go test -tags=integration ./... -run Integration -v -timeout=120s -count=1
 
 # Comprehensive — release gate
 INTERNAL_API_INTEGRATION=1 ENV=dev API_BASE_URL=http://localhost:8080 \
+  TEST_TENANT_ID=test-tenant-1 TEST_TENANT_ALLOWLIST=test-tenant-1 \
   go test -tags=integration ./... -run Integration -v -timeout=300s -count=1
 ```

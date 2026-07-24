@@ -18,6 +18,81 @@ SKILL_TEXT = read(SKILL_MD)
 SKILL_LINES = SKILL_TEXT.splitlines()
 
 
+def norm_func(src: str, name: str) -> str:
+    """Extract a top-level Go func by name and normalize it (strip line comments +
+    ALL whitespace). Uses brace DEPTH to find the true end of the function, so the
+    FULL body is compared — not just up to the first inner '}'. Assumes the target
+    funcs have no braces inside string literals (true for these safety helpers) and
+    balanced slice/struct literals (e.g. []string{...})."""
+    started, depth, out = False, 0, []
+    for ln in src.splitlines():
+        code = ln.split("//")[0]
+        if not started:
+            if ("func " + name + "(") not in ln:
+                continue
+            started = True
+        out.append(code)
+        depth += code.count("{") - code.count("}")
+        if depth == 0:  # closing brace of the function body reached
+            break
+    return "".join("".join(out).split())
+
+
+def _paren_group(s: str, open_idx: int):
+    """Return the text between s[open_idx]=='(' and its matching ')', or None."""
+    depth = 0
+    for i in range(open_idx, len(s)):
+        if s[i] == "(":
+            depth += 1
+        elif s[i] == ")":
+            depth -= 1
+            if depth == 0:
+                return s[open_idx + 1:i]
+    return None
+
+
+def _arg_count(argstr: str) -> int:
+    """Count top-level comma-separated args/params, respecting nested (){}[] and strings."""
+    if argstr.strip() == "":
+        return 0
+    depth, count, in_str, i = 0, 1, None, 0
+    while i < len(argstr):
+        c = argstr[i]
+        if in_str:
+            if c == "\\":
+                i += 2
+                continue
+            if c == in_str:
+                in_str = None
+        elif c in "\"`'":
+            in_str = c
+        elif c in "([{":
+            depth += 1
+        elif c in ")]}":
+            depth -= 1
+        elif c == "," and depth == 0:
+            count += 1
+        i += 1
+    return count
+
+
+def go_call_arities(text: str, name: str):
+    """Return (definition_arity or None, [call_arity, ...]) for a Go func `name`."""
+    import re
+
+    def_arity, calls = None, []
+    for m in re.finditer(re.escape(name) + r"\(", text):
+        content = _paren_group(text, m.end() - 1)
+        if content is None:
+            continue
+        arity = _arg_count(content)
+        if text[:m.start()].rstrip().endswith("func"):
+            def_arity = arity
+        else:
+            calls.append(arity)
+    return def_arity, calls
+
+
 def assert_re(testcase: unittest.TestCase, pattern: str, text: str, msg: str | None = None) -> None:
     testcase.assertIsNotNone(re.search(pattern, text, re.MULTILINE), msg or f"regex not found: {pattern}")
 
@@ -268,11 +343,13 @@ class TestReferenceLoading(unittest.TestCase):
 
 class TestSafetyRules(unittest.TestCase):
     def test_no_hardcode_secrets(self):
-        section = SKILL_TEXT.split("Safety Rules")[1].split("## ")[0]
+        # Anchor on the heading, not a bare "Safety Rules" substring (which also
+        # appears in code comments), so the slice is the real section.
+        section = SKILL_TEXT.split("## Safety Rules")[1].split("## ")[0]
         self.assertTrue("hardcode" in section.lower() or "secret" in section.lower())
 
     def test_timeout_bounded(self):
-        section = SKILL_TEXT.split("Safety Rules")[1].split("## ")[0]
+        section = SKILL_TEXT.split("## Safety Rules")[1].split("## ")[0]
         self.assertTrue("timeout" in section.lower() and "bounded" in section.lower())
 
 
@@ -286,6 +363,124 @@ class TestSize(unittest.TestCase):
             500,
             f"SKILL.md is {len(SKILL_LINES)} lines (max 500). Move content to references/.",
         )
+
+
+class CrossFileConsistencyGuardTests(unittest.TestCase):
+    """Guards for the round-4 fixes, and consistency between the SKILL.md baseline,
+    the reference docs, and the behavioral fixture the tests actually run — so the
+    doc and the fixture can't silently diverge."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.skill = SKILL_TEXT
+        cls.advanced = read(os.path.join(REFS_DIR, "advanced-patterns.md"))
+        cls.gate = read(os.path.join(REFS_DIR, "common-integration-gate.md"))
+        cls.fixture = read(os.path.join(os.path.dirname(__file__), "test_behavioral_integration.py"))
+
+    # #1 — prod URL check fails CLOSED (not just on url.Parse error).
+    def test_skill_prod_check_is_fail_closed(self):
+        for token in ("IsAbs()", "Hostname() ==", '!= "http"', '!= "https"'):
+            self.assertIn(token, self.skill, f"SKILL.md isProdTarget missing fail-closed guard: {token}")
+
+    def test_behavioral_fixture_prod_check_matches_skill(self):
+        # The fixture the behavioral tests run must carry the same hardening,
+        # or a green behavioral run would not reflect the documented logic.
+        for token in ("IsAbs()", "Hostname() =="):
+            self.assertIn(token, self.fixture, f"behavioral fixture missing: {token}")
+
+    # #2 — dedicated test tenant enforced in the baseline CODE, not only prose.
+    def test_skill_baseline_validates_tenant(self):
+        self.assertIn("TEST_TENANT_ID", self.skill)
+        self.assertIn("assertTestTenant", self.skill)
+        self.assertIn("assertTestTenant", self.fixture)
+
+    # #1-cache — -count=1 mandate + (cached) rejection documented.
+    def test_count1_mandate_documented(self):
+        self.assertIn("-count=1", self.skill)
+        self.assertIn("(cached)", self.skill)
+
+    # #1-cache — every real integration RUN command carries -count=1.
+    def test_every_integration_command_has_count1(self):
+        for label, text in (("SKILL.md", self.skill), ("advanced", self.advanced), ("gate", self.gate)):
+            for line in text.splitlines():
+                if "go test -tags=integration" not in line:
+                    continue
+                # a real run command (not a prose fragment) has -run/-timeout/-v
+                if any(f in line for f in ("-run ", "-timeout", "-v ")):
+                    self.assertIn("-count=1", line, f"{label}: integration command missing -count=1:\n{line}")
+
+    # #4a — the gate flowchart refuses prod with t.Fatalf, not the old t.Skip.
+    def test_flowchart_prod_is_fatal_not_skip(self):
+        self.assertIn("prod? env+host", self.skill)
+        self.assertNotIn("ENV=prod?", self.skill)
+
+    # #4c — the Blocked example run command carries -count=1.
+    def test_blocked_command_has_count1(self):
+        self.assertIn("-count=1", self.gate)
+
+    # #3 — prove the DOC helper and the behavioral FIXTURE share identical logic,
+    # not merely that some tokens are present. Compares normalized function bodies.
+    def test_safety_helpers_logic_identical_doc_vs_fixture(self):
+        from test_behavioral_integration import _FIXTURE
+        for name in ("isProdTarget", "assertTestTenant", "assertDestructiveSafe"):
+            doc = norm_func(self.skill, name)
+            fix = norm_func(_FIXTURE, name)
+            self.assertTrue(doc, f"{name} not found in SKILL.md")
+            self.assertTrue(fix, f"{name} not found in the behavioral fixture")
+            self.assertEqual(
+                doc, fix,
+                f"{name}: normalized body differs between SKILL.md and the behavioral "
+                f"fixture — the doc and the tested code have drifted.\nSKILL: {doc}\nFIX:   {fix}",
+            )
+
+    # #2 — the destructive-on-prod invariant is documented (never allowed).
+    def test_destructive_never_on_prod_documented(self):
+        self.assertIn("forbidden against a production target", self.skill)
+        self.assertIn("assertDestructiveSafe", self.skill)
+
+    # #1 — tenant validation is fail-closed (allowlist required), not a denylist.
+    def test_tenant_validation_is_fail_closed(self):
+        self.assertIn("TEST_TENANT_ALLOWLIST is required", self.skill)
+        # the old fail-OPEN denylist fallback must be gone
+        self.assertNotIn('strings.Contains(low, "prod")', self.skill)
+        # ...including the stale doc comment that described the denylist behavior.
+        self.assertNotIn("fail closed on prod-looking IDs", self.skill)
+
+    # #3 — command examples that set TEST_TENANT_ID must also provide the now-mandatory
+    # TEST_TENANT_ALLOWLIST, or a copied command fails immediately.
+    def test_command_examples_include_tenant_allowlist(self):
+        for label, text in (("SKILL.md", self.skill), ("advanced", self.advanced), ("gate", self.gate)):
+            if "TEST_TENANT_ID" in text:
+                self.assertIn("TEST_TENANT_ALLOWLIST", text,
+                              f"{label}: sets TEST_TENANT_ID but not the required TEST_TENANT_ALLOWLIST")
+
+    # #2 — destructive is fail-closed on host (requires NONPROD_HOST_ALLOWLIST) and
+    # folds tenant validation in.
+    def test_destructive_requires_host_allowlist_and_tenant(self):
+        self.assertIn("require NONPROD_HOST_ALLOWLIST", self.skill)
+        # assertDestructiveSafe takes the tenant and validates it.
+        self.assertIn("assertDestructiveSafe(t *testing.T, env, baseURL, tenant string)", self.skill)
+        self.assertIn("assertTestTenant(t, tenant)", self.skill)
+
+    # A helper signature change must not leave a stale call anywhere in the docs
+    # (which would fail to compile). Compare every doc call site's arity to the
+    # definition's — this catches the exact drift where advanced-patterns kept a
+    # 3-arg assertDestructiveSafe call after the helper grew a 4th param.
+    def test_helper_call_sites_match_definition_arity(self):
+        corpus = "\n".join([
+            self.skill, self.advanced, self.gate,
+            read(os.path.join(REFS_DIR, "internal-api-patterns.md")),
+            read(os.path.join(REFS_DIR, "checklists.md")),
+        ])
+        for name in ("assertDestructiveSafe", "assertTestTenant", "isProdTarget"):
+            defn, calls = go_call_arities(corpus, name)
+            self.assertIsNotNone(defn, f"{name}: no definition found in the doc corpus")
+            for c in calls:
+                self.assertEqual(
+                    c, defn,
+                    f"{name}: a doc call site passes {c} args but the definition takes "
+                    f"{defn} — stale signature, would not compile",
+                )
 
 
 if __name__ == "__main__":
