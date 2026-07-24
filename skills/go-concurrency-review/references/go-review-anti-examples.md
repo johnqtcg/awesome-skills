@@ -29,7 +29,7 @@ If you cannot cite specific evidence, the anti-example does not apply and the fi
 ## Premature optimization
 - "Should use sync.Pool" — when the object is small and allocated infrequently
 - "Should pre-allocate slice" — when the slice is small (< 16 elements) or size is truly unknown
-- "Struct fields should be reordered for alignment" — when the struct has < 4 fields or savings < 8 bytes
+- "Struct fields should be reordered for alignment" — when the struct has < 4 fields or savings < 8 bytes, **or** when the struct carries `json:` tags and is used as an HTTP/gRPC API response body. `encoding/json` (and high-performance alternatives like `sonic`) serialize fields in declaration order; reordering fields changes JSON output order, which breaks downstream consumers that rely on field position or string-prefix matching — even when no field is added, removed, or renamed. Before reporting a fieldalignment finding on a `json:`-tagged struct, confirm it is never serialized as a wire-format response to external callers; if it is, the correct action is to flag the reordering as an **API breaking change**, not a performance win.
 - "Should use strings.Clone for substring" — when both the substring and parent string are short-lived locals eligible for GC at the same scope
 
 ## Version-inappropriate recommendations
