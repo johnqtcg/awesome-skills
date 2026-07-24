@@ -1,10 +1,26 @@
 """Contract + consistency tests for the thirdparty-api-integration-test skill."""
 
+import importlib.util
 import os
 import re
 import unittest
 
 SKILL_ROOT = os.path.join(os.path.dirname(__file__), "..", "..")
+
+
+def load_fixture_source():
+    """Return `_FIXTURE` from the sibling behavioral test, imported BY PATH.
+
+    A bare `from test_behavioral_integration import _FIXTURE` only resolves when the tests dir is
+    on sys.path — true under `unittest discover -s tests` (run_regression.sh) but NOT under
+    `pytest skills/` from the repo root, where it raises ModuleNotFoundError. Loading by explicit
+    path with a per-file unique module name works under both runners and avoids colliding with the
+    identically-named module in the sibling api-integration-test skill."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_behavioral_integration.py")
+    spec = importlib.util.spec_from_file_location("_sibling_" + re.sub(r"\W+", "_", path), path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod._FIXTURE
 SKILL_MD = os.path.join(SKILL_ROOT, "SKILL.md")
 REFS_DIR = os.path.join(SKILL_ROOT, "references")
 
@@ -365,7 +381,7 @@ class HelperConsistency(unittest.TestCase):
         self.skill = DOC_TEXT
 
     def test_helper_bodies_identical_doc_vs_fixture(self):
-        from test_behavioral_integration import _FIXTURE
+        _FIXTURE = load_fixture_source()
         for name in HELPERS:
             doc = norm_func(self.skill, name)
             fix = norm_func(_FIXTURE, name)
@@ -393,7 +409,7 @@ class HelperConsistency(unittest.TestCase):
         self.assertNotIn("after", body, "brace inside a string literal ran the boundary past func h")
 
     def test_method_bodies_identical_doc_vs_fixture(self):
-        from test_behavioral_integration import _FIXTURE
+        _FIXTURE = load_fixture_source()
         for recv, name in METHODS:
             doc = norm_method(self.skill, recv, name)
             fix = norm_method(_FIXTURE, recv, name)
