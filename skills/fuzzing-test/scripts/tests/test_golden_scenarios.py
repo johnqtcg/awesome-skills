@@ -159,5 +159,159 @@ class GoldenValidatorRaceTests(unittest.TestCase):
             self.assertIn(rule, text, f"rule missing: {rule}")
 
 
+class GoldenCrashHandlingTests(unittest.TestCase):
+    def test_009_crash_steps_documented(self) -> None:
+        data = load_fixture("009_crash_handling_workflow.json")
+        skill = SKILL_MD.read_text()
+        crash = (SKILL_DIR / "references" / "crash-handling.md").read_text()
+        self.assertEqual(data["workflow_type"], "crash_handling")
+        # Every declared crash step must be reachable from the skill's own workflow.
+        anchors = {
+            "retain_corpus": "retain corpus under",
+            "record_failure_type": "Record failure type",
+            "fix_minimal": "Fix with minimal code change",
+            "rerun_regression": "Re-run corpus regression",
+            "report_root_cause": "Report root cause",
+        }
+        for step in data["expected_crash_steps"]:
+            self.assertIn(step, anchors, f"fixture declares unknown crash step: {step}")
+            self.assertIn(anchors[step], skill + crash,
+                          f"crash step {step} has no anchor in SKILL.md/crash-handling.md")
+
+
+class GoldenCiIntegrationTests(unittest.TestCase):
+    def test_010_both_lanes_documented(self) -> None:
+        data = load_fixture("010_ci_integration_workflow.json")
+        ci = (SKILL_DIR / "references" / "ci-strategy.md").read_text()
+        for lane in data["expected_ci_lanes"]:
+            self.assertIn(lane, ci, f"CI lane missing from ci-strategy.md: {lane}")
+
+
+class GoldenBorderlineTests(unittest.TestCase):
+    def test_011_check4_is_warn_not_fail(self) -> None:
+        data = load_fixture("011_borderline_soft_warning.json")
+        self.assertEqual("Warn", data["expected_checks"]["deterministic_local"])
+        self.assertEqual("suitable", data["applicability_verdict"])
+
+    def test_011_check4_never_a_hard_stop(self) -> None:
+        """Regression guard: checks 4 and 5 must stay soft warnings in BOTH documents."""
+        skill = SKILL_MD.read_text()
+        ref = APP_REF.read_text()
+        self.assertIn("Soft Warnings (proceed with caution)", ref)
+        self.assertIn("soft warnings", skill.lower(),
+                      "SKILL.md must state that checks 4/5 are soft warnings, not hard stops")
+
+
+class GoldenGoFuzzHeadersTests(unittest.TestCase):
+    def test_012_high_skip_rate_routes_to_structured_bridge(self) -> None:
+        data = load_fixture("012_go_fuzz_headers_suitable.json")
+        skill = SKILL_MD.read_text()
+        self.assertEqual("go-fuzz-headers", data["deserialization_method"])
+        self.assertEqual("Template D", data["expected_template"])
+        # The skill must document the bridge and the skip-rate threshold that triggers it.
+        self.assertIn("GenerateStruct", skill)
+        self.assertIn("skip rate", skill.lower())
+
+    def test_012_skip_rate_threshold_is_stated(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("50%", skill,
+                      "skill must state the skip-rate threshold that forces a seed rethink")
+
+
+class GoldenHardStopConsistencyTests(unittest.TestCase):
+    """The two documents disagreed on whether check 1 is blocking. Pin them together."""
+
+    def test_hard_stop_items_agree_across_documents(self) -> None:
+        skill = SKILL_MD.read_text()
+        ref = APP_REF.read_text()
+        for item in ("1", "2", "3"):
+            self.assertRegex(
+                skill, rf"\|\s*`?{item}`?\s",
+                f"SKILL.md hard-stop table must list blocking item {item}",
+            )
+            self.assertIn(f"If `{item}` fails: **stop**", ref,
+                          f"applicability-checklist.md must hard-stop on item {item}")
+
+    def test_skill_md_no_longer_limits_hard_stop_to_2_or_3(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertNotIn("If item `2` or `3` fails", skill,
+                         "stale rule: check 1 must also be a hard stop")
+
+
+class GoldenVersionGateTests(unittest.TestCase):
+    def test_013_low_go_directive_is_not_a_hard_stop(self) -> None:
+        data = load_fixture("013_go_directive_low_toolchain_modern.json")
+        self.assertEqual("suitable", data["applicability_verdict"])
+        self.assertTrue(data["version_gate"]["must_not_hard_stop"])
+        self.assertEqual("proceed", data["version_gate"]["gate_decision"])
+
+    def test_015_old_toolchain_is_a_hard_stop(self) -> None:
+        data = load_fixture("015_toolchain_below_118_hard_stop.json")
+        self.assertEqual("not_suitable", data["applicability_verdict"])
+        self.assertEqual("hard_stop", data["version_gate"]["gate_decision"])
+        self.assertEqual("Go Version Gate", data["failed_hard_stop"])
+
+    def test_gate_keys_on_toolchain_not_go_directive(self) -> None:
+        """Regression guard for the corrected gate: `testing.F` availability is decided by
+        the toolchain. Verified empirically — a `go 1.16` module fuzzes under Go 1.25."""
+        skill = SKILL_MD.read_text()
+        self.assertIn("Gate on the toolchain that will actually run the tests", skill)
+        self.assertIn("go version", skill)
+        self.assertIn("GOTOOLCHAIN", skill)
+        self.assertIn("note, not a stop", skill,
+                      "a low `go` directive must be a note, not a hard stop")
+
+    def test_two_version_fixtures_cover_both_outcomes(self) -> None:
+        outcomes = set()
+        for path in sorted(GOLDEN_DIR.glob("*.json")):
+            data = json.loads(path.read_text())
+            if "version_gate" in data:
+                outcomes.add(data["version_gate"]["gate_decision"])
+        self.assertEqual({"proceed", "hard_stop"}, outcomes,
+                         "version gate needs one proceed fixture and one hard-stop fixture")
+
+
+class GoldenCorpusLocationTests(unittest.TestCase):
+    def test_014_interesting_corpus_is_in_gocache(self) -> None:
+        data = load_fixture("014_corpus_management_degradation.json")
+        loc = data["corpus_location"]
+        self.assertEqual("$GOCACHE/fuzz", loc["interesting_inputs"])
+        self.assertTrue(loc["must_correct_user_premise"])
+        self.assertFalse(data["expected_corpus_actions"]["commit_all_auto_generated"])
+
+    def test_skill_states_testdata_is_failure_only(self) -> None:
+        """Regression guard: the skill must not imply coverage corpus accumulates in
+        testdata/fuzz. Verified empirically — a clean run creates no testdata/ at all."""
+        skill = SKILL_MD.read_text()
+        self.assertIn("only on failure", skill)
+        self.assertIn("$GOCACHE/fuzz", skill)
+
+    def test_ci_caches_gocache_not_testdata(self) -> None:
+        ci = (SKILL_DIR / "references" / "ci-strategy.md").read_text()
+        self.assertIn("go env GOCACHE", ci)
+        self.assertNotIn("path: testdata/fuzz\n", ci,
+                         "caching testdata/fuzz cannot accumulate corpus — cache $GOCACHE/fuzz")
+
+    def test_ci_schedule_is_top_level(self) -> None:
+        """`schedule` is a workflow trigger, never a job key."""
+        ci = (SKILL_DIR / "references" / "ci-strategy.md").read_text()
+        self.assertIn("MUST be top-level `on:`", ci)
+        self.assertRegex(ci, r"(?m)^on:\n(?:.*\n)*?  schedule:",
+                         "ci-strategy.md must show schedule under a top-level `on:`")
+
+
+class GoldenFixtureScenarioCoverageTests(unittest.TestCase):
+    """Every fixture must have a scenario-specific test class, not just the generic
+    integrity sweep. This is what was missing for 009-015."""
+
+    def test_every_fixture_is_referenced_by_a_test(self) -> None:
+        source = Path(__file__).read_text()
+        missing = [
+            path.name for path in sorted(GOLDEN_DIR.glob("*.json"))
+            if path.name not in source
+        ]
+        self.assertFalse(missing, f"fixtures with no scenario-specific test: {missing}")
+
+
 if __name__ == "__main__":
     unittest.main()

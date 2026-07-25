@@ -109,7 +109,7 @@ f.Fuzz(func(t *testing.T, data []byte) {
 
 | Go Version | Fuzzing Capabilities |
 |-----------|---------------------|
-| < 1.18 | No native fuzzing — use `go-fuzz` (dvyukov) or skip |
+| < 1.18 | No native fuzzing — use `go-fuzz` (dvyukov) or skip. Judge by `go version` (effective toolchain), **not** by the `go` directive in `go.mod` — a `go 1.16` module fuzzes fine under a modern toolchain |
 | 1.18+ | `testing.F` available, supported types: `[]byte`, `string`, `bool`, `int`/`uint` variants, `float32`/`float64` |
 | 1.20+ | Improved corpus minimization, better coverage instrumentation |
 | 1.21+ | Enhanced fuzz worker stability, reduced memory overhead |

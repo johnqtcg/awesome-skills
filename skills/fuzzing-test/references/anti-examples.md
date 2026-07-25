@@ -80,3 +80,47 @@ f.Fuzz(func(t *testing.T, data []byte) {
 os.RemoveAll("testdata/fuzz/FuzzParseXxx")
 // GOOD: keep the crashing corpus entry and replay it in CI.
 ```
+
+### Mistake 8: A round-trip seed the codec cannot represent
+
+The seed fails on **correct** code, so the harness is red before it has tested anything.
+This one actually shipped in this skill's Template B.
+
+```go
+// BAD: encoding/json rewrites invalid UTF-8 to U+FFFD, so this seed can never round-trip.
+f.Add("nul\x00and\xffbyte", int32(-1))
+// got={A:nul and�byte} want={A:nul and\xffbyte}  -> FAIL on a correct implementation
+
+// GOOD: awkward but representable — NUL, a combining mark, and an astral rune all survive.
+f.Add("nul\x00 combining é \U0001F30D", int32(-1))
+```
+
+Same class: a codec that drops sub-second precision, clamps integer width, or rejects NaN.
+Keep seeds inside the representable domain and let the fuzzer explore outside it — an input
+the codec legitimately rejects belongs behind `t.Skip()`, not an assertion.
+
+Rule of thumb: every seed must pass against the correct implementation. If it does not, the
+seed is wrong, not the code. Enforce it with `go test -run='^Fuzz' ./...` in CI — `go vet`
+cannot see this, because the harness compiles perfectly.
+
+### Mistake 9: `got != orig` on a normalizing codec
+
+If a codec is *allowed* to canonicalize its input, raw equality reports a bug on every
+correct normalization.
+
+```go
+// BAD: fails whenever the codec canonicalizes (Unicode NFC, key order, number format)
+if got != orig { t.Fatalf("round-trip mismatch") }
+
+// GOOD (option 1): compare canonical/semantic forms
+if !semanticallyEqual(got, orig) { t.Fatalf(...) }
+
+// GOOD (option 2): assert idempotence — normalization may happen once, never drift after
+again, err := Decode(mustEncode(t, got))
+if err != nil || again != got {
+	t.Fatalf("round-trip not idempotent: %+v vs %+v", again, got)
+}
+```
+
+Idempotence is the stronger property when one normalization pass is legitimate: it still
+forbids drift on every pass after the first.

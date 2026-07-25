@@ -80,22 +80,89 @@ class TemplateMechanicalScorecardTests(unittest.TestCase):
                              f"{path.name}: global-replace artifact present")
 
 
+def _go_env(root: str) -> dict:
+    """Hermetic go env: an inherited GOROOT from another toolchain breaks every compile,
+    and the default GOCACHE is not writable under sandboxed runs."""
+    import os
+    env = dict(os.environ)
+    env.pop("GOROOT", None)
+    env["GOTOOLCHAIN"] = "local"
+    env["GOFLAGS"] = "-count=1"
+    env["GOCACHE"] = str(Path(root) / ".gocache")
+    env["GOMODCACHE"] = str(Path(root) / ".gomod")
+    env["GOPATH"] = str(Path(root) / ".gopath")
+    return env
+
+
 @unittest.skipUnless(shutil.which("go"), "go toolchain not installed")
 class TemplateCompileTests(unittest.TestCase):
+    """`go vet` proves the templates parse and type-check. It does NOT run them, and that
+    gap shipped a Template B seed containing invalid UTF-8: encoding/json rewrites it to
+    U+FFFD, so the round-trip assertion failed on the CORRECT stub implementation. A
+    template that fails out of the box is worse than no template, so seed replay is now
+    part of the contract."""
+
+    def _module(self, tmp: str) -> Path:
+        mod = Path(tmp)
+        (mod / "go.mod").write_text("module tpl\n\ngo 1.18\n", encoding="utf-8")
+        (mod / "stubs.go").write_text(STUBS, encoding="utf-8")
+        test_src = "package tpl\n\nimport (\n\t\"encoding/json\"\n\t\"testing\"\n)\n\n"
+        test_src += "\n".join(fuzz_templates())
+        (mod / "templates_test.go").write_text(test_src, encoding="utf-8")
+        return mod
+
+    def _run(self, mod: Path, *args: str, timeout: int = 180) -> subprocess.CompletedProcess:
+        try:
+            return subprocess.run(
+                ["go", *args], cwd=mod, env=_go_env(str(mod)),
+                capture_output=True, text=True, timeout=timeout,
+                # go echoes the failing input verbatim, so output is not always valid
+                # UTF-8 (a raw 0xff seed crashes strict decoding).
+                errors="replace",
+            )
+        except subprocess.TimeoutExpired:
+            self.skipTest(f"go {' '.join(args)} exceeded {timeout}s here")
+        except OSError as exc:
+            self.skipTest(f"cannot exec go: {exc}")
+
     def test_all_templates_compile_with_stubs(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            mod = Path(tmp)
-            (mod / "go.mod").write_text("module tpl\n\ngo 1.18\n", encoding="utf-8")
-            (mod / "stubs.go").write_text(STUBS, encoding="utf-8")
-            test_src = "package tpl\n\nimport (\n\t\"encoding/json\"\n\t\"testing\"\n)\n\n"
-            test_src += "\n".join(fuzz_templates())
-            (mod / "templates_test.go").write_text(test_src, encoding="utf-8")
-            proc = subprocess.run(
-                ["go", "vet", "./..."],
-                cwd=mod, capture_output=True, text=True, timeout=120,
-            )
+            mod = self._module(tmp)
+            proc = self._run(mod, "vet", "./...")
             self.assertEqual(0, proc.returncode,
                              f"templates do not compile:\n{proc.stderr}")
+
+    def test_all_template_seeds_pass_on_correct_implementation(self) -> None:
+        """Every f.Add seed must pass against a correct implementation. A seed that fails
+        here is a false positive that would greet any user who copied the template."""
+        with tempfile.TemporaryDirectory() as tmp:
+            mod = self._module(tmp)
+            proc = self._run(mod, "test", "-run=^Fuzz", "./...")
+            self.assertEqual(
+                0, proc.returncode,
+                "template seeds FAIL on the correct stub implementation — a copied "
+                f"template would fail immediately:\n{proc.stdout}\n{proc.stderr}",
+            )
+
+    def test_seed_replay_would_catch_a_bad_seed(self) -> None:
+        """Anti-vacuity: prove the replay check above can actually fail, by injecting the
+        invalid-UTF-8 seed that originally slipped through `go vet`."""
+        with tempfile.TemporaryDirectory() as tmp:
+            mod = self._module(tmp)
+            path = mod / "templates_test.go"
+            poisoned = path.read_text(encoding="utf-8").replace(
+                'f.Add("seed", int32(1))',
+                'f.Add("seed", int32(1))\n\tf.Add("bad\\xff", int32(1))',
+                1,
+            )
+            self.assertIn("bad", poisoned, "failed to inject the poison seed")
+            path.write_text(poisoned, encoding="utf-8")
+            proc = self._run(mod, "test", "-run=^Fuzz", "./...")
+            self.assertNotEqual(
+                0, proc.returncode,
+                "seed replay did not reject an invalid-UTF-8 round-trip seed — the check "
+                "is vacuous",
+            )
 
 
 if __name__ == "__main__":

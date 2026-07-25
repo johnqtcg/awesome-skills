@@ -23,6 +23,48 @@ Use before writing any fuzz test. Mark each item `Pass` / `Fail`.
 - If `4` fails: can sometimes work with mocks/stubs, but flag as higher risk.
 - If `5` fails: classify as `High` cost, restrict to nightly runs with strict `-fuzztime`.
 
+## Oracle Forms — What Check 3 Accepts
+
+Check 3 asks whether a bug could be *recognised*, not whether a particular API is called.
+Two forms are accepted, and scorecard C2 is graded against whichever the harness declares.
+
+| Declared oracle | C2 passes when | C2 fails when |
+|---|---|---|
+| **no-panic / robustness** | The harness exercises the target and lets the runtime catch panics, hangs, and OOM. **No `t.Fatal` is required** — Go's fuzzer already fails the target on any panic. State the oracle in a one-line comment so the omission reads as deliberate. | The harness swallows the failure it exists to surface — wrapping the call in `recover()`, or discarding an error the target uses to report corruption |
+| **round-trip / differential / domain constraint** | An explicit `t.Fatal*`/`t.Error*` compares the actual result against the invariant | The harness only calls the target and drops the result. The declared invariant is never checked, so the test cannot fail for the reason it was written |
+
+The failure this catches is the **mismatch**: a harness that declared round-trip at the gate
+but only calls `Decode(data)` and ignores the result. A robustness harness with no assertion
+is legitimate and must not be rejected. Do not grade C2 by searching for an API token.
+
+## Go Version Gate — Judge the Toolchain, Not `go.mod`
+
+`testing.F` is a stdlib symbol, so its availability is decided by the **toolchain**, not by
+the module's language version. Verified: a module declaring `go 1.16` fuzzes fine under a
+Go 1.25+ toolchain — `go vet` passes and the fuzzer runs to completion. Gating on the `go`
+directive produces a false hard stop on exactly the legacy modules that most need fuzzing.
+
+Check three sources, in this order:
+
+| # | Source | Command | What it decides |
+|---|--------|---------|-----------------|
+| 1 | **Effective toolchain** | `go version` | Whether `testing.F` exists at all. **This is the gate.** |
+| 2 | `toolchain` directive + `GOTOOLCHAIN` | `go env GOTOOLCHAIN`, `grep '^toolchain' go.mod` | Which toolchain actually gets selected (may differ from the one on `PATH`) |
+| 3 | `go` directive in `go.mod` | `grep '^go ' go.mod` | Language-feature ceiling only — does **not** gate `testing.F` |
+
+```bash
+go version                           # 1 — the gate
+go env GOTOOLCHAIN                   # 2 — 'auto' may fetch a newer toolchain
+grep -E '^(go|toolchain) ' go.mod    # 2 + 3
+```
+
+What the `go` directive *does* constrain: language features. Under `go 1.16`, `for range 3`
+fails with `requires go1.22 or later`, while `testing.F` in the same file resolves fine. So a
+low directive means "avoid newer language constructs inside the harness", not "skip fuzzing".
+
+Hard stop only when the **effective toolchain** is `< 1.18` — for example a pinned CI image
+running go1.17 with `GOTOOLCHAIN=local`, where no newer toolchain can be fetched.
+
 ## Concrete Judgment Examples
 
 ### Suitable for Fuzzing (Verdict: PASS)

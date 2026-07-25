@@ -1,0 +1,31 @@
+{
+  "id": "013_go_directive_low_toolchain_modern",
+  "description": "Parser in a module whose go.mod says 'go 1.16', but the installed toolchain is Go 1.25 — this is NOT a hard stop. testing.F is a stdlib symbol gated by the toolchain, not by the go directive.",
+  "code_snippet": "// go.mod: module example.com/legacy\n// go 1.16\n// $ go version -> go version go1.25.0 linux/amd64\nfunc DecodePacket(data []byte) (*Packet, error)",
+  "context": "User asks to write a fuzz test. go.mod specifies 'go 1.16' but `go version` reports go1.25.0 and GOTOOLCHAIN=auto. Verified empirically: `go vet` passes and native fuzzing runs to completion in this configuration.",
+  "applicability_verdict": "suitable",
+  "expected_fuzz_mode": "parser robustness",
+  "expected_template": "Template A",
+  "expected_checks": {
+    "meaningful_input_space": "Pass",
+    "fuzz_compatible_types": "Pass",
+    "clear_oracle": "Pass",
+    "deterministic_local": "Pass",
+    "fast_per_call": "Pass"
+  },
+  "version_gate": {
+    "effective_toolchain": "1.25",
+    "go_directive": "1.16",
+    "gate_decision": "proceed",
+    "must_not_hard_stop": true,
+    "note": "low go directive caps language features inside the harness; it does not gate testing.F"
+  },
+  "expected_warnings": [
+    "go directive is 1.16 — avoid language features newer than 1.16 inside the harness"
+  ],
+  "skill_rules_that_must_fire": [
+    "Gate on the toolchain that will actually run the tests",
+    "Effective toolchain",
+    "note, not a stop"
+  ]
+}

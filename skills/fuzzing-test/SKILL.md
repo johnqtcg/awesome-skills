@@ -8,37 +8,19 @@ allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go
 
 Generate high-signal Go fuzz tests only when targets are suitable.
 
-## Quick Reference
+## Quick Reference — Load References Selectively
 
-| When you need to… | Jump to |
-|---|---|
-| Determine if a target is suitable for fuzzing | §Applicability Gate (run first, always) |
-| Choose among multiple candidate targets | §Target Priority Gate + load `references/target-priority.md` |
-| Write the fuzz harness | §Harness Templates |
-| Handle a discovered crash | §Crash Documentation + load `references/crash-handling.md` |
-| Set up CI integration | Load `references/ci-strategy.md` |
-| Diagnose a slow / ineffective fuzz run | Load `references/advanced-tuning.md` |
-| Avoid common fuzzing mistakes | Load `references/anti-examples.md` |
+Read the section named below first; load the reference only when its trigger applies.
 
-## Load References Selectively
-
-When target suitability is ambiguous (borderline cases):
-→ Load `references/applicability-checklist.md` for the full suitability decision tree with edge-case guidance.
-
-When 3+ candidate targets need prioritization:
-→ Load `references/target-priority.md` for the bug-finding-yield ranking criteria and tie-breaking rules.
-
-When a fuzz run discovers a crash that needs documentation:
-→ Load `references/crash-handling.md` for crash triage steps, corpus commit policy, and regression test patterns.
-
-When the user requests CI integration for fuzz tests:
-→ Load `references/ci-strategy.md` for GitHub Actions configuration, corpus caching, and time-budget settings.
-
-When diagnosing an ineffective fuzz run, OOM, leaks, flaky failures, or performance issues:
-→ Load `references/advanced-tuning.md` for seed quality analysis, skip-rate diagnosis, allocation profiling, and harness simplification patterns.
-
-When you need to avoid or check for common fuzzing mistakes (trivial targets, missing oracle, bad seeds, OOM, global state, time-based assertions, dropped corpus):
-→ Load `references/anti-examples.md` for 7 BAD/GOOD code patterns covering the most frequent harness mistakes.
+| When you need to… | Section | Load on demand |
+|---|---|---|
+| Decide if a target is suitable | §Applicability Gate (**run first, always**) | `applicability-checklist.md` — full decision tree, oracle forms, version gate, borderline cases |
+| Choose among 3+ candidate targets | §Target Priority Gate | `target-priority.md` — bug-yield ranking and tie-breaks |
+| Write the harness | §Minimal Templates | — |
+| Handle a discovered crash | §Crash Handling | `crash-handling.md` — triage steps, corpus policy, report template |
+| Set up CI | §CI Strategy | `ci-strategy.md` — Actions config, corpus caching, budgets |
+| Diagnose a slow/ineffective run, OOM, leak, or flake | §Fuzz Performance Baseline | `advanced-tuning.md` — seed quality, skip-rate, allocation profiling |
+| Avoid or check for common mistakes | §Quality Scorecard | `anti-examples.md` — 9 BAD/GOOD harness patterns |
 
 ## Applicability Gate (Must Run First)
 
@@ -56,13 +38,22 @@ Mark each item `Pass` / `Fail`:
 4. Target is mostly deterministic/local (not dominated by DB/network/clock/global mutable state).
 5. Target is fast enough for high-iteration fuzzing.
 
-Hard stop:
+Hard stop — items `1`, `2`, and `3` are each independently blocking:
 
-- If item `2` or `3` fails:
-  - output `Applicability Verdict: Not suitable for fuzzing`
-  - list concrete failed checks with specific code references
-  - suggest alternative strategy (unit/integration/property tests)
-  - stop (do not write fuzz tests)
+| Failed item | Why it stops the workflow |
+|---|---|
+| `1` meaningful input space | Fuzzing adds nothing a table-driven unit test would not find |
+| `2` fuzz-supported types | Go's fuzzer cannot drive the target at all |
+| `3` clear oracle | No way to recognise a bug even when the input triggers it |
+
+On any of those:
+- output `Applicability Verdict: Not suitable for fuzzing`
+- list concrete failed checks with specific code references
+- suggest alternative strategy (unit/integration/property tests)
+- stop (do not write fuzz tests)
+
+Items `4` and `5` are **soft warnings**, never hard stops: proceed, flag the risk, and adjust
+the cost class. Full decision tree in `references/applicability-checklist.md`.
 
 ## Additional Gates
 
@@ -189,12 +180,19 @@ Use two-lane strategy (see `references/ci-strategy.md`):
 
 ## Minimal Templates
 
+Every template ships **placeholder seeds**, marked as such. They are structurally distinct
+so each template already satisfies scorecard `S1` as written — but placeholders are not
+real seeds. Replace them with inputs mined per §Seed mining strategy before shipping; keep
+at least three structurally distinct cases when you do.
+
 ### Template A: Parser (`[]byte`)
 
 ```go
 func FuzzParseXxx(f *testing.F) {
-	f.Add([]byte{})
-	f.Add([]byte{0x01, 0x00})
+	// PLACEHOLDER SEEDS — replace with mined inputs (§Seed mining strategy).
+	f.Add([]byte{})                             // boundary: empty
+	f.Add([]byte{0x01, 0x00})                   // valid: minimal header
+	f.Add([]byte{0x01, 0xff, 0xff, 0xff, 0xff}) // malformed: oversized length field
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		if len(data) > 1<<20 {
@@ -215,7 +213,13 @@ func FuzzParseXxx(f *testing.F) {
 
 ```go
 func FuzzRoundTripXxx(f *testing.F) {
-	f.Add("seed", int32(1))
+	// PLACEHOLDER SEEDS — replace with mined inputs (§Seed mining strategy).
+	// Seeds must round-trip under the CORRECT implementation, so they stay inside
+	// what the codec can represent. Invalid UTF-8 does NOT belong here: encoding/json
+	// rewrites it to U+FFFD, so the seed fails on correct code (see the note below).
+	f.Add("", int32(0))                            // boundary: zero values
+	f.Add("seed", int32(1))                        // valid: typical
+	f.Add("nul\x00 combining é \U0001F30D", int32(-1)) // valid but tricky: NUL, combining mark, astral rune
 
 	f.Fuzz(func(t *testing.T, a string, b int32) {
 		if len(a) > 1<<16 {
@@ -237,11 +241,24 @@ func FuzzRoundTripXxx(f *testing.F) {
 }
 ```
 
+Two round-trip traps that fail on **correct** code — both cost a debugging cycle:
+
+- **Every seed must be representable by the codec.** Invalid UTF-8 under `encoding/json`
+  becomes U+FFFD, so the seed fails before testing anything. Same for dropped sub-second
+  precision or clamped integer width. Verify with `go test -run='^Fuzz' .`
+- **If the codec normalizes, `got != orig` is the wrong oracle** — compare canonical forms,
+  or assert idempotence on a second pass.
+
+→ Load `references/anti-examples.md` (Mistakes 8-9) for both patterns with BAD/GOOD code.
+
 ### Template C: Differential
 
 ```go
 func FuzzDiffXxx(f *testing.F) {
-	f.Add("hello,world", ",")
+	// PLACEHOLDER SEEDS — replace with mined inputs (§Seed mining strategy).
+	f.Add("hello,world", ",") // valid: typical
+	f.Add("", ",")            // boundary: empty subject
+	f.Add("a,,b", ",,")       // structurally distinct: empty field + multi-char separator
 
 	f.Fuzz(func(t *testing.T, s, sep string) {
 		if sep == "" || len(s) > 1<<16 {
@@ -262,11 +279,13 @@ Use when the target needs a complex struct that exceeds Go's native fuzz paramet
 
 ```go
 func FuzzProcessRequest(f *testing.F) {
-	// seed with known-good serialized inputs
+	// PLACEHOLDER SEEDS — replace with mined inputs (§Seed mining strategy).
 	seed1, _ := json.Marshal(Request{Method: "GET", Path: "/api/v1/users", Body: ""})
 	seed2, _ := json.Marshal(Request{Method: "POST", Path: "/api/v1/users", Body: `{"name":"x"}`})
+	seed3, _ := json.Marshal(Request{Method: "", Path: "", Body: ""}) // boundary: all-empty
 	f.Add(seed1)
 	f.Add(seed2)
+	f.Add(seed3)
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		if len(data) > 4096 {
@@ -312,23 +331,43 @@ For high-iteration fuzzing (targets <1 μs/call), prefer `encoding/binary` or `g
 
 ## Corpus Management
 
-- **Always commit** crashing inputs under `testdata/fuzz/FuzzXxx/` — these are regression tests.
-- **Do not commit** the Go fuzz cache (`$GOCACHE/fuzz/`) — it's large and machine-specific.
-- **Selectively commit** high-value seed inputs that cover distinct code paths. Avoid committing hundreds of auto-generated entries.
+Go writes fuzz inputs to **two** locations. Conflating them is the most common
+fuzz-workflow error:
+
+| Input kind | Written to | Fate |
+|---|---|---|
+| Failing input | `<pkg>/testdata/fuzz/FuzzXxx/` — **only on failure** | Commit it; it becomes a regression test |
+| Coverage-growing "interesting" input | `$GOCACHE/fuzz/<module>/<pkg>/FuzzXxx/` | Never committed; cache it in CI |
+
+So a clean 30-minute run reporting `new interesting: 2000` adds **nothing** to
+`testdata/fuzz` — those entries are in the build cache
+(`find "$(go env GOCACHE)/fuzz" -type f | wc -l`). Note `<pkg>` is the tested package's own
+directory, not the repo root.
+
+- **Always commit** crashing inputs under `<pkg>/testdata/fuzz/FuzzXxx/` — these are regression tests.
+- **Do not commit** the Go fuzz cache (`$GOCACHE/fuzz/`) — large and machine-specific.
+- **Selectively commit** high-value seeds covering distinct code paths; not hundreds of auto-generated entries.
 - Clean cache: `go clean -fuzzcache`
 
 ## Go Version Gate
 
-Check `go.mod` before generating native fuzz code:
+**Gate on the toolchain that will actually run the tests — not on the `go` directive in `go.mod`.**
+Run `go version` (and `go env GOTOOLCHAIN`); `testing.F` is a stdlib symbol, so the toolchain
+decides whether it exists. A `go 1.16` module fuzzes fine under a modern toolchain.
 
-| Go version | Guidance |
-|------------|----------|
-| `1.18` | Native `testing.F` is available. Baseline for this skill. |
+| Effective toolchain (`go version`) | Guidance |
+|---------------------|----------|
+| `< 1.18` | **Hard stop.** No `testing.F`. Recommend property tests, or legacy `go-fuzz` with explicit justification. |
+| `1.18` | Native `testing.F` available. Baseline for this skill. |
 | `1.20` | Prefer current corpus layout and CI patterns. |
 | `1.21` | Re-check package performance and memory budgets before extending fuzz time. |
-| `1.22` | Be explicit about loop variable semantics when adapting older code examples. |
+| `1.22` | Per-iteration loop variables; be explicit about loop semantics when adapting older examples. |
 
-If Go < 1.18, native fuzzing is unavailable — stop and recommend property tests or legacy `go-fuzz` only with explicit justification.
+A low `go` directive is a **note, not a stop**: it caps *language* features inside the
+harness, nothing more.
+
+→ Load `references/applicability-checklist.md` (§Go Version Gate) for the three-source check
+and the `GOTOOLCHAIN` cases.
 
 ### Race Detection + Fuzz
 
@@ -380,8 +419,16 @@ After generating fuzz tests, evaluate quality. Mark each item `Pass` / `Fail`.
 | # | Check | Criteria |
 |---|-------|----------|
 | C1 | Applicability gate ran | Verdict documented before any code |
-| C2 | Oracle/invariant present | Every `f.Fuzz` body has at least one `t.Fatal`/`t.Errorf` asserting a property |
+| C2 | Observable oracle present | Every `f.Fuzz` body has an oracle that can actually fail. See the two accepted forms below — do not grade this by searching for an API token |
 | C3 | Size guard present | `len(data) > N` or equivalent bound in every `[]byte`/`string` harness |
+
+**C2 is graded against the oracle declared at the gate, not the presence of a `t.Fatal` call.**
+A **no-panic / robustness** harness needs no assertion — the runtime already fails on panic;
+just say so in a comment. A harness declaring **round-trip / differential / domain
+constraint** must assert it explicitly. What C2 rejects is the *mismatch*: declaring an
+invariant and then dropping the result.
+
+→ Load `references/applicability-checklist.md` (§Oracle Forms) for the full pass/fail table.
 
 ### Standard (≥4/5 must pass)
 
@@ -417,10 +464,16 @@ Scoring:
 
 ## Quick Commands
 
-- One target fuzz: `go test -run=^$ -fuzz=^FuzzXxx$ -fuzztime=30s .`
-- All fuzz targets in package: `go test -run=^$ -fuzz=^Fuzz -fuzztime=1m .`
-- Corpus replay only: `go test -run=^FuzzXxx$ .`
+- One target fuzz: `go test -run='^$' -fuzz='^FuzzXxx$' -fuzztime=30s .`
+- Replay committed corpus for **all** targets: `go test -run='^Fuzz' ./...`
+- Replay one target's corpus: `go test -run='^FuzzXxx$' .`
+- Where interesting corpus accumulates: `find "$(go env GOCACHE)/fuzz" -type f`
 - Clean fuzz cache: `go clean -fuzzcache`
+
+`-fuzz` must match **exactly one** target — `-fuzz='^Fuzz'` fails with
+`will not fuzz, -fuzz matches more than one fuzz test` in any package with two or more
+targets. Anchor it per target and loop in the shell to cover a package. `-run='^Fuzz'`
+has no such restriction and is the correct way to replay every target's corpus at once.
 
 ## Skill Maintenance
 

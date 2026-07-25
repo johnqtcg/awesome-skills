@@ -1,0 +1,17 @@
+{
+  "id": "frame_parser",
+  "description": "Length-prefixed frame parser. Suitable for fuzzing (Tier 1 parser). The mutation drops one bounds check so data[2:2+n] slices past the end; reaching it requires an input of length >= 3 where data[1] exceeds len(data)-2 but not len(data).",
+  "expected_verdict": "suitable",
+  "expected_fuzz_mode": "parser robustness",
+  "expected_template": "Template A",
+  "min_seeds": 3,
+  "requires_size_guard": true,
+  "mutation": {
+    "find": "\tif n > len(data)-2 {",
+    "replace": "\tif n > len(data) {",
+    "defect": "slice bounds out of range — data[2:2+n] reads past the input when 2+n > len(data)",
+    "witness": "[]byte{0x00, 0x03, 0x00, 0x00}"
+  },
+  "fuzztime_kill": "10s",
+  "notes": "The emitted harness is compiled as `package eval` with only `testing` imported, so a harness needing extra imports will not compile here by design — Template A does not need any."
+}

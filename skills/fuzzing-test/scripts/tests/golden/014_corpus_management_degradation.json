@@ -1,8 +1,8 @@
 {
   "id": "014_corpus_management_degradation",
-  "description": "Developer asks whether to commit all 2000 auto-generated corpus entries after a 30-minute nightly fuzz run",
-  "code_snippet": "// testdata/fuzz/FuzzParseConfig/ has 2000 entries after nightly run\n// PR lane corpus replay now takes 45s\nfunc FuzzParseConfig(f *testing.F)",
-  "context": "Extended fuzz run accumulated 2000 corpus entries. Developer wants to know which to commit to git.",
+  "description": "Developer asks whether to commit the 2000 corpus entries a 30-minute fuzz run produced. Tests that the skill locates them in $GOCACHE/fuzz — not testdata/fuzz — and refuses a bulk commit.",
+  "code_snippet": "// $ go test -run='^$' -fuzz='^FuzzParseConfig$' -fuzztime=30m .\n// fuzz: elapsed: 30m0s, execs: 891402331, new interesting: 2000 (total: 2003)\n// $ find \"$(go env GOCACHE)/fuzz\" -type f | wc -l  ->  2003\n// $ ls testdata/fuzz  ->  (only the 3 hand-authored seeds)\nfunc FuzzParseConfig(f *testing.F)",
+  "context": "A 30-minute run reported 'new interesting: 2000'. The developer assumed those landed in testdata/fuzz and asks which to commit. They are actually in $GOCACHE/fuzz; testdata/fuzz still holds only the authored seeds, because the run found no failure. The skill must correct the premise before answering.",
   "applicability_verdict": "suitable",
   "expected_fuzz_mode": "parser robustness",
   "expected_template": "Template A",
@@ -12,10 +12,17 @@
     "commit_fuzz_cache": false,
     "commit_all_auto_generated": false
   },
+  "corpus_location": {
+    "interesting_inputs": "$GOCACHE/fuzz",
+    "failing_inputs": "testdata/fuzz/FuzzParseConfig/",
+    "must_correct_user_premise": true,
+    "note": "the fuzzer writes testdata/fuzz only on failure; coverage-growing inputs never go there"
+  },
   "skill_rules_that_must_fire": [
     "Corpus Management",
     "Always commit",
     "Do not commit",
-    "Selectively commit"
+    "Selectively commit",
+    "$GOCACHE/fuzz"
   ]
 }

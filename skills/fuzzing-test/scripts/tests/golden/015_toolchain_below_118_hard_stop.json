@@ -1,0 +1,22 @@
+{
+  "id": "015_toolchain_below_118_hard_stop",
+  "description": "Parser on a pinned CI image whose effective toolchain is Go 1.17 — the genuine Go Version Gate hard stop, because testing.F does not exist in that toolchain",
+  "code_snippet": "// go.mod: module example.com/svc\n// go 1.17\n// $ go version -> go version go1.17.13 linux/amd64\n// $ go env GOTOOLCHAIN -> local\nfunc DecodePacket(data []byte) (*Packet, error)",
+  "context": "User asks to write a fuzz test on a pinned CI image. `go version` reports go1.17.13 and GOTOOLCHAIN=local, so no newer toolchain can be fetched. testing.F is genuinely unavailable. Contrast with 013, where only the go directive is low and the toolchain is modern.",
+  "applicability_verdict": "not_suitable",
+  "failed_hard_stop": "Go Version Gate",
+  "expected_alternative": "property tests with gopter/rapid, or legacy go-fuzz with explicit justification; alternatively upgrade the toolchain",
+  "version_gate": {
+    "effective_toolchain": "1.17",
+    "go_directive": "1.17",
+    "gotoolchain": "local",
+    "gate_decision": "hard_stop",
+    "must_not_hard_stop": false,
+    "note": "GOTOOLCHAIN=local prevents auto-upgrade, so the 1.17 toolchain is final"
+  },
+  "skill_rules_that_must_fire": [
+    "Go Version Gate",
+    "< 1.18",
+    "Hard stop"
+  ]
+}

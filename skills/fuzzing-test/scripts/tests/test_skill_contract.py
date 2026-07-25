@@ -242,5 +242,179 @@ class ReferenceDepthTests(unittest.TestCase):
         self.assertIn("Post-Fix Checklist", content)
 
 
+class OracleRuleConsistencyTests(unittest.TestCase):
+    """C2 used to demand a `t.Fatal`/`t.Errorf` token in every harness, which mechanically
+    rejected the no-panic robustness oracle the Applicability Gate explicitly accepts.
+    These tests pin the reconciled rule."""
+
+    def test_gate_accepts_no_panic_oracle(self) -> None:
+        content = SKILL_MD.read_text()
+        self.assertIn("no panic for any input", content)
+
+    def test_c2_is_not_a_token_search(self) -> None:
+        """The rule stays in SKILL.md; the full pass/fail table lives in the gate reference."""
+        skill = SKILL_MD.read_text()
+        self.assertIn("Observable oracle present", skill)
+        self.assertIn("not the presence of a `t.Fatal` call", skill)
+        self.assertIn("Do not grade C2 by searching for an API token", APP_REF.read_text())
+
+    def test_c2_documents_both_accepted_oracle_forms(self) -> None:
+        ref = APP_REF.read_text()
+        self.assertIn("Oracle Forms", ref)
+        self.assertIn("no-panic / robustness", ref)
+        self.assertIn("No `t.Fatal` is required", ref,
+                      "a robustness harness with no assertion must remain legal")
+
+    def test_c2_still_rejects_the_declared_oracle_mismatch(self) -> None:
+        skill = SKILL_MD.read_text()
+        ref = APP_REF.read_text()
+        self.assertIn("mismatch", skill.lower(), "SKILL.md must name the mismatch failure")
+        self.assertIn("declared round-trip at the gate", ref)
+
+    def test_skill_md_points_at_the_oracle_reference(self) -> None:
+        """Progressive disclosure: moved detail must stay reachable from the main file."""
+        skill = SKILL_MD.read_text()
+        self.assertIn("references/applicability-checklist.md` (§Oracle Forms)", skill)
+
+
+class TemplateSeedQualityTests(unittest.TestCase):
+    """Templates are the most-copied artefact, so they must satisfy the skill's own S1 bar
+    (>=3 structurally distinct seeds) and be marked as placeholders."""
+
+    def _templates(self) -> list:
+        text = SKILL_MD.read_text()
+        blocks = re.findall(r"```go\n(.*?)```", text, re.DOTALL)
+        return [b for b in blocks if "func Fuzz" in b]
+
+    def test_every_template_has_at_least_three_seeds(self) -> None:
+        for tpl in self._templates():
+            name = re.search(r"func (Fuzz\w+)", tpl).group(1)
+            seeds = tpl.count("f.Add(")
+            self.assertGreaterEqual(
+                seeds, 3, f"{name}: scorecard S1 wants >=3 distinct seeds, template has {seeds}"
+            )
+
+    def test_every_template_marks_seeds_as_placeholders(self) -> None:
+        for tpl in self._templates():
+            name = re.search(r"func (Fuzz\w+)", tpl).group(1)
+            self.assertIn("PLACEHOLDER SEEDS", tpl,
+                          f"{name}: seeds must be marked as placeholders to replace")
+
+    def test_placeholder_note_points_at_seed_mining(self) -> None:
+        content = SKILL_MD.read_text()
+        self.assertIn("placeholders are not", content.lower())
+        self.assertIn("Seed mining strategy", content)
+
+
+class FuzzFlagSemanticsTests(unittest.TestCase):
+    """`-fuzz` must match exactly one target; `-fuzz=^Fuzz` fails outright in any package
+    with two or more targets. Verified against the toolchain:
+    'testing: will not fuzz, -fuzz matches more than one fuzz test'."""
+
+    def test_single_target_rule_documented(self) -> None:
+        content = SKILL_MD.read_text()
+        self.assertIn("must match **exactly one** target", content)
+        self.assertIn("matches more than one fuzz test", content)
+
+    def test_no_broken_multi_target_fuzz_command(self) -> None:
+        """Flag only runnable commands. Prose that names `-fuzz='^Fuzz'` as the anti-pattern
+        is required documentation, so the check is scoped to lines that invoke `go test`."""
+        for path in (SKILL_MD, CI_REF):
+            bad = [
+                line.strip()
+                for line in path.read_text().splitlines()
+                if re.search(r"(?:go|\$\(GO\)) test", line)
+                and re.search(r"-fuzz='?\^Fuzz'?(?![\w$])", line)
+            ]
+            self.assertFalse(
+                bad, f"{path.name}: -fuzz='^Fuzz' matches multiple targets and fails at "
+                     f"runtime; anchor per target instead. Offending lines: {bad}"
+            )
+
+    def test_replay_uses_run_not_fuzz(self) -> None:
+        content = SKILL_MD.read_text()
+        self.assertIn("-run='^Fuzz'", content,
+                      "corpus replay across targets must use -run, not -fuzz")
+
+
+class CrashArtifactGlobTests(unittest.TestCase):
+    """A crash lands in the target package's own testdata/fuzz (fuzzing ./pkg/parser/ writes
+    pkg/parser/testdata/fuzz/). A root-anchored `testdata/fuzz/**` upload glob therefore
+    captures nothing, and the crasher dies with the workspace."""
+
+    def test_upload_glob_is_recursive(self) -> None:
+        ci = CI_REF.read_text()
+        self.assertIn("path: '**/testdata/fuzz/**'", ci,
+                      "crash upload glob must be '**/testdata/fuzz/**' to reach subpackages")
+
+    def test_no_root_anchored_upload_path(self) -> None:
+        bad = [
+            line.strip() for line in CI_REF.read_text().splitlines()
+            if re.match(r"\s*path:\s*'?testdata/fuzz", line)
+        ]
+        self.assertFalse(bad, f"root-anchored artifact path misses subpackages: {bad}")
+
+    def test_missing_crasher_fails_loudly(self) -> None:
+        ci = CI_REF.read_text()
+        self.assertIn("if-no-files-found: error", ci,
+                      "a failed fuzz run that uploads no crasher means the glob is wrong")
+
+    def test_subpackage_path_documented(self) -> None:
+        ci = CI_REF.read_text()
+        self.assertIn("pkg/parser/testdata/fuzz", ci)
+        self.assertIn("not the repo root", ci)
+
+
+class CoverageDocConsistencyTests(unittest.TestCase):
+    """COVERAGE.md drifted to claiming 8 fixtures / 60 tests when there were 14 / 64.
+    These assertions make the counts self-checking instead of hand-maintained."""
+
+    COVERAGE = SKILL_DIR / "scripts" / "tests" / "COVERAGE.md"
+    GOLDEN = SKILL_DIR / "scripts" / "tests" / "golden"
+
+    def test_declared_fixture_count_matches_disk(self) -> None:
+        actual = len(list(self.GOLDEN.glob("*.json")))
+        text = self.COVERAGE.read_text()
+        m = re.search(r"\*\*Golden fixture count: (\d+)\*\*", text)
+        self.assertIsNotNone(m, "COVERAGE.md must declare a golden fixture count")
+        self.assertEqual(actual, int(m.group(1)),
+                         f"COVERAGE.md says {m.group(1)} fixtures, disk has {actual}")
+
+    def test_every_fixture_listed_in_coverage_doc(self) -> None:
+        text = self.COVERAGE.read_text()
+        missing = [p.name for p in sorted(self.GOLDEN.glob("*.json")) if p.name not in text]
+        self.assertFalse(missing, f"fixtures absent from COVERAGE.md: {missing}")
+
+    def test_no_satisfied_gap_still_listed(self) -> None:
+        """Known Gaps listed borderline and go-fuzz-headers fixtures that already exist."""
+        text = self.COVERAGE.read_text()
+        gaps = text.split("## Known Gaps")[-1] if "## Known Gaps" in text else ""
+        for stale in ("borderline/soft-warning case", "`go-fuzz-headers` specific scenario"):
+            self.assertNotIn(stale, gaps,
+                             f"Known Gaps still lists a gap that is now covered: {stale}")
+
+    def test_behavioral_eval_documented(self) -> None:
+        text = self.COVERAGE.read_text()
+        self.assertIn("test_llm_fuzz_eval.py", text)
+        self.assertIn("frame_parser", text)
+        self.assertIn("kv_codec", text)
+
+    def test_declared_anti_example_count_matches_reference(self) -> None:
+        actual = len(re.findall(r"(?m)^### Mistake \d+:", ANTI_EXAMPLES_REF.read_text()))
+        text = self.COVERAGE.read_text()
+        m = re.search(r"\| Anti-examples \((\d+)\) \| (\d+) \|", text)
+        self.assertIsNotNone(m, "COVERAGE.md must declare an anti-example count")
+        self.assertEqual(actual, int(m.group(1)),
+                         f"COVERAGE.md says {m.group(1)} anti-examples, reference has {actual}")
+        self.assertEqual(actual, int(m.group(2)))
+
+    def test_skill_md_anti_example_count_matches_reference(self) -> None:
+        actual = len(re.findall(r"(?m)^### Mistake \d+:", ANTI_EXAMPLES_REF.read_text()))
+        m = re.search(r"`anti-examples\.md` — (\d+) BAD/GOOD", SKILL_MD.read_text())
+        self.assertIsNotNone(m, "SKILL.md must cite the anti-example count")
+        self.assertEqual(actual, int(m.group(1)),
+                         f"SKILL.md cites {m.group(1)} anti-examples, reference has {actual}")
+
+
 if __name__ == "__main__":
     unittest.main()

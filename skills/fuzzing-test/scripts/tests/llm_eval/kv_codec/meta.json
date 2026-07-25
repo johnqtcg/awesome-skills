@@ -1,0 +1,17 @@
+{
+  "id": "kv_codec",
+  "description": "Length-prefixed key/value codec. Round-trip scenario (Template B). The mutation drops the high byte when reassembling the 4-byte value, so any Value outside 24-bit range decodes wrong. Silent corruption — no panic, so only an explicit round-trip assertion catches it.",
+  "expected_verdict": "suitable",
+  "expected_fuzz_mode": "round-trip",
+  "expected_template": "Template B",
+  "min_seeds": 3,
+  "requires_size_guard": true,
+  "mutation": {
+    "find": "uint32(p[2])<<16 | uint32(p[3])<<24",
+    "replace": "uint32(p[2])<<16",
+    "defect": "Decode discards the most-significant value byte, so Value round-trips wrong whenever it exceeds 24 bits (e.g. -1 decodes as 16777215)",
+    "witness": "Record{Key: \"k\", Value: -1}"
+  },
+  "fuzztime_kill": "10s",
+  "notes": "This fixture exists because a bad round-trip SEED (invalid UTF-8 under encoding/json) once shipped in Template B and `go vet` could not see it. Round-trip harnesses fail in two directions — false positive on correct code, or no detection of real corruption — and this fixture grades both."
+}
