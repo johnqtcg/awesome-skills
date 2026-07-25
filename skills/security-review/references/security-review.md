@@ -41,9 +41,20 @@ Use when writing the suggested regression/negative test for a finding (Output Co
 ## CWE / OWASP ASVS Mapping Table
 
 Lookup table for the mandatory Standards Mapping (`SKILL.md § Standards Mapping`).
-Section-level ASVS references are sufficient; use `Mapping: TBD` with a reason if unclear.
 
-| Finding Category | CWE | OWASP ASVS |
+> **These are ASVS 4.0.3 chapter numbers.** ASVS 5.0.0 reorganised and renumbered its
+> chapters, so these values are **not** valid 5.0.0 identifiers. Pick one version per report
+> and say which:
+>
+> - Targeting **4.0.3** → use this table, and write IDs as `ASVS 4.0.3 V4.1.2`.
+> - Targeting **5.0.0** → resolve the requirement in the 5.0.0 document itself and write
+>   `ASVS 5.0.0 V<n>.<n>.<n>`. Do **not** translate the numbers below by guessing; a plausible
+>   but wrong requirement ID is worse than `Mapping: TBD`.
+>
+> Chapter-level precision is acceptable (`ASVS 4.0.3 V5 (chapter-level)`) when the exact
+> requirement is unclear — state the imprecision rather than implying precision you lack.
+
+| Finding Category | CWE | ASVS 4.0.3 chapter |
 |------------------|-----|-----------|
 | Authz bypass / IDOR | CWE-639 | V4 |
 | SQL / command / code injection | CWE-89 / CWE-78 / CWE-94 | V5 |
@@ -57,3 +68,43 @@ Section-level ASVS references are sufficient; use `Mapping: TBD` with a reason i
 | Weak TLS config | CWE-295 / CWE-327 | V9 |
 | Weak crypto / hash usage | CWE-327 / CWE-328 | V6 |
 | Race condition / TOCTOU | CWE-362 / CWE-367 | V11 |
+
+---
+
+## One-Shot Finding Example
+
+The finding format from `SKILL.md §1) Findings`, fully populated. Note the reproducer is
+labelled as **not executed** and targets loopback only — see
+`authorization-and-policy.md` §1.
+
+> **SEC-001: IDOR — Any authenticated user can access other users' orders**
+>
+> - **Severity**: P1 High
+> - **Confidence**: confirmed
+> - **Mapping**: CWE-639 (Authorization Bypass Through User-Controlled Key) / ASVS 4.0.3 V4.1.2
+> - **File/line**: `internal/handler/order.go:47`
+> - **Exploit path**: `GET /api/orders/:id` extracts `id` from the URL path and passes it
+>   directly to `repo.GetOrder(id)` without verifying `order.UserID == ctx.UserID()`. Any
+>   authenticated user can read any order by iterating IDs.
+> - **Impact**: Full horizontal privilege escalation on order data (PII, payment amounts, addresses).
+> - **Reproducer** (NOT executed — no authorization to test a live target; confirmed from the
+>   code path alone):
+>   ```bash
+>   # Run against a local instance only. User A's token, requesting User B's order.
+>   curl -H "Authorization: Bearer <tokenA>" http://127.0.0.1:8080/api/orders/ORDER-9999
+>   # Expected on the vulnerable build: 200 with User B's order details
+>   ```
+>   Two IDs are enough to demonstrate the class — do not enumerate further.
+> - **Recommended fix**:
+>   ```go
+>   order, err := h.repo.GetOrder(ctx, orderID)
+>   if err != nil { ... }
+>   if order.UserID != auth.UserIDFrom(ctx) {
+>       return echo.NewHTTPError(http.StatusNotFound, "order not found")
+>   }
+>   ```
+>   Return 404 (not 403) to avoid confirming the order exists.
+> - **Regression test**: Add `TestGetOrder_CrossUser_Returns404` — create order as User A,
+>   request as User B, assert 404.
+> - **Baseline status**: new
+> - **Origin**: introduced

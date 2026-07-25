@@ -57,18 +57,57 @@ public String fetch(@RequestParam String url) {
     return restTemplate.getForObject(url, String.class); // SSRF
 }
 
-// GOOD: validate against allowlist
-private static final Set<String> ALLOWED_HOSTS = Set.of("api.example.com");
-
+// ALSO BAD: allowlist only. RestTemplate follows redirects by default, so an
+// allowlisted host can 302 to http://169.254.169.254/ and the allowlist is never
+// re-checked. The hostname is also validated before resolution, leaving a rebinding window.
 @GetMapping("/fetch")
 public String fetch(@RequestParam String url) {
+    URI uri = URI.create(url);
+    if (!ALLOWED_HOSTS.contains(uri.getHost())) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "blocked host");
+    }
+    return restTemplate.getForObject(uri, String.class); // redirects still followed
+}
+
+// GOOD: allowlist + scheme pin + redirects disabled + every resolved IP checked
+private static final Set<String> ALLOWED_HOSTS = Set.of("api.example.com");
+
+// Redirects OFF at the factory level — this is the control the allowlist cannot provide.
+@Bean
+RestTemplate ssrfSafeRestTemplate() {
+    HttpClient client = HttpClient.newBuilder()
+            .followRedirects(HttpClient.Redirect.NEVER)
+            .connectTimeout(Duration.ofSeconds(5))
+            .build();
+    return new RestTemplate(new JdkClientHttpRequestFactory(client));
+}
+
+private static void assertPublicAddress(String host) throws UnknownHostException {
+    InetAddress[] addrs = InetAddress.getAllByName(host); // check EVERY A/AAAA record
+    for (InetAddress addr : addrs) {
+        if (addr.isLoopbackAddress() || addr.isSiteLocalAddress() || addr.isAnyLocalAddress()
+                || addr.isLinkLocalAddress() || addr.isMulticastAddress()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "blocked address");
+        }
+    }
+}
+
+@GetMapping("/fetch")
+public String fetch(@RequestParam String url) throws UnknownHostException {
     URI uri = URI.create(url);
     if (!ALLOWED_HOSTS.contains(uri.getHost()) || !"https".equals(uri.getScheme())) {
         throw new ResponseStatusException(HttpStatus.FORBIDDEN, "blocked host");
     }
-    return restTemplate.getForObject(uri, String.class);
+    assertPublicAddress(uri.getHost());
+    return ssrfSafeRestTemplate.getForObject(uri, String.class);
 }
 ```
+
+Java caveat: the JVM caches DNS (`networkaddress.cache.ttl`), which narrows but does not
+close the rebinding window — `getAllByName` and the eventual connect are still two separate
+resolutions. Java has no direct equivalent of Go's `Dialer.Control`, so for high-risk
+proxies route egress through a vetted forward proxy or a network policy instead of relying
+on in-process checks alone. Disabling redirects is non-negotiable either way.
 
 ### TLS Configuration
 

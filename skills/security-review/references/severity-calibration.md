@@ -4,6 +4,44 @@ Use this reference when calibrating severity and confidence for findings. Load i
 
 ---
 
+## Governing Rule: Exploitability Outranks Any Severity Floor
+
+Elsewhere in this skill some patterns carry a default floor ("at least `P2`"). Those defaults
+are **starting points for a reachable finding**, not overrides of the exploitability-first
+principle. When a floor and the four questions below disagree, the questions win — and you
+must state which one moved the severity.
+
+Apply to every finding before publishing:
+
+1. **Can an attacker trigger it?** Reachable from an untrusted input at a trust boundary?
+   If no path exists, it is not a security finding at any severity — suppress (Rule 2) or
+   reclassify as reliability/quality.
+2. **Does it protect a security asset?** Credentials, authz decisions, funds, PII, tenant
+   isolation, integrity. If the affected value is cosmetic or operational, it is not `P1/P2`.
+3. **Is it already bounded upstream?** Gateway body caps, WAF, network policy, pool limits,
+   framework escaping. If yes, downgrade or suppress (Rule 1/3) and record residual risk —
+   including what happens if that control is removed.
+4. **Is it a security defect or a reliability defect?** Both are worth fixing; only the first
+   belongs in this report as a finding. Route the second to `Hardening suggestions` and say so.
+
+A finding that cannot answer (1) and (2) affirmatively must not be published as `P1` or `P2`,
+regardless of any default floor. Conversely, a default floor never *caps* severity: a
+"P2 by default" pattern on an unauthenticated payment path is `P1` or `P0`.
+
+**Do not pad the report with floor-derived findings.** Systematically reporting every
+missing-`MaxBytesReader` or unexplained-`nolint` as a finding is the over-reporting failure
+mode this skill exists to prevent (see AE-3), and it trains readers to ignore the output.
+
+### Deployment-dependent patterns
+
+For patterns whose severity hinges on infrastructure you cannot see (`MaxBytesReader`,
+rate limiting, `X-Frame-Options`, CSP), do not guess. Either verify the upstream control in
+the repo (ingress config, gateway manifest, middleware chain) and calibrate accordingly, or
+report at the lower severity with an explicit assumption line and list the check under
+`Open questions / assumptions`.
+
+---
+
 ## Confidence Downgrade Rules
 
 ### Attacker Must Control Environment Variable

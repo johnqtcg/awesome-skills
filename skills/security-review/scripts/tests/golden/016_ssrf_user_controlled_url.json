@@ -9,8 +9,11 @@
   "coverage_rules": [
     "SSRF",
     "allowlist",
-    "private IPs",
-    "subtle.ConstantTimeCompare"
+    "non-public address",
+    "Dialer.Control",
+    "CheckRedirect",
+    "rebinding"
   ],
+  "note": "An allowlist alone is necessary but not sufficient: the rules must also require refusing redirects and validating the IP at connect time, or the 'fixed' code is still exploitable.",
   "reference": "references/go-secure-coding.md"
 }

@@ -32,7 +32,7 @@ For each applicable scenario, verify every item. Mark items as `Pass / Fail / N/
 - `net/http.Redirect` with user-controlled URL → open redirect; validate against allowlist or restrict to relative paths.
 - `filepath.Join(base, userInput)` does NOT prevent `../` traversal → must verify result starts with `base` after `filepath.Clean`.
 - `encoding/json.Decoder` without `DisallowUnknownFields` or size limit → resource exhaustion via large payload.
-- `json.Unmarshal` / `xml.Decoder` on untrusted input without `xml.Decoder.MaxDepth` (Go 1.24+) → billion-laughs DoS.
+- `xml.NewDecoder` on untrusted input without an input-size bound → memory exhaustion. Note: stdlib `encoding/xml` resolves **no** DTD entities and already caps unmarshal depth, so XXE and billion-laughs are false positives against it (they apply only to third-party/cgo XML libraries). There is no `xml.Decoder.MaxDepth` field — see `go-secure-coding.md` §Go XML.
 
 ## 3) Session / JWT / Cookie / CSRF
 

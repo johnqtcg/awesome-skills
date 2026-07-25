@@ -228,7 +228,7 @@ class SecurityReviewContractTests(unittest.TestCase):
     def test_output_contract_sections(self) -> None:
         for section in (
             "### 1) Findings",
-            "### 2) Go 10-Domain Coverage",
+            "### 2) Security Domain Coverage",
             "### 3) Automation Evidence",
             "### 4) Open questions",
             "### 5) Risk Acceptance Register",
@@ -240,10 +240,16 @@ class SecurityReviewContractTests(unittest.TestCase):
             self.assertIn(section, self.skill_text, f"output section {section!r} missing")
 
     def test_finding_example_exists(self) -> None:
-        self.assertIn("One-Shot Finding Example", self.skill_text)
-        self.assertIn("SEC-001", self.skill_text)
-        self.assertIn("Reproducer", self.skill_text)
-        self.assertIn("Regression test", self.skill_text)
+        """The worked example lives in references (progressive disclosure); SKILL.md must
+        still point at it, and the example must model the safe-reproducer rules."""
+        ref = (SKILL_DIR / "references" / "security-review.md").read_text()
+        self.assertIn("One-Shot Finding Example", ref)
+        self.assertIn("SEC-001", ref)
+        self.assertIn("Regression test", ref)
+        self.assertIn("NOT executed", ref, "the example reproducer must be labelled unexecuted")
+        self.assertIn("127.0.0.1", ref, "the example must target loopback, not a real host")
+        self.assertIn("One-Shot Finding Example", self.skill_text,
+                      "SKILL.md must still route the reader to the worked example")
 
     def test_json_summary_schema(self) -> None:
         json_match = re.search(r"```json\n(\{.*?\})\n```", self.skill_text, re.DOTALL)
@@ -251,9 +257,26 @@ class SecurityReviewContractTests(unittest.TestCase):
         data = json.loads(json_match.group(1))
         self.assertIn("summary", data)
         self.assertIn("counts", data)
-        self.assertIn("go_domains", data)
+        # Stack-neutral key: a CI consumer must not branch on language to read the result.
+        self.assertIn("security_domains", data)
+        self.assertNotIn("go_domains", data, "go_domains is retired; use security_domains")
         self.assertIn("findings", data)
-        self.assertEqual(data["go_domains"]["total"], 10)
+        self.assertEqual(data["security_domains"]["total"], 10)
+        # Multi-language and audit context must be machine-readable too.
+        self.assertIn("stack", data)
+        self.assertIn("asvs_version", data)
+        self.assertIn("active_verification", data)
+        self.assertIn(data["active_verification"], ("permitted", "not_permitted"))
+
+    def test_asvs_mappings_are_version_pinned(self) -> None:
+        """A bare `V4` does not identify a requirement: ASVS 5.0.0 renumbered 4.x chapters."""
+        json_match = re.search(r"```json\n(\{.*?\})\n```", self.skill_text, re.DOTALL)
+        data = json.loads(json_match.group(1))
+        for finding in data["findings"]:
+            self.assertRegex(
+                finding["asvs"], r"ASVS \d+\.\d+\.\d+ V\d",
+                "ASVS mappings must be version-pinned (e.g. 'ASVS 4.0.3 V4.1.2')",
+            )
 
     def test_risk_acceptance_requires_approval(self) -> None:
         self.assertIn("VP-level", self.skill_text)
@@ -264,8 +287,12 @@ class SecurityReviewContractTests(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_automation_commands_present(self) -> None:
+        """Commands live in the policy reference; SKILL.md keeps the execution policy."""
+        policy = (SKILL_DIR / "references" / "authorization-and-policy.md").read_text()
         for cmd in ("rg -n", "go test -race", "gosec", "govulncheck"):
-            self.assertIn(cmd, self.skill_text, f"automation command {cmd!r} missing")
+            self.assertIn(cmd, policy, f"automation command {cmd!r} missing from policy ref")
+        self.assertIn("authorization-and-policy.md", self.skill_text,
+                      "SKILL.md must route to the command reference")
 
     def test_tool_interpretation_rules(self) -> None:
         self.assertIn("Tool Interpretation Rules", self.skill_text)
@@ -316,14 +343,17 @@ class SecurityReviewContractTests(unittest.TestCase):
         self.assertIn("transitive", anti.lower(), "AE-7 transitive call path rule missing")
 
     def test_na_judgment_examples_section_exists(self) -> None:
-        """N/A Judgment Examples section must be present with a verdict table."""
-        self.assertIn("N/A Judgment Examples", self.skill_text)
-        na_start = self.skill_text.index("N/A Judgment Examples")
-        na_section = self.skill_text[na_start : na_start + 1000]
-        self.assertIn("N/A", na_section)
-        self.assertIn("Rationale", na_section)
-        # At least one row showing a valid N/A domain
-        self.assertIn("Randomness safety", na_section)
+        """N/A judgment table lives in the policy reference; the anti-pattern rule stays inline."""
+        policy = (SKILL_DIR / "references" / "authorization-and-policy.md").read_text()
+        self.assertIn("N/A` Judgment Examples", policy)
+        start = policy.index("N/A` Judgment Examples")
+        section = policy[start : start + 1500]
+        self.assertIn("Rationale", section)
+        self.assertIn("Randomness safety", section)
+        self.assertRegex(self.skill_text, r"`?N/A`? judgments",
+                         "SKILL.md must route to the N/A examples")
+        self.assertRegex(self.skill_text, r"(?i)anti-pattern.*`N/A`|`N/A`.*trigger signals",
+                         "the N/A anti-pattern rule must stay inline in SKILL.md")
 
     # ------------------------------------------------------------------
     # Issue 5: Finding Volume Cap
@@ -345,7 +375,25 @@ class SecurityReviewContractTests(unittest.TestCase):
         for label in ("`introduced`", "`pre-existing`", "`uncertain`"):
             self.assertIn(label, self.skill_text, f"Origin label {label!r} missing")
         self.assertIn("Must fix before merge", self.skill_text)
-        self.assertIn("do NOT block merge", self.skill_text)
+        self.assertIn("do not block merge", self.skill_text)
+
+    def test_pre_existing_default_has_documented_overrides(self) -> None:
+        """"pre-existing → don't block" is an org policy call, not a security clearance. The
+        skill must name the cases where it is void, or it reads as blanket permission to ship
+        a known P0."""
+        self.assertRegex(
+            self.skill_text, r"(?i)void",
+            "the pre-existing merge default must state when it does not apply",
+        )
+        for override in ("release vehicle", "widens the attack surface", "same\n  file/function|same file/function"):
+            self.assertRegex(
+                self.skill_text, override,
+                f"missing pre-existing block override: {override}",
+            )
+        self.assertRegex(
+            self.skill_text, r"(?i)never present .pre-existing. as a reason",
+            "must forbid using 'pre-existing' as a risk-acceptance argument",
+        )
 
     # ------------------------------------------------------------------
     # Issue 7: Gate C — independent contract test

@@ -20,6 +20,7 @@ Find exploitable risks early, provide concrete fixes, and keep recommendations p
 | Review Python / FastAPI / Django code | Load `references/lang-python.md` + `references/scenario-checklists.md` |
 | Calibrate severity (P0–P3) or confidence | Load `references/severity-calibration.md` |
 | Suppress a false positive correctly | §False-Positive Suppression Rules |
+| Send any request / run a scanner against a live target | §Active Verification Authorization Gate (**default deny**) |
 
 ## Review Principles
 
@@ -30,6 +31,10 @@ Find exploitable risks early, provide concrete fixes, and keep recommendations p
 - Map findings to standards for auditability.
 - If evidence is missing, state `Not found in repo`.
 - Fail closed: if a mandatory gate cannot be executed, state it explicitly and do not claim full coverage.
+- **Authorization before action**: static review always; touching a running system only under
+  §Active Verification Authorization Gate. Default deny.
+- **Execution integrity**: never present a command you did not run as if you had. Label
+  unexecuted reproducers explicitly.
 
 ## Evidence Confidence (Mandatory)
 
@@ -109,21 +114,13 @@ When Lite is selected, record: `Review depth: Lite (N files changed, no security
 
 ### Fast Pass (Lite Only)
 
-If ALL conditions are met during Lite triage:
+If Lite triage finds **all** of: 10 Gate D domains `N/A`, 11 scenario checklists `N/A`, clean
+secret sweep, and no constructor/acquisition calls in Gate A — output a condensed report
+instead of the full Output Contract: review depth + rationale, the line
+`Fast Pass: all domains N/A, all scenarios N/A, no findings.`, a JSON summary with
+`pass: true` and zero counts, and the Gate F list (may be empty). All four are mandatory.
 
-1. All 10 Gate D domains classify as N/A
-2. All 11 scenario checklists classify as N/A
-3. Secret pattern sweep is clean
-4. No constructor/acquisition calls found in Gate A
-
-Then output a condensed report instead of the full Output Contract:
-
-- Review depth + rationale (mandatory)
-- `Fast Pass: all domains N/A, all scenarios N/A, no findings.`
-- JSON summary with `pass: true` and zero counts (mandatory)
-- Gate F uncovered risk list (mandatory, may be empty)
-
-This avoids verbose N/A tables for truly benign changes while preserving audit traceability.
+This avoids verbose N/A tables for benign changes while preserving audit traceability.
 
 ## Fixed Process + Mandatory Gates
 
@@ -160,17 +157,9 @@ Rules:
 - Do not mark `N/A` if there is any trigger signal (relevant imports, touched config, related middleware, DB/crypto/TLS paths, dependency changes).
 - Domain-specific reproducer/tests are required only for `Applicable` domains with findings.
 
-#### N/A Judgment Examples
-
-| Domain | Scenario | Verdict | Rationale |
-|--------|----------|---------|-----------|
-| Randomness safety | Change adds a new CLI `--dry-run` flag; no token/session/nonce code touched | `N/A` | No import of `math/rand` or `crypto/rand` in changed files or callers |
-| Injection + SQL | Change updates a Markdown documentation file only | `N/A` | No `.go` files changed; no SQL/exec/template paths reachable |
-| TLS safety | Change modifies HTTP handler logic but no TLS config, `http.Client`, or dial code touched | `N/A` | No `tls.Config`, `InsecureSkipVerify`, or custom transport in changed scope |
-| Concurrency safety | Change adds a pure function with no shared state, goroutines, or channels | `N/A` | Function is stateless; no `go` keyword, `sync.*`, or channel ops in diff |
-| Container security | No Dockerfile, K8s manifests, or CI pipeline files in changed scope | `N/A` | `git diff --name-only` shows no infra/deploy files |
-
 **Anti-pattern**: marking a domain `N/A` when imports or adjacent call paths contain trigger signals (e.g., `database/sql` imported → Domain 2 must be `Applicable`).
+
+→ Worked `N/A` judgments with rationales: `references/authorization-and-policy.md` §6.
 
 ## Mandatory Gate Definitions
 
@@ -251,7 +240,14 @@ Each item must include:
 Classify each finding's origin relative to the current code change:
 
 - **`introduced`**: defect resides in code added or modified by this change. **Must fix before merge.**
-- **`pre-existing`**: defect found in unchanged code that came into scope via call paths. **File a follow-up issue; do NOT block merge.** Pre-existing P0/P1 still require immediate escalation regardless of origin.
+- **`pre-existing`**: defect found in unchanged code that came into scope via call paths.
+  Default: **file a follow-up issue and do not block merge** — a change should not be held
+  hostage to unrelated debt. This default is a *recommendation to the owning team*, not a
+  security clearance, and it is **void** (recommend blocking + escalate) when the finding is
+  `P0` or an actively-exploited `P1`, when this change widens the attack surface on it, when
+  this merge is the release vehicle that ships it, or when the defect sits in the same
+  file/function being modified. Never present "pre-existing" as a reason the risk is
+  acceptable. → `references/authorization-and-policy.md` §5.
 - **`uncertain`**: diff boundaries are ambiguous. Use `git blame` to resolve; treat as `introduced` if unresolvable.
 
 Add `**Origin:**` to each finding's output. Use diff hunks as primary classification signal.
@@ -279,25 +275,62 @@ These are structured examples of review mistakes this skill is designed to preve
 
 ## Scenario Checklists
 
-Run applicable scenarios from the full 11-scenario checklist:
+Classify all 11 as `Applicable` or `N/A`, then run the applicable ones:
 
-1. **Authentication / Authorization** — auth on routes, authz before ops, IDOR, token lifecycle.
-2. **Input Validation / Injection / Uploads** — schema rules, parameterized SQL, path traversal, upload controls, Go injection sinks.
-3. **Session / JWT / Cookie / CSRF** — JWT validation, `alg=none` rejection, cookie flags, CSRF.
-4. **New Endpoints and Error Surface** — authn/authz strategy, error leakage, CORS, idempotency, Go-specific (`MaxBytesReader`, timeouts).
-5. **Secrets / Crypto / Key Management** — no hardcoded secrets, env-only loading, bcrypt/argon2id, constant-time compare.
-6. **Payment / Financial Transitions** — server-side validation, replay protection, transaction boundaries, balance concurrency.
-7. **Sensitive Data Storage / Transmission** — TLS, field masking, encryption-at-rest, response minimization.
-8. **Third-Party Integrations** — timeout/retry bounds, signature verification, SSRF-safe URL, fail-safe behavior.
-9. **Supply Chain / Dependency / Build Path** — `govulncheck`, `gosec`, dependency pinning.
-10. **Container / Deployment Security** — Dockerfile non-root, image pinning, K8s securityContext, NetworkPolicy, CI secret store.
-11. **Concurrency Safety as Security Risk** — TOCTOU, double-spend race, concurrent map crash, `go test -race`.
+1. Authentication / Authorization · 2. Input Validation / Injection / Uploads ·
+3. Session / JWT / Cookie / CSRF · 4. New Endpoints and Error Surface ·
+5. Secrets / Crypto / Key Management · 6. Payment / Financial Transitions ·
+7. Sensitive Data Storage / Transmission · 8. Third-Party Integrations ·
+9. Supply Chain / Dependency / Build Path · 10. Container / Deployment Security ·
+11. Concurrency Safety as Security Risk
 
-> **Reference**: See `references/scenario-checklists.md` for the full checklist with per-item details and Go-specific subsections.
+> **Reference**: `references/scenario-checklists.md` has the per-item details and the
+> stack-specific subsections. Load it for every Standard/Deep review.
+
+## Active Verification Authorization Gate (Mandatory Before Any Request)
+
+This skill can issue network requests (`curl`) and run scanners. **A tool grant is not an
+authorization.** Everything below is *static* analysis by default; sending a single request to
+a target you were not authorized to test is unauthorized activity, regardless of intent.
+
+Before any command that touches a running system, record this three-line block:
+
+```
+Active verification: permitted | NOT permitted
+Target: <host/URL or "none">
+Basis: <who authorized it, or which local/test environment it is>
+```
+
+**Default deny.** If you cannot fill in `Basis` from what the user actually told you,
+`Active verification` is `NOT permitted`. Do not infer authorization from the presence of a
+hostname in the code, a `.env` file, a README, or a CI config.
+
+Always allowed: reading code/config/diffs, static scanners on local source, local test runs,
+and requests to `127.0.0.1`/`localhost` or a container you started.
+
+Never without explicit authorization: any request to a host you did not stand up (including
+read-only `GET` to staging/production), authenticating with credentials found in the repo, or
+scanning a third party. Ambiguous targets — `.test`/`.local` domains, a shared dev cluster, a
+hostname in a compose file you did not launch — count as **not permitted**; ask first.
+
+When authorized: non-destructive read-only probes only; production is static-only unless
+explicitly authorized with a change window; demonstrate rather than enumerate; use only
+test accounts the user provided; log every request in `Automation Evidence`; stop on any
+unexpected impact.
+
+A `confirmed` P0/P1 does **not** require executing anything — static proof of the path is
+sufficient. Provide the reproducer as **unexecuted instructions** labelled
+`Reproducer (NOT executed — no authorization to test)`, against a non-routable placeholder
+target. Never describe a command you did not run as if you had.
+
+→ Full rules (destructive payloads, credentials, rate limits, production policy):
+`references/authorization-and-policy.md` §1.
 
 ## Focused Automation Gate
 
 Run when tools are available; never claim results without running commands.
+**Prerequisite: the Active Verification Authorization Gate above.** Everything in this
+section except the local static commands requires `Active verification: permitted`.
 
 Execution policy:
 
@@ -307,34 +340,46 @@ Execution policy:
   - If security-sensitive Go code changed, run `gosec` on affected scope (or full repo when scope is unclear).
 - If a scanner is skipped because the domain is `N/A`, record that explicitly in `Automation Evidence`.
 
-```bash
-# secret pattern sweep
-rg -n "(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY-----|ghp_[A-Za-z0-9]{36}|xox[baprs]-|AIza[0-9A-Za-z\-_]{35}|password\s*=|secret\s*=|token\s*=)" .
-
-# Go race detector on changed packages (mandatory for Standard/Deep if tests exist)
-go test -race -count=1 ./path/to/changed/...
-
-# Go security scanners
-gosec ./...
-govulncheck ./...
-
-# Optional cross-check: module exposure view (may include unreachable vulns)
-govulncheck -mode=binary ./...
-```
+→ Exact commands (secret sweep regex, `go test -race`, `gosec`, `govulncheck` source and
+binary mode): `references/authorization-and-policy.md` §7.
 
 ### Tool Interpretation Rules (Mandatory)
 
-- `go test -race`: any race detected is at least `P2`; races on auth/balance/permission state are `P1` (CWE-367). Report goroutine stacks from race output.
+- `go test -race`: a detected race is always a **defect to fix**, but its *security* severity depends on what races. Races on auth/permission/balance/quota state are `P1` (CWE-367). Races on request-scoped state an attacker can drive concurrently are `P2`. A race confined to test scaffolding, metrics counters, or log buffers is `P3` or reliability-only — say which, and why. Report goroutine stacks from race output.
 - `gosec`: report rule ID, location, and whether finding is exploitable on reachable paths.
 - `govulncheck` source mode: call-trace reachable vulns are high confidence (`confirmed/likely`).
-- `govulncheck -mode=binary`: treat as exposure signal only; do not mark `confirmed` without source reachability or equivalent proof.
-- Any suppressed `nolint:gosec` requires explicit rationale review; missing rationale is at least `P3` hardening gap.
+- `govulncheck -mode=binary <path-to-binary>`: exposure signal only; do not mark `confirmed` without source reachability or equivalent proof. Binary mode has no call-graph, so it over-reports. It also accepts only a built artifact — passing a package pattern is an error, not a scan.
+- Any suppressed `nolint:gosec` requires rationale review. Judge the **suppressed rule**, not the missing comment: if the underlying gosec finding is exploitable, report it at its own severity. If it is a genuine false positive, an absent rationale is a process/hygiene note, not a security finding — record it under `Hardening suggestions`, not as `P3`. Only treat it as `P3` when the suppression hides a real defense gap you cannot fully assess.
 
 ## Language/Framework Extension Hooks
-Replace Go Gate D with the stack-specific reference; all other gates unchanged. See `references/reference-index.md` for per-language loading details.
+
+Gate D's **10 domains are stack-independent** — they are the review axes, not Go features.
+Only the sink/idiom reference you load changes per stack. Detect the stack from manifests
+(`go.mod`, `package.json`, `pom.xml`/`build.gradle`, `pyproject.toml`/`requirements.txt`), load
+the matching reference plus `scenario-checklists.md`, evaluate the **same 10 domains**, and
+record `stack` in the JSON and the coverage header.
+
+A non-Go stack must not report `N/A` for all ten domains merely because the repo is not Go —
+that is a coverage failure, not an exemption. Multi-stack repos emit one coverage section per
+stack; a domain is `FAIL` for the repo if it fails in any stack.
+
+→ Detection table, Domain 2 generalisation, and multi-stack JSON shape:
+`references/authorization-and-policy.md` §2.
 
 ## Standards Mapping (Mandatory)
-Map each finding to `CWE-xxx` and `OWASP ASVS` when applicable. Use `Mapping: TBD` if unclear.
+
+Map each finding to `CWE-xxx` and OWASP ASVS. Use `Mapping: TBD` if unclear.
+
+**Pin the ASVS version in every mapping.** ASVS 5.0.0 reorganised and renumbered the chapters
+4.x used, so a bare `V4` or `V4.1.2` does not identify a requirement — it does not say which
+standard it belongs to. Write IDs fully qualified (`ASVS 4.0.3 V4.1.2`), declare
+`"asvs_version"` once in the JSON block, and use exactly one version per report.
+
+The lookup table in `references/security-review.md` is **4.0.3 chapter numbers**. If the
+project audits against 5.0.0, resolve IDs from the 5.0.0 document — never renumber by guessing;
+`Mapping: TBD` beats a plausible-but-wrong requirement ID.
+
+→ Version-pinning rules: `references/authorization-and-policy.md` §3.
 
 ## Output Contract
 
@@ -343,7 +388,7 @@ Return outputs in this order. Fields are graded MUST / SHOULD / MAY per review d
 | # | Section | Lite | Standard | Deep |
 |---|---------|------|----------|------|
 | 1 | **Findings** (P0 → P3) | MUST | MUST | MUST |
-| 2 | **Go 10-Domain Coverage** | MUST (triage only) | MUST (full) | MUST (full) |
+| 2 | **Security Domain Coverage** (10 domains, per detected stack) | MUST (triage only) | MUST (full) | MUST (full) |
 | 3 | **Automation Evidence** | MUST (secret sweep only) | MUST | MUST |
 | 4 | **Open questions / assumptions** | MAY | MUST | MUST |
 | 5 | **Risk Acceptance Register** | MAY | MUST | MUST |
@@ -354,58 +399,34 @@ Return outputs in this order. Fields are graded MUST / SHOULD / MAY per review d
 
 ### 1) Findings (P0 -> P3)
 
-Each finding includes:
+Each finding includes: Title · Severity · Confidence (`confirmed/likely/suspected`) ·
+Mapping (`CWE` / version-pinned `ASVS`) · File/line · Exploit path · Impact ·
+Minimal reproducer · Recommended fix · Suggested regression/negative test ·
+Baseline status (`new/regressed/unchanged`) · Origin (`introduced | pre-existing | uncertain`).
 
-- Title
-- Severity
-- Confidence (`confirmed/likely/suspected`)
-- Mapping (`CWE` / `OWASP ASVS`)
-- File/line
-- Exploit path
-- Impact
-- Minimal reproducer (required for confirmed P0/P1)
-- Recommended fix
-- Suggested regression/negative test
-- Baseline status (`new/regressed/unchanged`)
-- Origin (`introduced | pre-existing | uncertain`)
+The reproducer is required for confirmed P0/P1, but may be **unexecuted instructions** when
+active verification is not authorized — label it as such; never fake execution.
 
-#### One-Shot Finding Example
-
-> **SEC-001: IDOR — Any authenticated user can access other users' orders**
->
-> - **Severity**: P1 High
-> - **Confidence**: confirmed
-> - **Mapping**: CWE-639 (Authorization Bypass Through User-Controlled Key) / OWASP ASVS V4.1.2
-> - **File/line**: `internal/handler/order.go:47`
-> - **Exploit path**: `GET /api/orders/:id` extracts `id` from URL path and passes it directly to `repo.GetOrder(id)` without verifying `order.UserID == ctx.UserID()`. Any authenticated user can read any order by iterating IDs.
-> - **Impact**: Full horizontal privilege escalation on order data (PII, payment amounts, addresses).
-> - **Reproducer**:
->   ```bash
->   # User A's token, requesting User B's order
->   curl -H "Authorization: Bearer <tokenA>" https://api.example.com/api/orders/ORDER-9999
->   # Returns 200 with User B's order details
->   ```
-> - **Recommended fix**:
->   ```go
->   order, err := h.repo.GetOrder(ctx, orderID)
->   if err != nil { ... }
->   if order.UserID != auth.UserIDFrom(ctx) {
->       return echo.NewHTTPError(http.StatusNotFound, "order not found")
->   }
->   ```
->   Return 404 (not 403) to avoid confirming the order exists.
-> - **Regression test**: Add `TestGetOrder_CrossUser_Returns404` — create order as User A, request as User B, assert 404.
-> - **Baseline status**: new
-> - **Origin**: introduced
+→ Fully worked finding (IDOR, all fields populated, unexecuted reproducer, 404-not-403 fix):
+`references/security-review.md` §One-Shot Finding Example.
 
 #### Finding Volume Cap
 
 - **P0/P1**: Always fully reported. Volume cap does not apply to P0/P1.
-- **P2/P3 soft cap by depth**: Lite ≤ 3, Standard ≤ 5, Deep ≤ 8 lower-severity findings.
-- **Overflow**: move lowest-priority P2/P3 overflow to `§9 Uncovered Risk List` as one-line summaries. Record `counts.overflow` in the JSON block.
+- **P2/P3 soft cap by depth**: Lite ≤ 3, Standard ≤ 5, Deep ≤ 8 detailed lower-severity findings.
+- **Overflow goes to a `Condensed Findings` subsection of §1 — never to §9.** List each
+  overflow item as one line (`ID — severity — title — file:line`), still inside Findings, and
+  record `counts.overflow` in the JSON block.
 - P0/P1 findings are never dropped by volume cap.
 
-### 2) Go 10-Domain Coverage (Required for Go repos)
+**§1 and §9 are disjoint.** §9 means *"scope I did not inspect"*; a confirmed P2 is the
+opposite — inspected, understood, real. Filing findings there corrupts the section readers use
+to judge review coverage. The cap limits **detail**, not disclosure: every finding stays
+visible in §1. → `references/authorization-and-policy.md` §4.
+
+### 2) Security Domain Coverage (Required for every stack)
+
+Header must name the stack, e.g. `Security Domain Coverage — stack: nodejs`.
 
 - Domains 1..10 with `PASS/FAIL/N/A`
 - Applicability per domain (`Applicable` or `N/A` with reason)
@@ -445,50 +466,35 @@ Also output a compact JSON block for CI/inbox ingestion:
 
 ```json
 {
-  "summary": {
-    "pass": false,
-    "score": "10/14",
-    "baseline": "present"
-  },
-  "counts": {
-    "p0": 0,
-    "p1": 1,
-    "p2": 2,
-    "p3": 1
-  },
-  "changes": {
-    "new": 2,
-    "regressed": 1,
-    "unchanged": 1,
-    "resolved": 0
-  },
-  "go_domains": {
-    "required": true,
-    "total": 10,
-    "pass": 7,
-    "fail": 2,
-    "na": 1
-  },
+  "summary": { "pass": false, "score": "10/14", "baseline": "present" },
+  "counts": { "p0": 0, "p1": 1, "p2": 2, "p3": 1, "overflow": 0 },
+  "changes": { "new": 2, "regressed": 1, "unchanged": 1, "resolved": 0 },
+  "stack": "go",
+  "asvs_version": "4.0.3",
+  "active_verification": "not_permitted",
+  "security_domains": { "required": true, "total": 10, "pass": 7, "fail": 2, "na": 1 },
   "findings": [
     {
-      "id": "SEC-001",
-      "severity": "P1",
-      "confidence": "confirmed",
-      "status": "new",
-      "cwe": "CWE-639",
-      "asvs": "V4",
+      "id": "SEC-001", "severity": "P1", "confidence": "confirmed", "status": "new",
+      "origin": "introduced", "cwe": "CWE-639", "asvs": "ASVS 4.0.3 V4.1.2",
       "file": "internal/handler/account.go:88"
     }
   ]
 }
 ```
 
+`security_domains` uses the same key for every stack — a consumer must never branch on
+language to read the result (there is no `go_domains` key). `stack` may be a comma-joined list;
+`active_verification` mirrors the authorization gate so CI can tell whether findings were
+established statically or dynamically.
+
+→ Full field rules and the multi-stack `per_stack` shape:
+`references/authorization-and-policy.md` §2.
+
 ### 8) Hardening suggestions
 
 ### 9) Uncovered Risk List (Mandatory)
 
-## Load References Selectively
-→ See `references/reference-index.md` for the full loading guide by depth and stack.
-
-## Bundled Assets
-→ See `references/reference-index.md` for the full asset inventory.
+## Load References Selectively / Bundled Assets
+→ See `references/reference-index.md` for the loading guide by depth and stack, and the full
+asset inventory.

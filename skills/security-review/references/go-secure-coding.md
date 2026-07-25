@@ -1,6 +1,36 @@
 # Security Review — Go Secure-Coding Reference
 
-This reference provides deep details for Gate B (resource inventory) and Gate D (10-domain coverage) when reviewing Go code.
+Deep details for Gate B (resource inventory) and Gate D (10-domain coverage) in Go code.
+This file is long — jump to the section you need rather than reading top to bottom.
+
+## Contents
+
+**Gate B — Resource Inventory** ([§](#gate-b-go-resource-inventory--extended-details))
+- Key Invariant (severity depends on attacker reachability, not on the leak existing)
+- Deferred Cleanup Anti-Patterns
+
+**Gate D — 10 Domains** ([§](#gate-d-10-domain-deep-reference))
+
+| # | Domain | Look for |
+|---|--------|----------|
+| 1 | Randomness Safety | `math/rand` in tokens/session/nonce |
+| 2 | Injection + SQL Lifecycle | concatenated SQL, `rows.Close()` |
+| 3 | Sensitive Data Handling | logging/serialising PII and credentials |
+| 4 | Secret/Config Management | hardcoded secrets, env loading |
+| 5 | TLS Safety | `MinVersion`, `InsecureSkipVerify` |
+| 6 | Crypto Primitive Correctness | password hashing, constant-time compare |
+| 7 | Concurrency Safety | TOCTOU, races on auth/balance state |
+| 8 | Go-Specific Injection Sinks | `text/template`, `exec`, redirect, path, **Go XML facts** |
+| 9 | Static Scanner Posture | `gosec` triage, `nolint` rationale |
+| 10 | Dependency Posture | `govulncheck` source vs binary mode |
+
+**Extended BAD/GOOD Patterns** ([§](#extended-security-patterns--badgood-code-reference))
+AuthN/AuthZ · SSRF · XSS · CORS · Rate Limiting · HTTP Security Headers ·
+Timing Attacks · Input Validation & Deserialization · Path Traversal · Open Redirect
+
+> The GOOD examples in the SSRF and timing-attack sections are mirrored as executable code
+> under `scripts/tests/examples/` and verified by `scripts/tests/test_examples_executable.py`.
+> If you change one, change both — the test enforces it.
 
 ---
 
@@ -24,7 +54,21 @@ Perform a full resource lifecycle scan for at least:
 
 ### Key Invariant
 
-Resource is closed/released on both success and error paths. Any violation is at least `P2`.
+Resource is closed/released on both success and error paths.
+
+**Severity depends on reachability, not on the leak's existence.** A leak is a *security*
+finding when an attacker can drive it; otherwise it is a reliability defect and belongs in a
+code-quality review, not here.
+
+| Situation | Severity |
+|---|---|
+| Leak on a path an unauthenticated caller can trigger repeatedly (request handler, retry loop) | `P2` — resource exhaustion → DoS |
+| Leak reachable only via an authenticated, rate-limited, or admin-only path | `P3` |
+| Leak on a startup/one-shot/CLI path that runs a bounded number of times, or in a process that exits immediately after | **Not a security finding** — report as reliability, or suppress with Rule 2 |
+| Leak already bounded upstream (pool cap with a hard timeout, request-scoped context that forces release) | Suppressed (Rule 1), note residual risk |
+
+State the attacker-reachability reason in the finding. "Missing `rows.Close()`" alone is not a
+severity justification.
 
 ### Deferred Cleanup Anti-Patterns
 
@@ -149,7 +193,32 @@ Any race: at least `P2`. Race on auth/balance/permission state: `P1` (CWE-367).
 | `net/http.Redirect(w, r, userURL, 302)` | Open redirect | Validate URL against allowlist or force relative path |
 | `filepath.Join(base, userInput)` | Path traversal | Check `strings.HasPrefix(filepath.Clean(result), base)` |
 | `encoding/json.Decoder` unbounded | DoS | Use `http.MaxBytesReader` or `io.LimitReader` |
-| `xml.NewDecoder` on untrusted input | Billion-laughs DoS | Set `d.MaxDepth` (Go 1.24+) or limit input size |
+| `xml.NewDecoder` on untrusted input | Memory exhaustion from large/deep input | Bound input with `http.MaxBytesReader`/`io.LimitReader`. **Do not** look for a decoder depth knob — see below |
+
+#### Go XML: what actually applies (and what does not)
+
+Do not port Java/Python XML advice to Go. Verified against the toolchain:
+
+| Classic XML attack | Applies to Go `encoding/xml`? | Why |
+|---|---|---|
+| XXE (external entity → file read/SSRF) | **No** | Go never resolves external entities. `<!ENTITY x SYSTEM "file:///etc/passwd">` yields `XML syntax error: invalid character entity &x;` |
+| Billion laughs (entity expansion) | **No** | Go does not expand DTD-declared entities at all — same `invalid character entity` error |
+| Deeply-nested-element DoS | **Already mitigated** | `encoding/xml` enforces a **built-in, non-configurable** unmarshal depth cap; depth 10001 returns `exceeded max depth` |
+| Large-payload memory exhaustion | **Yes** | This is the real Go XML risk, and the only one you must fix in code |
+
+Consequences for review:
+
+- **There is no `xml.Decoder.MaxDepth` field** in any Go version — `d.MaxDepth = N` fails to
+  compile with `undefined (type *xml.Decoder has no field or method MaxDepth)`. Never
+  recommend it, and flag it as an error if a diff adds it.
+- Reporting "XXE" or "billion laughs" against stdlib `encoding/xml` is a **false positive**
+  (Suppression Rule 3 — the parser structurally cannot reach the sink). Record it as
+  suppressed with this reason.
+- Do report missing input bounds: `xml.NewDecoder(r.Body)` without
+  `http.MaxBytesReader` is the same finding class as the `encoding/json` row above.
+- **These exemptions are stdlib-only.** If the repo uses a cgo binding to libxml2/expat, or
+  another XML library that honours DTDs, the classic attacks are live again — check the
+  library's entity-resolution settings and treat it as `Applicable`.
 
 ### Domain 9 — Static Scanner Posture
 
@@ -160,7 +229,7 @@ Any race: at least `P2`. Race on auth/balance/permission state: `P1` (CWE-367).
 ### Domain 10 — Dependency Vulnerability Posture
 
 - `govulncheck ./...` (source mode): call-trace reachable vulns are `confirmed/likely`.
-- `govulncheck -mode=binary`: exposure signal only; do not mark `confirmed` without source reachability.
+- `govulncheck -mode=binary <path-to-binary>`: exposure signal only; do not mark `confirmed` without source reachability. Requires a built artifact — `-mode=binary ./...` errors with `"./..." is not a file`.
 - Remediation path: upgrade available → `P2`; no fix available → note in `Uncovered Risk List`.
 
 ---
@@ -301,15 +370,66 @@ func ProxyHandler(w http.ResponseWriter, r *http.Request) {
     io.Copy(w, resp.Body)
 }
 
-// GOOD: allowlist + block private IPs
+// ALSO BAD (the common "fixed" version): resolve-then-dial-by-name.
+// LookupIPAddr validates the IPs, then DialContext is handed the HOSTNAME again, so the
+// resolver runs a SECOND time. An attacker whose DNS answer changes between the two
+// lookups (DNS rebinding) passes the check and connects somewhere else entirely.
+func unsafeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+    host, _, _ := net.SplitHostPort(addr)
+    ips, err := net.DefaultResolver.LookupIPAddr(ctx, host) // check
+    if err != nil {
+        return nil, err
+    }
+    for _, ip := range ips {
+        if ip.IP.IsLoopback() || ip.IP.IsPrivate() {
+            return nil, fmt.Errorf("blocked %s", ip.IP)
+        }
+    }
+    return (&net.Dialer{}).DialContext(ctx, network, addr) // use — resolves AGAIN
+}
+
+// GOOD: allowlist + scheme pin + redirects refused + IP validated at CONNECT time.
 var allowedHosts = map[string]bool{
-    "api.example.com":    true,
-    "cdn.example.com":    true,
+    "api.example.com": true,
+    "cdn.example.com": true,
+}
+
+// blockNonPublic runs after DNS resolution on the concrete IP about to be dialed, so
+// there is no check-then-resolve window. Dialer.Control is the hook that closes
+// DNS rebinding; a pre-dial lookup cannot.
+func blockNonPublic(network, address string, _ syscall.RawConn) error {
+    host, _, err := net.SplitHostPort(address)
+    if err != nil {
+        return err
+    }
+    ip, err := netip.ParseAddr(host)
+    if err != nil {
+        return fmt.Errorf("ssrf guard: %q is not a resolved IP", host)
+    }
+    ip = ip.Unmap() // defeat ::ffff:127.0.0.1 smuggling
+    if !ip.IsGlobalUnicast() || ip.IsPrivate() || ip.IsLoopback() ||
+        ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+        ip.IsInterfaceLocalMulticast() {
+        return fmt.Errorf("ssrf guard: blocked non-public address %s", ip)
+    }
+    return nil
+}
+
+// Reuse one client; it carries the guard, the timeout, and the redirect policy.
+var safeClient = &http.Client{
+    Timeout: 10 * time.Second,
+    // Refuse redirects outright. Following them re-opens SSRF: an allowlisted host
+    // can 302 to 169.254.169.254 and the allowlist is never consulted again.
+    CheckRedirect: func(*http.Request, []*http.Request) error {
+        return http.ErrUseLastResponse
+    },
+    Transport: &http.Transport{
+        DialContext: (&net.Dialer{Timeout: 5 * time.Second, Control: blockNonPublic}).DialContext,
+    },
 }
 
 func ProxyHandler(w http.ResponseWriter, r *http.Request) {
-    targetURL := r.URL.Query().Get("url")
-    parsed, err := url.Parse(targetURL)
+    parsed, err := url.Parse(r.URL.Query().Get("url"))
     if err != nil || !allowedHosts[parsed.Hostname()] {
         http.Error(w, "forbidden target", http.StatusForbidden)
         return
@@ -318,49 +438,40 @@ func ProxyHandler(w http.ResponseWriter, r *http.Request) {
         http.Error(w, "https only", http.StatusForbidden)
         return
     }
-
-    client := &http.Client{
-        Transport: &http.Transport{
-            DialContext: safeDialContext, // blocks private IPs
-        },
-        Timeout: 10 * time.Second,
+    req, err := http.NewRequestWithContext(r.Context(), http.MethodGet, parsed.String(), nil)
+    if err != nil {
+        http.Error(w, "bad target", http.StatusBadRequest)
+        return
     }
-    resp, err := client.Get(parsed.String())
+    resp, err := safeClient.Do(req)
     if err != nil {
         http.Error(w, "fetch failed", http.StatusBadGateway)
         return
     }
     defer resp.Body.Close()
+    if resp.StatusCode >= 300 && resp.StatusCode < 400 {
+        http.Error(w, "redirect refused", http.StatusBadGateway)
+        return
+    }
     io.Copy(w, io.LimitReader(resp.Body, 10<<20)) // 10MB limit
-}
-
-// safeDialContext rejects connections to private/loopback addresses
-func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
-    host, _, err := net.SplitHostPort(addr)
-    if err != nil {
-        return nil, err
-    }
-    ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
-    if err != nil {
-        return nil, err
-    }
-    for _, ip := range ips {
-        if ip.IP.IsLoopback() || ip.IP.IsPrivate() || ip.IP.IsLinkLocalUnicast() {
-            return nil, fmt.Errorf("blocked: resolved to private IP %s", ip.IP)
-        }
-    }
-    dialer := &net.Dialer{Timeout: 5 * time.Second}
-    return dialer.DialContext(ctx, network, addr)
 }
 ```
 
-Key checks:
-- User-controlled URLs validated against host allowlist
+Verified: this guard rejects `localhost`, `127.0.0.1`, `[::ffff:127.0.0.1]`, `169.254.169.254`
+(cloud IMDS), and `10.0.0.1` at connect time.
+
+Key checks — an allowlist alone fails **all three** of the first items:
+- IP validated at connect time via `Dialer.Control`, **not** by a pre-dial `LookupIP`
+  (a separate lookup leaves a DNS-rebinding window)
+- Redirects refused or re-validated per hop (`CheckRedirect`); an allowlisted host that
+  returns 302 otherwise bypasses the allowlist entirely
+- IPv4-mapped IPv6 unmapped before classification (`::ffff:127.0.0.1`)
+- User-controlled URLs validated against a host allowlist
 - Scheme restricted (https only or explicit allowlist)
-- DNS resolution checked for private/loopback IPs (including IPv6)
-- Response body size limited
-- Client timeout set
-- Redirect following disabled or limited (`CheckRedirect`)
+- Response body size limited; client timeout set; one shared client reused
+
+When reviewing, treat "validates the hostname against an allowlist" as **necessary but not
+sufficient**. Ask specifically: what happens on a 302, and what IP is actually connected to?
 
 ### XSS (Cross-Site Scripting)
 
