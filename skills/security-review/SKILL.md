@@ -13,8 +13,8 @@ Find exploitable risks early, provide concrete fixes, and keep recommendations p
 | If you need to… | Go to |
 |---|---|
 | Choose review depth (Lite / Standard / Deep) | §Review Depth Selection |
-| Run a fast Go security scan (skip Gate B/C/E) | Lite depth → Load `references/scenario-checklists.md` only |
-| Run a full Go security review with all gates | Standard/Deep → Load `references/go-secure-coding.md` + `references/scenario-checklists.md` |
+| Run a fast scan (skip Gate B/C/E) | Lite depth → Load `references/scenario-checklists.md` only |
+| Run a full review with all gates (Go) | Standard/Deep → Load `references/go-secure-coding.md` + `references/scenario-checklists.md` |
 | Review Node.js / TypeScript code | Load `references/lang-nodejs.md` + `references/scenario-checklists.md` |
 | Review Java / Spring code | Load `references/lang-java.md` + `references/scenario-checklists.md` |
 | Review Python / FastAPI / Django code | Load `references/lang-python.md` + `references/scenario-checklists.md` |
@@ -130,17 +130,17 @@ The following process is mandatory for Standard and Deep reviews. Lite reviews f
 2. Map trust boundaries.
 3. Run scenario checks.
 4. Run focused automation checks.
-5. Run `Gate A`: constructor-release pairing audit.
-6. Run `Gate B`: Go resource inventory scan.
-7. Run `Gate C`: third-party lifecycle contract verification.
-8. Run `Gate D`: Go secure-coding 10-domain coverage (for Go repos).
+5. `Gate A`: constructor-release pairing audit.
+6. `Gate B`: resource inventory scan (acquire/release pairs at trust boundaries, any stack).
+7. `Gate C`: third-party lifecycle contract verification.
+8. `Gate D`: 10-domain coverage against the detected stack.
 9. Verify exploitability.
-10. Run `Gate E`: second-pass falsification review.
+10. `Gate E`: second-pass falsification review.
 11. Apply suppression filter.
 12. Compare with baseline (if available).
 13. Report findings first.
 14. Provide remediation plan and risk acceptance entries.
-15. Provide `Gate F`: uncovered risk list.
+15. `Gate F`: uncovered risk list.
 
 If any mandatory gate cannot be executed, record it under `Uncovered Risk List` and downgrade confidence where applicable.
 
@@ -148,7 +148,7 @@ If any mandatory gate cannot be executed, record it under `Uncovered Risk List` 
 
 To control review cost and avoid unnecessary depth, execute in two phases:
 
-- `Phase 1 (triage)`: classify each Go domain as `Applicable` or `N/A` from changed files + adjacent call paths.
+- `Phase 1 (triage)`: classify each of the 10 domains as `Applicable` or `N/A` from changed files + adjacent call paths.
 - `Phase 2 (deep review)`: run detailed checks and domain-specific tooling only for `Applicable` domains.
 
 Rules:
@@ -173,15 +173,21 @@ For changed code and immediately related call paths, enumerate and verify pairin
 Output requirement:
 
 - Include a short pairing table in analysis notes.
-- Any missing or ambiguous pairing is at least `P2` unless proven harmless.
+- A missing or ambiguous pairing is `P2` when an attacker can drive the leak repeatedly, `P3` behind an authenticated/rate-limited path, and reliability-only on a bounded one-shot path. Never grade it on the missing `Close()` alone — see `severity-calibration.md` §Governing Rule.
 
-### Gate B: Go Resource Inventory (Mandatory for Go)
+### Gate B: Resource Inventory (Mandatory, every stack)
 
-Scan all changed code for resource acquisition without matching release. Covers: `rows`, `stmt`, `tx`, `conn`, `file`, `http.Response.Body`, `net.Listener`, driver objects, `goroutine`, `context cancel`, `io.Pipe`.
+Scan all changed code for resource acquisition without a matching release — Domain 2's lifecycle
+half. Applies to every stack; only the idioms differ: Go `defer x.Close()`/`defer cancel()`,
+Node `finally`/stream cleanup and `client.release()`, Java try-with-resources, Python `with`.
+Typical resources: DB rows/statements/transactions/sessions, connections, files, HTTP response
+bodies, listeners, background tasks/goroutines, timers, cancel functions, pipes.
 
-Key checks: closed on both success and error paths; no `defer` inside loops; goroutines have bounded lifecycle; `WithTimeout` paired with `defer cancel()`.
+Key checks: released on both success and error paths; no deferred release inside a loop;
+background tasks have a bounded lifecycle; every timeout paired with its cancel.
 
-> **Reference**: See `references/go-secure-coding.md` § Gate B for the full resource inventory table and anti-patterns.
+> **Reference**: `references/go-secure-coding.md` § Gate B has the full Go inventory table and
+> anti-patterns; the matching `lang-*.md` Domain 2 row carries the per-stack equivalents.
 
 ### Gate C: Third-Party Lifecycle Contract Verification (Mandatory)
 
@@ -191,26 +197,24 @@ When code uses driver/framework objects with non-obvious lifecycle rules (for ex
 - Cite exactly what contract was used for the decision.
 - If no contract can be verified, mark confidence at most `suspected` and list under `Uncovered Risk List`.
 
-### Gate D: Go Secure-Coding 10-Domain Coverage (Mandatory for Go)
+### Gate D: 10-Domain Coverage (Mandatory, every stack)
 
-For Go repositories, score coverage for these 10 domains:
+These names and numbers are **stack-independent** — "Domain 7" means the same thing in Go, Node,
+Java, and Python. Score all ten for every review:
 
-1. **Randomness safety** — `crypto/rand` for secrets; `math/rand` OK for non-security use.
-2. **Injection + SQL lifecycle** — parameterized SQL, `ORDER BY` allowlist, `rows.Close`/`Err`, `Commit`/`Rollback`.
-3. **Sensitive data handling** — mask logs, opaque error messages, response DTO minimization.
-4. **Secret/config management** — no hardcoded secrets, env fail-fast, `nolint:gosec` with rationale.
-5. **TLS safety** — `MinVersion >= TLS1.2`, no `InsecureSkipVerify` in production.
-6. **Crypto primitives** — bcrypt/argon2id for passwords, AEAD for encryption, `subtle.ConstantTimeCompare`.
-7. **Concurrency safety** — `go test -race` clean, no TOCTOU in auth/balance, no unsynchronized map access.
-8. **Go injection sinks** — `html/template` not `text/template`, `exec.Command` arg separation, `filepath.Join` traversal.
-9. **Static scanner posture** — `gosec` triaged, suppressed `nolint` has rationale.
-10. **Dependency posture** — `govulncheck` source-mode reachability.
+1. **Randomness Safety** · 2. **Injection & Data-Access Safety** · 3. **Sensitive Data Handling**
+· 4. **Secret / Config Management** · 5. **Transport Security** · 6. **Crypto Primitive
+Correctness** · 7. **Concurrency & Shared-State Safety** · 8. **Language-Specific Injection
+Sinks** · 9. **Static Scanner Posture** · 10. **Dependency Vulnerability Posture**
 
 Execution: D1 triage (`Applicable/N/A`) → D2 deep review on applicable domains only.
+Output: each domain `PASS/FAIL/N/A` with one-line evidence. Any `FAIL` with an exploitable path
+becomes a finding. A domain with no idiom in your stack is still judged against its canonical
+question — never omitted.
 
-Output: each domain `PASS/FAIL/N/A` with one-line evidence. Any `FAIL` with exploitable path becomes a finding.
-
-> **Reference**: See `references/go-secure-coding.md` § Gate D for detailed checks, code examples, and decision tables per domain.
+> **References**: canonical definitions and the per-stack rules in
+> `references/authorization-and-policy.md` §2; per-stack evidence in `go-secure-coding.md` or the
+> matching `lang-*.md`. Auth/authz and input validation are Scenario Checklists 1-2, not domains.
 
 ### Gate E: Second-Pass Falsification Review (Mandatory)
 
@@ -329,19 +333,16 @@ target. Never describe a command you did not run as if you had.
 ## Focused Automation Gate
 
 Run when tools are available; never claim results without running commands.
-**Prerequisite: the Active Verification Authorization Gate above.** Everything in this
-section except the local static commands requires `Active verification: permitted`.
+**Prerequisite: the Active Verification Authorization Gate above** — everything here except the
+local static commands requires `Active verification: permitted`.
 
-Execution policy:
+Policy: always run the low-cost secret sweep; run expensive scanners per `Gate D` applicability
+(dependency graph changed or third-party risk `Applicable` → the stack's vulnerability scanner;
+security-sensitive code changed → the stack's static scanner on the affected scope, or the whole
+repo when scope is unclear). A scanner skipped because its domain is `N/A` must be recorded in
+`Automation Evidence`.
 
-- Always run low-cost baseline sweep (`rg` secrets patterns).
-- Run expensive scanners according to `Gate D` applicability:
-  - If dependency/module graph changed or third-party risk is `Applicable`, run `govulncheck`.
-  - If security-sensitive Go code changed, run `gosec` on affected scope (or full repo when scope is unclear).
-- If a scanner is skipped because the domain is `N/A`, record that explicitly in `Automation Evidence`.
-
-→ Exact commands (secret sweep regex, `go test -race`, `gosec`, `govulncheck` source and
-binary mode): `references/authorization-and-policy.md` §7.
+→ Exact commands per stack: `references/authorization-and-policy.md` §7.
 
 ### Tool Interpretation Rules (Mandatory)
 
@@ -353,18 +354,13 @@ binary mode): `references/authorization-and-policy.md` §7.
 
 ## Language/Framework Extension Hooks
 
-Gate D's **10 domains are stack-independent** — they are the review axes, not Go features.
-Only the sink/idiom reference you load changes per stack. Detect the stack from manifests
-(`go.mod`, `package.json`, `pom.xml`/`build.gradle`, `pyproject.toml`/`requirements.txt`), load
-the matching reference plus `scenario-checklists.md`, evaluate the **same 10 domains**, and
-record `stack` in the JSON and the coverage header.
+Detect the stack from manifests (`go.mod`, `package.json`, `pom.xml`/`build.gradle`,
+`pyproject.toml`/`requirements.txt`), load the matching reference plus
+`scenario-checklists.md`, and evaluate the **same 10 domains** (see §Gate D). Record `stack` in
+the JSON and the coverage header. Multi-stack repos emit one coverage section per stack; a domain
+is `FAIL` for the repo if it fails in any stack.
 
-A non-Go stack must not report `N/A` for all ten domains merely because the repo is not Go —
-that is a coverage failure, not an exemption. Multi-stack repos emit one coverage section per
-stack; a domain is `FAIL` for the repo if it fails in any stack.
-
-→ Detection table, Domain 2 generalisation, and multi-stack JSON shape:
-`references/authorization-and-policy.md` §2.
+→ Detection table, Domain 2 generalisation, multi-stack JSON shape: `authorization-and-policy.md` §2.
 
 ## Standards Mapping (Mandatory)
 
@@ -412,17 +408,14 @@ active verification is not authorized — label it as such; never fake execution
 
 #### Finding Volume Cap
 
-- **P0/P1**: Always fully reported. Volume cap does not apply to P0/P1.
-- **P2/P3 soft cap by depth**: Lite ≤ 3, Standard ≤ 5, Deep ≤ 8 detailed lower-severity findings.
-- **Overflow goes to a `Condensed Findings` subsection of §1 — never to §9.** List each
-  overflow item as one line (`ID — severity — title — file:line`), still inside Findings, and
-  record `counts.overflow` in the JSON block.
-- P0/P1 findings are never dropped by volume cap.
+P0/P1 findings are never dropped by volume cap — they are always fully reported. P2/P3 soft cap by depth:
+Lite ≤ 3, Standard ≤ 5, Deep ≤ 8 *detailed* findings. **Overflow goes to a `Condensed Findings`
+subsection of §1 — never to §9** — one line each (`ID — severity — title — file:line`), with
+`counts.overflow` set in the JSON.
 
-**§1 and §9 are disjoint.** §9 means *"scope I did not inspect"*; a confirmed P2 is the
-opposite — inspected, understood, real. Filing findings there corrupts the section readers use
-to judge review coverage. The cap limits **detail**, not disclosure: every finding stays
-visible in §1. → `references/authorization-and-policy.md` §4.
+**§1 and §9 are disjoint.** §9 means *"scope I did not inspect"*; a confirmed P2 is the opposite.
+Filing findings there corrupts the section readers use to judge coverage. The cap limits
+**detail**, not disclosure. → `references/authorization-and-policy.md` §4.
 
 ### 2) Security Domain Coverage (Required for every stack)
 
@@ -483,13 +476,11 @@ Also output a compact JSON block for CI/inbox ingestion:
 }
 ```
 
-`security_domains` uses the same key for every stack — a consumer must never branch on
-language to read the result (there is no `go_domains` key). `stack` may be a comma-joined list;
+`security_domains` uses the same key for every stack — a consumer must never branch on language
+to read the result (there is no `go_domains` key). `stack` may be a comma-joined list;
 `active_verification` mirrors the authorization gate so CI can tell whether findings were
 established statically or dynamically.
-
-→ Full field rules and the multi-stack `per_stack` shape:
-`references/authorization-and-policy.md` §2.
+→ Full field rules and multi-stack `per_stack` shape: `authorization-and-policy.md` §2.
 
 ### 8) Hardening suggestions
 

@@ -1,0 +1,18 @@
+{
+  "id": "GOLDEN-021",
+  "title": "Python RCE — pickle.loads on an attacker-supplied request body",
+  "expected_finding": true,
+  "severity": "P0",
+  "category": "deserialization",
+  "stack": "python",
+  "code": "import base64, pickle\nfrom fastapi import FastAPI, Request\n\napp = FastAPI()\n\n@app.post(\"/session/restore\")\nasync def restore(request: Request):\n    body = await request.body()\n    state = pickle.loads(base64.b64decode(body))\n    return {\"restored\": list(state.keys())}",
+  "finding_pattern": "pickle",
+  "expected_domain": 8,
+  "coverage_rules": [
+    "pickle",
+    "Language-Specific Injection Sinks",
+    "eval`/`exec`/`pickle.loads` on untrusted input"
+  ],
+  "note": "Non-Go scenario: forces stack=python in the JSON and exercises the unified Domain 8 mapping. pickle.loads on untrusted input is arbitrary code execution at import of the payload — not merely a data-integrity issue, so P0 rather than P1.",
+  "reference": "references/lang-python.md"
+}

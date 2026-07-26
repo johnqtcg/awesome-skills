@@ -65,6 +65,7 @@ Maps each core rule/gate in SKILL.md to its golden fixture and contract test. Us
 | GOLDEN-016 | SSRF via user-controlled URL in http.Client | ssrf | P1 | SSRF, allowlist, private IPs |
 | GOLDEN-017 | Timing attack via == on API key | crypto | P2 | subtle.ConstantTimeCompare, Timing Attacks |
 | GOLDEN-018 | Integer overflow in financial calculation | injection | P1 | Integer overflow, financial calculation |
+| GOLDEN-021 | **Python** RCE via `pickle.loads` on request body | deserialization | P0 | pickle, Domain 8 (Language-Specific Injection Sinks) |
 
 ### False Positives (should be suppressed)
 
@@ -80,12 +81,32 @@ Maps each core rule/gate in SKILL.md to its golden fixture and contract test. Us
 
 | Metric | Count |
 |--------|-------|
-| Total golden fixtures | 20 |
-| True positives | 15 |
+| Total golden fixtures | 21 |
+| True positives | 16 |
 | False positives | 5 |
 | Categories covered | auth, secrets, injection, concurrency, resource_lifecycle, session, container, endpoint, ssrf, crypto |
-| Contract tests | 46 |
-| SKILL.md lines | 494 (budget: ≤ 500) |
+| Contract tests | 55 |
+| Golden-fixture tests | 26 |
+| Executable-example tests | 42 |
+| Forward-eval tests | 18 |
+| **Total tests** | **141** |
+| SKILL.md lines | 491 (budget: ≤ 500, 9 lines headroom) |
+
+These counts are **self-checking** — `test_skill_contract.py::TestCoverageDocAccuracy` recomputes
+them from disk and fails if this table drifts. They previously read 46 tests / 494 lines while the
+real values were 48 / 500.
+
+## Test Layers
+
+| Layer | File | Validates | Blind to |
+|---|---|---|---|
+| 1. Contract | `test_skill_contract.py` | documents contain the required rules and do not contradict each other | whether following them finds anything |
+| 2. Golden fixtures | `test_golden_reviews.py` | fixture metadata complete; rule strings present in docs | the review itself |
+| 3. Executable examples | `test_examples_executable.py` | GOOD example code compiles **and is actually safe** (SSRF guard blocks, `os.Root` contains, XML facts hold) | the review itself |
+| 4. **Forward eval** | `test_forward_eval.py` | a graded **review**: finds the real bug, suppresses the false positive, correct severity/confidence/CWE/pinned-ASVS, stack-neutral JSON, no fabricated execution | whether a *live* model passes — that needs the opt-in hook |
+
+Layer 4 is the answer to "does the skill actually work?"; layers 1-3 only answer "is the skill
+well-formed?". See `forward_eval/README.md` for the honesty boundary.
 
 ## Gap Analysis
 

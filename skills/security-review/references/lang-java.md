@@ -1,21 +1,41 @@
 # Security Review — Java / Spring Extension
 
-Replace Go-specific Gate D domains with these checks for Java/Spring services. All other gates (A-C, E-F), scenario checklists, severity model, and output contract remain unchanged.
+Java/Spring idioms for the **same ten Gate D domains** — numbering and names are
+stack-independent and defined once in `authorization-and-policy.md` §2. This file supplies the
+Java-specific evidence for each; it does not replace or renumber them. All other gates (A-C,
+E-F), scenario checklists, severity model, and output contract are unchanged.
+
+## Contents
+[Domain Checklist](#domain-checklist) · [SQL Injection](#sql-injection) ·
+[SSRF in Spring](#ssrf-in-spring) · [TLS Configuration](#tls-configuration) ·
+[Password Hashing](#password-hashing)
 
 ---
 
 ## Domain Checklist
 
-| Domain | Check | Tool |
-|--------|-------|------|
-| Deserialization | No `ObjectInputStream.readObject` on untrusted input; Jackson `DefaultTyping` disabled or restricted to allowlist | `spotbugs`, `semgrep` |
-| Injection | No string-concatenated SQL/JPQL → use `@Query` with `?1` params or `CriteriaBuilder`; no SpEL with user input in `@Value` / `@PreAuthorize` | `spotbugs`, `find-sec-bugs` |
-| Auth | `@PreAuthorize` / `@Secured` on controller methods; `SecurityFilterChain` order correct; CSRF enabled for session-auth endpoints | manual review |
-| Dependency | `mvn dependency:tree` for transitive deps; `OWASP dependency-check-maven` or `snyk` for CVEs | `dependency-check`, `snyk` |
-| Logging | No PII/secrets in `log.info()`; use structured logging with masking for sensitive fields; no `e.printStackTrace()` in production code | `spotbugs` |
-| Config | `application.yml` secrets use `${VAULT_*}` or Spring Cloud Vault; no plaintext passwords in committed profiles | `rg` pattern sweep |
-| TLS/Crypto | `server.ssl.protocol=TLSv1.3` or `TLSv1.2` minimum; no `SSLContext.getInstance("SSL")` or `TLSv1`; `BCryptPasswordEncoder` for passwords, not MD5/SHA1; `MessageDigest.isEqual()` for constant-time comparison | manual review |
-| Input validation | `@Valid` / `@Validated` on controller params; `@Size`, `@Min`, `@Max`, `@Pattern` constraints; `spring.servlet.multipart.max-file-size` and `max-request-size` configured | manual review |
+All ten are evaluated for every Java review. Where the row says *no Java-specific idiom*, judge
+the domain against its canonical question in `authorization-and-policy.md` §2 — do not skip it.
+
+| # | Domain | Java/Spring check | Tool |
+|---|--------|-------------------|------|
+| 1 | Randomness Safety | `SecureRandom` for tokens/session IDs/resets. **`java.util.Random` / `Math.random()` never** for security values; do not seed `SecureRandom` with a constant | `spotbugs`, `find-sec-bugs` |
+| 2 | Injection & Data-Access Safety | No concatenated SQL/JPQL → `@Query` with `?1`/named params or `CriteriaBuilder`; no SpEL with user input in `@Value`/`@PreAuthorize`. Release: try-with-resources on `Connection`/`Statement`/`ResultSet`/`InputStream` | `spotbugs`, `find-sec-bugs` |
+| 3 | Sensitive Data Handling | No PII/secrets in `log.info()`; structured logging with field masking; **no `e.printStackTrace()`** in production; DTOs rather than entities on responses (avoid lazy-loading leaks) | `spotbugs` |
+| 4 | Secret / Config Management | `application.yml` secrets via `${VAULT_*}` or Spring Cloud Vault; no plaintext passwords in committed profiles | `rg` pattern sweep |
+| 5 | Transport Security | `server.ssl.protocol` = TLSv1.2 minimum; no `SSLContext.getInstance("SSL")`/`"TLSv1"`; no all-trusting `TrustManager` or `HostnameVerifier` returning true | manual review |
+| 6 | Crypto Primitive Correctness | `BCryptPasswordEncoder`/`Argon2PasswordEncoder`, not MD5/SHA1; **`MessageDigest.isEqual()`** for secret comparison, not `String.equals`; no ECB mode; explicit IV handling | `find-sec-bugs` |
+| 7 | Concurrency & Shared-State Safety | Spring singletons are shared across all requests — **no mutable instance fields in `@Service`/`@Controller`**; `@Transactional` boundaries must cover check-then-act on balances/permissions; `SimpleDateFormat` and other non-thread-safe fields as singletons | manual review |
+| 8 | Language-Specific Injection Sinks | **Deserialization**: no `ObjectInputStream.readObject` on untrusted input; Jackson `DefaultTyping` disabled or allowlisted; XXE — `DocumentBuilderFactory`/`SAXParserFactory` must disable DTDs (`FEATURE_SECURE_PROCESSING`, `disallow-doctype-decl`); SSRF via `RestTemplate`/`WebClient` (see §SSRF) | `spotbugs`, `semgrep` |
+| 9 | Static Scanner Posture | `spotbugs` + `find-sec-bugs` run and triaged; every `@SuppressWarnings`/`@SuppressFBWarnings` carries a rationale | `spotbugs`, `mvn spotbugs:check` |
+| 10 | Dependency Vulnerability Posture | `mvn dependency:tree` for transitives; `OWASP dependency-check-maven` or `snyk`. Prefer reachability evidence over raw CVE counts | `dependency-check`, `snyk` |
+
+> Auth (`@PreAuthorize`/`@Secured`, `SecurityFilterChain` order, CSRF for session auth) and
+> input validation (`@Valid`, `@Size`/`@Pattern`, `spring.servlet.multipart.max-*`) belong to
+> **Scenario Checklists 1 and 2**, not Gate D.
+
+Unlike Go, **XXE and entity-expansion attacks do apply to Java** — its XML parsers honour DTDs
+by default. Do not carry the Go XML exemption across (`go-secure-coding.md` §Go XML).
 
 ## Secure Pattern Examples
 
@@ -69,7 +89,10 @@ public String fetch(@RequestParam String url) {
     return restTemplate.getForObject(uri, String.class); // redirects still followed
 }
 
-// GOOD: allowlist + scheme pin + redirects disabled + every resolved IP checked
+// MINIMUM DEFENSE (PARTIAL — residual DNS-rebinding risk).
+// This is the floor, not "safe": getAllByName and the eventual connect are two separate
+// resolutions, and JVM DNS caching only narrows the window. Java has no per-connect hook
+// equivalent to Go's Dialer.Control. See the note after this block.
 private static final Set<String> ALLOWED_HOSTS = Set.of("api.example.com");
 
 // Redirects OFF at the factory level — this is the control the allowlist cannot provide.
@@ -103,11 +126,20 @@ public String fetch(@RequestParam String url) throws UnknownHostException {
 }
 ```
 
-Java caveat: the JVM caches DNS (`networkaddress.cache.ttl`), which narrows but does not
-close the rebinding window — `getAllByName` and the eventual connect are still two separate
-resolutions. Java has no direct equivalent of Go's `Dialer.Control`, so for high-risk
-proxies route egress through a vetted forward proxy or a network policy instead of relying
-on in-process checks alone. Disabling redirects is non-negotiable either way.
+#### What "closed" actually requires (Java)
+
+The block above is the **minimum bar** — a review must not describe it as SSRF mitigated:
+
+| Level | Approach | Residual risk |
+|---|---|---|
+| **Minimum (the code above)** | Allowlist + scheme pin + `Redirect.NEVER` + check every `getAllByName` record | **DNS rebinding still open**; JVM DNS caching (`networkaddress.cache.ttl`) only narrows the window |
+| **Strong** | Resolve once, then connect to the *validated IP* with the hostname supplied only for `Host`/SNI (a custom `SocketFactory`, or an `HttpClient` on a connection pool that pins the resolved address). Re-apply on every retry | Small; depends on consistent pinning |
+| **Strongest** | Route outbound traffic through a **vetted egress proxy**, or a network policy / security group that cannot reach link-local or RFC1918 ranges | Enforcement lives outside the exploitable process |
+
+Java has no direct equivalent of Go's `Dialer.Control`, so for high-risk proxies prefer the
+egress-proxy or network-policy option over in-process checks. Disabling redirects is
+non-negotiable either way. When only the minimum is present, report it as a finding with
+residual risk recorded.
 
 ### TLS Configuration
 

@@ -104,7 +104,10 @@ class SecurityReviewContractTests(unittest.TestCase):
         self.assertIn("Constructor-Release Pairing", self.skill_text)
 
     def test_gate_b_resource_inventory(self) -> None:
-        self.assertIn("Go Resource Inventory", self.skill_text)
+        """Gate B is stack-independent — it was "Go Resource Inventory" while Gate D had already
+        become all-stack, which left the 15-step prose contradicting the domain table."""
+        self.assertIn("Gate B: Resource Inventory (Mandatory, every stack)", self.skill_text)
+        self.assertNotIn("Go Resource Inventory", self.skill_text)
 
     def test_gate_b_references_detail(self) -> None:
         self.assertIn("references/go-secure-coding.md", self.skill_text)
@@ -174,20 +177,26 @@ class SecurityReviewContractTests(unittest.TestCase):
         self.assertIn("go-secure-coding.md", self.reference_texts)
 
     def test_go_secure_coding_has_all_domains(self) -> None:
+        """Domain names are the stack-independent canonical set (see
+        authorization-and-policy.md §2). The Go reference is one instantiation of it, not the
+        definition — it previously used its own names ("TLS Safety", "Go-Specific ..."), which is
+        what made "Domain 7" ambiguous across stacks."""
         ref = self.reference_texts["go-secure-coding.md"]
-        for domain in (
+        for num, domain in enumerate((
             "Randomness Safety",
-            "Injection + SQL",
-            "Sensitive Data",
-            "Secret/Config",
-            "TLS Safety",
-            "Crypto Primitive",
-            "Concurrency Safety",
-            "Go-Specific Injection Sinks",
-            "Static Scanner",
-            "Dependency Vulnerability",
-        ):
-            self.assertIn(domain, ref, f"domain {domain!r} missing from go-secure-coding")
+            "Injection & Data-Access Safety",
+            "Sensitive Data Handling",
+            "Secret / Config Management",
+            "Transport Security",
+            "Crypto Primitive Correctness",
+            "Concurrency & Shared-State Safety",
+            "Language-Specific Injection Sinks",
+            "Static Scanner Posture",
+            "Dependency Vulnerability Posture",
+        ), start=1):
+            self.assertIn(f"### Domain {num} — {domain}", ref,
+                          f"go-secure-coding.md must head Domain {num} with the canonical name "
+                          f"{domain!r}")
 
     def test_go_resource_inventory_table(self) -> None:
         ref = self.reference_texts["go-secure-coding.md"]
@@ -443,6 +452,83 @@ class SecurityReviewContractTests(unittest.TestCase):
         self.assertIn("Use when", desc, "description missing 'Use when' trigger phrase")
         self.assertIn("go-review-lead", desc, "description missing boundary vs go-review-lead")
         self.assertIn("go-security-review", desc, "description missing boundary vs go-security-review")
+
+
+class TestCoverageDocAccuracy(unittest.TestCase):
+    """COVERAGE.md drifted to 46 tests / 494 lines while reality was 48 / 500. Hand-maintained
+    counts always drift; recompute them from disk instead."""
+
+    COVERAGE = SKILL_DIR / "scripts" / "tests" / "COVERAGE.md"
+    TESTS = SKILL_DIR / "scripts" / "tests"
+
+    @staticmethod
+    def _declared(text: str, label: str):
+        m = re.search(rf"\|\s*\*{{0,2}}{re.escape(label)}\*{{0,2}}\s*\|\s*\*{{0,2}}(\d+)", text)
+        return int(m.group(1)) if m else None
+
+    @staticmethod
+    def _count_tests(path) -> int:
+        """Count `def test_*` across a test module."""
+        return len(re.findall(r"(?m)^\s+def test_\w+", path.read_text(encoding="utf-8")))
+
+    def test_skill_md_line_count_is_accurate(self) -> None:
+        actual = len(SKILL_MD.read_text(encoding="utf-8").splitlines())
+        text = self.COVERAGE.read_text(encoding="utf-8")
+        m = re.search(r"\|\s*SKILL\.md lines\s*\|\s*(\d+)", text)
+        self.assertIsNotNone(m, "COVERAGE.md must declare the SKILL.md line count")
+        self.assertEqual(actual, int(m.group(1)),
+                         f"COVERAGE.md says {m.group(1)} lines; SKILL.md has {actual}")
+
+    def test_fixture_count_is_accurate(self) -> None:
+        actual = len(list((self.TESTS / "golden").glob("*.json")))
+        declared = self._declared(self.COVERAGE.read_text(encoding="utf-8"),
+                                  "Total golden fixtures")
+        self.assertEqual(actual, declared,
+                         f"COVERAGE.md says {declared} fixtures; disk has {actual}")
+
+    def test_declared_test_counts_match_disk(self) -> None:
+        text = self.COVERAGE.read_text(encoding="utf-8")
+        for label, module in (
+            ("Contract tests", "test_skill_contract.py"),
+            ("Golden-fixture tests", "test_golden_reviews.py"),
+            ("Executable-example tests", "test_examples_executable.py"),
+            ("Forward-eval tests", "test_forward_eval.py"),
+        ):
+            with self.subTest(module=module):
+                declared = self._declared(text, label)
+                self.assertIsNotNone(declared, f"COVERAGE.md must declare '{label}'")
+                actual = self._count_tests(self.TESTS / module)
+                self.assertEqual(actual, declared,
+                                 f"{label}: COVERAGE.md says {declared}, {module} defines {actual}")
+
+    def test_total_is_the_sum(self) -> None:
+        text = self.COVERAGE.read_text(encoding="utf-8")
+        parts = sum(self._count_tests(self.TESTS / m) for m in (
+            "test_skill_contract.py", "test_golden_reviews.py",
+            "test_examples_executable.py", "test_forward_eval.py"))
+        self.assertEqual(parts, self._declared(text, "Total tests"),
+                         "COVERAGE.md 'Total tests' must equal the sum of the layers")
+
+    def test_forward_eval_layer_is_documented(self) -> None:
+        text = self.COVERAGE.read_text(encoding="utf-8")
+        self.assertIn("test_forward_eval.py", text)
+        self.assertIn("forward_eval/README.md", text)
+
+
+class TestLanguageReferenceNavigation(unittest.TestCase):
+    """The language references passed 100 lines with no way to navigate them."""
+
+    def test_language_refs_have_contents(self) -> None:
+        for name in ("lang-nodejs.md", "lang-java.md", "lang-python.md"):
+            text = (SKILL_DIR / "references" / name).read_text(encoding="utf-8")
+            if len(text.splitlines()) < 100:
+                continue
+            self.assertIn("## Contents", text,
+                          f"{name} exceeds 100 lines and needs a Contents block")
+
+    def test_go_reference_has_contents(self) -> None:
+        text = (SKILL_DIR / "references" / "go-secure-coding.md").read_text(encoding="utf-8")
+        self.assertIn("## Contents", text)
 
 
 if __name__ == "__main__":

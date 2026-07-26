@@ -30,7 +30,7 @@ For each applicable scenario, verify every item. Mark items as `Pass / Fail / N/
 - `os/exec.Command(name, args...)` — never concatenate user input into `name`; pass user values as separate `args`.
 - `os/exec.CommandContext` with unsanitized shell string via `sh -c` → command injection.
 - `net/http.Redirect` with user-controlled URL → open redirect; validate against allowlist or restrict to relative paths.
-- `filepath.Join(base, userInput)` does NOT prevent `../` traversal → must verify result starts with `base` after `filepath.Clean`.
+- `filepath.Join(base, userInput)` does NOT prevent `../` traversal. A prefix check after `filepath.Clean` is **not** the fix — it is lexical, so it misses symlink escapes and (without a trailing separator) sibling-prefix escapes. For file access use `os.Root`/`os.OpenRoot` and `filepath.Clean` the *relative* input first; see `go-secure-coding.md` §Path Traversal for the containment rules and the `os.Root` patch requirement.
 - `encoding/json.Decoder` without `DisallowUnknownFields` or size limit → resource exhaustion via large payload.
 - `xml.NewDecoder` on untrusted input without an input-size bound → memory exhaustion. Note: stdlib `encoding/xml` resolves **no** DTD entities and already caps unmarshal depth, so XXE and billion-laughs are false positives against it (they apply only to third-party/cgo XML libraries). There is no `xml.Decoder.MaxDepth` field — see `go-secure-coding.md` §Go XML.
 

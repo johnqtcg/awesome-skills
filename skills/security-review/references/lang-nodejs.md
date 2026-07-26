@@ -1,22 +1,38 @@
 # Security Review — Node.js / TypeScript Extension
 
-Replace Go-specific Gate D domains with these checks for Node.js/TypeScript services. All other gates (A-C, E-F), scenario checklists, severity model, and output contract remain unchanged.
+Node.js/TypeScript idioms for the **same ten Gate D domains** — the numbering and names are
+stack-independent and defined once in `authorization-and-policy.md` §2. This file supplies the
+Node-specific evidence for each; it does not replace or renumber them. All other gates (A-C,
+E-F), scenario checklists, severity model, and output contract are unchanged.
+
+## Contents
+[Domain Checklist](#domain-checklist) · [Command Injection](#command-injection) ·
+[Prototype Pollution](#prototype-pollution) · [SSRF](#ssrf) · [TLS & Crypto](#tls--crypto) ·
+[Input Validation](#input-validation)
 
 ---
 
 ## Domain Checklist
 
-| Domain | Check | Tool |
-|--------|-------|------|
-| Injection | `child_process.exec` with string interpolation → use `execFile` with args array; template literal SQL → use parameterized queries (pg `$1`, Prisma, Knex) | `eslint-plugin-security`, `semgrep` |
-| Prototype pollution | `Object.assign({}, userInput)` / `lodash.merge` with untrusted input → freeze prototype or use `Map` | `npm audit`, manual review |
-| ReDoS | Regex on user input without complexity bound → use `re2` or limit input length before regex | `eslint-plugin-security` |
-| SSRF | `fetch(userURL)` / `axios.get(userURL)` without allowlist → validate URL scheme+host against allowlist | manual review |
-| Dependency | `npm audit --production` for reachable vulns; `package-lock.json` committed and up-to-date | `npm audit`, `snyk` |
-| Auth middleware | Express middleware order: `helmet` → `cors` → `rateLimit` → `auth` → routes; verify `next()` not called after `res.send()` | manual review |
-| Secrets | No secrets in `.env` committed to repo; `dotenv` loaded only in dev; production uses secret manager | `rg` pattern sweep |
-| TLS/Crypto | `https.createServer` with `secureProtocol: 'TLSv1_2_method'` minimum; no `rejectUnauthorized: false` in production; `crypto.timingSafeEqual` for comparisons; `bcrypt` / `argon2` for passwords, not `crypto.createHash('md5')` | manual review |
-| Input validation | `express-validator` / `zod` / `joi` on all route params and body; `express.json({ limit: '1mb' })` to cap body size | manual review |
+All ten are evaluated for every Node review. Where the row says *no Node-specific idiom*, judge
+the domain against its canonical question in `authorization-and-policy.md` §2 — do not skip it.
+
+| # | Domain | Node.js check | Tool |
+|---|--------|---------------|------|
+| 1 | Randomness Safety | `crypto.randomBytes`/`randomUUID` for tokens, session IDs, resets. **`Math.random()` is never acceptable** for security values | `eslint-plugin-security` |
+| 2 | Injection & Data-Access Safety | `child_process.exec` with string interpolation → `execFile` with args array; template-literal SQL → parameterized (`pg` `$1`, Prisma, Knex). Release: always `client.release()`/`finally` on pool clients | `eslint-plugin-security`, `semgrep` |
+| 3 | Sensitive Data Handling | No PII/tokens in `console.log`/pino/winston output; no full objects logged with `JSON.stringify(req)`; response shaping so internal fields are not serialised | manual review |
+| 4 | Secret / Config Management | No committed `.env`; `dotenv` dev-only; production uses a secret manager | `rg` pattern sweep |
+| 5 | Transport Security | `https.Agent` with `minVersion: 'TLSv1.2'`; **`rejectUnauthorized: false` is forbidden** outside tests; `NODE_TLS_REJECT_UNAUTHORIZED=0` never set in prod | manual review |
+| 6 | Crypto Primitive Correctness | `bcrypt`/`argon2` for passwords, not `createHash('md5'\|'sha1')`; constant-time compare that **cannot throw** on length mismatch (see §TLS & Crypto) | manual review |
+| 7 | Concurrency & Shared-State Safety | Single-threaded event loop does **not** remove the risk: `await` between a check and its use is a TOCTOU window; module-level mutable caches are shared across requests; `worker_threads`/cluster share nothing but may race on external state | manual review |
+| 8 | Language-Specific Injection Sinks | Prototype pollution (`lodash.merge`/`Object.assign` on untrusted input → `Map` or null-prototype); ReDoS (unbounded regex on user input → `re2` or cap length first); SSRF via `fetch`/`axios` (see §SSRF); `vm`/`eval` on user input | `eslint-plugin-security` |
+| 9 | Static Scanner Posture | `eslint-plugin-security` and/or `semgrep` run and triaged; every `// eslint-disable-next-line security/*` carries a rationale | `eslint`, `semgrep` |
+| 10 | Dependency Vulnerability Posture | `npm audit --production`; `package-lock.json` committed and current. Prefer reachability evidence over raw advisory counts | `npm audit`, `snyk` |
+
+> Auth middleware order (`helmet` → `cors` → `rateLimit` → `auth` → routes, and never calling
+> `next()` after `res.send()`) and input validation (`zod`/`joi`/`express-validator`,
+> `express.json({ limit: '1mb' })`) belong to **Scenario Checklists 1 and 2**, not Gate D.
 
 ## Secure Pattern Examples
 
@@ -84,7 +100,11 @@ app.get('/proxy', async (req, res) => {
   res.send(await resp.text());
 });
 
-// GOOD: allowlist + scheme pin + redirects refused + resolved IPs checked
+// MINIMUM DEFENSE (PARTIAL — residual DNS-rebinding risk).
+// This is the floor, not "safe": dns.lookup and the socket's own resolution are two separate
+// lookups, so an attacker controlling DNS can still change the answer in between. Node has no
+// per-connect hook equivalent to Go's Dialer.Control. See the note after this block for what a
+// genuinely closed defense requires.
 const dns = require('node:dns').promises;
 const net = require('node:net');
 const ALLOWED_HOSTS = new Set(['api.example.com', 'cdn.example.com']);
@@ -133,11 +153,19 @@ app.get('/proxy', async (req, res) => {
 });
 ```
 
-Node caveat: `dns.lookup` and the socket's own resolution are two separate lookups, so a
-rebinding window remains (Node has no per-connect hook equivalent to Go's `Dialer.Control`).
-For high-risk proxies, pin the connection to the validated IP by passing a custom `Agent`
-with `lookup`, or route egress through a vetted forward proxy. Refusing redirects and
-checking all records are the minimum bar.
+#### What "closed" actually requires (Node)
+
+The block above is the **minimum bar** — a review must not describe it as SSRF mitigated:
+
+| Level | Approach | Residual risk |
+|---|---|---|
+| **Minimum (the code above)** | Allowlist + scheme pin + `redirect: 'manual'` + check every `dns.lookup` record | **DNS rebinding still open** — two separate resolutions |
+| **Strong** | Resolve once, then connect to the *validated IP*, carrying the hostname only in `Host`/SNI. In Node: a custom `http.Agent` with a `lookup` option returning the already-validated address, so the socket cannot re-resolve. Re-apply on every retry and redirect hop | Small; depends on pinning being applied consistently |
+| **Strongest** | Take the decision out of the process: route outbound traffic through a **vetted egress proxy**, or a network policy / security group that cannot reach link-local or RFC1918 ranges | Enforcement lives outside the exploitable process |
+
+For services handling untrusted URLs at scale, prefer the egress-proxy or network-policy option.
+When only the minimum is present, report it as a finding with the residual risk recorded — not
+as "SSRF mitigated".
 
 ### TLS & Crypto
 

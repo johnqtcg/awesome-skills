@@ -61,6 +61,35 @@ vulnerable path read end-to-end in code) is sufficient.
 Gate D's 10 domains are **review axes, not Go features**. What changes per stack is the
 sink/idiom table you load.
 
+### The canonical domain names (identical in every stack)
+
+This is the single source of truth for domain numbering. Every `lang-*.md` and
+`go-secure-coding.md` uses **these numbers and these names**, so "Domain 7" means the same
+thing whether the repo is Go, Node, Java, or Python.
+
+| # | Domain | The question it answers |
+|---|--------|------------------------|
+| 1 | **Randomness Safety** | Is anything security-bearing (token, session ID, nonce, salt, reset code) generated from a non-CSPRNG? |
+| 2 | **Injection & Data-Access Safety** | Can untrusted input change the *structure* of a query/command/template, and is the data-access resource released on every path? |
+| 3 | **Sensitive Data Handling** | Are PII, credentials, or tokens logged, serialised, or returned where they should not be? |
+| 4 | **Secret / Config Management** | Are secrets loaded from a manager/env rather than committed, and is config not attacker-influenced? |
+| 5 | **Transport Security** | Is TLS enforced with a modern minimum version and verification left on? |
+| 6 | **Crypto Primitive Correctness** | Right primitive for the job — password hashing, constant-time comparison, no home-grown crypto? |
+| 7 | **Concurrency & Shared-State Safety** | Can concurrent requests corrupt shared state, or produce a TOCTOU/double-spend on a security decision? |
+| 8 | **Language-Specific Injection Sinks** | The sinks unique to this stack's stdlib/framework (see the per-language table) |
+| 9 | **Static Scanner Posture** | Was the stack's scanner run, triaged, and are suppressions justified? |
+| 10 | **Dependency Vulnerability Posture** | Are known-vulnerable dependencies present, and are they *reachable*? |
+
+Rules for using them:
+
+- **Report all ten, every stack.** A domain with no language-specific idiom is still evaluated
+  against the general question above — mark it `Applicable`/`N/A` with a reason like any other.
+  "The `lang-*.md` table has no row for it" is not a reason to omit it.
+- **Never renumber.** If a stack has an extra concern (Node prototype pollution, Java
+  deserialization, Python SSTI), file it under Domain 8; do not invent Domain 11.
+- **Auth/authz and input validation are not Gate D domains.** They are Scenario Checklists 1
+  and 2. A `lang-*.md` row mentioning them is a convenience pointer, not a domain.
+
 | Step | Rule |
 |---|---|
 | 1. Detect stack | `go.mod` → `go`; `package.json` → `nodejs`; `pom.xml`/`build.gradle` → `java`; `pyproject.toml`/`requirements.txt` → `python` |

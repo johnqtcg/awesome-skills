@@ -14,15 +14,15 @@ This file is long — jump to the section you need rather than reading top to bo
 | # | Domain | Look for |
 |---|--------|----------|
 | 1 | Randomness Safety | `math/rand` in tokens/session/nonce |
-| 2 | Injection + SQL Lifecycle | concatenated SQL, `rows.Close()` |
+| 2 | Injection & Data-Access Safety | concatenated SQL, `rows.Close()` |
 | 3 | Sensitive Data Handling | logging/serialising PII and credentials |
-| 4 | Secret/Config Management | hardcoded secrets, env loading |
-| 5 | TLS Safety | `MinVersion`, `InsecureSkipVerify` |
+| 4 | Secret / Config Management | hardcoded secrets, env loading |
+| 5 | Transport Security | `MinVersion`, `InsecureSkipVerify` |
 | 6 | Crypto Primitive Correctness | password hashing, constant-time compare |
-| 7 | Concurrency Safety | TOCTOU, races on auth/balance state |
-| 8 | Go-Specific Injection Sinks | `text/template`, `exec`, redirect, path, **Go XML facts** |
+| 7 | Concurrency & Shared-State Safety | TOCTOU, races on auth/balance state |
+| 8 | Language-Specific Injection Sinks | `text/template`, `exec`, redirect, path, **Go XML facts** |
 | 9 | Static Scanner Posture | `gosec` triage, `nolint` rationale |
-| 10 | Dependency Posture | `govulncheck` source vs binary mode |
+| 10 | Dependency Vulnerability Posture | `govulncheck` source vs binary mode |
 
 **Extended BAD/GOOD Patterns** ([§](#extended-security-patterns--badgood-code-reference))
 AuthN/AuthZ · SSRF · XSS · CORS · Rate Limiting · HTTP Security Headers ·
@@ -106,7 +106,7 @@ func processID(db *sql.DB, id string) error {
 
 Key check: `math/rand` in `import` block → trace all call sites; any security-relevant use is `P1`.
 
-### Domain 2 — Injection + SQL Lifecycle Safety
+### Domain 2 — Injection & Data-Access Safety
 
 Parameterized SQL checklist:
 
@@ -123,7 +123,7 @@ Parameterized SQL checklist:
 - `fmt.Errorf("query failed: %w", err)` returned to client → may contain SQL; wrap with opaque message.
 - API response contains full user struct → use response DTO with only needed fields.
 
-### Domain 4 — Secret/Config Management
+### Domain 4 — Secret / Config Management
 
 Secret detection patterns:
 
@@ -144,7 +144,7 @@ Config best practices:
 - No default values for secrets in code
 - `//nolint:gosec` on secret-related code requires explicit rationale
 
-### Domain 5 — TLS Safety
+### Domain 5 — Transport Security
 
 ```go
 // BAD
@@ -167,7 +167,7 @@ tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 | MAC | HMAC-SHA256 | Plain SHA256 of `secret+message` |
 | Comparison | `subtle.ConstantTimeCompare` | `==` or `bytes.Equal` |
 
-### Domain 7 — Concurrency Safety
+### Domain 7 — Concurrency & Shared-State Safety
 
 Critical patterns:
 
@@ -182,16 +182,25 @@ Race detector:
 go test -race -count=1 ./path/to/changed/...
 ```
 
-Any race: at least `P2`. Race on auth/balance/permission state: `P1` (CWE-367).
+A detected race is always a defect to fix, but its **security** severity depends on what races:
 
-### Domain 8 — Go-Specific Injection Sinks
+| What races | Severity |
+|---|---|
+| Auth / permission / balance / quota state | `P1` (CWE-367) |
+| Request-scoped state an attacker can drive concurrently | `P2` |
+| Test scaffolding, metrics counters, log buffers | `P3`, or reliability-only — say which |
+
+State the attacker-reachability reason. "The race detector fired" is not a severity
+justification. Governed by `severity-calibration.md` §Governing Rule.
+
+### Domain 8 — Language-Specific Injection Sinks
 
 | Sink | Risk | Mitigation |
 |------|------|-----------|
 | `text/template.Execute` with user content | XSS | Use `html/template` |
 | `os/exec.Command("sh", "-c", userInput)` | Command injection | Use `exec.Command(binary, args...)` with separate args |
 | `net/http.Redirect(w, r, userURL, 302)` | Open redirect | Validate URL against allowlist or force relative path |
-| `filepath.Join(base, userInput)` | Path traversal | Check `strings.HasPrefix(filepath.Clean(result), base)` |
+| `filepath.Join(base, userInput)` | Path traversal | Use `os.Root`/`os.OpenRoot` (Go 1.24+) — symlink-aware. A `HasPrefix` check is lexical only and allows sibling-prefix and symlink escapes; see §Path Traversal |
 | `encoding/json.Decoder` unbounded | DoS | Use `http.MaxBytesReader` or `io.LimitReader` |
 | `xml.NewDecoder` on untrusted input | Memory exhaustion from large/deep input | Bound input with `http.MaxBytesReader`/`io.LimitReader`. **Do not** look for a decoder depth knob — see below |
 
@@ -223,7 +232,7 @@ Consequences for review:
 ### Domain 9 — Static Scanner Posture
 
 - `gosec ./...` triaged: each finding checked for exploitability on reachable paths.
-- Suppressed `//nolint:gosec` must have inline rationale; missing rationale is at least `P3`.
+- Suppressed `//nolint:gosec` must have inline rationale. Judge the **suppressed rule**, not the missing comment: if the underlying finding is exploitable, report it at its own severity. If it is a genuine false positive, an absent rationale is a hygiene note under `Hardening suggestions` — not a `P3` finding. Treat it as `P3` only when the suppression hides a defense gap you cannot assess.
 - False positives documented under `Suppressed Items`.
 
 ### Domain 10 — Dependency Vulnerability Posture
@@ -694,7 +703,7 @@ func ValidateHMAC(provided, expected []byte) bool {
 
 Key checks:
 - All secret/token/HMAC comparisons use `subtle.ConstantTimeCompare`
-- `==` or `bytes.Equal` on secrets is at least `P2`
+- `==` or `bytes.Equal` on secrets: `P2` **when the comparison is remotely observable and the attacker can retry** (API key check on a hot endpoint). Drop to `P3` where timing is not measurable through the surrounding noise — a single comparison behind an expensive DB round-trip, or a CLI tool — and say which case applies
 - Applies to: API key validation, webhook signature verification, CSRF token comparison, password reset tokens
 
 ### Input Validation & Deserialization Safety
@@ -782,23 +791,125 @@ func ServeFile(w http.ResponseWriter, r *http.Request) {
     http.ServeFile(w, r, path) // ../../etc/passwd
 }
 
-// GOOD: validate cleaned path stays within base directory
+// ALSO BAD: prefix check without a trailing separator — sibling-directory escape.
+// base="/var/app", filename="../app-evil/secret" -> "/var/app-evil/secret",
+// and strings.HasPrefix("/var/app-evil/secret", "/var/app") is TRUE. Verified.
 func ServeFile(w http.ResponseWriter, r *http.Request) {
-    filename := r.URL.Query().Get("file")
-    path := filepath.Join("/data/uploads", filename)
-    cleaned := filepath.Clean(path)
-    if !strings.HasPrefix(cleaned, "/data/uploads/") {
+    path := filepath.Join("/var/app", r.URL.Query().Get("file"))
+    if !strings.HasPrefix(filepath.Clean(path), "/var/app") { // missing trailing "/"
         http.Error(w, "forbidden", http.StatusForbidden)
         return
     }
-    http.ServeFile(w, r, cleaned)
+    http.ServeFile(w, r, path)
+}
+
+// STILL BAD for file access: a lexical check cannot see symlinks.
+// If /data/uploads/link -> /etc, then "link/passwd" stays lexically inside the base
+// and the prefix check passes — verified reading a file planted outside the base.
+func ServeFile(w http.ResponseWriter, r *http.Request) {
+    path := filepath.Join("/data/uploads", r.URL.Query().Get("file"))
+    if !strings.HasPrefix(filepath.Clean(path), "/data/uploads"+string(os.PathSeparator)) {
+        http.Error(w, "forbidden", http.StatusForbidden)
+        return
+    }
+    http.ServeFile(w, r, path) // symlink inside the base still escapes
+}
+
+// GOOD (Go 1.24+): os.Root gives kernel-enforced, symlink-aware containment.
+// Every operation is resolved relative to the root and refuses to leave it.
+var uploadRoot *os.Root // opened once at startup: os.OpenRoot("/data/uploads")
+
+func ServeFile(w http.ResponseWriter, r *http.Request) {
+    // Clean first: a trailing separator on a symlink component bypasses os.Root
+    // containment (GO-2026-4970). See the note below this example.
+    rel := filepath.Clean(r.URL.Query().Get("file"))
+    if rel == "." || rel == ".." || filepath.IsAbs(rel) {
+        http.Error(w, "forbidden", http.StatusForbidden)
+        return
+    }
+    f, err := uploadRoot.Open(rel)
+    if err != nil {
+        // "path escapes from parent" on traversal or symlink escape; also covers
+        // absolute paths and ".." without any manual string checking.
+        http.Error(w, "forbidden", http.StatusForbidden)
+        return
+    }
+    defer f.Close()
+    st, err := f.Stat()
+    if err != nil || st.IsDir() {
+        http.Error(w, "forbidden", http.StatusForbidden)
+        return
+    }
+    http.ServeContent(w, r, st.Name(), st.ModTime(), f)
 }
 ```
 
+Verified against the toolchain: with a symlink planted inside the base,
+`os.Root.Open` returns `openat link/secret.txt: path escapes from parent`, while the lexical
+guard allowed the read and returned the outside file's contents.
+
+#### `os.Root` is necessary but not self-sufficient: the trailing-separator escape
+
+`os.Root` has a containment bug in the **trailing-separator** form, advisory
+[`GO-2026-4970`](https://pkg.go.dev/vuln/GO-2026-4970). Reproduced here on **go1.26.1**, which is
+**within** the advisory's affected range — the reproduction confirms the advisory, it does not
+contradict it.
+
+**Fixed in Go 1.25.12+, 1.26.5+, and 1.27.0-rc.2+.** Upgrading the toolchain is the primary fix;
+confirm the current ranges against the advisory rather than trusting this line, and let
+`govulncheck` decide for your build. The observed behaviour on an affected toolchain:
+
+```
+BLOCKED         Open("link")            openat link: path escapes from parent
+*** ALLOWED *** Open("link/")           isdir=true          <-- escapes
+BLOCKED         Open("link/.")          path escapes from parent
+BLOCKED         Open("link/secret.txt") path escapes from parent
+BLOCKED         Open("link/sub/")       path escapes from parent
+*** ALLOWED *** Stat("link/")
+```
+
+And the escaped handle is fully usable: `Readdirnames` on it listed the outside directory
+(`[secret.txt]`) and reading through it returned `TOP SECRET`. Only the bare
+`<symlink>/` shape escapes — every deeper path is blocked.
+
+Two things are therefore required, in this order:
+
+1. **Upgrade the toolchain** to a fixed release (1.25.12+ / 1.26.5+ / 1.27.0-rc.2+) and keep
+   `govulncheck` in CI so a regression or a newly disclosed range is caught. This is the fix.
+2. **`filepath.Clean` the relative input before handing it to `os.Root`** — defense in depth, not
+   a substitute for upgrading. It matters because you rarely control every toolchain that builds
+   the code, and a future containment bug may take a different shape. Verified as a complete
+   mitigation for this shape — `Clean("link/")` → `"link"`, which `os.Root` correctly blocks,
+   while legitimate paths are unaffected (`"realdir/"` → `"realdir"`, `"./ok.txt"` → `"ok.txt"`,
+   both still allowed):
+
+```go
+func (s *Server) open(userInput string) (*os.File, error) {
+    // Clean strips the trailing separator that bypasses os.Root containment,
+    // and normalises "./" and duplicate separators. Do this BEFORE root.Open.
+    rel := filepath.Clean(userInput)
+    if rel == "." || rel == ".." || filepath.IsAbs(rel) {
+        return nil, fs.ErrPermission
+    }
+    return s.root.Open(rel)
+}
+```
+
+Defense in depth, since a lexical pre-pass is exactly the kind of thing that gets removed
+later: when you expect a file, `Stat` the result and reject directories — the escape yields a
+directory handle, so a `!IsDir()` check independently blocks it.
+
 Key checks:
-- `filepath.Clean` + prefix check after `filepath.Join`
-- Reject filenames containing `..`, null bytes, or absolute paths
-- `http.Dir` / `http.FileServer` scoped to intended directory
+- **Prefer `os.Root` (`os.OpenRoot`) for any user-influenced file access on Go ≥ 1.24.** It is
+  the only option here that is symlink-aware — but pair it with the two requirements above.
+- If you must do it lexically (older Go), the prefix **must** include a trailing separator, or
+  compare `filepath.Rel(base, target)` and reject results starting with `..`.
+  `filepath.IsLocal` is also lexical-only — it rejects `..` and absolute paths but knows nothing
+  about symlinks, so it is not sufficient on its own for filesystem access.
+- A lexical check is adequate only when the path is never opened (e.g. building a key for an
+  object store with no symlink semantics). Say which case applies.
+- Reject null bytes; `http.Dir` / `http.FileServer` scoped to the intended directory
+  (`http.Dir` already refuses `..`, but not symlinks out of the tree).
 
 ### Open Redirect
 

@@ -9,6 +9,7 @@ the skill documents is sufficient to produce the expected behavior.
 """
 
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -203,9 +204,43 @@ class GoldenReviewTests(unittest.TestCase):
         self._assert_anti_example(f)
         self._assert_coverage(f)
 
+    def test_021_python_pickle_rce(self) -> None:
+        """Non-Go fixture: the rule references must resolve in the Python reference, and the
+        canonical Domain 8 name must be the one used — that is what makes the unified numbering
+        real rather than table-deep."""
+        f = self._load("021_python_pickle_rce.json")
+        self.assertTrue(f["expected_finding"])
+        self.assertEqual("P0", f["severity"], "pickle.loads on untrusted input is RCE, not P1")
+        self.assertEqual("python", f["stack"])
+        self.assertEqual(8, f["expected_domain"])
+        self._assert_coverage(f)
+        self._assert_reference(f)
+        # The pinned domain must be named canonically in the stack reference the fixture cites.
+        lang_ref = (REFERENCES_DIR / "lang-python.md").read_text()
+        self.assertRegex(
+            lang_ref, r"\|\s*8\s*\|\s*Language-Specific Injection Sinks\s*\|",
+            "fixture pins Domain 8; lang-python.md must name it canonically",
+        )
+
     # ------------------------------------------------------------------
     # Fixture integrity
     # ------------------------------------------------------------------
+
+    def test_every_fixture_has_a_scenario_specific_test(self) -> None:
+        """GOLDEN-021 was added, listed in COVERAGE.md and used by the forward eval, but had no
+        test_021_* — so it only ever got the generic field checks. This makes that impossible:
+        a new fixture must be named by its own test."""
+        source = Path(__file__).read_text(encoding="utf-8")
+        missing = []
+        for path in sorted(GOLDEN_DIR.glob("*.json")):
+            num = path.name.split("_", 1)[0]
+            if not re.search(rf"def test_{num}_\w+", source):
+                missing.append(path.name)
+        self.assertFalse(
+            missing,
+            "fixtures with no scenario-specific golden test (generic field checks only): "
+            f"{missing}",
+        )
 
     def test_all_fixtures_have_required_fields(self) -> None:
         required = {"id", "title", "expected_finding", "category", "code"}

@@ -2,13 +2,20 @@
 
 ## Language/Framework Reference Selection
 
-Default checklist targets Go services. For non-Go stacks, replace Go-specific Gate D domains with the stack-specific reference. All other gates, scenario checklists, severity model, and output contract remain unchanged. If mixed stack, split findings by module.
+Gate D's **ten domains are stack-independent** — same numbers, same names, every stack. Defined
+once in `authorization-and-policy.md` §2. Selecting a stack reference does **not** replace or
+renumber them; it supplies the per-stack evidence for the same ten axes. All other gates,
+scenario checklists, severity model, and output contract are unchanged.
 
-| Stack | Reference | Key Domains |
-|-------|-----------|-------------|
-| Node.js / TypeScript | `references/lang-nodejs.md` | injection, prototype pollution, ReDoS, SSRF, middleware order |
-| Java / Spring | `references/lang-java.md` | deserialization, SpEL/SQL injection, auth annotations, config secrets |
-| Python / FastAPI / Django | `references/lang-python.md` | eval/pickle, SSTI, ORM safety, async blocking, dependency audit |
+For a mixed-stack repo, emit one coverage section per detected stack and set `stack` to a
+comma-joined list; a domain is `FAIL` for the repo if it fails in any stack.
+
+| Stack | Reference | Domain 8 (Language-Specific Sinks) highlights |
+|-------|-----------|----------------------------------------------|
+| Go | `references/go-secure-coding.md` | `text/template`, `exec`, redirect, `filepath` traversal, Go XML exemptions |
+| Node.js / TypeScript | `references/lang-nodejs.md` | prototype pollution, ReDoS, SSRF, `vm`/`eval` |
+| Java / Spring | `references/lang-java.md` | Java deserialization, SpEL, XXE (applies, unlike Go) |
+| Python / FastAPI / Django | `references/lang-python.md` | `eval`/`pickle`, SSTI, XXE via stdlib parsers, `tarfile` traversal |
 
 ## Loading Guide by Depth and Stack
 
