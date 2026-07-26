@@ -26,25 +26,59 @@ Treat documentation with the same rigor as code. Add these checks to the CI pipe
 
 ### Example GitHub Actions Workflow
 
+> **Action versions in this example are illustrative, not current.** A skill that preaches
+> anti-staleness must not ship pins that rot silently — this file previously carried
+> `checkout@v4`, `markdownlint-cli2-action@v18`, and
+> `gaurav-nelson/github-action-markdown-link-check@v1`, the last of which has since been
+> **archived by its author**. Before adopting, resolve each `uses:` against its current
+> release page and replace the `vN` below, then let Dependabot keep it current (config after
+> the workflow). Treat any unverified pin as a finding in your own doc review.
+
 ```yaml
 name: docs-ci
 on:
   pull_request:
     paths: ['docs/**', '**/*.md']
 
+# Least privilege: this job only needs to read the tree. Without an explicit block the job
+# inherits the repository default, which is often write.
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: DavidAnson/markdownlint-cli2-action@v18
+      # Pin to the current major of each action — verify before use, see note above.
+      - uses: actions/checkout@vN
+
+      - uses: DavidAnson/markdownlint-cli2-action@vN
         with:
           globs: '**/*.md'
+
+      # Link checking: prefer a maintained checker. lychee is the common choice now that the
+      # gaurav-nelson action is archived; confirm the current major on its releases page.
       - name: Check links
-        uses: gaurav-nelson/github-action-markdown-link-check@v1
+        uses: lycheeverse/lychee-action@vN
         with:
-          folder-path: 'docs'
+          args: --no-progress --verbose 'docs/**/*.md'
+          fail: true
 ```
+
+**Keep the pins fresh automatically** — `.github/dependabot.yml`:
+
+```yaml
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+```
+
+Without this, action pins are exactly the kind of silent staleness the §Anti-Staleness rules
+exist to prevent — and the docs-CI workflow is the last place you want it, because a dead
+action reports success by not running.
 
 ---
 

@@ -8,7 +8,7 @@ description: >
   Audience-aware, evidence-based, with quality gates and anti-staleness
   enforcement. Supports concept docs, task docs, reference docs,
   troubleshooting docs, and design docs (RFC/ADR).
-allowed-tools: Read, Write, Edit, StrReplace, Grep, Glob, Bash(git log*), Bash(git diff*), Bash(go vet*), Bash(go build*), Bash(go test*), Bash(*lint_doc.py*)
+allowed-tools: Read, Write, Edit, Grep, Glob, Bash(git log*), Bash(git diff*), Bash(go vet*), Bash(go build*), Bash(go test*), Bash(*lint_doc.py*)
 ---
 
 # Tech Doc Writer
@@ -74,11 +74,32 @@ Classify the document **and** its audience before writing anything:
 
 If the user's request maps to multiple types → **STOP and ASK** before proceeding.
 
-**Audience** — state explicitly: (1) who is the reader, (2) what must they do, (3) what do they already know. If audience is unclear and cannot be inferred → **STOP and ASK**. Mixed audience → use funnel structure (Executive Summary → Overview → Technical Detail → Appendix); load [writing-quality-guide.md §Funnel Structure](references/writing-quality-guide.md) for the pattern.
+**Audience** — state explicitly: (1) who is the reader, (2) what must they do, (3) what do they already know. Mixed audience → use funnel structure (Executive Summary → Overview → Technical Detail → Appendix); load [writing-quality-guide.md §Funnel Structure](references/writing-quality-guide.md) for the pattern.
+
+When the audience is **not** stated, follow §Resolution Order below — do not choose between
+asking and assuming ad hoc.
 
 ### Gate 3: Quality Scorecard
 
-Run after writing/reviewing. Results must be reported in the output. Items marked with a doc type apply only to that type; unmarked items apply to all types.
+Run after writing/reviewing. Results must be reported in the output.
+
+**Scoring rule (read before scoring).** Each item carries an applicability tag: `[all]`, a list
+of doc types, or `[..., when X]`. Score like this:
+
+1. **Determine applicability first.** An item is `N/A` when its tag excludes this doc type, or
+   when its `when` condition does not hold (no diagrams present, not an API doc, …).
+2. **`N/A` items leave the denominator.** The threshold is a ratio of *applicable* items, not a
+   fixed count: the Standard and Hygiene tiers each need **≥ ⅔ of their applicable items**,
+   rounded up.
+3. **A tier with 0 applicable items passes trivially** — record `Standard: n/a (0 applicable)`.
+4. **Critical is per-item, not a ratio**: every *applicable* Critical item must pass. An `N/A`
+   Critical item is not a failure.
+5. **Report the arithmetic**, not just a verdict: `Standard: 2/2 applicable (4 N/A) → PASS`.
+
+Why a ratio and not `≥ 4/6`: with a fixed count the tier was **unpassable** for three of the
+five doc types — a Concept doc has only 2 applicable Standard items, Reference 3, Design 2, so
+`≥ 4/6` could never be met no matter how good the document was. `scripts/lint_doc.py --type <t>`
+prints the applicable counts so the denominator is not guessed.
 
 **Critical (any FAIL → document not deliverable)**
 - [ ] Commands are copy-paste-runnable [task, troubleshooting] or code is marked as snippet [concept]
@@ -87,19 +108,19 @@ Run after writing/reviewing. Results must be reported in the output. Items marke
 - [ ] Terminology is consistent — zero synonym mixing [all]
 - [ ] Parameter/field tables complete — Type, Required, Default, Description columns all filled; no empty cells or `TBD` [reference]
 
-**Standard (≥ 4/6 pass)**
+**Standard (≥ ⅔ of applicable items, rounded up)**
 - [ ] Conclusion/core message appears in the first paragraph, not buried at the end [all — especially troubleshooting: root cause upfront]
 - [ ] Prerequisites are complete: permissions, environment, dependencies, inputs [task, troubleshooting]
 - [ ] Rollback/failure path documented with trigger conditions [task]
-- [ ] Title follows SPA principle (Simple ≤20 chars, Profit, Accurate) [all]
+- [ ] Title follows SPA principle (Simple — within the weight budget and filler-free, Profit, Accurate) [all]
 - [ ] Code examples are self-contained with imports, not just fragments [task, troubleshooting, reference]
 - [ ] Error codes / status codes documented with trigger conditions and recommended actions [reference, when API doc]
 
-**Hygiene (≥ 4/6 pass)**
+**Hygiene (≥ ⅔ of applicable items, rounded up)**
 - [ ] Diagrams have title, legend, and terms consistent with prose [all, when diagrams present]
 - [ ] Cross-references to related docs where appropriate [all]
 - [ ] Short paragraphs; 80%+ structured info in lists/tables [all]
-- [ ] `applicable_versions` field present for version-sensitive content [all]
+- [ ] `applicable_versions` field present [all, when version-sensitive]
 - [ ] Maintenance trigger conditions noted (when must this doc be updated?) [task, troubleshooting]
 - [ ] Prevention section with quantifiable monitoring/alerting thresholds [troubleshooting]
 
@@ -107,14 +128,37 @@ Critical failures block delivery. Record scorecard results in output.
 
 ## Degradation Strategy
 
+### Resolution Order (deterministic — do not reorder)
+
+Ambiguity is resolved by this sequence, not by preference. **Retrieve → Ask → Assume.**
+Each step runs only if the previous one failed.
+
+| Step | Do | Then |
+|---|---|---|
+| **R1. Retrieve** | If a repo/doc corpus exists, search it: existing docs' stated audience, README, `CONTRIBUTING`, ADRs, the callers of the code being documented. One focused round, not exhaustive. | Resolved → **Level 1**. Unresolved → R2 |
+| **R2. Ask** | Ask **one** consolidated question naming the specific missing facts (audience / type / scope) and the options you inferred. Ask once — not one question per gap. | Answered → **Level 1**. Cannot ask, or unanswered → R3 |
+| **R3. Assume** | Proceed on an explicit, labelled assumption. | → **Level 2** (audience) or **Level 3** (content) |
+
+**"Cannot ask" means exactly one of:** the user pre-authorised assumptions ("just draft it",
+"don't ask, use your judgement"), the run is non-interactive (batch/CI/scheduled), or the user
+already declined to specify. **Absence of a reply inside one turn is not "cannot ask"** — if you
+have asked, wait; do not ask and then answer yourself in the same turn.
+
+So the earlier rule "unclear audience → STOP and ASK" is **R2**, and Level 2 is **R3**. They are
+sequential states, never alternatives. Recording which step resolved it is mandatory (see below).
+
 | Level | Condition | Behavior |
 |-------|-----------|----------|
-| **Level 1: Full** | Audience, type, and repo context all clear | Complete document + all gates pass |
-| **Level 2: Partial** | Type clear but audience uncertain | Write with broadest reasonable audience; mark `<!-- AUDIENCE: assumed ... -->` at top; note in output |
-| **Level 2.5: Active Retrieval** | Content gaps exist but codebase may contain answers | Before degrading to Level 3, attempt at least one round of targeted search (Grep for key terms, Glob for related files, Read for config/code). Fill gaps with retrieved evidence. If retrieval succeeds → proceed at Level 1 or 2. If retrieval fails → degrade to Level 3 |
-| **Level 3: Scaffold** | Insufficient info **after** active retrieval attempt | Generate skeleton with section headings + `<!-- TODO: ... -->` placeholders; list what was searched and not found; ask user to fill gaps |
+| **Level 1: Full** | Audience, type, and repo context clear — natively or via R1/R2 | Complete document + all gates pass |
+| **Level 2: Partial** | Type clear, audience unresolved **after R1 and R2** | Write for the broadest reasonable audience; mark `<!-- AUDIENCE: assumed ... -->` at top; note in output |
+| **Level 3: Scaffold** | Content still insufficient after R1 and R2 | Skeleton with section headings + `<!-- TODO: ... -->` placeholders; list what was searched and not found; ask the user to fill gaps |
 
-Never present Level 2/3 output as if it were Level 1. **When a relevant codebase or doc corpus exists, always attempt Level 2.5 retrieval before degrading to Level 3.** If no meaningful corpus is available (e.g., greenfield project, standalone document with no repo context), skip Level 2.5 retrieval and classify based on the information the user has provided — if audience, type, and scope are clear, proceed at Level 1 or 2 directly.
+Every response must state the resolution path, e.g.
+`Resolution: R1 retrieved (CONTRIBUTING.md names SRE as reader) → Level 1` or
+`Resolution: R1 found nothing, R2 not possible (non-interactive) → Level 2, audience assumed`.
+
+Never present Level 2/3 output as if it were Level 1. If no corpus exists at all (greenfield,
+standalone doc), R1 is a no-op — say so and go straight to R2.
 
 ## Workflow
 
@@ -153,9 +197,28 @@ Apply these rules while writing:
 - Every diagram: title + legend + naming consistent with prose.
 
 **Title — SPA Principle**:
-- **S**imple: ≤ 20 characters, no filler words
+- **S**imple: no filler words, and within the **language-aware weight budget** below
 - **P**rofit: what does the reader gain?
 - **A**ccurate: no exaggeration, no ambiguity
+
+*Simple* is not a raw character count. A flat "≤ 20 characters" is not comparable across
+scripts — 20 Chinese characters carry roughly a sentence, 20 Latin characters barely three
+words — and it wrongly penalised the RFC/ADR titles this skill itself recommends. The budget is:
+
+| Element | Weight |
+|---|---|
+| CJK character | 1.0 |
+| Latin letter / digit | 0.5 |
+| Punctuation, spaces | 0 |
+| Leading identifier (`RFC-042:`, `ADR-7:`, `[JIRA-1234]`) | **exempt** — it aids search, it is not padding |
+
+Budget: **20 weight units** — about 20 CJK characters or 40 Latin characters of content.
+Filler is judged separately and is never acceptable at any length: articles, and openers like
+*Comprehensive / Introduction to / Overview of / Notes on / 关于 / 简介 / 详解 / 浅谈*.
+
+`scripts/lint_doc.py` implements exactly this (`title-weight`), so the rule and the checker
+cannot drift apart. `RFC-042: Migrate to Event-Driven Architecture` passes; *A Comprehensive
+Introduction to the Cache* fails on filler.
 
 | Doc Type | Title Pattern | Example |
 |----------|--------------|---------|
@@ -184,11 +247,16 @@ Add to the top of every document:
 ---
 title: <Document Title>
 owner: <responsible person>
-status: draft | active | deprecated
-last_updated: YYYY-MM-DD
-applicable_versions: <e.g. Go 1.24+, MySQL 8.0>
+status: draft | active | needs-update | deprecated
+last_updated: YYYY-MM-DD          # must be a real calendar date, not just the right shape
+applicable_versions: <e.g. Go 1.24+, MySQL 8.0>   # required when the body pins a version
 ---
 ```
+
+`needs-update` is the state that makes the anti-staleness rules usable: it marks a doc whose
+content is known to have drifted but which is still the best available reference. Omitting it
+forces a false choice between `active` (implying it is correct) and `deprecated` (implying it
+should not be read). `lint_doc.py` accepts all four values and rejects anything else.
 
 ## Hard Rules
 
@@ -252,28 +320,38 @@ Every invocation must end with this structured block. Use the exact field names.
 ```
 ── tech-doc-writer output ──
 mode:           Write | Review | Improve
-degradation:    Level 1 (Full) | Level 2 (Partial) | Level 2.5 (Retrieval-Assisted) | Level 3 (Scaffold)
+resolution:     R1 (retrieved) | R2 (asked) | R3 (assumed) — plus what resolved or blocked it
+degradation:    Level 1 (Full) | Level 2 (Partial) | Level 3 (Scaffold)
 doc_type:       concept | task | reference | troubleshooting | design
 audience:       <role> / <goal> / <prior knowledge>
-scorecard:      Critical: <n>/<total> | Standard: <n>/<total> | Hygiene: <n>/<total>
+scorecard:      Critical: <n>/<applicable> | Standard: <n>/<applicable> | Hygiene: <n>/<applicable>
+                (denominators are the APPLICABLE counts for this doc_type — run
+                 `scripts/lint_doc.py <file> --type <doc_type> --scorecard` to get them;
+                 note the N/A count so the reader can check the arithmetic)
 files:          [list of created or changed file paths]
 maintenance:    cadence: <monthly|quarterly|biannually>; triggers: <comma-separated>
 assumptions:    [list of anything inferred rather than confirmed, or "none"]
 ```
 
-Example:
+Example — note the denominators differ from a fixed 6 because `task` docs have 4 applicable
+Critical, 5 Standard, and 3 unconditional Hygiene items:
 
 ```
 ── tech-doc-writer output ──
 mode:           Write
+resolution:     R1 (retrieved) — CONTRIBUTING.md names the on-call rota as the reader
 degradation:    Level 1 (Full)
 doc_type:       task
 audience:       backend dev / deploy service / knows Docker basics
-scorecard:      Critical: 4/4 | Standard: 5/5 | Hygiene: 4/5
+scorecard:      Critical: 4/4 applicable (1 N/A) | Standard: 5/5 applicable (1 N/A) |
+                Hygiene: 3/3 applicable (2 conditional, 1 N/A)
 files:          [docs/deploy-user-service.md]
 maintenance:    cadence: monthly; triggers: deploy script change, infra version bump
 assumptions:    [assumed reader has VPN access based on repo context]
 ```
+
+For a `concept` doc the same block would read `Standard: 2/2 applicable (4 N/A)` — the
+denominator moves with the doc type, which is the whole point of §Gate 3's scoring rule.
 
 ## Language
 

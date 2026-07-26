@@ -58,7 +58,82 @@ class LintDocTests(unittest.TestCase):
         findings = lint_doc.lint(doc)
         crit = [f for f in findings if f.severity == lint_doc.CRITICAL]
         self.assertEqual({"metadata"}, {f.check for f in crit})
-        self.assertEqual(3, len(crit), "owner, status, last_updated all missing")
+        # `title` joined the required set: Phase 5 declares it mandatory, but nothing checked it.
+        self.assertEqual(4, len(crit), "title, owner, status, last_updated all missing")
+        self.assertEqual(
+            {"title", "owner", "status", "last_updated"},
+            {f.message.split("`")[1] for f in crit},
+        )
+
+    def test_all_blank_table_row_is_not_a_separator(self):
+        """The separator test was `^\\s*\\|[\\s:|-]+\\|\\s*$`. That class admits spaces and pipes,
+        so an entirely blank data row matched it and was SKIPPED — a parameter table with nothing
+        filled in produced zero findings and passed the reference-doc Critical gate."""
+        body = "| Field | Type |\n|-------|------|\n|       |      |\n"
+        findings = lint_doc.check_tables(body, 0, lint_doc.CRITICAL)
+        self.assertTrue(findings, "an all-blank data row must be reported, not skipped")
+        self.assertTrue(all(f.check == "table-cells" for f in findings))
+        self.assertEqual(lint_doc.CRITICAL, findings[0].severity)
+
+    def test_separator_row_recognition(self):
+        for line, want in (
+            ("|-------|------|", True),
+            ("|:------|-----:|", True),
+            ("| :---: | ---- |", True),
+            ("|       |      |", False),   # blank data row
+            ("|   -   |      |", False),   # single dash is not an alignment cell
+            ("| a | b |", False),
+        ):
+            with self.subTest(line=line):
+                self.assertEqual(want, lint_doc.is_separator_row(line))
+
+    def test_empty_reference_table_still_fails_for_a_real_doc(self):
+        """End-to-end: the bypass mattered because it let an unfilled data dictionary through."""
+        doc = GOOD_DOC + (
+            "\n## Parameters\n\n| Field | Type | Required |\n|-------|------|----------|\n"
+            "|       |      |          |\n")
+        names = [f.check for f in lint_doc.lint(doc, "reference")
+                 if f.severity == lint_doc.CRITICAL]
+        self.assertIn("table-cells", names)
+
+    def test_calendar_invalid_date_is_critical(self):
+        """Shape-only validation let `2026-99-99` through, so any staleness audit built on
+        last_updated was unsound."""
+        doc = GOOD_DOC.replace("last_updated: 2026-06-11", "last_updated: 2026-99-99")
+        hits = [f for f in lint_doc.lint(doc) if f.check == "date-format"]
+        self.assertEqual(1, len(hits), "an impossible calendar date must be rejected")
+        self.assertEqual(lint_doc.CRITICAL, hits[0].severity)
+        self.assertIn("real calendar date", hits[0].message)
+
+    def test_valid_leap_day_accepted(self):
+        doc = GOOD_DOC.replace("last_updated: 2026-06-11", "last_updated: 2024-02-29")
+        self.assertEqual([], [f for f in lint_doc.lint(doc) if f.check == "date-format"])
+
+    def test_unclosed_code_fence_is_critical(self):
+        """An unclosed fence makes every fence-skipping check blind to the rest of the file."""
+        doc = GOOD_DOC + "\n```go\nfunc main() {}\n"
+        hits = [f for f in lint_doc.lint(doc) if f.check == "fence-balance"]
+        self.assertEqual(1, len(hits))
+        self.assertEqual(lint_doc.CRITICAL, hits[0].severity)
+
+    def test_balanced_fences_accepted(self):
+        doc = GOOD_DOC + "\n```go\nfunc main() {}\n```\n"
+        self.assertEqual([], [f for f in lint_doc.lint(doc) if f.check == "fence-balance"])
+
+    def test_applicable_versions_warned_when_body_pins_a_version(self):
+        # GOOD_DOC already declares the field, so remove it to exercise the check.
+        doc = GOOD_DOC.replace("applicable_versions: Redis 7.2+\n", "")
+        doc += "\nRequires Redis 7.2.1 or later.\n"
+        self.assertIn("applicable-versions", checks(lint_doc.lint(doc)))
+
+    def test_applicable_versions_satisfied_when_declared(self):
+        doc = GOOD_DOC + "\nRequires Redis 7.2.1 or later.\n"
+        self.assertNotIn("applicable-versions", checks(lint_doc.lint(doc)))
+
+    def test_applicable_versions_not_demanded_without_a_version_mention(self):
+        """No false positives on docs that pin nothing."""
+        doc = GOOD_DOC.replace("applicable_versions: Redis 7.2+\n", "")
+        self.assertNotIn("applicable-versions", checks(lint_doc.lint(doc)))
 
     def test_bad_status_and_date_are_critical(self):
         doc = GOOD_DOC.replace("status: active", "status: WIP").replace(
@@ -85,13 +160,39 @@ class LintDocTests(unittest.TestCase):
         doc = GOOD_DOC.replace("| port | int | yes | 6379 |", "| port | int |  | 6379 |")
         self.assertIn("table-cells", checks(lint_doc.lint(doc, "reference")))
 
-    def test_long_title_warned(self):
+    def test_overweight_title_warned(self):
         doc = GOOD_DOC.replace(
             "# Deploy Redis Cluster",
-            "# A Comprehensive Guide To Deploying Redis Clusters In Production")
-        hits = [f for f in lint_doc.lint(doc) if f.check == "title-length"]
-        self.assertEqual(1, len(hits))
+            "# Deploying And Operating Redis Clusters Across Multiple Production Regions")
+        hits = [f for f in lint_doc.lint(doc) if f.check == "title-weight"]
+        self.assertTrue(hits, "an over-budget title must warn")
         self.assertEqual(lint_doc.WARNING, hits[0].severity)
+
+    def test_filler_title_warned_at_any_length(self):
+        doc = GOOD_DOC.replace("# Deploy Redis Cluster", "# A Guide To Redis")
+        hits = [f for f in lint_doc.lint(doc) if f.check == "title-weight"]
+        self.assertTrue(any("filler" in f.message for f in hits),
+                        "SPA rejects filler regardless of length")
+
+    def test_identifier_prefixed_title_is_not_penalised(self):
+        """The skill's own recommended RFC title was 45 chars and tripped its own linter under
+        the flat 20-char rule. The ID prefix aids search; it is not padding."""
+        doc = GOOD_DOC.replace(
+            "# Deploy Redis Cluster",
+            "# RFC-042: Migrate to Event-Driven Architecture")
+        self.assertEqual([], [f for f in lint_doc.lint(doc) if f.check == "title-weight"],
+                         "the skill's own example title must pass its own linter")
+
+    def test_cjk_title_budget_is_not_latin_char_count(self):
+        """20 CJK characters carry far more than 20 Latin characters; a single character
+        threshold is not comparable across scripts."""
+        short_cjk = GOOD_DOC.replace("# Deploy Redis Cluster", "# 部署 Redis 集群")
+        self.assertEqual([], [f for f in lint_doc.lint(short_cjk) if f.check == "title-weight"])
+        long_cjk = GOOD_DOC.replace(
+            "# Deploy Redis Cluster",
+            "# 在多个生产区域部署并运维分布式缓存集群的完整操作流程说明")
+        self.assertTrue([f for f in lint_doc.lint(long_cjk) if f.check == "title-weight"],
+                        "an over-budget CJK title must still warn")
 
     def test_multiple_h1_warned(self):
         doc = GOOD_DOC + "\n# Second Title\n"

@@ -12,5 +12,8 @@
     "TODO",
     "Never present Level 2/3 output as if it were Level 1"
   ],
-  "notes": "Unknown system with unspecified scope — skill must generate skeleton with TODO placeholders, not fabricate content (Gate 0 integrity)"
+  "expected_level": 3,
+  "must_contain_in_document": ["<!-- TODO"],
+  "must_not_fabricate": ["port", "endpoint", "version"],
+  "notes": "Unknown system with unspecified scope — skill must generate skeleton with TODO placeholders, not fabricate content (Gate 0 integrity). Per §Resolution Order it must still attempt R1 retrieval and report the path before degrading; a Level 3 claim with no resolution line is an unproven degradation."
 }

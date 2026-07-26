@@ -12,5 +12,23 @@
     "Critical",
     "Preserve the author"
   ],
-  "notes": "Improve mode must change only what the scorecard flags — not rewrite passing sections"
+  "max_changed_lines": 40,
+  "must_survive_verbatim": [
+    "kubectl scale deploy/payment-worker --replicas=0 -n payments",
+    "kubectl scale deploy/payment-worker --replicas=3 -n payments",
+    "owner: payments-team"
+  ],
+  "budget_rationale": "Measured: fixing the three flagged defects (per-step expected output, a Verification section, a Rollback section) costs ~30 changed lines on a 34-line document, because two of them require new sections. A full rewrite touches ~76. 40 separates them with margin. The verbatim check is the stronger signal — a rewrite reformats the commands even when the line count happens to land under budget.",
+  "original_document": "---\ntitle: Restart Payment Worker\nowner: payments-team\nstatus: active\nlast_updated: 2026-01-04\n---\n\n# Restart Payment Worker\n\nRestart the payment worker when its queue stalls.\n\n## Prerequisites\n\n- kubectl access\n\n## Steps\n\n1. Scale the deployment down.\n\n   ```bash\n   kubectl scale deploy/payment-worker --replicas=0 -n payments\n   ```\n\n2. Wait for pods to terminate.\n\n3. Scale back up.\n\n   ```bash\n   kubectl scale deploy/payment-worker --replicas=3 -n payments\n   ```\n\n## Notes\n\nAsk the on-call engineer if anything looks wrong.\n",
+  "known_defects": [
+    "no expected output / verification for any step (Critical for task docs)",
+    "no rollback path with trigger conditions (Standard, applicable to task)",
+    "Prerequisites incomplete — namespace permission and environment not named"
+  ],
+  "must_not_change": [
+    "the existing kubectl scale commands, which are already correct",
+    "the title and owner metadata",
+    "the overall step order"
+  ],
+  "notes": "Improve mode must change only what the scorecard flags — not rewrite passing sections. The grader counts unified-diff lines against max_changed_lines, so a full rewrite fails even when the rewritten doc is itself good."
 }

@@ -12,5 +12,7 @@
     "Partial",
     "assumed"
   ],
-  "notes": "Ambiguous request — could be concept, task, or reference doc. Gate 2 should trigger STOP and ASK. If audience cannot be inferred, degrade to Level 2."
+  "expected_level": 2,
+  "expected_resolution": "R1 retrieval finds nothing and R2 asking is unavailable, so R3 assumes",
+  "notes": "Ambiguous request — could be concept, task, or reference doc. Per §Resolution Order the sequence is fixed: R1 retrieve, R2 ask, only then R3 assume (Level 2). The response must record which step resolved it; 'STOP and ASK' and 'Level 2' are sequential states, not alternatives."
 }

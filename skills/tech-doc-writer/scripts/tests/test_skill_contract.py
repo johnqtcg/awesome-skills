@@ -151,14 +151,73 @@ class TestOutputContract(unittest.TestCase):
     def test_has_output_contract_section(self):
         self.assertIn("## Output Contract", self.content)
 
+    def _contract_blocks(self):
+        """Return the field-name sets of the contract template and its worked example.
+
+        Fields are read out of the block itself rather than hardcoded. The hardcoded list drifted:
+        `resolution:` was added to the contract and this test kept passing, because it also
+        searched the whole file — any field name appearing in prose counted as present."""
+        blocks = []
+        current = None
+        for line in self.content.splitlines():
+            if "── tech-doc-writer output ──" in line:
+                current = set()
+                blocks.append(current)
+                continue
+            if current is not None:
+                if line.startswith("```"):
+                    current = None
+                    continue
+                m = re.match(r"^([a-z_]+):", line)
+                if m:
+                    current.add(m.group(1))
+        return blocks
+
     def test_structured_field_names(self):
-        fields = ["mode:", "degradation:", "doc_type:", "audience:",
-                   "scorecard:", "files:", "maintenance:", "assumptions:"]
-        for field in fields:
-            self.assertIn(field, self.content, f"Missing structured field: {field}")
+        blocks = self._contract_blocks()
+        self.assertGreaterEqual(len(blocks), 2,
+                                "expected a contract template and a worked example")
+        template = blocks[0]
+        # Floor, so a broken extraction cannot pass by finding nothing.
+        self.assertGreaterEqual(len(template), 8,
+                                f"contract declares only {len(template)} fields: {template}")
+        for field in ("mode", "resolution", "degradation", "doc_type", "audience",
+                      "scorecard", "files", "maintenance", "assumptions"):
+            self.assertIn(field, template, f"contract template omits `{field}:`")
+
+    def test_worked_example_instantiates_every_field(self):
+        """A reader copies the example, not the template — an example missing a field teaches an
+        incomplete contract."""
+        blocks = self._contract_blocks()
+        missing = blocks[0] - blocks[1]
+        self.assertFalse(missing,
+                         f"worked example omits contract field(s): {sorted(missing)}")
 
     def test_scorecard_format_specified(self):
-        self.assertIn("Critical: <n>/<total>", self.content)
+        """`<total>` was wrong: the denominator is the APPLICABLE count for the doc type, not a
+        fixed total. The contract must say so, or the ⅔-of-applicable rule has no output shape."""
+        self.assertIn("Critical: <n>/<applicable>", self.content)
+        self.assertRegex(
+            self.content, r"(?i)denominators are the APPLICABLE counts",
+            "the output contract must state that denominators vary by doc_type",
+        )
+        self.assertIn("--scorecard", self.content,
+                      "the contract should point at the tool that computes the denominators")
+
+    def test_output_contract_requires_the_resolution_field(self):
+        """The Resolution Order state machine is unverifiable if the output never records which
+        step applied."""
+        block = self.content.split("── tech-doc-writer output ──")[1]
+        self.assertRegex(block, r"(?m)^resolution:",
+                         "output contract must carry a `resolution:` field")
+        for step in ("R1", "R2", "R3"):
+            self.assertIn(step, block, f"resolution field must enumerate {step}")
+
+    def test_output_contract_has_no_retired_level(self):
+        """Level 2.5 was removed from the Degradation Strategy but survived in the contract, so
+        the model saw two versions of the level vocabulary."""
+        self.assertNotIn("Level 2.5", self.content,
+                         "Level 2.5 was retired from the degradation strategy")
 
     def test_has_example_block(self):
         self.assertIn("tech-doc-writer output", self.content)
@@ -202,11 +261,44 @@ class TestDegradation(unittest.TestCase):
 
 
 class TestAllowedTools(unittest.TestCase):
-    def test_allowed_tools_in_frontmatter(self):
+    """`allowed-tools` is optional in the skill format but conventional here (43 of 51 skills
+    declare it), so presence is asserted as a repo convention rather than a format requirement.
+    The value is what actually needed checking: the list used to grant `StrReplace`, which is not
+    a tool name at all — no other skill in the repo names it, and `Edit` was already granted, so
+    it read as a real permission while granting nothing."""
+
+    # Names that exist as tools. A typo here is a silent no-op grant, not an error.
+    KNOWN_TOOLS = {
+        "Read", "Write", "Edit", "Grep", "Glob", "Bash", "Agent", "Task",
+        "WebFetch", "WebSearch", "NotebookEdit", "TodoWrite",
+    }
+
+    def setUp(self):
         content = _read_skill()
         m = re.search(r"^---\n(.*?)\n---", content, re.DOTALL)
+        self.assertIsNotNone(m, "SKILL.md has no YAML frontmatter")
+        self.frontmatter = m.group(1)
+
+    def test_allowed_tools_in_frontmatter(self):
+        self.assertIn("allowed-tools:", self.frontmatter,
+                      "repo convention: skills declare an explicit least-privilege tool list")
+
+    def test_every_granted_tool_name_is_real(self):
+        m = re.search(r"^allowed-tools:\s*(.+)$", self.frontmatter, re.M)
         self.assertIsNotNone(m)
-        self.assertIn("allowed-tools:", m.group(1))
+        # `Bash(git log*)` -> `Bash`; scope patterns are not validated here, only the tool name.
+        names = {t.split("(")[0].strip() for t in m.group(1).split(",")}
+        names.discard("")
+        unknown = names - self.KNOWN_TOOLS
+        self.assertFalse(unknown,
+                         f"allowed-tools grants unrecognised tool name(s) {sorted(unknown)} — a "
+                         f"name that is not a tool grants nothing while looking like a permission")
+
+    def test_no_duplicate_tool_grants(self):
+        m = re.search(r"^allowed-tools:\s*(.+)$", self.frontmatter, re.M)
+        entries = [t.strip() for t in m.group(1).split(",") if t.strip()]
+        dupes = {e for e in entries if entries.count(e) > 1}
+        self.assertFalse(dupes, f"allowed-tools repeats {sorted(dupes)}")
 
 
 # ─── Checklist #10: Contract tests exist (self-referential) ───
@@ -338,10 +430,11 @@ class TestQualityScorecard(unittest.TestCase):
         checks = standard_section.count("- [ ]")
         self.assertGreaterEqual(checks, 4, f"Need ≥4 Standard checks, found {checks}")
 
-    def test_tier_thresholds_match_item_counts(self):
-        """Drift guard: the `≥ n/total` label in each tier header must match the
-        number of checklist items actually listed. Regression: the Hygiene header
-        said `≥ 3/5` while listing 6 items (6th item added, header not updated)."""
+    def test_tier_thresholds_are_ratios_of_applicable_items(self):
+        """A fixed `≥ n/total` label was the bug, not the guard: with items tagged by doc type,
+        a Concept doc had only 2 applicable Standard items, so `≥ 4/6` was unpassable — the tier
+        could never be satisfied no matter how good the document was. Thresholds are now ratios
+        of the applicable subset, so the header must say so rather than name a fixed count."""
         import re as _re
         scorecard = self.content.split("Gate 3: Quality Scorecard")[1].split("\n## ")[0]
         for tier in ("Standard", "Hygiene"):
@@ -349,14 +442,155 @@ class TestQualityScorecard(unittest.TestCase):
             if tier == "Standard":
                 section = section.split("**Hygiene")[0]
             header = section.split("**")[0]
-            match = _re.search(r"≥\s*\d+/(\d+)", header)
-            self.assertIsNotNone(match, f"{tier} header missing `≥ n/total` label")
-            declared_total = int(match.group(1))
-            actual_items = section.count("- [ ]")
+            self.assertRegex(
+                header, r"(⅔|2/3).{0,30}applicable",
+                f"{tier} header must state the ⅔-of-applicable rule, not a fixed count",
+            )
+            self.assertIsNone(
+                _re.search(r"≥\s*\d+/\d+\s*pass", header),
+                f"{tier} header still declares a fixed count; that made the tier unpassable "
+                f"for concept/reference/design docs",
+            )
+
+    def test_resolution_order_is_deterministic(self):
+        """Gate 2 said "unclear audience → STOP and ASK" while Level 2 said "audience uncertain →
+        assume broadest and continue". With no ordering, two runs could legitimately do opposite
+        things. The sequence must be explicit and the two must be sequential states."""
+        content = self.content
+        self.assertIn("Resolution Order", content)
+        for step in ("R1", "R2", "R3"):
+            self.assertIn(step, content, f"resolution step {step} missing")
+        self.assertRegex(
+            content, r"(?i)Retrieve\s*(→|->)\s*Ask\s*(→|->)\s*Assume",
+            "the ordering Retrieve → Ask → Assume must be stated explicitly",
+        )
+        self.assertRegex(
+            content, r"(?i)sequential states, never alternatives|sequential states, not alternatives",
+            "must state that STOP-and-ASK and Level 2 are sequential, not alternatives",
+        )
+        # "Cannot ask" must be bounded, or R3 becomes a licence to skip asking.
+        self.assertRegex(
+            content, r'(?i)"?[Cc]annot ask"? means',
+            "must define what counts as being unable to ask",
+        )
+        self.assertRegex(
+            content, r"(?i)not\s+.?cannot ask.?|Absence of a reply.{0,60}not",
+            "must forbid treating a same-turn non-answer as permission to assume",
+        )
+
+    def test_resolution_path_must_be_reported(self):
+        self.assertRegex(
+            self.content, r"(?i)must state the resolution path|Resolution:\s*R1",
+            "the response must record which resolution step applied",
+        )
+
+    def test_scoring_rule_defines_na_handling(self):
+        scorecard = self.content.split("Gate 3: Quality Scorecard")[1].split("\n## ")[0]
+        self.assertIn("N/A", scorecard, "the scoring rule must define N/A handling")
+        self.assertRegex(
+            scorecard, r"(?i)N/A items? leave the denominator|leave the denominator",
+            "must state explicitly that N/A items leave the denominator",
+        )
+        self.assertRegex(
+            scorecard, r"(?i)0 applicable",
+            "must define the empty-tier case (0 applicable items)",
+        )
+        self.assertRegex(
+            scorecard, r"(?i)report the arithmetic|N/M applicable|\d+/\d+ applicable",
+            "must require the arithmetic to be reported, not just a verdict",
+        )
+
+    def test_title_rule_is_language_aware_and_matches_the_linter(self):
+        """The flat "≤ 20 characters" rule flagged the skill's own recommended RFC title (45
+        chars) and treated 20 CJK characters as equivalent to 20 Latin ones."""
+        content = self.content
+        self.assertNotRegex(
+            content, r"(?i)\*\*S\*\*imple:\s*≤\s*20 characters",
+            "the flat character threshold is retired; use the weight budget",
+        )
+        self.assertRegex(content, r"(?i)language-aware weight budget|weight budget")
+        for token in ("CJK character", "Leading identifier", "exempt"):
+            self.assertIn(token, content, f"title budget must define {token!r}")
+        self.assertRegex(
+            content, r"(?i)filler is judged separately|Filler is judged",
+            "filler must be a separate rule from length",
+        )
+        # And the rule must point at the checker so they cannot drift.
+        self.assertRegex(content, r"lint_doc\.py.{0,80}title-weight|title-weight")
+
+    def test_phase5_metadata_template_includes_needs_update(self):
+        """`needs-update` is accepted by the linter and required by the maintenance flow, but the
+        template offered only draft|active|deprecated — forcing a false choice between "this is
+        correct" and "do not read this"."""
+        m = re.search(r"### Phase 5: Metadata.*?```yaml\n(.*?)```", self.content, re.S)
+        self.assertIsNotNone(m, "Phase 5 metadata template not found")
+        template = m.group(1)
+        for value in ("draft", "active", "needs-update", "deprecated"):
+            self.assertIn(value, template,
+                          f"status template must offer {value!r}")
+        self.assertIn("applicable_versions", template)
+        self.assertIn("title", template)
+
+    def test_ci_example_does_not_ship_unverified_pins(self):
+        """A skill that preaches anti-staleness must not ship rotting action pins. The example
+        carried `checkout@v4`, `markdownlint-cli2-action@v18`, and an action its author has since
+        archived — presented as current."""
+        path = os.path.join(SKILL_DIR, "references", "docs-as-code.md")
+        with open(path, encoding="utf-8") as fh:
+            docs_as_code = fh.read()
+
+        # Concrete majors must not be presented as current inside the workflow example.
+        offenders = re.findall(r"uses:\s*[\w.-]+/[\w.-]+@v\d+", docs_as_code)
+        self.assertFalse(
+            offenders,
+            "workflow example pins concrete action majors that will rot; use @vN with a "
+            f"verify-before-use note: {offenders}",
+        )
+        # The archived action must not be recommended.
+        self.assertNotRegex(
+            docs_as_code, r"uses:\s*gaurav-nelson/github-action-markdown-link-check",
+            "that link-check action is archived; recommend a maintained checker",
+        )
+        # And the systemic fix must be present, not just a warning.
+        self.assertIn("dependabot.yml", docs_as_code,
+                      "action staleness needs an automated fix, not only a caution")
+        self.assertIn("package-ecosystem: github-actions", docs_as_code)
+        self.assertRegex(
+            docs_as_code,
+            r"(?is)(verify|resolve|confirm)[^.]{0,80}(before|against)[^.]{0,80}"
+            r"(adopt|current|release)"
+            r"|[Bb]efore adopting[^.]{0,80}(resolve|verify|confirm)",
+            "must tell the reader to resolve each pin against its current release before use",
+        )
+        self.assertRegex(
+            docs_as_code, r"(?m)^permissions:",
+            "the example workflow should declare least-privilege permissions",
+        )
+
+    def test_linter_scorecard_table_matches_skill_items(self):
+        """Cross-file drift guard: lint_doc.py computes the denominator, so its SCORECARD table
+        must carry the same number of items per tier as SKILL.md lists. If they drift, the tool
+        and the rule disagree about what counts."""
+        import importlib.util
+        spec = importlib.util.spec_from_file_location(
+            "lint_doc", os.path.join(SKILL_DIR, "scripts", "lint_doc.py"))
+        lint_doc = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(lint_doc)
+
+        scorecard = self.content.split("Gate 3: Quality Scorecard")[1].split("\n## ")[0]
+        # Split on the header form `**Tier (` — the bare `**Tier` token also appears in the
+        # scoring-rule prose above, which silently truncated the section to nothing.
+        for tier in ("Critical", "Standard", "Hygiene"):
+            section = scorecard.split(f"**{tier} (")[1]
+            for later in ("**Standard (", "**Hygiene ("):
+                if later != f"**{tier} (" and later in section:
+                    section = section.split(later)[0]
+            doc_items = section.count("- [ ]")
+            tool_items = len(lint_doc.SCORECARD[tier])
             self.assertEqual(
-                declared_total, actual_items,
-                f"{tier} tier declares /{declared_total} but lists "
-                f"{actual_items} checklist items — update both together",
+                doc_items, tool_items,
+                f"{tier}: SKILL.md lists {doc_items} items but lint_doc.SCORECARD has "
+                f"{tool_items} — the computed denominator would be wrong",
             )
 
 
