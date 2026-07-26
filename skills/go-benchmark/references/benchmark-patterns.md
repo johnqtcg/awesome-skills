@@ -76,22 +76,154 @@ func BenchmarkConcat(b *testing.B) {
 
 ---
 
-## Parallel Benchmarks
+## Choosing the Loop Form
+
+On Go ≥ 1.24 `for b.Loop()` is the default: it starts the timer at the first call, stops it when
+it returns false, and keeps the body from being optimised away — so neither `b.ResetTimer()` nor
+a sink is needed. Two exceptions:
+
+**1. Sub-nanosecond operations.** `b.Loop()` costs a real call per iteration. Measured on an
+Apple M4, Go 1.26:
+
+```
+BenchmarkLoopEmpty-10       1.724 ns/op    ← empty for b.Loop() {}
+BenchmarkClassicEmpty-10    0.2281 ns/op   ← empty for i := 0; i < b.N; i++ {}
+```
+
+Roughly 1.5 ns of harness per iteration. If the operation under test is in that range, the
+harness dominates — use the classic loop and subtract a baseline:
 
 ```go
+// Measure the harness itself, then subtract it from the real result.
+func BenchmarkAddBaseline(b *testing.B) {
+    for i := 0; i < b.N; i++ { // empty body, same loop shape
+    }
+}
+
+var sinkInt int
+
+func BenchmarkAdd(b *testing.B) {
+    for i := 0; i < b.N; i++ {
+        sinkInt = add(i, 3)
+    }
+}
+```
+
+Report `BenchmarkAdd − BenchmarkAddBaseline`. Why this matters concretely — the same cheap
+function, three ways:
+
+```
+BenchmarkClassicEmpty-10      0.2281 ns/op   ← baseline
+BenchmarkClassicDiscard-10    0.2258 ns/op   ← `_ = add(...)`: EQUAL to baseline, call eliminated
+BenchmarkClassicSink-10       0.2882 ns/op   ← sink: above baseline, call survives
+```
+
+Without the baseline row, `0.2258` and `0.2882` look like the same measurement. The baseline is
+what proves the discard version measured nothing.
+
+**2. Inside `b.RunParallel`** — `b.Loop()` is not usable; `pb.Next()` is the loop condition.
+
+---
+
+## Multi-Return Sinks
+
+A store to a package-level variable cannot be elided, so **one** sink is enough to keep a
+multi-return call alive:
+
+```go
+var sinkBytes []byte
+
+func BenchmarkMarshal(b *testing.B) {
+    input := buildInput()
+    for b.Loop() {
+        sinkBytes, _ = json.Marshal(input) // sufficient: the store to sinkBytes is observable
+    }
+}
+```
+
+Sink the error too only when you want it inspected — e.g. to fail the benchmark on an
+unexpected error, which is worth doing when a silent error path would make the benchmark
+measure the cheap failure branch instead of the real work:
+
+```go
+func BenchmarkMarshal(b *testing.B) {
+    input := buildInput()
+    for b.Loop() {
+        out, err := json.Marshal(input)
+        if err != nil {
+            b.Fatal(err) // otherwise you may be benchmarking the error return
+        }
+        sinkBytes = out
+    }
+}
+```
+
+Under `b.Loop()` no sink is required at all; keep one only if you also want the value inspected.
+
+---
+
+## Parallel Benchmarks
+
+**The ordinary package-level sink becomes a data race here.** Inside `b.RunParallel`, the body
+runs on N goroutines concurrently; `sinkAny, _ = cache.Get(...)` has every one of them writing
+the same variable. `go test -race -bench=.` fails with `WARNING: DATA RACE`, so the benchmark
+cannot be run under the race detector at all — and a racy benchmark is not a valid measurement.
+
+Writing the shared variable *after* the loop does not fix it either: each goroutine still
+performs that write.
+
+```go
+// BAD: shared sink written from every goroutine — fails under -race
 func BenchmarkCacheGet(b *testing.B) {
-    cache := NewCache(1000)
-    populateCache(cache)
-    b.ResetTimer()
     b.RunParallel(func(pb *testing.PB) {
         for pb.Next() {
             sinkAny, _ = cache.Get("key-42")
         }
     })
 }
+
+// GOOD: goroutine-local accumulation, single atomic publish per goroutine
+var sinkTotal atomic.Int64
+
+func BenchmarkCacheGet(b *testing.B) {
+    cache := NewCache(1000)
+    populateCache(cache)
+    b.ResetTimer()
+    b.RunParallel(func(pb *testing.PB) {
+        var acc int // local: nothing shared while the timer runs
+        for pb.Next() {
+            v, _ := cache.Get("key-42")
+            acc += len(v)
+        }
+        sinkTotal.Add(int64(acc))
+    })
+}
+
+// GOOD (alternative): no accumulator, keep the last value alive
+func BenchmarkCacheGetKeepAlive(b *testing.B) {
+    cache := NewCache(1000)
+    populateCache(cache)
+    b.ResetTimer()
+    b.RunParallel(func(pb *testing.PB) {
+        var local any
+        for pb.Next() {
+            local, _ = cache.Get("key-42")
+        }
+        runtime.KeepAlive(local)
+    })
+}
 ```
 
+Pick the accumulator when the result is cheap to reduce (length, sum, hash);
+pick `runtime.KeepAlive` when the result is a struct or pointer you do not want to touch.
+
+`b.Loop()` is **not** usable inside `RunParallel` — `pb.Next()` is the loop condition there.
+
 Control goroutine count: `go test -bench=BenchmarkCacheGet -benchmem -cpu=1,2,4,8`
+
+Always run parallel benchmarks under the race detector once:
+`go test -race -bench=BenchmarkCacheGet -benchtime=100x -run='^$' .`
+A benchmark that cannot survive `-race` is measuring undefined behaviour.
 
 ---
 

@@ -251,11 +251,17 @@ class TestAutoScorecard(unittest.TestCase):
     def test_scorecard_section_exists(self) -> None:
         self.assertIn("## Auto Scorecard", self.text)
 
-    def test_critical_tier_exists_with_3_items(self) -> None:
+    def test_critical_tier_grades_properties_not_tokens(self) -> None:
+        """The Critical tier used to demand a `package-level sink` outright, which would fail a
+        correct `for b.Loop()` benchmark — b.Loop needs no sink. It must grade the property
+        (body cannot be optimised away) and accept either loop form."""
         self.assertIn("Critical — any failure means redo", self.text)
-        self.assertIn("package-level sink", self.text)
+        self.assertIn("cannot be optimised away", self.text)
+        self.assertIn("no sink required", self.text)
+        self.assertIn("Grade the property, not the presence of a `sink` identifier", self.text)
         self.assertIn("`-benchmem` is included", self.text)
-        self.assertIn("placed correctly", self.text)
+        self.assertIn("correctly placed", self.text)
+        self.assertIn("b.RunParallel", self.text)
 
     def test_standard_tier_exists_with_5_items(self) -> None:
         self.assertIn("Standard — 4 of 5 must pass", self.text)

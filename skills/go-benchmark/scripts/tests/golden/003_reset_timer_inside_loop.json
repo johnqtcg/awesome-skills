@@ -8,9 +8,10 @@
   "expected_feedback": "b.ResetTimer() must be called once before the loop, not inside it; move it between setup and the for loop",
   "coverage_rules": [
     "b.ResetTimer()",
-    "placed correctly",
-    "not inside loop",
-    "Timer discipline"
+    "correctly placed",
+    "Timer discipline",
+    "b.Loop"
   ],
+  "expected_modernization": "On Go >= 1.24 the whole defect class disappears: `for b.Loop()` starts the timer itself, so there is no ResetTimer to misplace. Recommend converting rather than only relocating the call.",
   "reference": "SKILL.md"
 }

@@ -2,25 +2,35 @@
 
 Extended catalog of benchmark mistakes. The three core patterns are in SKILL.md; these cover edge cases.
 
-## AP-1: Forgetting to sink error values
+> **On Go ≥ 1.24, AP-1 and AP-2 both disappear if you use `for b.Loop()`** — it starts the
+> timer itself and keeps the body alive, so there is no ResetTimer to misplace and no sink to
+> forget. The classic-loop fixes below still apply on older toolchains and to sub-nanosecond
+> benchmarks (see `benchmark-patterns.md` §Choosing the Loop Form).
+
+## AP-1: Silently ignoring an error return
+
+Note the real reason to handle the error — it is **not** about dead-code elimination. A store
+to `sinkBytes` is observable, so the call already cannot be elided by sinking one value.
 
 ```go
-// BAD: only sinks first return; compiler may still elide the call
+// BAD: an error every iteration means you are benchmarking the cheap failure path,
+// and the result looks impressively fast for the wrong reason.
 var sinkBytes []byte
 func BenchmarkMarshal(b *testing.B) {
-    b.ResetTimer()
-    for i := 0; i < b.N; i++ {
-        sinkBytes, _ = json.Marshal(input)
+    for b.Loop() {
+        sinkBytes, _ = json.Marshal(input) // input may be unmarshalable; nobody checks
     }
 }
 
-// GOOD: sink both return values
+// GOOD: fail loudly, so a broken benchmark cannot masquerade as a fast one
 var sinkBytes []byte
-var sinkErr   error
 func BenchmarkMarshal(b *testing.B) {
-    b.ResetTimer()
-    for i := 0; i < b.N; i++ {
-        sinkBytes, sinkErr = json.Marshal(input)
+    for b.Loop() {
+        out, err := json.Marshal(input)
+        if err != nil {
+            b.Fatal(err)
+        }
+        sinkBytes = out
     }
 }
 ```
@@ -36,8 +46,16 @@ func BenchmarkWrong(b *testing.B) {
     }
 }
 
-// GOOD: ResetTimer once, before the loop
+// GOOD (Go >= 1.24): b.Loop handles the timer; the mistake becomes unexpressible
 func BenchmarkRight(b *testing.B) {
+    setup()
+    for b.Loop() {
+        doWork()
+    }
+}
+
+// GOOD (classic): ResetTimer once, before the loop
+func BenchmarkRightClassic(b *testing.B) {
     setup()
     b.ResetTimer()
     for i := 0; i < b.N; i++ {
