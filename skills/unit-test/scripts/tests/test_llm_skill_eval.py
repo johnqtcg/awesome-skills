@@ -95,9 +95,32 @@ class _GoRunner:
             self.tc.skipTest("go cannot compile in this environment")
 
     def test_passes(self, source: str, go_test: str) -> bool:
-        """True iff `go test` passes with this source + test."""
+        """True iff `go test` ran and passed; False iff it ran and failed.
+
+        Skips when the code never ran at all. `returncode == 0` alone conflates "the test failed"
+        with "nothing compiled", and the grader reads this result in both directions, so a build
+        failure corrupted the grade twice over:
+
+          * on the correct source — a build failure reported "emitted test does not pass on the
+            correct implementation", blaming the model for a broken toolchain;
+          * on the mutated source — a build failure meant `test_passes` returned False, which the
+            grader reads as *the mutation was killed*, silently crediting a test that never ran.
+
+        The sibling `test_behavioral_killer.py` already guards this by pinning the expected
+        assertion text alongside the exit code; this is the same discipline applied to a helper
+        that cannot know the expected message."""
         root = self._mod({"go.mod": "module eval\n\ngo 1.22\n", "sut.go": source, "sut_test.go": go_test})
-        return self._run(root, "test", "./...").returncode == 0
+        proc = self._run(root, "test", "./...")
+        combined = f"{proc.stdout}\n{proc.stderr}"
+        if proc.returncode == 0:
+            return True
+        # A test binary that ran and failed says so; a build/setup failure says that instead.
+        if re.search(r"^\s*--- FAIL:", combined, re.M) or re.search(r"^FAIL\s+\S+\s+[\d.]+s",
+                                                                    combined, re.M):
+            return False
+        self.tc.skipTest(
+            f"go test exited {proc.returncode} without running the test — an environment or "
+            f"build failure, not a result: {combined.strip()[-400:]}")
 
 
 def grade(output: str, fixture: dict, runner: "_GoRunner"):
@@ -154,6 +177,27 @@ class GraderSelfTest(unittest.TestCase):
     def _read(self, name: str) -> str:
         with open(os.path.join(FIXTURE_DIR, name), encoding="utf-8") as fh:
             return fh.read()
+
+    def test_build_failure_is_not_a_test_result(self):
+        """`test_passes` must report three states, not two.
+
+        It returned `returncode == 0`, so a test that never compiled came back `False` — which the
+        grader reads on the mutated source as "the mutation was killed". A test that cannot even
+        build was therefore credited with catching the defect. The mirror case blamed the model
+        for a broken toolchain on the correct source. Both are now skips."""
+        src = self.fixture["source"]
+        with self.assertRaises(unittest.SkipTest):
+            self.runner.test_passes(
+                src, 'package eval\n\nimport "testing"\n\n'
+                     "func TestBroken(t *testing.T) { this is not go }\n")
+
+    def test_passes_distinguishes_pass_from_fail(self):
+        """Anti-vacuity for the above: a real pass and a real failure must still be told apart."""
+        src = "package eval\n\nfunc Add(a, b int) int { return a + b }\n"
+        tpl = ('package eval\n\nimport "testing"\n\n'
+               "func TestAdd(t *testing.T) {{ if Add(1, 2) != {0} {{ t.Fatal(\"mismatch\") }} }}\n")
+        self.assertTrue(self.runner.test_passes(src, tpl.format(3)))
+        self.assertFalse(self.runner.test_passes(src, tpl.format(99)))
 
     def test_grader_passes_good_exemplar(self):
         passed, reasons = grade(self._read("good.md"), self.fixture, self.runner)

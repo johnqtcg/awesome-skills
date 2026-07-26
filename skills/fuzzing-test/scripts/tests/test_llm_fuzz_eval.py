@@ -171,12 +171,33 @@ class _GoRunner:
         return self._run(root, "test", f"-run=^{target}$", ".").returncode == 0
 
     def fuzz_finds_defect(self, source: str, harness: str, target: str, fuzztime: str) -> bool:
-        """True iff a bounded fuzz run FAILS on this source (i.e. finds a defect)."""
+        """True iff a bounded fuzz run finds a defect in this source.
+
+        A nonzero exit code alone does NOT mean a defect was found. `go test` also exits nonzero
+        for build failures, cache write errors, and toolchain problems, so `returncode != 0` read
+        every infrastructure hiccup as "the fuzzer found the bug". That made the bad-exemplar
+        assertions flaky: observed once in a full-repo run (1 failed / 3904 passed on
+        `test_grader_fails_bad_exemplars[kv_codec]`, passing on the identical run repeated), where
+        a bad harness that discards its Decode result — and therefore *cannot* detect silent
+        corruption — was reported as having detected it.
+
+        A genuine finding is identified by the `--- FAIL: <target>` line go prints for the failing
+        input. A nonzero exit without it is an environment failure and skips, because guessing
+        either way corrupts the grade."""
         root = self._mod(source, harness)
         secs = int(re.sub(r"\D", "", fuzztime) or 30)
         proc = self._run(root, "test", "-run=^$", f"-fuzz=^{target}$",
                          f"-fuzztime={fuzztime}", ".", timeout=secs + 120)
-        return proc.returncode != 0
+        if proc.returncode == 0:
+            return False
+        combined = f"{proc.stdout}\n{proc.stderr}"
+        if re.search(rf"^\s*--- FAIL: {re.escape(target)}\b", combined, re.M):
+            return True
+        if "Failing input written to" in combined:
+            return True
+        self.tc.skipTest(
+            f"go test exited {proc.returncode} without reporting a failing input for {target} — "
+            f"an environment failure, not a fuzzing result: {combined.strip()[-400:]}")
 
 
 def grade(output: str, fixture: dict, runner: "_GoRunner"):
@@ -301,6 +322,21 @@ class GraderSelfTest(unittest.TestCase):
                     self.runner.replay_passes(fx["source"], harness, target),
                     f"{name}: good harness fails on the correct source",
                 )
+
+    def test_build_failure_is_not_reported_as_a_finding(self) -> None:
+        """A nonzero `go test` exit is not evidence the fuzzer found anything.
+
+        `fuzz_finds_defect` returned `returncode != 0`, so a build failure, a cache write error,
+        or any toolchain hiccup counted as "defect found". That made the bad-exemplar assertions
+        flaky — one full-repo run failed `test_grader_fails_bad_exemplars[kv_codec]` while the
+        same run repeated passed, because a harness that discards its Decode result and cannot
+        possibly detect silent corruption was credited with detecting it. An infrastructure
+        failure must skip, never silently invert the grade."""
+        fx = _load_fixture(FIXTURES[0])
+        with self.assertRaises(unittest.SkipTest):
+            self.runner.fuzz_finds_defect(
+                fx["source"], "func FuzzBroken(f *testing.F) {\n\tthis is not go\n}\n",
+                "FuzzBroken", "2s")
 
     def test_good_harness_seeds_are_representable(self) -> None:
         """A round-trip seed the codec cannot represent losslessly fails on CORRECT code.
