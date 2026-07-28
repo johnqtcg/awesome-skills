@@ -254,22 +254,31 @@ With-skill Eval 2 的 ToC：
 
 readme-generator 是一个**多文件 skill**，SKILL.md 包含核心规则，参考资料按需加载。
 
+> **2026-07-28 重新测量**（路由修正与 forward-eval 加固之后）。下表为当前实际体积。
+> 5.2、5.3 节的通过率与效费比数据来自加固之前那次评测，本次**没有重跑**，应当按当时的
+> 基线来看，不能当作对当前版本的结论。
+
 | 文件 | 行数 | 字节 | 估算 Token | 加载时机 |
 |------|------|------|-----------|---------|
-| **SKILL.md** | 403 | 18,755 | **~4,688** | 始终 |
-| references/templates.md | 372 | 7,512 | ~1,878 | 从零生成时 |
-| references/golden-service.md | 144 | 4,357 | ~1,089 | 服务类项目 |
-| references/golden-cli.md | 102 | 2,638 | ~660 | CLI 类项目 |
-| references/golden-library.md | 103 | 3,007 | ~752 | 库类项目 |
-| references/golden-monorepo.md | 93 | 2,951 | ~738 | monorepo（按需） |
-| references/golden-lightweight.md | 61 | 1,685 | ~421 | 小型项目 |
-| references/anti-examples.md | 182 | 3,306 | ~826 | 重构时 |
-| references/checklist.md | 171 | 10,389 | ~2,597 | 重构时 |
-| references/command-priority.md | 279 | 8,496 | ~2,124 | 命令冲突时 |
-| scripts/discover_readme_needs.sh | 239 | 9,499 | ~2,375 | 始终（步骤1） |
-| references/bilingual-guidelines.md | 28 | 1,086 | ~271 | 中文/双语（按需） |
-| references/monorepo-rules.md | 49 | 1,687 | ~421 | monorepo（按需） |
+| **SKILL.md** | 396 | 18,120 | **~4,530** | 始终 |
+| references/templates.md | 423 | 9,199 | ~2,300 | 从零生成时 |
+| references/golden-service.md | 153 | 4,996 | ~1,249 | 服务类项目 |
+| references/golden-cli.md | 107 | 3,060 | ~765 | CLI 类项目 |
+| references/golden-library.md | 110 | 3,489 | ~872 | 库类项目 |
+| references/golden-monorepo.md | 96 | 3,158 | ~790 | monorepo（按需） |
+| references/golden-lightweight.md | 61 | 1,671 | ~418 | 小型项目 |
+| references/anti-examples.md | 182 | 3,312 | ~828 | 重构时 |
+| references/checklist.md | 173 | 11,012 | ~2,753 | 重构时 |
+| references/command-priority.md | 305 | 10,732 | ~2,683 | 命令冲突时 |
+| references/badges-and-governance.md | 66 | 3,628 | ~907 | 徽章与治理文件判断（按需） |
+| references/bilingual-guidelines.md | 28 | 1,086 | ~272 | 中文/双语（按需） |
+| references/monorepo-rules.md | 49 | 1,687 | ~422 | monorepo（按需） |
+| scripts/discover_readme_needs.sh | 452 | 18,689 | —（执行，不读源码） | 始终（步骤3） |
+| scripts/lint_readme.py | 617 | 25,341 | —（执行，不读源码） | 自检（步骤11） |
 | **Description（始终在 context）** | — | — | ~60 | 始终 |
+
+两个脚本是**执行**而不是读入 context 的：进入上下文的是它们输出的 TSV / 检查结果（几百
+token），不是源码。旧表把 discover_readme_needs.sh 按 ~2,375 token 计入常驻成本，高估了。
 
 **典型加载场景（按 Load References Selectively 原则）**：
 

@@ -1,0 +1,17 @@
+{
+  "scenario": "rust_workspace",
+  "expected_project_type": "monorepo",
+  "expected_base_type": "monorepo",
+  "expected_verdict": "READY",
+  "note": "Cargo workspace laid out as crates/*/Cargo.toml. The module scan used to walk only apps/, packages/, services/, so this routed to monorepo with entrypoint_count=0 and then degraded on its own correct classification.",
+  "files": {
+    "Cargo.toml": "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n",
+    "crates/core/Cargo.toml": "[package]\nname = \"core\"\nversion = \"0.2.0\"\nedition = \"2021\"\n",
+    "crates/core/src/lib.rs": "pub fn run() {}\n",
+    "crates/core/README.md": "# core\n\nShared parsing types.\n",
+    "crates/cli/Cargo.toml": "[package]\nname = \"cli\"\nversion = \"0.2.0\"\nedition = \"2021\"\n",
+    "crates/cli/src/main.rs": "fn main() {}\n",
+    "crates/cli/README.md": "# cli\n\nCommand-line front end.\n",
+    ".github/workflows/ci.yml": "name: ci\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: cargo test --workspace\n"
+  }
+}

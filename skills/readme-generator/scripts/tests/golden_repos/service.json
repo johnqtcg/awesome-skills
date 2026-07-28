@@ -1,0 +1,24 @@
+{
+  "golden_file": "golden-service.md",
+  "project_type": "service",
+  "note": "Files implied by the Repo signals block at the top of golden-service.md.",
+  "files": {
+    "go.mod": "module github.com/acme/orderapi\n\ngo 1.22\n",
+    "cmd/api/main.go": "package main\n\nfunc main() {}\n",
+    "internal/handler/health.go": "package handler\n",
+    "internal/service/order.go": "package service\n",
+    "internal/repository/order.go": "package repository\n",
+    "internal/cache/redis.go": "package cache\n",
+    "migrations/0001_init.sql": "CREATE TABLE orders (id text);\n",
+    "config/config.yaml": "port: 8080\n",
+    "docs/swagger/swagger.json": "{}\n",
+    "deploy/k8s/deployment.yaml": "kind: Deployment\n",
+    "Dockerfile": "FROM scratch\n",
+    "Makefile": "help:\n\t@true\ninstall-tools:\n\t@true\nbuild-api:\n\t@true\nrun-api:\n\t@true\ntest:\n\t@true\ntest-race:\n\t@true\nlint:\n\t@true\ncover:\n\t@true\nmigrate-up:\n\t@true\nmock:\n\t@true\nswagger:\n\t@true\ndocker-build:\n\t@true\ndocker-run:\n\t@true\nci:\n\t@true\n",
+    ".env.example": "DB_URL=\nREDIS_URL=\nPORT=8080\nLOG_LEVEL=info\n",
+    ".github/workflows/ci.yml": "name: ci\non: [push]\n",
+    ".codecov.yml": "coverage:\n  status:\n    project:\n      default:\n        target: 80%\n",
+    "LICENSE": "MIT License\n\nCopyright (c) 2026 Acme\n",
+    "CONTRIBUTING.md": "# Contributing\n"
+  }
+}

@@ -131,15 +131,17 @@ Use this when reviewing whether README is stale after code changes:
 
 ## Degradation Patterns
 
-When evidence is incomplete, apply these degradation rules:
+When evidence is incomplete, apply these degradation rules. All of them are
+instances of SKILL.md §Evidence Precedence — required sections keep their heading and say
+`Not found in repo`; optional sections are omitted and reported in `sections_omitted`.
 
 | Missing Evidence | Degradation Action | README Impact |
 |-----------------|-------------------|---------------|
-| No Makefile, no package.json, no build system | Use `go build` / `go test` fallback | Note "Command source: standard toolchain" |
-| No `.env.example` | Omit Configuration section | Note "Configuration: Not found in repo" |
+| No Makefile and no task runner, but a manifest exists | Use the toolchain command the manifest implies (`go test ./...`, `pytest`, `cargo test`) | Note "Command source: standard toolchain (no Makefile in repo)" |
+| No `.env.example` and no `config/` | Apply SKILL.md §Evidence Precedence: **service** keeps the heading with `Not found in repo`; every other type omits the section and reports it in `sections_omitted` | Never both omit and annotate — that row used to say both |
 | No CI workflows | Omit Badges section entirely | No placeholder badges |
 | No `LICENSE` file | Add missing-license note | "License: Not found in repo — consider adding" |
-| No tests found | Show testing commands with caveat | "No test files found — commands are standard defaults" |
+| Manifest exists but no test files | Show the toolchain test command, add `No test files found in repo` | The command is a manifest fact; a coverage or pass-rate claim would not be (SKILL.md §Facts vs Results) |
 | Private repo detected | Skip external badge URLs | Add private-repo fallback note |
 | Cannot determine project type | Generate Overview-only README | Mark `degraded: true` in output |
 | No entry point found | Generate minimal README | Only Project Overview + documented gaps |
@@ -163,7 +165,7 @@ When improving an existing README rather than generating from scratch:
 | 2 | Preserve valuable content | Don't discard useful prose that took effort to write |
 | 3 | Fix contradictory commands | Cross-check with Makefile / scripts / CI |
 | 4 | Remove guessed content | Replace with `Not found in repo` or investigate |
-| 5 | Add missing required sections | Quick Start, Structure, Commands, Testing, Maintenance |
+| 5 | Add missing required sections | Use the per-type matrix in SKILL.md §Structure Policy — a Library README needs Installation/Usage/API, not Configuration |
 | 6 | Update badges | Verify CI workflow file still matches badge URL |
 | 7 | Re-evaluate project type | Repo may have grown from CLI to service |
 | 8 | Check language consistency | Don't mix ZH/EN heading styles |

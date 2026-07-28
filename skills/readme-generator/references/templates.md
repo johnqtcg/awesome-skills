@@ -1,6 +1,40 @@
 # README Templates by Project Type
 
-Each template is a fillable markdown skeleton. Replace `{PLACEHOLDER}` with repo evidence. Remove sections marked `<!-- optional -->` if not applicable.
+Each template is a fillable markdown skeleton. Replace `{PLACEHOLDER}` with repo evidence.
+Remove sections marked `<!-- optional -->` if not applicable.
+
+**Structure here, commands elsewhere.** These skeletons define *which sections* a project
+type needs. The command bodies are placeholders — `{INSTALL_CMD}`, `{TEST_CMD}`,
+`{VERSION_LINE}` — resolved from `references/language-snippets.md` according to the manifest
+the repo actually has. Baking `go install` into "Template C" made every Node, Python, and
+Rust CLI a rewrite rather than a fill-in.
+
+Resolve the two axes independently:
+
+| Axis | Source |
+|---|---|
+| Which sections, in what order | `project_type effective` from `discover_readme_needs.sh` → the template below |
+| What the commands say | the manifest present in the repo → `language-snippets.md` |
+
+**Every skeleton here satisfies the required-section matrix for its type** (SKILL.md
+§Structure Policy). That is checked mechanically by
+`scripts/tests/test_skill_contract.py::TestTemplateRequiredSections`, so a template cannot
+drift into telling you to omit a section the skill requires. The reverse also holds: a type
+whose matrix row lists Configuration has it below; one whose row does not, does not.
+
+## Prerequisites Section Format (CLI / Service)
+
+List required runtime dependencies first, then optional ones. State the version constraint,
+the purpose, and a setup link when non-trivial.
+
+```markdown
+## Prerequisites
+
+- Go `>= 1.21` ([download](https://go.dev/dl/))
+- A GitHub Personal Access Token with `repo` read permission ([create one](https://github.com/settings/tokens))
+- _(Optional)_ An OpenAI API key — required only for the AI summary feature
+- _(Optional)_ Docker — required only for `make docker-build`
+```
 
 ---
 
@@ -20,36 +54,29 @@ Each template is a fillable markdown skeleton. Replace `{PLACEHOLDER}` with repo
 
 ### Prerequisites
 
-- Go {VERSION} (from go.mod)
-- {DATABASE/DEPENDENCY} (if required)
+- {VERSION_LINE} (from the language manifest)
+- {DATABASE/DEPENDENCY} (only when a config file proves the dependency)
 - Environment variables (see [Configuration](#configuration))
 
 ### Run
 
 ```bash
-# install dev tools
-make install-tools
-
-# start the service
-make run-api
+{SETUP_CMD}     # e.g. cp .env.example .env, make install-tools
+{RUN_CMD}       # start the service
 ```
 
 ## Project Structure
 
-```
-{PROJECT_NAME}/
-├── cmd/
-│   └── api/              # HTTP server entrypoint
-├── internal/
-│   ├── handler/          # HTTP handlers
-│   ├── service/          # Business logic
-│   └── repository/       # Data access layer
-├── pkg/                  # Shared libraries (if any)
-├── config/               # Configuration files
-├── docs/                 # Documentation
-├── Makefile              # Build/test/run commands
-└── README.md
-```
+| Path | Purpose |
+|------|---------|
+| `{ENTRYPOINT_DIR}` | Server entrypoint |
+| `{HANDLER_DIR}` | Request handlers |
+| `{SERVICE_DIR}` | Business logic |
+| `{DATA_DIR}` | Data access layer |
+| `{CONFIG_DIR}` | Configuration |
+
+List only directories that exist. `cmd/` + `internal/` is a Go convention, `src/` is
+Node/Python, `crates/` is a Rust workspace — use the repository's own layout.
 
 ## Configuration
 
@@ -67,26 +94,23 @@ cp .env.example .env
 ## Common Commands
 
 ```bash
-make help           # show all targets
-make build-api      # build API binary
-make run-api        # run API server
-make test           # run all tests
-make lint           # run linter
-make cover          # run tests with coverage
-make ci             # full CI pipeline locally
+{BUILD_CMD}
+{RUN_CMD}
+{TEST_CMD}
+{LINT_CMD}
 ```
 
-> Command source: root `Makefile`.
+> Command source: {Makefile / package.json / native toolchain}.
 
 ## Testing and Quality
 
 ```bash
-make test           # unit + integration tests
-make cover          # coverage report
-make lint           # golangci-lint
+{TEST_CMD}
+{LINT_CMD}
 ```
 
-Coverage target: {X}% (from Makefile or CI config).
+State a coverage target only when a config file commits one (`.codecov.yml`, a Makefile
+threshold). A measured percentage is not a repository fact — SKILL.md §Facts vs Results.
 
 <!-- optional: Architecture -->
 ## Architecture
@@ -132,15 +156,15 @@ This README should be updated when:
 ## Installation
 
 ```bash
-go get {MODULE_PATH}
+{LIB_INSTALL_CMD}
 ```
 
 ## Quick Usage
 
-```go
-import "{MODULE_PATH}"
+```{LANG}
+{IMPORT_LINE}
 
-// {minimal working example — 5-15 lines}
+// {minimal working example — 5-15 lines, taken from a test or example file}
 ```
 
 ## API Overview
@@ -151,18 +175,18 @@ import "{MODULE_PATH}"
 | `{Func2}` | {One-line description} |
 | `{Type1}` | {One-line description} |
 
-For full API reference, see [pkg.go.dev]({PKG_GO_DEV_URL}).
+For the full API reference, see {API_DOC_URL} (pkg.go.dev / docs.rs / the published docs
+site — only when the package is actually published there).
 
 ## Compatibility
 
-- Go >= {MIN_VERSION} (from go.mod)
+- {VERSION_LINE} (from the language manifest)
 - {Other compatibility notes}
 
 ## Testing
 
 ```bash
-go test ./...
-go test -race ./...
+{TEST_CMD}
 ```
 
 <!-- optional: Contributing -->
@@ -172,7 +196,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
-{License type from LICENSE file.}
+{License type from LICENSE file, or "Not found in repo — consider adding a LICENSE file."}
+
+## Documentation Maintenance
+
+Update this README when:
+- the exported API surface changes
+- the minimum language version in the manifest changes
+- new built-in rules or options are added
 ````
 
 ---
@@ -190,11 +221,10 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 ## Installation
 
 ```bash
-# from source
-go install {MODULE_PATH}/cmd/{CLI_NAME}@latest
+{INSTALL_CMD}
 
-# or build locally
-make build-{CLI_NAME}
+# or build from source
+{BUILD_CMD}
 ```
 
 ## Usage
@@ -220,6 +250,8 @@ make build-{CLI_NAME}
 | `--{flag1}` | `-{f}` | `{default}` | {Description} |
 | `--{flag2}` | `-{f}` | `{default}` | {Description} |
 
+<!-- optional: Configuration — only when the CLI reads a config file or env vars.
+     A flag table is not configuration; do not add this section just to fill space. -->
 ## Configuration
 
 {CLI_NAME} reads configuration from (in priority order):
@@ -236,17 +268,26 @@ make build-{CLI_NAME}
 | 1 | General error |
 | {N} | {Specific error} |
 
-## Development
+## Development and Testing
 
 ```bash
-make build-{CLI_NAME}   # build binary
-make test                # run tests
-make lint                # run linter
+{BUILD_CMD}
+{TEST_CMD}
+{LINT_CMD}
 ```
+
+> Command source: {Makefile / package.json / native toolchain}.
 
 ## License
 
-{License type from LICENSE file.}
+{License type from LICENSE file, or "Not found in repo — consider adding a LICENSE file."}
+
+## Documentation Maintenance
+
+Update this README when:
+- subcommands or flags are added, renamed, or removed
+- output formats change
+- the install path changes
 ````
 
 ---
@@ -264,53 +305,56 @@ make lint                # run linter
 
 | Module | Path | Description | Docs |
 |--------|------|-------------|------|
-| {App1} | `apps/{app1}/` | {One-line description} | [README](apps/{app1}/README.md) |
-| {App2} | `apps/{app2}/` | {One-line description} | [README](apps/{app2}/README.md) |
-| {Pkg1} | `packages/{pkg1}/` | {One-line description} | [README](packages/{pkg1}/README.md) |
+| {Mod1} | `{MODULE_ROOT}/{mod1}/` | {One-line description} | [README]({MODULE_ROOT}/{mod1}/README.md) |
+| {Mod2} | `{MODULE_ROOT}/{mod2}/` | {One-line description} | [README]({MODULE_ROOT}/{mod2}/README.md) |
 
 ## Quick Start
 
 ```bash
-# install shared tools
-make install-tools
-
-# run a specific app
-make run-{app1}
-
-# run all tests
-make test
+{SETUP_CMD}         # install shared tooling
+{RUN_CMD}           # run one module, e.g. make run-{app1} / cargo run -p {app1}
+{TEST_CMD}          # test everything
 ```
 
 ## Shared Commands
 
 ```bash
-make help               # show all targets
-make test               # test all modules
-make lint               # lint all modules
-make build-all          # build all apps
-make ci                 # full CI pipeline
+{HELP_CMD}              # list available targets, when the repo has one
+{BUILD_CMD}             # build every module
+{TEST_CMD}              # test every module
+{LINT_CMD}              # lint every module
 ```
+
+> Command source: {root Makefile / workspace tool / native toolchain}.
 
 ## Project Structure
 
-```
-{PROJECT_NAME}/
-├── apps/
-│   ├── {app1}/          # {Description}
-│   └── {app2}/          # {Description}
-├── packages/
-│   └── {pkg1}/          # {Description}
-├── scripts/             # Shared build/deploy scripts
-├── Makefile             # Root orchestration
-└── README.md
-```
+| Path | Contents |
+|------|----------|
+| `{MODULE_ROOT}/{mod1}` | {Description} — see its own README |
+| `{MODULE_ROOT}/{mod2}` | {Description} — see its own README |
+| `{WORKSPACE_MANIFEST}` | Workspace definition |
+
+`{MODULE_ROOT}` is whatever the repo uses: `apps/` and `packages/` (npm workspaces,
+`go.work`), `crates/` (Cargo workspace), `services/`, or a flat root. Read it from the
+discovery output rather than assuming — `discover_readme_needs.sh` emits one
+`entrypoint module <path>` line per module it found.
 
 ## Adding a New Module
 
-1. Create directory under `apps/` or `packages/`
-2. Add module-level `README.md`
-3. Add build/run targets to root `Makefile`
-4. Update this table
+1. Create the directory under `{MODULE_ROOT}/`
+2. Register it in `{WORKSPACE_MANIFEST}` (`go.work use`, Cargo `members`, npm
+   `workspaces`) — omit this step if the workspace globs its members
+3. Add a module-level `README.md`
+4. Wire it into the shared command source, if the repo has one
+5. Update the Repository Overview table above
+
+## Testing
+
+```bash
+{TEST_CMD}              # every module
+{TEST_ONE_CMD}          # a single module, when the tooling supports it
+```
 
 ## Contributing
 
@@ -318,7 +362,14 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow.
 
 ## License
 
-{License type from LICENSE file.}
+{License type from LICENSE file, or "Not found in repo — consider adding a LICENSE file."}
+
+## Documentation Maintenance
+
+Update this README when:
+- a module is added to or removed from the workspace
+- the shared command set changes
+- the workspace manifest changes
 ````
 
 ---
@@ -343,10 +394,12 @@ Use this when the repository is small and heavy sections would add maintenance b
 ## Common Commands
 
 ```bash
-{BUILD_CMD}   # build
-{TEST_CMD}    # test
-{LINT_CMD}    # lint
+{BUILD_CMD}
+{TEST_CMD}
+{LINT_CMD}
 ```
+
+> Resolve these from `language-snippets.md` using the repo's manifest.
 
 ## Project Structure
 
@@ -370,3 +423,19 @@ Update this README when:
 - entrypoints change
 - required config/env changes
 ````
+
+---
+
+## Resolving Placeholders
+
+| Placeholder | Resolve from |
+|---|---|
+| `{INSTALL_CMD}` `{LIB_INSTALL_CMD}` `{BUILD_CMD}` `{RUN_CMD}` `{TEST_CMD}` `{LINT_CMD}` `{VERSION_LINE}` | `language-snippets.md`, keyed by the manifest in the repo |
+| `{SETUP_CMD}` `{HELP_CMD}` `{TEST_ONE_CMD}` | the Makefile/script/workspace tool the repo actually has; omit the line when it has none |
+| `{MODULE_ROOT}` `{WORKSPACE_MANIFEST}` | the module parent (`apps/`, `packages/`, `crates/`, `services/`) and manifest (`go.work`, `Cargo.toml`, `package.json`) that discovery reported |
+| `{ENTRYPOINT_DIR}` and the other structure rows | directories that actually exist |
+| `{API_DOC_URL}` | only when the package is published to that docs host |
+| `{PROJECT_NAME}` `{MODULE_PATH}` `{CLI_NAME}` | the manifest |
+
+An unresolved `{PLACEHOLDER}` shipped in a README is a defect — `lint_readme.py` reports it
+as R005. If a placeholder has no evidence behind it, delete the line rather than guessing.

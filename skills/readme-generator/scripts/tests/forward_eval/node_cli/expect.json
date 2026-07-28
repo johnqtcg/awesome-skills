@@ -1,0 +1,26 @@
+{
+  "good": {
+    "max_critical": 0,
+    "max_total": 0
+  },
+  "bad": {
+    "must_contain_codes": [
+      "R002",
+      "R004",
+      "R005",
+      "R008",
+      "R010",
+      "R011",
+      "R012"
+    ],
+    "why": {
+      "R002": "`npm run release` and `npm run publish:latest` are not in package.json scripts",
+      "R004": "src/parser/index.js does not exist",
+      "R005": "{CLI_NAME} placeholder left in the H1",
+      "R008": "CI badge with no .github/workflows in the repo",
+      "R010": "ToC entry 'Setup' links to #installation",
+      "R011": "'Usage / \u7528\u6cd5' double-language heading",
+      "R012": "cli README is missing Testing and Maintenance sections"
+    }
+  }
+}

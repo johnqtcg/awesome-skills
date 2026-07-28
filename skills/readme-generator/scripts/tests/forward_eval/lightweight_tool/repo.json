@@ -1,0 +1,15 @@
+{
+  "scenario": "lightweight_tool",
+  "expected_project_type": "cli",
+  "expected_base_type": "cli",
+  "expected_verdict": "READY",
+  "note": "A small internal Go tool: <5 top-level dirs, no CI, no deploy surface, no manifest-declared distribution entry. Discovery reports lightweight_eligible=true but does NOT promote \u2014 'audience is internal' is a judgement no probe can make, and inferring it downgraded public SDKs. The Audience Gate decides and records it via --type=lightweight, which is what `scan_as` models here.",
+  "files": {
+    "go.mod": "module github.com/acme/logparser\n\ngo 1.22\n",
+    "main.go": "package main\n\nfunc main() {}\n",
+    "parser.go": "package main\n\nfunc parse(s string) string { return s }\n",
+    "parser_test.go": "package main\n\nimport \"testing\"\n\nfunc TestParse(t *testing.T) {\n\tif parse(\"a\") != \"a\" {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n"
+  },
+  "scan_as": "lightweight",
+  "expected_lightweight_eligible": true
+}

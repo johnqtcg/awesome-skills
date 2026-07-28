@@ -1,0 +1,11 @@
+{
+  "golden_file": "golden-lightweight.md",
+  "project_type": "lightweight",
+  "note": "golden-lightweight.md: no Makefile, no CI, no .env.example, no LICENSE.",
+  "files": {
+    "go.mod": "module logparser\n\ngo 1.22\n",
+    "main.go": "package main\n\nfunc main() {}\n",
+    "parser.go": "package main\n",
+    "parser_test.go": "package main\n\nimport \"testing\"\n\nfunc TestParse(t *testing.T) {}\n"
+  }
+}

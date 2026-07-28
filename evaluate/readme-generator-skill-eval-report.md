@@ -254,22 +254,33 @@ All 10 items matched the actual `##` headings exactly, which follows the skill's
 
 `readme-generator` is a **multi-file skill**. `SKILL.md` contains the core rules, and references are loaded on demand.
 
+> **Re-measured 2026-07-28** after the routing/forward-eval hardening. The sizes below are
+> current. The pass-rate and cost-effectiveness figures in §5.2 and §5.3 come from the
+> original eval run against the pre-hardening skill and have **not** been re-run — treat
+> them as the baseline they were measured against, not as a claim about the current build.
+
 | File | Lines | Bytes | Estimated tokens | When loaded |
 |------|------|------|-----------|---------|
-| **SKILL.md** | 403 | 18,755 | **~4,688** | Always |
-| `references/templates.md` | 372 | 7,512 | ~1,878 | When generating from scratch |
-| `references/golden-service.md` | 144 | 4,357 | ~1,089 | Service projects |
-| `references/golden-cli.md` | 102 | 2,638 | ~660 | CLI projects |
-| `references/golden-library.md` | 103 | 3,007 | ~752 | Library projects |
-| `references/golden-monorepo.md` | 93 | 2,951 | ~738 | Monorepo (on demand) |
-| `references/golden-lightweight.md` | 61 | 1,685 | ~421 | Small projects |
-| `references/anti-examples.md` | 182 | 3,306 | ~826 | During refactoring |
-| `references/checklist.md` | 171 | 10,389 | ~2,597 | During refactoring |
-| `references/command-priority.md` | 279 | 8,496 | ~2,124 | When commands conflict |
-| `scripts/discover_readme_needs.sh` | 239 | 9,499 | ~2,375 | Always (step 1) |
-| `references/bilingual-guidelines.md` | 28 | 1,086 | ~271 | Chinese / bilingual (on demand) |
-| `references/monorepo-rules.md` | 49 | 1,687 | ~421 | Monorepo (on demand) |
+| **SKILL.md** | 396 | 18,120 | **~4,530** | Always |
+| `references/templates.md` | 423 | 9,199 | ~2,300 | When generating from scratch |
+| `references/golden-service.md` | 153 | 4,996 | ~1,249 | Service projects |
+| `references/golden-cli.md` | 107 | 3,060 | ~765 | CLI projects |
+| `references/golden-library.md` | 110 | 3,489 | ~872 | Library projects |
+| `references/golden-monorepo.md` | 96 | 3,158 | ~790 | Monorepo (on demand) |
+| `references/golden-lightweight.md` | 61 | 1,671 | ~418 | Small projects |
+| `references/anti-examples.md` | 182 | 3,312 | ~828 | During refactoring |
+| `references/checklist.md` | 173 | 11,012 | ~2,753 | During refactoring |
+| `references/command-priority.md` | 305 | 10,732 | ~2,683 | When commands conflict |
+| `references/badges-and-governance.md` | 66 | 3,628 | ~907 | Badge/governance decisions (on demand) |
+| `references/bilingual-guidelines.md` | 28 | 1,086 | ~272 | Chinese / bilingual (on demand) |
+| `references/monorepo-rules.md` | 49 | 1,687 | ~422 | Monorepo (on demand) |
+| `scripts/discover_readme_needs.sh` | 452 | 18,689 | — (executed, not read) | Always (step 3) |
+| `scripts/lint_readme.py` | 617 | 25,341 | — (executed, not read) | Self-check (step 11) |
 | **Description (always in context)** | - | - | ~60 | Always |
+
+Both scripts are **run**, not loaded into context: the agent reads their TSV/finding output
+(a few hundred tokens), not their source. The earlier version of this table counted
+`discover_readme_needs.sh` as ~2,375 context tokens, which overstated the always-on cost.
 
 **Typical loading scenarios** (following the "Load References Selectively" rule):
 

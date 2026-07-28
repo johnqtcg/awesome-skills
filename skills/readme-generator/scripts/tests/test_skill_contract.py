@@ -1,4 +1,6 @@
+import importlib.util
 import re
+import sys
 import unittest
 from pathlib import Path
 
@@ -11,6 +13,10 @@ COMMAND_REF = SKILL_DIR / "references" / "command-priority.md"
 GOLDEN_REF = SKILL_DIR / "references" / "golden-examples.md"
 ANTI_EXAMPLES_REF = SKILL_DIR / "references" / "anti-examples.md"
 DISCOVER_SCRIPT = SKILL_DIR / "scripts" / "discover_readme_needs.sh"
+LINT_SCRIPT = SKILL_DIR / "scripts" / "lint_readme.py"
+COVERAGE_DOC = Path(__file__).resolve().parent / "COVERAGE.md"
+TEST_MODULES = ("test_skill_contract.py", "test_golden_scenarios.py",
+                "test_discovery_script.py", "test_forward_eval.py")
 
 
 def frontmatter(text: str) -> str:
@@ -27,6 +33,35 @@ def skill_text() -> str:
 def anti_examples_text() -> str:
     """Anti-examples live in references/anti-examples.md (progressive disclosure)."""
     return ANTI_EXAMPLES_REF.read_text()
+
+
+def _load_linter():
+    """Load lint_readme.py so the contract tests check templates against the SAME
+    required-section table the grader enforces, instead of a second copy that can drift.
+
+    Registered in sys.modules before exec: @dataclass resolves field types through
+    sys.modules[cls.__module__], which is None for an unregistered spec-built module.
+    """
+    spec = importlib.util.spec_from_file_location("lint_readme", LINT_SCRIPT)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+def templates() -> dict:
+    """{'service': body, 'library': …} extracted from references/templates.md."""
+    text = TEMPLATES_REF.read_text()
+    out = {}
+    pattern = re.compile(
+        r"^## Template ([A-E]): ([^\n]+)\n(.*?)^````\s*(?:markdown)?\s*\n(.*?)^````",
+        re.MULTILINE | re.DOTALL,
+    )
+    letter_to_type = {"A": "service", "B": "library", "C": "cli",
+                      "D": "monorepo", "E": "lightweight"}
+    for m in pattern.finditer(text):
+        out[letter_to_type[m.group(1)]] = m.group(4)
+    return out
 
 
 # ── 1. Frontmatter ──────────────────────────────────────────────
@@ -238,14 +273,30 @@ class TestChineseBilingual(unittest.TestCase):
 # ── 10. Update Triggers ────────────────────────────────────────
 
 class TestUpdateTriggers(unittest.TestCase):
-    def test_section_exists(self):
-        self.assertIn("README Update Triggers", skill_text())
+    """The staleness matrix lives in references/checklist.md (it is refactor-mode
+    detail, loaded on demand). SKILL.md must still route to it, and the matrix must
+    still carry every trigger — a pointer to an empty page is worse than no pointer."""
 
-    def test_key_triggers(self):
+    def test_skill_routes_to_the_matrix(self):
         data = skill_text()
-        for trigger in ["Makefile target", "CI workflow", "Environment variable",
-                         "LICENSE", "Go version"]:
+        self.assertIn("Refactor Mode", data)
+        refactor = data[data.index("## Refactor Mode"):]
+        self.assertIn("checklist.md", refactor)
+        self.assertIn("update-trigger matrix", refactor.lower())
+
+    def test_key_triggers_present_in_checklist(self):
+        data = CHECKLIST_REF.read_text()
+        self.assertIn("Update Trigger Matrix", data)
+        for trigger in ["Makefile target", "CI workflow", "Env variable",
+                         "LICENSE", "Go/Node version"]:
             self.assertIn(trigger, data, f"trigger missing: {trigger}")
+
+    def test_matrix_row_count(self):
+        data = CHECKLIST_REF.read_text()
+        start = data.index("## Update Trigger Matrix")
+        section = data[start:data.index("##", start + 5)]
+        rows = [l for l in section.splitlines() if l.startswith("|") and "---" not in l]
+        self.assertGreaterEqual(len(rows), 10, f"only {len(rows)} matrix rows")
 
 
 # ── 11. Templates Reference ────────────────────────────────────
@@ -535,11 +586,243 @@ class TestCrossCuttingIntegrity(unittest.TestCase):
         for ref in [TEMPLATES_REF, GOLDEN_REF, COMMAND_REF, CHECKLIST_REF]:
             self.assertTrue(ref.exists(), f"reference missing: {ref.name}")
 
+    def test_no_orphaned_reference_files(self):
+        """Every file in references/ must be reachable from SKILL.md.
+
+        Progressive disclosure only works if the always-loaded file says when to load
+        each reference. A reference nothing points at is dead weight that still has to
+        be maintained — and both files added during the 2026-07-28 hardening
+        (badges-and-governance, language-snippets) could have landed that way."""
+        skill = skill_text()
+        # SKILL.md points at the golden set by pattern (`golden-<type>.md`) rather than
+        # naming five files; expand it so the pattern counts as a mention.
+        if "golden-<type>.md" in skill:
+            skill += "\n" + "\n".join(
+                f"golden-{k}.md" for k in
+                ("service", "library", "cli", "monorepo", "lightweight")
+            )
+        orphans = [
+            f.name for f in sorted((SKILL_DIR / "references").glob("*.md"))
+            if f.name not in skill and f.stem not in skill
+        ]
+        self.assertEqual([], orphans,
+                         f"references never mentioned in SKILL.md: {orphans}")
+
     def test_total_content_depth(self):
-        total = 0
-        for f in [SKILL_MD, TEMPLATES_REF, GOLDEN_REF, COMMAND_REF, CHECKLIST_REF]:
+        """Counts every reference, not a hand-picked five: SKILL.md shrank when detail
+        moved into new reference files, and a fixed five-file list would have read that
+        as content loss."""
+        total = len(SKILL_MD.read_text().splitlines())
+        refs = sorted((SKILL_DIR / "references").glob("*.md"))
+        self.assertGreaterEqual(len(refs), 8, "reference set unexpectedly small")
+        for f in refs:
             total += len(f.read_text().splitlines())
         self.assertGreaterEqual(total, 1500, f"total content: {total} lines (need ≥1500)")
+
+    def test_skill_md_stays_lean(self):
+        """SKILL.md is always in context; references are loaded on demand. 400 lines is
+        the working budget this skill was refactored down to (was 492)."""
+        lines = len(skill_text().splitlines())
+        self.assertLessEqual(lines, 400, f"SKILL.md is {lines} lines (budget 400)")
+
+
+# ── 22. Templates satisfy their own required-section matrix ─────
+
+class TestTemplateRequiredSections(unittest.TestCase):
+    """SKILL.md §Structure Policy lists required sections per project type; the
+    templates are what an author actually fills in. Before this test the two
+    disagreed: Templates B, C, and D omitted sections the (then flat) required list
+    demanded, so following the skill exactly produced a README the skill would fail.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.lint = _load_linter()
+        cls.templates = templates()
+
+    def test_all_five_templates_extracted(self):
+        self.assertEqual(
+            {"service", "library", "cli", "monorepo", "lightweight"},
+            set(self.templates),
+            "template extraction broke — the rest of this class would vacuously pass",
+        )
+
+    def test_each_template_carries_its_required_sections(self):
+        for ptype, body in self.templates.items():
+            with self.subTest(template=ptype):
+                missing = self.lint.missing_sections(body, ptype)
+                self.assertEqual(
+                    [], missing,
+                    f"Template for {ptype!r} omits required section(s): {missing}",
+                )
+
+    def test_templates_do_not_carry_foreign_required_sections(self):
+        """A Library template with a Configuration section teaches service habits."""
+        self.assertNotIn("configuration", self.lint.REQUIRED_SECTIONS["library"])
+        library = self.templates["library"].lower()
+        self.assertNotIn("## configuration", library)
+
+    def test_license_placeholder_carries_the_missing_note(self):
+        """License is the documented exception to §Evidence Precedence: the section
+        never simply disappears. Two of the five templates offered no fallback text,
+        which is how "optional section, omit when missing" leaked back in."""
+        data = TEMPLATES_REF.read_text()
+        bare = data.count("{License type from LICENSE file.}")
+        self.assertEqual(0, bare,
+                         "a License placeholder with no missing-note fallback")
+        self.assertGreaterEqual(
+            data.count("Not found in repo — consider adding a LICENSE file"), 4,
+            "every template that has a License section needs the fallback wording",
+        )
+
+    def test_no_verification_language_in_any_template(self):
+        for ptype, body in self.templates.items():
+            with self.subTest(template=ptype):
+                for banned in ("Not verified", "not executed in this environment",
+                               "| Verified |"):
+                    self.assertNotIn(banned, body)
+
+
+# ── 23. Repo-aware linter contract ──────────────────────────────
+
+class TestLintReadmeScript(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.lint = _load_linter()
+
+    def test_script_exists_and_is_referenced(self):
+        self.assertTrue(LINT_SCRIPT.exists())
+        data = skill_text()
+        self.assertIn("lint_readme.py", data)
+        workflow = data[data.index("Generation Workflow"):]
+        self.assertIn("lint_readme.py", workflow,
+                      "the self-check step must be part of the workflow, not a footnote")
+
+    def test_every_finding_code_is_documented_in_the_module(self):
+        source = LINT_SCRIPT.read_text()
+        codes = sorted(set(re.findall(r'Finding\("(R\d{3})"', source)))
+        self.assertGreaterEqual(len(codes), 10, f"only {len(codes)} checks: {codes}")
+        for code in codes:
+            self.assertRegex(source, rf'{code}", (CRITICAL|STANDARD)',
+                             f"{code} has no severity")
+
+    def test_required_sections_cover_every_routed_type(self):
+        for ptype in ("service", "library", "cli", "monorepo", "lightweight"):
+            self.assertIn(ptype, self.lint.REQUIRED_SECTIONS)
+
+
+# ── 24. Coverage doc cannot go stale ────────────────────────────
+
+class TestCoverageDocIsCurrent(unittest.TestCase):
+    """COVERAGE.md previously claimed 151 tests and listed a TestAgentsConfig class
+    with an agents/openai.yaml that never existed anywhere in this repository. A
+    coverage document that overstates the suite is worse than none, because it is
+    read as evidence. These three checks make the numbers and the class names
+    machine-verifiable.
+
+    Counting is done by AST, not by running pytest: the suite must not depend on
+    being able to re-enter its own runner.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        import ast
+        cls.doc = COVERAGE_DOC.read_text()
+        cls.per_module = {}
+        cls.class_names = set()
+        for name in TEST_MODULES:
+            tree = ast.parse((Path(__file__).resolve().parent / name).read_text())
+            count = 0
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ClassDef):
+                    cls.class_names.add(node.name)
+                    count += sum(
+                        1 for b in node.body
+                        if isinstance(b, (ast.FunctionDef, ast.AsyncFunctionDef))
+                        and b.name.startswith("test_")
+                    )
+            cls.per_module[name] = count
+
+    def test_total_matches_the_live_suite(self):
+        total = sum(self.per_module.values())
+        claimed = re.search(r"\*\*Total:\s*(\d+)\s*tests?\*\*", self.doc)
+        self.assertIsNotNone(claimed, "COVERAGE.md has no '**Total: N tests**' line")
+        self.assertEqual(
+            total, int(claimed.group(1)),
+            f"COVERAGE.md claims {claimed.group(1)}; the suite defines {total} "
+            f"({self.per_module})",
+        )
+
+    def test_per_module_counts_match(self):
+        headline = {
+            "test_skill_contract.py": r"(\d+) contract",
+            "test_golden_scenarios.py": r"(\d+) golden-scenario",
+            "test_discovery_script.py": r"(\d+) discovery-behavioral",
+            "test_forward_eval.py": r"(\d+) forward-eval",
+        }
+        for module, pattern in headline.items():
+            with self.subTest(module=module):
+                m = re.search(pattern, self.doc)
+                self.assertIsNotNone(m, f"no count for {module} in COVERAGE.md")
+                self.assertEqual(self.per_module[module], int(m.group(1)))
+
+    def test_no_phantom_test_classes(self):
+        """Every class named in a COVERAGE.md table row must exist in the suite.
+
+        Table rows only, deliberately: the stale `TestAgentsConfig` entry lived in a
+        row, and the prose above must stay free to explain that such a class was
+        removed without the explanation itself tripping the check."""
+        rows = [l for l in self.doc.splitlines() if l.lstrip().startswith("|")]
+        named = set(re.findall(r"\b(Test[A-Z]\w+|[A-Z]\w*Test)\b", "\n".join(rows)))
+        named -= {"TestCase"}
+        phantom = sorted(named - self.class_names)
+        self.assertEqual([], phantom,
+                         f"COVERAGE.md names classes that do not exist: {phantom}")
+
+
+# ── 25. Golden section orders satisfy the same matrix ───────────
+
+class TestGoldenSectionOrders(unittest.TestCase):
+    """The matrix is asserted in four places: SKILL.md prose, lint_readme's table,
+    the templates, and the "Golden section order" lists in golden-examples.md. The
+    fourth was the last one still disagreeing — three of its five lists omitted
+    Documentation Maintenance while the skill required it."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.lint = _load_linter()
+        text = GOLDEN_REF.read_text()
+        cls.orders = {}
+        blocks = re.split(r"^## Example \d+: ", text, flags=re.MULTILINE)[1:]
+        name_to_type = {"go service": "service", "go library": "library",
+                        "cli tool": "cli", "monorepo": "monorepo",
+                        "lightweight internal tool": "lightweight"}
+        for block in blocks:
+            title = block.splitlines()[0].strip().lower()
+            ptype = name_to_type.get(title)
+            m = re.search(r"### Golden section order\n\n((?:\d+\. .+\n)+)", block)
+            if ptype and m:
+                cls.orders[ptype] = [
+                    re.sub(r"^\d+\.\s*", "", line).strip()
+                    for line in m.group(1).strip().splitlines()
+                ]
+
+    def test_all_five_orders_parsed(self):
+        self.assertEqual(
+            {"service", "library", "cli", "monorepo", "lightweight"},
+            set(self.orders),
+            "section-order extraction broke — the next test would vacuously pass",
+        )
+
+    def test_each_order_satisfies_its_matrix_row(self):
+        for ptype, items in self.orders.items():
+            with self.subTest(example=ptype):
+                synthetic = "\n".join(f"## {i}" for i in items)
+                missing = self.lint.missing_sections(synthetic, ptype)
+                self.assertEqual(
+                    [], missing,
+                    f"golden section order for {ptype!r} omits: {missing}",
+                )
 
 
 if __name__ == "__main__":

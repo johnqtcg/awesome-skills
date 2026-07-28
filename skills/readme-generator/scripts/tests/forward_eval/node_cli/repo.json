@@ -1,0 +1,14 @@
+{
+  "scenario": "node_cli",
+  "expected_project_type": "cli",
+  "expected_verdict": "READY",
+  "note": "package.json declares `bin`. The pre-audit router grepped raw text for \"bin\", so this shape and the library shape below were classified by string luck.",
+  "files": {
+    "package.json": "{\n  \"name\": \"csvkit\",\n  \"version\": \"1.3.0\",\n  \"bin\": { \"csvkit\": \"./src/cli.js\" },\n  \"engines\": { \"node\": \">=20\" },\n  \"scripts\": {\n    \"build\": \"node scripts/build.js\",\n    \"test\": \"node --test\",\n    \"lint\": \"eslint src\"\n  }\n}\n",
+    "src/cli.js": "#!/usr/bin/env node\nconsole.log('csvkit');\n",
+    "src/filter.js": "export function filter(rows) { return rows; }\n",
+    "test/filter.test.js": "import { test } from 'node:test';\ntest('filter', () => {});\n",
+    "scripts/build.js": "console.log('build');\n",
+    "LICENSE": "MIT License\n\nCopyright (c) 2026 Acme\n"
+  }
+}

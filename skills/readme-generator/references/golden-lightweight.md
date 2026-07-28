@@ -36,7 +36,7 @@ logparser/
 ## Testing
 
 ```bash
-go test ./...               # 12 tests, ~95% coverage
+go test ./...               # run tests
 go test -race ./...         # race detection
 ```
 

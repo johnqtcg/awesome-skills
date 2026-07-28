@@ -1,6 +1,11 @@
 # Golden Example: Go Library (Template B)
 
-**Repo signals**: `go.mod` (Go 1.21), exported `pkg/` with `validator.go`, no `cmd/`, no Makefile, `LICENSE` (Apache-2.0), `.github/workflows/test.yml`.
+**Repo signals**: `go.mod` (Go 1.21) · exported `pkg/` with `validator.go`, `error.go`, `rules.go` ·
+`validator_test.go` containing `Benchmark*` functions · no `cmd/` · no Makefile · no coverage
+config · `LICENSE` (Apache-2.0) · `.github/workflows/test.yml`.
+
+Note what is absent: benchmark *functions* exist, benchmark *results* do not, and there is no
+coverage config. So the README shows how to run both and reports neither.
 
 ````markdown
 ![CI](https://github.com/acme/govalidate/actions/workflows/test.yml/badge.svg)
@@ -67,13 +72,11 @@ Full API reference: [pkg.go.dev/github.com/acme/govalidate](https://pkg.go.dev/g
 
 ## Benchmarks
 
+`validator_test.go` defines `BenchmarkValidateSmallStruct` and
+`BenchmarkValidateLargeStruct`. Run them locally:
+
 ```bash
 go test -bench=. -benchmem ./...
-```
-
-```
-BenchmarkValidateSmallStruct-8    5000000    240 ns/op    0 B/op    0 allocs/op
-BenchmarkValidateLargeStruct-8    1000000   1200 ns/op    0 B/op    0 allocs/op
 ```
 
 ## Testing
@@ -81,13 +84,26 @@ BenchmarkValidateLargeStruct-8    1000000   1200 ns/op    0 B/op    0 allocs/op
 ```bash
 go test ./...                # all tests
 go test -race ./...          # race detection
-go test -cover ./...         # coverage (~92%)
+go test -cover ./...         # coverage report
 ```
 
 ## License
 
 Apache-2.0 — see [LICENSE](LICENSE).
+
+## Documentation Maintenance
+
+Update this README when:
+- the exported API surface changes
+- a built-in rule is added or removed
+- the minimum Go version in `go.mod` changes
 ````
+
+**Why no benchmark numbers**: a benchmark result is a property of the machine that produced
+it. It belongs in a README only when the repo commits that output — a `benchstat` artifact
+under `testdata/`, or a published CI job — so a reader can trace it back. This repo has the
+benchmark *functions* and none of that output, so the README shows how to run them and
+reports nothing. Same rule for the coverage command.
 
 **Evidence mapping (assistant response)**:
 

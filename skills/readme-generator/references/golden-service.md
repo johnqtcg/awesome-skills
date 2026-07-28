@@ -1,6 +1,13 @@
 # Golden Example: Go Service (Template A)
 
-**Repo signals**: `go.mod` (Go 1.22), `cmd/api/main.go`, `internal/`, `Makefile` (15 targets), `.env.example`, `.github/workflows/ci.yml`, `LICENSE` (MIT), `CONTRIBUTING.md`, codecov config.
+**Repo signals**: `go.mod` (Go 1.22) · `cmd/api/main.go` · `internal/{handler,service,repository,cache}/` ·
+`migrations/` · `config/` · `Makefile` targets `help build-api run-api test test-race lint cover
+migrate-up mock swagger docker-build docker-run ci` · `.env.example` with `DB_URL REDIS_URL PORT
+LOG_LEVEL` · `.github/workflows/ci.yml` · `.codecov.yml` with `target: 80%` · `Dockerfile` ·
+`deploy/k8s/` · `docs/swagger/` · `LICENSE` (MIT) · `CONTRIBUTING.md`.
+
+Every number and command below traces to one of those signals. That is the point of the
+example: if a fact is not in the signal list, it does not appear in the README.
 
 ````markdown
 ![CI](https://github.com/acme/orderapi/actions/workflows/ci.yml/badge.svg)
@@ -10,7 +17,7 @@
 
 # OrderAPI
 
-High-throughput order processing service supporting 10K+ TPS with PostgreSQL and Redis caching.
+Order processing service backed by PostgreSQL, with a Redis caching layer.
 
 ## Quick Start
 
@@ -32,8 +39,10 @@ Verify:
 
 ```bash
 curl localhost:8080/health
-# {"status":"ok","version":"v1.2.0"}
 ```
+
+The response body is not shown: the repo has no fixture or handler test pinning its shape,
+and inventing one is the single easiest way for this README to go stale.
 
 ## Project Structure
 
@@ -48,7 +57,7 @@ orderapi/
 ├── migrations/           # SQL migration files (golang-migrate)
 ├── config/               # YAML config loader
 ├── docs/                 # API documentation
-├── Makefile              # 15 targets — run `make help`
+├── Makefile              # build/test/run targets — run `make help`
 └── .github/workflows/    # CI pipeline
 ```
 
@@ -88,7 +97,7 @@ make cover              # HTML coverage report → coverage.html
 make lint               # golangci-lint with project config
 ```
 
-Coverage target: 80% (enforced in CI).
+Coverage target: 80% — the value configured in `.codecov.yml`, not a measured result.
 
 ## API Documentation
 
@@ -136,7 +145,7 @@ Update this README when:
 | Quick Start | `Makefile` (run-api), `.env.example` | Targets and config exist |
 | Structure | `cmd/`, `internal/`, `migrations/`, `config/` | Directories present |
 | Configuration | `.env.example` | 4 variables defined |
-| Commands | `Makefile` (15 targets) | `make help` output |
+| Commands | root `Makefile` | targets listed in the repo signals above |
 | Testing | `Makefile` (test, cover, lint) | Targets present |
 | API Docs | `Makefile` (swagger), `docs/` | Swagger target exists |
 | Deployment | `Dockerfile`, `deploy/k8s/` | Docker and K8s configs |

@@ -1,0 +1,22 @@
+{
+  "good": {
+    "max_critical": 0,
+    "max_total": 0
+  },
+  "bad": {
+    "must_contain_codes": [
+      "R004",
+      "R007",
+      "R008",
+      "R009",
+      "R012"
+    ],
+    "why": {
+      "R004": "internal/pipeline/stage.go does not exist",
+      "R007": "97% coverage with no coverage config anywhere in the repo",
+      "R008": "codecov badge with no codecov config",
+      "R009": "no Quick Start \u2014 the primary entry path for a lightweight README",
+      "R012": "Commands, Structure, Testing, Maintenance all absent"
+    }
+  }
+}

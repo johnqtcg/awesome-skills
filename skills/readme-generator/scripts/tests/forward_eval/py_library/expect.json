@@ -1,0 +1,22 @@
+{
+  "good": {
+    "max_critical": 0,
+    "max_total": 0
+  },
+  "bad": {
+    "must_contain_codes": [
+      "R001",
+      "R004",
+      "R007",
+      "R008",
+      "R012"
+    ],
+    "why": {
+      "R001": "`make install` / `make test` with no Makefile; `cargo test` with no Cargo.toml",
+      "R004": "src/parsekit/api/reference.py does not exist",
+      "R007": "ns/op with no benchmark function, and a coverage percentage with no coverage config",
+      "R008": "license badge with no LICENSE file in the repo",
+      "R012": "library README is missing the Maintenance section"
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "scenario": "py_library",
+  "expected_project_type": "library",
+  "expected_verdict": "READY",
+  "note": "A pyproject-only repo. The pre-audit router had no Python branch at all, so this fell through to unknown/DEGRADED and the skill was told to emit a degraded README for a perfectly documentable package.",
+  "files": {
+    "pyproject.toml": "[project]\nname = \"parsekit\"\nversion = \"0.4.0\"\nrequires-python = \">=3.11\"\ndependencies = []\n\n[build-system]\nrequires = [\"hatchling\"]\nbuild-backend = \"hatchling.build\"\n",
+    "src/parsekit/__init__.py": "from .core import parse\n\n__all__ = [\"parse\"]\n",
+    "src/parsekit/core.py": "def parse(text: str) -> dict:\n    return {\"raw\": text}\n",
+    "tests/test_core.py": "from parsekit import parse\n\n\ndef test_parse():\n    assert parse(\"x\") == {\"raw\": \"x\"}\n",
+    ".github/workflows/test.yml": "name: test\non: [push]\njobs:\n  pytest:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: pytest\n"
+  }
+}

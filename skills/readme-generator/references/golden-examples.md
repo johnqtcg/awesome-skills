@@ -18,6 +18,8 @@ that routing, and how evidence mapping should look in practice.
 ## How To Use This File
 
 - Read only the example matching the detected project type.
+- Each "Golden section order" below satisfies the required-section matrix in SKILL.md
+  §Structure Policy — verified by `test_skill_contract.py::TestGoldenSectionOrders`.
 - Treat the examples as filled-in reference shapes, not copy-paste templates.
 - Every section shown below must still be grounded in real repository evidence.
 - If the target repo lacks evidence for a section shown in an example, omit that
@@ -105,6 +107,7 @@ that routing, and how evidence mapping should look in practice.
 6. Common Commands
 7. Testing
 8. License
+9. Documentation Maintenance
 
 ### Evidence mapping
 
@@ -152,6 +155,7 @@ that routing, and how evidence mapping should look in practice.
 8. Common Commands
 9. Testing
 10. License
+11. Documentation Maintenance
 
 ### Evidence mapping
 
@@ -197,6 +201,7 @@ that routing, and how evidence mapping should look in practice.
 6. Adding a New Module
 7. Docs / module pointers
 8. License note
+9. Documentation Maintenance
 
 ### Evidence mapping
 

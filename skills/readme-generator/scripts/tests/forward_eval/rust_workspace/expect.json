@@ -1,0 +1,22 @@
+{
+  "good": {
+    "max_critical": 0,
+    "max_total": 0
+  },
+  "bad": {
+    "must_contain_codes": [
+      "R001",
+      "R002",
+      "R004",
+      "R009",
+      "R012"
+    ],
+    "why": {
+      "R001": "`make build-all` with no Makefile in the workspace root",
+      "R002": "`npm run bootstrap` with no package.json",
+      "R004": "packages/core and packages/cli do not exist \u2014 the crates live under crates/",
+      "R009": "no Repository Overview and no Quick Start, both primary for a monorepo",
+      "R012": "Commands, Structure, Maintenance absent"
+    }
+  }
+}

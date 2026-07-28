@@ -1,6 +1,12 @@
 # Golden Example: CLI Tool (Template C)
 
-**Repo signals**: `go.mod` (Go 1.22), `cmd/csvtool/main.go`, `Makefile` (build, test, lint), `LICENSE` (MIT), no `.env.example`.
+**Repo signals**: `go.mod` (Go 1.22) · `cmd/csvtool/main.go` with a `cobra` command tree
+(`filter sort aggregate convert schema`) and its flag definitions · `Makefile` targets
+`build test lint release` · `.github/workflows/ci.yml` · `LICENSE` (MIT) · no `.env.example` ·
+no committed sample output.
+
+The last signal is why the Quick Start below shows invocations and destinations but never a
+row count or a rendered result.
 
 ````markdown
 ![CI](https://github.com/acme/csvtool/actions/workflows/ci.yml/badge.svg)
@@ -23,20 +29,19 @@ make build              # → ./bin/csvtool
 ## Quick Start
 
 ```bash
-# filter rows where age > 30, output as JSON
+# filter rows where age > 30, write JSON
 csvtool filter --where "age > 30" --format json data.csv
-
-# output:
-# data_filtered.json written (142 rows)
+# → writes data_filtered.json
 ```
 
 ```bash
-# sort by name, keep top 10
+# sort by name, keep the first 10 rows
 csvtool sort --by name --limit 10 data.csv -o top10.csv
-
-# output:
-# top10.csv written (10 rows)
+# → writes top10.csv
 ```
+
+The destination file is evidence (the flag parser defines `-o`); the row count is not — it
+depends on the input file, which the repo does not ship.
 
 ## Commands
 

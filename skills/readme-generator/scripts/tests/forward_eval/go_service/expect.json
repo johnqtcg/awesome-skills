@@ -1,0 +1,18 @@
+{
+  "good": {
+    "max_critical": 0,
+    "max_total": 0
+  },
+  "bad": {
+    "must_contain_codes": ["R001", "R003", "R004", "R005", "R006", "R007", "R008"],
+    "why": {
+      "R001": "`make bootstrap` / `make serve` / `make deploy` are not Makefile targets",
+      "R003": "JWT_SECRET and SMTP_HOST are absent from .env.example",
+      "R004": "internal/repository and deploy/k8s do not exist in the repo",
+      "R005": "OWNER/REPO left in the CI badge URL",
+      "R006": "'Not verified' status labels inside the README body",
+      "R007": "10K+ TPS, p99 latency, and an exact test count are run-time claims",
+      "R008": "coveralls badge with no coveralls config; CI badge names a workflow that is absent"
+    }
+  }
+}

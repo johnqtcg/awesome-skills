@@ -1,309 +1,246 @@
 ---
 name: readme-generator
 description: Generate or refactor project README.md files using repository evidence. Use when the user asks to create/rewrite/standardize README, improve documentation structure, or produce maintainable README templates for different project types (service/library/CLI/monorepo).
-allowed-tools: Read, Write, Grep, Glob, Bash(git log*), Bash(git diff*), Bash(bash*discover_readme_needs.sh*), Bash(make*), Bash(gh api*), Bash(go build*), Bash(go test*), Bash(go vet*), Bash(pytest*), Bash(cargo test*), Bash(node --test*)
+allowed-tools: Read, Write, Grep, Glob, Bash(git log*), Bash(git diff*), Bash(bash*discover_readme_needs.sh*), Bash(python3*lint_readme.py*), Bash(make*), Bash(gh api*), Bash(go build*), Bash(go test*), Bash(go vet*), Bash(pytest*), Bash(cargo test*), Bash(node --test*)
 ---
 
 # README Generator
 
-Generate high-quality README documents from codebase evidence, with clear structure, runnable commands, and maintenance rules.
+Generate high-quality README documents from codebase evidence, with clear structure,
+runnable commands, and maintenance rules.
 
 ## Core Rules
 
 - Base every statement on repository evidence (files, code, scripts, workflows, configs).
-- If key information is missing, write `Not found in repo` instead of guessing.
-- Exclude local/private tooling folders by default (for example `.codex/`) unless explicitly requested.
-- Keep naming/paths accurate and consistent with real repository layout.
-- Prefer concise sections, bullet lists, and short command blocks.
-- Keep internal workflow reporting out of README body by default. Evidence maps, scorecards, and verification-state reporting belong in the assistant response unless the user explicitly asks for them in the document.
-- Treat top-level `README.md` as a user-facing homepage first and a maintainer reference second, unless the user explicitly wants an internal-only README.
+- Keep internal workflow reporting out of the README body. Evidence maps, scorecards, and
+  verification state belong in the assistant response — see §Command Verifiability Gate.
+- Exclude local/private tooling folders by default (for example `.codex/`) unless asked.
+- Keep naming and paths consistent with the real repository layout.
+- Treat top-level `README.md` as a user-facing homepage first, a maintainer reference second.
+
+### Evidence Precedence (resolves "omit or mark?")
+
+One rule, applied by section class — there is no third case:
+
+| Section class | Evidence present | Evidence missing |
+|---|---|---|
+| **Required** for the project type (§Structure Policy) | Write it | Keep the heading, write `Not found in repo` |
+| **Optional** (§Optional Sections) | Write it | Omit entirely and list it in `sections_omitted` |
+
+### Facts vs Results (resolves "is this command fabricated?")
+
+A manifest proves a **toolchain**; only an artifact proves a **result**.
+
+- Evidence-backed: `go test ./...` when `go.mod` exists, `pytest` when `pyproject.toml`
+  exists, `make <target>` when that exact target is in the Makefile.
+- Not evidence-backed: coverage percentages, test counts, benchmark numbers, throughput,
+  latency, or a response body — unless the repo commits the artifact they come from
+  (`.codecov.yml`, a checked-in `benchstat` output, a golden fixture).
+- If a repo has a manifest but no test files, still show the toolchain command and add
+  `No test files found in repo` — the command is real, the coverage claim would not be.
 
 ## Quick Reference
 
 | When you need to… | Jump to |
 |---|---|
-| Generate README from scratch | §Pre-Generation Gates → §Project Type Routing → §Generation Workflow |
-| Update an existing README | §README Update Triggers + load `references/checklist.md` |
-| Chinese or bilingual output | §Chinese / Bilingual README Guidelines + load `references/bilingual-guidelines.md` |
-| Monorepo project | §Monorepo Rules + load `references/monorepo-rules.md` |
-| Lightweight / small project | §Lightweight Mode |
-| Calibrate ToC and navigation | §README Navigation Rule |
-| Check output quality | §README Quality Scorecard (3-Tier) |
-| Validate evidence mapping | §Evidence Mapping Output |
-| Check/avoid README anti-patterns | See §Anti-Examples for top failure; full catalog in `references/anti-examples.md` |
+| Generate from scratch | §Pre-Generation Gates → §Project Type Routing → §Generation Workflow |
+| Update an existing README | §Refactor Mode + `references/checklist.md` |
+| Chinese or bilingual output | §Chinese / Bilingual + `references/bilingual-guidelines.md` |
+| Monorepo / Lightweight | §Monorepo Rules + `references/monorepo-rules.md` · §Lightweight Template Mode |
+| Calibrate ToC, check quality | §README Navigation Rule · §README Quality Scorecard + `scripts/lint_readme.py` |
+| Evidence mapping, anti-patterns | §Evidence Mapping Output · §Anti-Examples (catalog in `references/anti-examples.md`) |
 
 ## Pre-Generation Gates (Mandatory)
 
 ### 1) Audience and Language Gate
 
-Before drafting, determine:
-
-- target readers: contributors, operators, API consumers, or end users
-- output language: Chinese / English / bilingual
-
-If unspecified, default to:
-
-- primary language follows existing repo docs
-- keep audience assumptions in working notes; only state them in README when they materially help readers
+Decide target readers (contributors / operators / API consumers / end users) and output
+language (Chinese / English / bilingual). If unspecified, follow the existing repo docs and
+keep audience assumptions in working notes, not in the README. This gate also owns the
+lightweight decision — see §Project Type Routing.
 
 ### 2) Project Type Routing
 
-Classify repository and choose template path:
+Discovery emits `project_type detected` (Service / Library / CLI / Monorepo — selects the
+**language command snippets**) and `project_type effective` (selects the **template and
+required sections**).
 
-- Service/backend app
-- Library/SDK
-- CLI tool
-- Monorepo (multiple apps/packages)
+**`effective` is the single answer** — generation, the Output Contract, and
+`scripts/lint_readme.py` all read it, so they cannot disagree.
 
-If uncertain, state assumption explicitly in README.
+**Discovery never promotes to `lightweight` on its own.** It reports
+`lightweight_eligible` plus a named `lightweight_blocked_by` list (5+ dirs · CI present ·
+deployment surface · public distribution surface · unclassified). Promotion is *your* call
+at the Audience Gate, because the deciding trigger — audience is internal contributors only
+— is a judgement no probe can make. Inferring it was harmful: a minimal public Go SDK
+(`go.mod` + `pkg/`, no CI, few dirs) was silently downgraded and lost Installation and API.
+Absence of CI is not evidence of absence of users, and a `library` is a public surface by
+definition. When the Gate does establish an internal audience on an eligible repo, record it
+with `lint_readme.py --type=lightweight` and report `lightweight` in the Output Contract.
 
-> Detection logic for these types is duplicated in `scripts/discover_readme_needs.sh` — change both together. Sync is guarded by `scripts/tests/test_discovery_script.py::TestRoutingSync`.
+> Routing logic lives in `scripts/discover_readme_needs.sh` — it reads Go, Node, Rust, and
+> Python manifests, workspace markers (`go.work`, `apps/`, `packages/`, npm `workspaces`,
+> Cargo `[workspace]`), and entrypoint locations. Change prose and script together; sync is
+> guarded by `scripts/tests/test_discovery_script.py::TestRoutingSync`.
 
 ### 3) Evidence Completeness Gate
 
-Before drafting, verify minimum evidence has been collected:
-
-- At least one entry point identified (`main.go`, `cmd/`, `package.json`, executable script)
-- Project type determined (service/library/CLI/monorepo/lightweight)
-- Command source located (Makefile, package.json, go.mod, or none)
-
-If the discovery script is available, run it first:
+Run discovery first and read its verdict — do not re-derive these by hand:
 
 ```bash
 bash "<path-to-skill>/scripts/discover_readme_needs.sh"
 ```
 
-If minimum evidence is insufficient (no entry point found, no build system detected):
-- Output a degraded README with only Project Overview + "Not found in repo" sections
-- Mark the output as `degraded: true` in the assistant response
-- List exactly what evidence is missing and suggest how to resolve
+The script emits an `entrypoint` inventory and a `verdict` line. Minimum evidence: at least
+one entrypoint, a determined project type, a located command source. `verdict status
+DEGRADED` names which of the three is missing.
+
+When degraded: output Project Overview plus `Not found in repo` sections only, set
+`degraded: true` in the assistant response, and list each missing item with a suggested
+resolution.
 
 ### 4) Badge Detection Gate (Mandatory)
 
-Badge generation is mandatory for every README generation. Before drafting, scan for badge evidence:
-- CI workflow files (`.github/workflows/*.yml`)
-- Coverage config (codecov, coveralls, Makefile `cover` target)
-- Language version (`go.mod`, `package.json engines`, `pyproject.toml`)
-- License file (`LICENSE`, `LICENSE.md`)
-
-If evidence exists, add badges. If no evidence exists for any badge type, skip that badge — do not fabricate. Document badge decisions in the Output Contract (`badges_added` field).
+Scan for badge evidence before drafting: CI workflow **files** (an empty
+`.github/workflows/` is not evidence), coverage config, language version, license file. Add
+a badge only when its evidence exists. Record the outcome in `badges_added`.
 
 ### 5) Command Verifiability Gate
 
-Do not fabricate command verification or health-check results.
-
-- If commands were executed, you may say so in the assistant response.
-- If commands were not executed, do not inject `Verified` / `Not verified in this environment` labels into README body by default.
-- In README itself, prefer evidence-backed install/run commands plus prerequisites.
-- Only add explicit verification-state wording inside the README when the user requests it or the repository clearly uses that style for internal docs.
-
-> **Hard rule**: verification-state phrases such as "not executed in this environment", "not verified", "Commands are derived from the Makefile and have not been executed" must **never** appear inside the README.md file itself. These belong exclusively in the assistant response (Output Contract). Even when the Scorecard checks H2, that check refers to the README file — keep all process language out of it.
+**Hard rule, no exceptions.** Verification-state language — `Verified`, `Not verified`,
+`not executed in this environment`, `PASS/FAIL`, scorecard output, `degraded: true` — never
+appears inside `README.md`; it belongs in the assistant response. This holds even when the
+user asks for a "verification table": produce it in the response and say why it is not in
+the file, because the label goes stale the moment it is committed. Inside the README, write
+evidence-backed install/run commands plus prerequisites.
 
 ## Badge Strategy
 
-Add badges at the top of README when evidence exists. Detection order:
+Detection order, which is also render order:
+**CI status** → **Coverage** → **Language version** → **License** → **Release**.
 
-1. **CI status**: detect from `.github/workflows/*.yml` → `![CI](https://github.com/OWNER/REPO/actions/workflows/FILE/badge.svg)`
-2. **Coverage**: detect from coverage config (codecov, coveralls) or Makefile `cover` target
-3. **Go version / Language version**: detect from `go.mod`, `package.json engines`, `pyproject.toml`
-4. **License**: detect from `LICENSE` file → `![License](https://img.shields.io/badge/license-MIT-blue)`
-5. **Release/tag**: detect from git tags or release workflow
-
-Badge ordering: CI → Coverage → Language version → License → Release
-
-Rules:
-- Only add badges with real URLs derivable from repo evidence.
-- Do not add placeholder badges with fake URLs.
-- If repo is private and badges won't render, note this and skip.
-
-Private-repo fallback (recommended wording):
+Only emit badges whose URL is derivable from repo evidence. For a private repo, skip the
+external badge URLs and add:
 
 `Badge note: repository is private; external badge URLs may not render outside authorized viewers.`
 
+→ URL templates per badge type and the community-file mapping live in
+`references/badges-and-governance.md`.
+
 ## Community and Governance Files
 
-Detect and reference these files when present:
-
-| File | README Action |
-|------|--------------|
-| `LICENSE` | Add License section or badge |
-| `CONTRIBUTING.md` | Add "Contributing" section linking to it |
-| `CODE_OF_CONDUCT.md` | Reference in Contributing section |
-| `SECURITY.md` | Add "Security" section linking to it |
-| `CHANGELOG.md` | Reference in Release/Versioning section |
-
-If `LICENSE` is missing, add a note: `License: Not found in repo — consider adding a LICENSE file.`
+Detect `LICENSE`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `CHANGELOG.md`;
+link each present file from the matching section. **License is the one exception to
+§Evidence Precedence** — an absent license is itself information, so the section never just
+disappears: present → name it; absent → `License: Not found in repo — consider adding a
+LICENSE file.` Only Lightweight mode on an internal repo omits it. Every other governance
+file follows the normal optional rule. → `references/badges-and-governance.md`.
 
 ## Key Evidence Targets
 
-Always scan these high-signal files before drafting or refactoring:
+Scan before drafting; absent targets are recorded per §Evidence Precedence, never guessed.
 
-- Entrypoints: `main.go`, `cmd/*`, executable scripts, `package.json`
-- Build/test hubs: `Makefile`, `go.mod`, `pyproject.toml`, `package.json`
-- CI and release: `.github/workflows/*`
-- Runtime/config: `.env.example`, `config/*`, `application.yml`, `docker-compose.yml`
-- Governance: `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md`
-- Existing docs: `README*.md`, `docs/*`
-
-If any of these are absent, record `Not found in repo` instead of filling the gap with assumptions.
+| Class | Files |
+|---|---|
+| Entrypoints | `main.go`, `cmd/*`, `package.json` `bin`/`main`, `src/main.rs`, `[project.scripts]`, executable scripts |
+| Build/test hubs | `Makefile`, `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml` |
+| CI and release | `.github/workflows/*` |
+| Runtime/config | `.env.example`, `config/*`, `application.yml`, `docker-compose.yml` |
+| Governance | `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md` |
+| Existing docs | `README*.md`, `docs/*` |
 
 ## Command Priority
 
-When multiple command sources exist, apply Command Priority in this order:
+`Makefile` target → language-native manifest (`go.mod`, `package.json`, `pyproject.toml`,
+`Cargo.toml`) → CI workflow command → direct tool invocation.
 
-1. `Makefile` target when it exists and is clearly maintained
-2. Language-native manifest (`go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml`)
-3. CI workflow commands when they confirm the maintained path
-4. Direct tool invocation only when no stronger source exists
-
-If sources conflict, load `references/command-priority.md` and resolve the conflict before drafting commands.
+Every command must resolve against one of these — a `make` target absent from the Makefile
+is a fabrication, not a suggestion, and each half of `make test && make deploy` is checked
+separately. On conflict, load `references/command-priority.md`.
 
 ## Structure Policy
 
-Use required + optional sections, not one rigid template.
+Required sections are **per project type**, not one flat list. A Library README carrying a
+Configuration section, or a CLI README carrying Deployment, is noise.
 
-### Required Sections
+| Project type | Required sections |
+|---|---|
+| service | Quick Start, Prerequisites, Structure, Commands, Configuration, Testing, Maintenance |
+| cli | Installation, Usage, Commands, Testing, Maintenance |
+| library | Installation, Usage, API, Testing, Maintenance |
+| monorepo | Repository Overview, Quick Start, Commands, Structure, Maintenance |
+| lightweight | Quick Start, Commands, Structure, Testing, Maintenance |
 
-1. Badges (when evidence exists)
-2. Project overview
-3. Prerequisites (CLI / Service types)
-4. Quick start
-5. Code/project structure
-6. Common commands
-7. Configuration and environment
-8. Testing and quality checks
-9. Documentation maintenance note
+Every type opens with an overview: name, one-sentence value proposition, then badges when
+evidence exists. Missing a **primary** section (Quick Start / Installation / Usage /
+Repository Overview, per type) is a Critical defect; missing any other required section is
+Standard — `lint_readme.py` reports them as R009 and R012 respectively.
 
-For public/open-source homepage-style READMEs, prefer this top order when evidence exists:
+**Sections and commands are separate axes.** This matrix picks sections from
+`project_type effective`; the commands inside them come from
+`references/language-snippets.md`, picked by the manifest the repo has. A Node CLI and a Go
+CLI share Template C and share none of their command blocks. The matrix is the same table
+`lint_readme.py` enforces (`REQUIRED_SECTIONS`), kept in sync by
+`test_forward_eval.py::RequiredSectionSyncTest`.
 
-1. Value proposition
-2. Highlights / key capabilities
-3. Prerequisites
-4. Install
-5. Quick start
-6. End-to-end example
-7. Reference sections (structure, configuration, commands, testing, docs)
-
-**Prerequisites section format** (CLI / Service types): list required runtime dependencies first, then optional ones. Each entry should state version constraint, purpose, and a setup link when non-trivial. Example:
-
-```markdown
-## Prerequisites
-
-- Go `>= 1.21` ([download](https://go.dev/dl/))
-- A GitHub Personal Access Token with `repo` read permission ([create one](https://github.com/settings/tokens))
-- _(Optional)_ An OpenAI API key — required only for the AI summary feature
-- _(Optional)_ Docker — required only for `make docker-build`
-```
+For public homepages, order the top of the file: value proposition → highlights →
+prerequisites → install → quick start → end-to-end example → reference sections.
 
 ### Optional Sections (include only when evidence exists)
 
-- Architecture / data flow
-- Deployment / operations
-- API usage examples
-- Release/versioning
-- Contributing guide (link to `CONTRIBUTING.md` if present)
-- License
-- Security notes (link to `SECURITY.md` if present)
-- Contact and support (optional; no forced SLA field)
-
-If a section is not applicable, omit it or mark `N/A (reason)`.
+Architecture / data flow · Deployment / operations · API usage examples · Release and
+versioning · Contributing · Security notes · Contact and support. Missing evidence means
+omit — see §Evidence Precedence. License is deliberately not on this list
+(§Community and Governance Files).
 
 ## Lightweight Template Mode
 
-Use lightweight mode when repository scope is small and a full template would create noise.
-
-Trigger conditions (any 2):
-
-- fewer than 5 top-level functional directories
-- no deployment/ops workflows in repo
-- no public API/SDK surface
-- README target is internal contributors only
-
-Lightweight required sections:
-
-1. Project overview
-2. Quick start
-3. Common commands
-4. Project structure (short)
-5. Testing and quality checks
-6. Documentation maintenance note
-
-In lightweight mode, skip optional heavy sections unless explicitly requested.
+Triggers: fewer than 5 top-level functional directories · no deployment/ops workflows in
+the repo · no public API/SDK surface · README targets internal contributors only. Discovery
+reports the first three as `lightweight_eligible`; the fourth is yours to assert
+(§Project Type Routing). Required sections: Project overview, Quick start, Common commands,
+Project structure (short), Testing and quality checks, Documentation maintenance note.
+Skip heavy optional sections unless explicitly requested.
 
 ## Chinese / Bilingual README Guidelines
 
-Apply this section when the repository or user request indicates Chinese or bilingual output.
-
-- Keep English for package names, command names, file paths, environment variables, and precise technical identifiers.
-- Translate headings and explanatory prose to match the target audience language.
-- Do not use double-language headings like `## Quick Start / 快速开始`.
-- In bilingual mode, use Chinese as the primary prose and keep English technical terms inline.
-- Prefer exact Chinese headings such as `## 快速开始`, `## 项目结构`, and `## 常用命令`.
-
-Example heading style:
-
-````markdown
-## 快速开始
-
-先安装依赖，再运行服务：
-
-```bash
-make install-tools
-make run-api
-```
-````
+Keep English for package names, commands, file paths, environment variables, and precise
+technical identifiers; translate headings and prose. Never use double-language headings
+(`## Quick Start / 快速开始`) — prefer `## 快速开始`, `## 项目结构`, `## 常用命令`. In
+bilingual mode Chinese is the primary prose with English technical terms inline.
+→ `references/bilingual-guidelines.md` for the full rules.
 
 ## README Navigation Rule
 
-For long READMEs, navigation is part of usability.
-
-- If the README has many major sections or reads like a long-form reference doc, keep a compact table of contents with major sections only.
-- Do not remove an existing useful table of contents solely to reduce length.
-- If the README is short enough to scan without scrolling effort, a table of contents can be omitted.
-
-**ToC size calibration**: ToC length should match project complexity. A simple CLI or single-purpose library should have 7–10 ToC entries at most. Inflating the ToC by listing every section creates noise and obscures the user's actual navigation path.
-
-Exclude from ToC by default (keep in document body for those who scroll):
-
-- Architecture / data flow internals (downgrade to `###` subsection under Project Structure)
-- Contributor-only sections (Testing/CI details, Common Commands reference tables, Docker build steps)
-- Any section that is not a direct action step for the primary audience
-
-**ToC label / heading consistency rule**: the display text of every ToC entry must exactly match the `##` heading it links to. If you shorten a ToC label for readability, you must rename the section heading to match. Mismatches disorient readers who click a link and land on a differently-titled section.
+- Keep a compact ToC for long, reference-shaped READMEs; omit it when the file is scannable
+  without scrolling. Never delete a useful existing ToC just to shorten.
+- **Size**: 7–10 entries max for a simple CLI or library. Exclude architecture internals,
+  contributor-only sections, and anything that is not a direct action step for the primary
+  audience — they stay in the body.
+- **Label consistency**: every ToC entry's text must match the `##` heading it links to.
 
 ## Monorepo Rules
 
-When the detected project type is monorepo:
-
-- Use a repository overview table instead of a deep tree dump.
-- Link to submodule READMEs instead of duplicating every module's internal details.
-- Document shared root commands only; module-specific commands belong in each module README.
-- If `LICENSE` is missing, say `Not found in repo` at the root rather than guessing package-level license inheritance.
-
-Load `references/monorepo-rules.md` before drafting or calibrating a monorepo README.
+Repository overview table instead of a deep tree dump · link to submodule READMEs rather
+than duplicating internals · document shared root commands only · missing root `LICENSE` →
+`Not found in repo`, never guessed inheritance. Load `references/monorepo-rules.md` first.
 
 ## End-to-End Example Rule
 
-For CLI tools, converters, generators, and similar products, prefer at least one end-to-end example that shows:
-
-1. the user input command or API call
-2. the resulting file name, status line, or response shape
-3. a short excerpt of the generated output when evidence exists
-
-This is usually more useful than showing an isolated output snippet alone.
-
-**No-fabrication constraint**: if actual output cannot be derived from repository evidence (no sample output files, no test fixtures, no documented response format), show only the invocation and describe the destination generically — do not invent output content.
+For CLI tools, converters, and generators, show one complete example: the input command,
+then the resulting file name or response shape. **No-fabrication constraint**: with no
+sample output, fixture, or documented response format in the repo, show the invocation and
+describe the destination generically — never an invented JSON body, row count, or status
+line.
 
 ```markdown
 schema-gen generate --format json --output ./schemas ./internal/models
 # → writes schema file(s) to ./schemas/
 ```
 
-Never write a fabricated JSON/YAML body as if it were real output when no evidence exists for the exact shape.
-
 ## Anti-Examples (BAD / GOOD Markdown Pairs)
 
-**Most common failure — process-state labels in README body:**
+Most common failure — process-state labels in the README body:
 
 BAD:
 
@@ -313,7 +250,6 @@ BAD:
 | Command | Verified |
 |---------|----------|
 | `make test` | ⚠️ Not verified |
-| `make lint` | ✅ Verified |
 ````
 
 GOOD:
@@ -327,69 +263,51 @@ make lint
 ```
 ````
 
-This applies to all process-state language: `Verified`, `Not verified in this environment`, `PASS/FAIL` — these belong in the assistant response, not the README body.
-
-When refactoring an existing README that may contain low-frequency anti-patterns (fabricated badges, guessed config values, monorepo tree dumps, double-language headings, output-without-input snippets):
-→ Load `references/anti-examples.md` for the full BAD/GOOD catalog with correction guidance for each pattern.
+→ Load `references/anti-examples.md` for the full catalog (fabricated badges, guessed
+config, monorepo tree dumps, double-language headings, output-without-input).
 
 ## Generation Workflow
 
-1. **Detect audience** — decide whether the README is for end users, contributors, operators, or mixed readers.
-2. **Detect language** — choose English, Chinese, or bilingual output before drafting.
-3. **Discover repository facts** — run `scripts/discover_readme_needs.sh` if available.
-4. **Collect key evidence targets** — read `main.go`, `Makefile`, `go.mod`, `.github/workflows`, config files, and existing README/docs.
-5. **Route project type** — choose Template A/B/C/D/E based on repo structure.
-6. **Choose command source** — apply Command Priority and resolve command conflicts before copying commands.
-7. **Select supporting references** — load template, checklist, golden example, bilingual guidance, or monorepo rules only when needed.
-8. **Draft sections** — build the README from evidence, keeping homepage-first reader flow.
-9. **Calibrate structure** — add or trim ToC, badges, end-to-end examples, and optional sections based on project complexity.
-10. **Polish language** — remove internal process wording, duplicated headings, guessed configuration, and filler prose.
-11. **Verify evidence mapping** — ensure each non-trivial section maps back to repo files.
-12. **Return output contract** — include the evidence mapping, scorecard, degraded flag, and omitted sections in the assistant response.
+1. **Detect audience** — end users, contributors, operators, or mixed.
+2. **Detect language** — English, Chinese, or bilingual.
+3. **Run discovery** — `scripts/discover_readme_needs.sh`; read verdict and entrypoints.
+4. **Collect evidence** — entrypoints, `Makefile`, manifests, workflows, config, existing docs.
+5. **Route** — template from `project_type effective`, commands from the manifest.
+6. **Choose command source** — apply Command Priority; resolve conflicts before drafting.
+7. **Load references selectively** — template, snippets, golden example, checklist, rules.
+8. **Draft sections** — from evidence, in homepage-first reader order.
+9. **Calibrate** — ToC, badges, end-to-end example, optional sections.
+10. **Polish** — remove process wording, duplicate headings, guessed config, filler.
+11. **Self-check** — `python3 "<path-to-skill>/scripts/lint_readme.py" <repo-dir> <readme-path>`;
+    fix every critical finding before returning.
+12. **Return the output contract** — evidence mapping, scorecard, degraded flag, omissions.
+
+## Refactor Mode (Existing README)
+
+Preserve valuable prose, fix contradictory commands, replace guessed content, re-evaluate
+the project type, re-run the scorecard. Load `references/checklist.md` for the refactor
+checklist and the update-trigger matrix that detects staleness after code changes (new
+entrypoint, env var, Makefile target, CI workflow, `LICENSE`, Go version, and the rest).
 
 ## Output Style
 
-- Short, direct prose. Fenced blocks for trees and commands.
-- No internal rubric language (`scorecard`, `pass/fail`, `verified`) in README body unless requested.
+Short, direct prose; fenced blocks for trees and commands; no internal rubric language.
+Explanatory notes about *why* a section looks the way it does belong outside the document,
+never inside it.
 
 ## Evidence Mapping Output (Required)
 
-After generating or refactoring README, output an evidence mapping table in the assistant response, not inside the README itself, unless the user explicitly asks for an in-document appendix:
+Output this in the assistant response, not inside the README:
 
 | README Section | Evidence File(s) | Evidence Snippet/Reason |
 |---|---|---|
 | Quick Start | `Makefile`, `go.mod` | target/command exists |
 | Configuration | `.env.example`, `config/*` | variables defined |
-| Testing | `Makefile`, CI workflow | test/lint commands present |
 
-Rules:
-
-- Every non-trivial section should map to at least one evidence source.
-- If evidence is missing, map the section to `Not found in repo`.
-- Keep mapping concise (one line per section is enough).
-
-## README Update Triggers
-
-When these changes occur, the corresponding README sections should be updated:
-
-| Repository Change | README Sections to Update |
-|------------------|--------------------------|
-| New `cmd/*/main.go` entrypoint added | Project Structure, Common Commands, Quick Start |
-| Environment variable added/changed | Configuration and Environment |
-| Makefile target added/renamed | Common Commands |
-| CI workflow changed | Badges, Testing and Quality |
-| New package/module added | Project Structure |
-| API endpoint added/changed | API Usage Examples (if present) |
-| Deployment config changed | Deployment / Operations (if present) |
-| Dependency major version bumped | Quick Start prerequisites |
-| `LICENSE` / `CONTRIBUTING.md` added | License, Contributing sections |
-| Go version / Node version bumped | Badges, Quick Start prerequisites |
-
-Use this matrix to check README staleness after code changes. When updating docs with `update-doc` skill, cross-reference this table.
+Every non-trivial section maps to at least one evidence source, or to `Not found in repo`;
+one line per section.
 
 ## Output Contract (Mandatory Fields)
-
-Every README generation or refactoring must produce these outputs in the assistant response:
 
 | # | Field | Required | Description |
 |---|-------|----------|-------------|
@@ -398,14 +316,12 @@ Every README generation or refactoring must produce these outputs in the assista
 | 3 | `template_used` | Always | Template A–E name |
 | 4 | `evidence_mapping` | Always | Section → evidence file table |
 | 5 | `scorecard` | Always | 3-tier scorecard result |
-| 6 | `degraded` | When applicable | true/false — whether evidence was insufficient |
-| 7 | `missing_evidence` | When degraded | List of missing items and suggested actions |
-| 8 | `badges_added` | When applicable | List of badge types added, or "skipped (reason)" |
-| 9 | `sections_omitted` | When applicable | Sections skipped with reason |
+| 6 | `degraded` | When applicable | whether evidence was insufficient |
+| 7 | `missing_evidence` | When degraded | Missing items and suggested actions |
+| 8 | `badges_added` | When applicable | Badge types added, or "skipped (reason)" |
+| 9 | `sections_omitted` | When applicable | Optional sections skipped, with reason |
 
 ### Machine-Readable Summary (JSON)
-
-When the user requests structured output or for CI integration, append:
 
 ```json
 {
@@ -413,12 +329,7 @@ When the user requests structured output or for CI integration, append:
   "language": "zh",
   "template_used": "Template A: Service",
   "degraded": false,
-  "scorecard": {
-    "critical": "4/4",
-    "standard": "5/6",
-    "hygiene": "4/4",
-    "result": "PASS"
-  },
+  "scorecard": {"critical": "4/4", "standard": "5/6", "hygiene": "4/4", "result": "PASS"},
   "badges_added": ["CI", "Coverage", "Go Version", "License"],
   "sections_omitted": [],
   "missing_evidence": []
@@ -427,66 +338,62 @@ When the user requests structured output or for CI integration, append:
 
 ## README Quality Scorecard (3-Tier)
 
-### Critical Tier (any FAIL → overall FAIL)
+Critical Tier — any FAIL means the whole output FAILs:
 
 | # | Check | PASS Rule |
 |---|-------|-----------|
 | C1 | Evidence-backed claims | Every non-trivial statement traces to a repo file |
-| C2 | No fabricated content | Zero guessed commands, URLs, config values, or paths |
-| C3 | Quick Start present and actionable | Reader can run the project in ≤ 3 steps |
-| C4 | Correct project type routing | Template matches actual repo layout |
+| C2 | No fabricated content | Zero guessed commands, URLs, config values, paths, or metrics |
+| C3 | Primary onboarding path present and actionable | Reader gets running in ≤ 3 steps. The path is per type: **Quick Start** for Service / Monorepo / Lightweight, **Installation + Usage** for CLI / Library — the same set `lint_readme.py` treats as primary (R009) |
+| C4 | Correct project type routing | Template matches the discovery verdict |
 
-### Standard Tier (≥ 4/6 to PASS)
+Standard Tier — ≥ 4/6 to PASS:
 
 | # | Check | PASS Rule |
 |---|-------|-----------|
 | S1 | Command source attribution | Commands traced to Makefile / scripts / native tools |
-| S2 | Structure section with purpose | Key directories listed with one-line description |
+| S2 | Structure section with purpose | Key directories listed with one-line descriptions |
 | S3 | Config/env section present | Required variables documented, source file cited |
-| S4 | Testing commands included | At least test + lint commands with practical defaults |
+| S4 | Testing commands included | Test + lint commands from a real command source |
 | S5 | Badges evidence-based | Only real URLs; private-repo fallback applied if needed |
-| S6 | Audience and language explicit | Stated in working notes or README when it helps readers |
+| S6 | Audience and language explicit | Stated in working notes, or in README when it helps |
 
-### Hygiene Tier (≥ 3/4 to PASS)
+Hygiene Tier — ≥ 3/4 to PASS:
 
 | # | Check | PASS Rule |
 |---|-------|-----------|
-| H1 | Maintenance trigger note | "Update this README when..." section present |
-| H2 | No internal process labels | No `Verified` / `PASS/FAIL` / scorecard language in README body. Also excludes execution-state phrases like "not executed in this environment" — those belong in the Output Contract only. |
-| H3 | Navigation and ToC quality | TOC present when needed; size calibrated to project complexity (7–10 entries for simple projects); contributor-only sections excluded; every ToC label matches its `##` heading exactly |
+| H1 | Maintenance trigger note | "Update this README when…" section present |
+| H2 | No internal process labels | No verification state or scorecard language in the body |
+| H3 | Navigation and ToC quality | Sized to complexity; every label matches its heading |
 | H4 | Optional sections gated | Architecture / Deployment / API only when evidence exists |
 
 Output format: `Critical: X/4 | Standard: X/6 | Hygiene: X/4 → PASS/FAIL`
 
-## Skill Maintenance
+`scripts/lint_readme.py` mechanically checks the **high-frequency** violations of C1, C2,
+H2, H3: undefined `make`/npm targets, env vars absent from `.env.example`, non-existent
+paths, placeholder residue, metrics with no committed artifact, unevidenced badges, missing
+required sections, ToC/heading mismatches, process labels.
 
-Run regression checks for this skill with:
-
-```bash
-bash "<path-to-skill>/scripts/run_regression.sh"
-```
+It is a floor, not the tier. A linter-clean README can still fail C1/C2 — a plausible but
+wrong prose claim, a command that exists yet does the wrong thing, a structure description
+that is stale rather than invented. Read the output as "no *detectable* fabrication", then
+judge the tiers yourself.
 
 ## Load References Selectively
 
-When generating a README from scratch or switching template:
-→ Load `references/templates.md` for Template A–E structures and section checklists.
+- Generating from scratch or switching template → `references/templates.md`
+  (Template A–E skeletons and the prerequisites format).
+- Filling a template's command blocks → `references/language-snippets.md`
+  (Go / Node / Python / Rust install, build, test, lint, and version lines).
+- Calibrating output quality for a detected type → `references/golden-<type>.md`; index at
+  `references/golden-examples.md`.
+- Command conflicts across Makefile / package.json / CI → `references/command-priority.md`.
+- Final review of a refactor → `references/checklist.md`.
+- Refactoring a README with suspected anti-patterns → `references/anti-examples.md`.
+- Chinese or bilingual output → `references/bilingual-guidelines.md`.
+- Monorepo detected → `references/monorepo-rules.md`.
+- Badge URL templates and governance-file mapping → `references/badges-and-governance.md`.
 
-When you need to match a golden-quality example for a specific project type (service / library / cli / monorepo / lightweight), or for calibrating output quality against a reference:
-→ Load `references/golden-<type>.md` (the file matching the detected type) for calibrated output examples. See `references/golden-examples.md` for the index.
-
-When command conflicts appear (Makefile + package.json + CI scripts all define overlapping commands):
-→ Load `references/command-priority.md` for the resolution precedence rules.
-
-When updating an existing README (refactor mode), during the final review phase:
-→ Load `references/checklist.md` for the section-by-section refactor checklist.
-
-When refactoring an existing README that may contain fabricated badges, guessed config, monorepo tree dumps, double-language headings, or output-without-input patterns:
-→ Load `references/anti-examples.md` for the full BAD/GOOD catalog with correction guidance for each anti-pattern.
-
-When the output language is Chinese or bilingual:
-→ Load `references/bilingual-guidelines.md` for heading style, language-split rules, and bilingual anti-patterns.
-
-When the detected project type is monorepo:
-→ Load `references/monorepo-rules.md` for tree-depth limits, per-app pointer tables, and submodule README linking rules.
-
-Run `scripts/discover_readme_needs.sh` first (step 1 of Generation Workflow) to collect repo facts deterministically.
+Run `scripts/discover_readme_needs.sh` first (workflow step 3) to collect repo facts
+deterministically, and `scripts/lint_readme.py` last (step 11) to check the draft against
+those same facts. Skill regression: `bash "<path-to-skill>/scripts/run_regression.sh"`.

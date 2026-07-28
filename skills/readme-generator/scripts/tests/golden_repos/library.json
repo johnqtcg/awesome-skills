@@ -1,0 +1,14 @@
+{
+  "golden_file": "golden-library.md",
+  "project_type": "library",
+  "note": "golden-library.md declares no Makefile and no coverage config \u2014 both absences matter.",
+  "files": {
+    "go.mod": "module github.com/acme/govalidate\n\ngo 1.21\n",
+    "pkg/validator.go": "package govalidate\n\nfunc New() {}\n",
+    "pkg/error.go": "package govalidate\n",
+    "pkg/rules.go": "package govalidate\n",
+    "pkg/validator_test.go": "package govalidate\n\nimport \"testing\"\n\nfunc BenchmarkValidateSmallStruct(b *testing.B) {}\nfunc BenchmarkValidateLargeStruct(b *testing.B) {}\n",
+    ".github/workflows/test.yml": "name: test\non: [push]\n",
+    "LICENSE": "Apache License\nVersion 2.0, January 2004\n"
+  }
+}

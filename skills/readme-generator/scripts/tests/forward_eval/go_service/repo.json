@@ -1,0 +1,20 @@
+{
+  "scenario": "go_service",
+  "expected_project_type": "service",
+  "expected_verdict": "READY",
+  "note": "Materialized into a temp dir at test time. Checking these files into skills/ directly would let pytest collect the fixture's own tests and would put a second .env.example inside the repo tree.",
+  "files": {
+    "go.mod": "module github.com/acme/orderapi\n\ngo 1.22\n",
+    "cmd/api/main.go": "package main\n\nfunc main() {}\n",
+    "internal/handler/health.go": "package handler\n\nfunc Health() string { return \"ok\" }\n",
+    "internal/handler/health_test.go": "package handler\n\nimport \"testing\"\n\nfunc TestHealth(t *testing.T) {\n\tif Health() != \"ok\" {\n\t\tt.Fatal(\"bad\")\n\t}\n}\n",
+    "internal/service/order.go": "package service\n\ntype Order struct{ ID string }\n",
+    "internal/cache/redis.go": "package cache\n",
+    "migrations/0001_init.sql": "CREATE TABLE orders (id text primary key);\n",
+    "Makefile": "help:\n\t@grep -E '^[a-zA-Z_-]+:' Makefile\n\ninstall-tools:\n\tgo install github.com/golangci/golangci-lint/cmd/golangci-lint@latest\n\nbuild-api:\n\tgo build -o ./bin/api ./cmd/api\n\nrun-api:\n\tgo run ./cmd/api\n\ntest:\n\tgo test ./...\n\nlint:\n\tgolangci-lint run\n\ncover:\n\tgo test -coverprofile=coverage.out ./...\n\nmigrate-up:\n\tmigrate -path migrations up\n",
+    ".env.example": "DB_URL=\nREDIS_URL=\nPORT=8080\nLOG_LEVEL=info\n",
+    ".github/workflows/ci.yml": "name: ci\non: [push]\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - uses: actions/checkout@v4\n      - run: make test\n",
+    ".codecov.yml": "coverage:\n  status:\n    project:\n      default:\n        target: 80%\n",
+    "LICENSE": "MIT License\n\nCopyright (c) 2026 Acme\n"
+  }
+}

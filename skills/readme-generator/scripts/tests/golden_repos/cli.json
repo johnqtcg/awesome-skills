@@ -1,0 +1,12 @@
+{
+  "golden_file": "golden-cli.md",
+  "project_type": "cli",
+  "note": "golden-cli.md declares no .env.example and no committed sample output.",
+  "files": {
+    "go.mod": "module github.com/acme/csvtool\n\ngo 1.22\n",
+    "cmd/csvtool/main.go": "package main\n\nfunc main() {}\n",
+    "Makefile": "build:\n\t@true\ntest:\n\t@true\nlint:\n\t@true\nrelease:\n\t@true\n",
+    ".github/workflows/ci.yml": "name: ci\non: [push]\n",
+    "LICENSE": "MIT License\n\nCopyright (c) 2026 Acme\n"
+  }
+}

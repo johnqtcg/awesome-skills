@@ -79,7 +79,7 @@ GOOD:
 ```markdown
 # MyService
 
-高性能订单处理服务，支持每秒 10K+ 事务。
+订单处理服务，使用 PostgreSQL 存储、Redis 缓存。
 
 ## Quick Start
 

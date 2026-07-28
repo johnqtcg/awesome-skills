@@ -1,0 +1,20 @@
+{
+  "golden_file": "golden-monorepo.md",
+  "project_type": "monorepo",
+  "note": "golden-monorepo.md declares no LICENSE \u2014 the missing-license note must appear.",
+  "files": {
+    "go.work": "go 1.22\n\nuse ./apps/api\nuse ./apps/worker\n",
+    "apps/api/go.mod": "module api\n\ngo 1.22\n",
+    "apps/api/main.go": "package main\n",
+    "apps/api/README.md": "# api\n",
+    "apps/worker/go.mod": "module worker\n\ngo 1.22\n",
+    "apps/worker/main.go": "package main\n",
+    "apps/worker/README.md": "# worker\n",
+    "packages/shared/go.mod": "module shared\n\ngo 1.22\n",
+    "packages/shared/types.go": "package shared\n",
+    "packages/shared/README.md": "# shared\n",
+    "scripts/build.sh": "#!/bin/sh\n",
+    "Makefile": "help:\n\t@true\ninstall-tools:\n\t@true\nrun-api:\n\t@true\nrun-worker:\n\t@true\ntest:\n\t@true\ntest-api:\n\t@true\ntest-worker:\n\t@true\nlint:\n\t@true\nbuild-all:\n\t@true\nci:\n\t@true\n",
+    ".github/workflows/ci.yml": "name: ci\non: [push]\n"
+  }
+}

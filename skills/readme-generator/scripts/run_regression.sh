@@ -9,42 +9,48 @@ echo "============================================"
 echo "  readme-generator skill regression suite"
 echo "============================================"
 
+run_suite() {
+  local label="$1" file="$2"
+  echo ""
+  echo "${label}"
+  if python3 -c "import pytest" >/dev/null 2>&1; then
+    python3 -m pytest "${SKILL_DIR}/scripts/tests/${file}" -v
+  else
+    echo "  pytest not installed; falling back to unittest"
+    python3 "${SKILL_DIR}/scripts/tests/${file}"
+  fi
+}
+
 echo ""
-echo "[1/4] Validate skill frontmatter"
+echo "[1/5] Validate skill frontmatter"
 if [[ -f "${VALIDATOR}" ]]; then
   python3 "${VALIDATOR}" "${SKILL_DIR}"
 else
   echo "  validator not found at ${VALIDATOR}; skip quick_validate"
 fi
 
-echo ""
-echo "[2/4] Run contract tests"
-if python3 -c "import pytest" >/dev/null 2>&1; then
-  python3 -m pytest "${SKILL_DIR}/scripts/tests/test_skill_contract.py" -v
-else
-  echo "  pytest not installed; falling back to unittest"
-  python3 "${SKILL_DIR}/scripts/tests/test_skill_contract.py"
-fi
-
-echo ""
-echo "[3/4] Run golden scenario tests"
-if python3 -c "import pytest" >/dev/null 2>&1; then
-  python3 -m pytest "${SKILL_DIR}/scripts/tests/test_golden_scenarios.py" -v
-else
-  echo "  pytest not installed; falling back to unittest"
-  python3 "${SKILL_DIR}/scripts/tests/test_golden_scenarios.py"
-fi
-
-echo ""
-echo "[4/4] Run discovery script behavioral tests"
-if python3 -c "import pytest" >/dev/null 2>&1; then
-  python3 -m pytest "${SKILL_DIR}/scripts/tests/test_discovery_script.py" -v
-else
-  echo "  pytest not installed; falling back to unittest"
-  python3 "${SKILL_DIR}/scripts/tests/test_discovery_script.py"
-fi
+run_suite "[2/5] Contract tests"                    test_skill_contract.py
+run_suite "[3/5] Golden scenario tests"             test_golden_scenarios.py
+run_suite "[4/5] Discovery script behavioral tests" test_discovery_script.py
+run_suite "[5/5] Forward evaluation"                test_forward_eval.py
 
 echo ""
 echo "============================================"
 echo "  All regression checks passed"
 echo "============================================"
+
+# Coverage honesty. The forward-eval layer proves the GRADER separates a grounded
+# README from a fabricated one. It does not prove a live model produces grounded
+# READMEs — that requires README_GEN_EVAL_CMD. Say so out loud rather than letting a
+# green suite imply coverage it does not have.
+if [[ -z "${README_GEN_EVAL_CMD:-}" ]]; then
+  echo ""
+  echo "  GAP: live forward eval skipped (README_GEN_EVAL_CMD unset)."
+  echo "       Verified: the rules exist, routing is correct, the grader discriminates,"
+  echo "       and every golden example the skill ships survives that grader."
+  echo "       NOT verified: that a live model reliably produces a passing README."
+  echo ""
+  echo "       Enable it (needs an authenticated CLI — a sandboxed subprocess without"
+  echo "       credentials exits 'Not logged in', which now FAILs rather than skips):"
+  echo "         README_GEN_EVAL_CMD='claude -p --model sonnet' bash scripts/run_regression.sh"
+fi

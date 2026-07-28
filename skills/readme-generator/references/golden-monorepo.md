@@ -1,6 +1,9 @@
 # Golden Example: Monorepo (Template D)
 
-**Repo signals**: `apps/api/`, `apps/worker/`, `packages/shared/`, root `Makefile`, `.github/workflows/ci.yml`, `go.work`, no LICENSE.
+**Repo signals**: `apps/api/` and `apps/worker/` (each with `go.mod` and `README.md`) ·
+`packages/shared/` · `go.work` · `scripts/` · root `Makefile` targets `help install-tools
+run-api run-worker test test-api test-worker lint build-all ci` · `.github/workflows/ci.yml` ·
+no LICENSE.
 
 ````markdown
 ![CI](https://github.com/acme/platform/actions/workflows/ci.yml/badge.svg)
@@ -42,13 +45,13 @@ make ci                     # full CI pipeline
 ```
 platform/
 ├── apps/
-│   ├── api/                # HTTP API (Go 1.22, chi router)
-│   └── worker/             # Kafka consumer (Go 1.22)
+│   ├── api/                # HTTP API — see apps/api/README.md
+│   └── worker/             # Async job processor — see apps/worker/README.md
 ├── packages/
 │   └── shared/             # Common types, middleware, errors
 ├── scripts/                # Build and deploy scripts
 ├── go.work                 # Go workspace file
-├── Makefile                # Root orchestration (12 targets)
+├── Makefile                # Root orchestration — run `make help`
 └── .github/workflows/      # CI pipeline
 ```
 
@@ -88,6 +91,6 @@ Update this README when:
 | Badges | `.github/workflows/ci.yml` | CI workflow only (no LICENSE) |
 | Repository Overview | `apps/`, `packages/` | Directory structure |
 | Quick Start | `Makefile` (run-api, run-worker) | Targets present |
-| Commands | `Makefile` (12 targets) | `make help` output |
+| Commands | root `Makefile` | targets listed in the repo signals above |
 | Structure | `go.work`, `apps/`, `packages/` | Workspace layout |
 | License | Not found in repo | No LICENSE file |
