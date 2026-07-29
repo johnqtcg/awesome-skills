@@ -235,5 +235,141 @@ class TestGolden010VisualRegression(unittest.TestCase):
             self.assertIn(pattern, self.full_text)
 
 
+class TestGolden011TauriDesktop(unittest.TestCase):
+    """Tauri must route AWAY from Playwright.
+
+    This fixture previously asserted the opposite — that the skill should tell
+    Playwright to attach to a "Tauri WebView port". Playwright cannot drive
+    WKWebView / WebView2 / WebKitGTK, so that guidance was unimplementable. The
+    `must_not_appear` assertion exists so the wrong answer cannot come back.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.golden = load_golden("011_tauri_desktop")
+        cls.full_text = all_skill_text()
+
+    def test_scenario_type(self) -> None:
+        self.assertEqual(self.golden["scenario_type"], "stop_condition")
+
+    def test_rules_fire(self) -> None:
+        for rule in self.golden["skill_rules_that_must_fire"]:
+            self.assertIn(rule, self.full_text, f"rule not found: {rule}")
+
+    def test_routes_to_webdriverio(self) -> None:
+        self.assertIn("@wdio/tauri-service", self.full_text)
+        self.assertIn("tauri-driver", self.full_text)
+
+    def test_wrong_playwright_guidance_absent(self) -> None:
+        for banned in self.golden["must_not_appear"]:
+            self.assertNotIn(
+                banned,
+                self.full_text,
+                f"Playwright-for-Tauri guidance reintroduced: {banned!r}. "
+                "Tauri renders in the OS webview; Playwright cannot attach.",
+            )
+
+
+class TestGolden012NativeMobileRejection(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.golden = load_golden("012_native_mobile_rejection")
+        cls.full_text = all_skill_text()
+
+    def test_scenario_type(self) -> None:
+        self.assertEqual(self.golden["scenario_type"], "stop_condition")
+
+    def test_rules_fire(self) -> None:
+        for rule in self.golden["skill_rules_that_must_fire"]:
+            self.assertIn(rule, self.full_text, f"rule not found: {rule}")
+
+    def test_defers_to_native_tools(self) -> None:
+        for tool in self.golden["expected_deferral_tools"]:
+            self.assertIn(tool, self.full_text, f"deferral target missing: {tool}")
+
+    def test_scope_boundary_stated(self) -> None:
+        self.assertIn("Out of Playwright scope", self.full_text)
+
+
+class TestGolden013MultiBrowserMatrixCI(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.golden = load_golden("013_multi_browser_matrix_ci")
+        cls.full_text = all_skill_text()
+
+    def test_scenario_type(self) -> None:
+        self.assertEqual(self.golden["scenario_type"], "ci_gate_design")
+
+    def test_rules_fire(self) -> None:
+        for rule in self.golden["skill_rules_that_must_fire"]:
+            self.assertIn(rule, self.full_text, f"rule not found: {rule}")
+
+    def test_ci_elements(self) -> None:
+        for elem in self.golden["expected_ci_elements"]:
+            self.assertIn(elem, self.full_text)
+
+    def test_all_browsers_documented(self) -> None:
+        for browser in self.golden["context"]["browsers"]:
+            self.assertIn(browser, self.full_text, f"browser not covered: {browser}")
+
+
+class TestGolden014IframeEmbeddedContent(unittest.TestCase):
+    """Guards the gap that motivated this fixture.
+
+    The fixture shipped requiring `frameLocator` / `contentFrame`, but neither
+    token existed anywhere in the skill and no test checked — so the fixture
+    protected nothing. These assertions make the gap visible.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.golden = load_golden("014_iframe_embedded_content")
+        cls.full_text = all_skill_text()
+
+    def test_scenario_type(self) -> None:
+        self.assertEqual(self.golden["scenario_type"], "new_journey_coverage")
+
+    def test_rules_fire(self) -> None:
+        for rule in self.golden["skill_rules_that_must_fire"]:
+            self.assertIn(rule, self.full_text, f"rule not found: {rule}")
+
+    def test_iframe_apis_documented(self) -> None:
+        for pattern in self.golden["expected_code_patterns"]:
+            self.assertIn(
+                pattern,
+                self.full_text,
+                f"iframe API {pattern!r} required by fixture 014 but absent from the skill",
+            )
+
+    def test_payment_side_effect_gate_applies(self) -> None:
+        self.assertIn("Side-Effect Gate", self.full_text)
+        # Sandbox confirmation is what keeps a payment E2E from moving real money.
+        self.assertIn("pk_test_", self.full_text)
+
+    def test_third_party_frame_internals_not_asserted(self) -> None:
+        self.assertIn("do not assert its internal dom", self.full_text.lower())
+
+
+class TestEveryFixtureHasATestClass(unittest.TestCase):
+    """A fixture with no test class is decoration, not coverage.
+
+    Fixtures 011-014 sat untested while COVERAGE.md claimed "all fixtures
+    tested". This test makes adding a fixture without a test a hard failure.
+    """
+
+    def test_all_fixtures_referenced_by_a_test_class(self) -> None:
+        source = Path(__file__).read_text()
+        missing = []
+        for path in sorted(GOLDEN_DIR.glob("*.json")):
+            if f'load_golden("{path.stem}")' not in source:
+                missing.append(path.name)
+        self.assertEqual(
+            [],
+            missing,
+            f"golden fixtures with no test class: {missing}. "
+            "Every fixture must be loaded by a test or it protects nothing.",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

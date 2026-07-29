@@ -68,7 +68,11 @@ await expect(page.getByText('Saved successfully')).toBeVisible();
 await page.getByRole('link', { name: 'Profile' }).click();
 await page.waitForURL('**/profile');
 
-// GOOD — wait for specific API when it is the acceptance criterion
+// GOOD — wait for specific API when it is the acceptance criterion.
+// Order is load-bearing: create the promise BEFORE the triggering click.
+// Playwright delivers only events that arrive after the waiter is installed, so
+// `await page.waitForResponse(...)` placed *after* the click hangs whenever the
+// response already landed.
 const responsePromise = page.waitForResponse(resp =>
   resp.url().includes('/api/orders') && resp.status() === 200
 );
@@ -167,9 +171,33 @@ await expect(page.getByText('Registration successful')).toBeVisible();
 
 ## Minimal Config Baseline
 
+This is a template, not a drop-in. Three values are **repository facts you must
+verify**, not defaults you may assume:
+
+| Value | Verify against |
+|-------|----------------|
+| `testDir` | where specs actually live (`e2e_directory` from the discovery script) |
+| `webServer.command` | a script that exists in `package.json` (`dev_command` / `start_command`) |
+| the dev port | the framework's actual port (`detected_port`); Vite is 5173, Next 3000, Nuxt 3000, CRA 3000 |
+
+A wrong `webServer.command` or port does not fail clearly — Playwright waits the
+full `timeout` and reports "Timed out waiting for the web server", which reads as
+a slow app rather than a misconfiguration.
+
 ```ts
 // playwright.config.ts
 import { defineConfig } from '@playwright/test';
+
+// VERIFY these two against the repository before using this config.
+const DEV_COMMAND = 'npm run dev';        // must exist in package.json scripts
+const DEV_URL = 'http://localhost:3000';  // must match the framework's real port
+
+// Falling back to localhost is right for a developer laptop and wrong for CI: a
+// CI run with E2E_BASE_URL unset would boot a dev server and pass against it,
+// reporting green for an environment nobody meant to test. Fail loudly instead.
+if (process.env.CI && !process.env.E2E_BASE_URL) {
+  throw new Error('E2E_BASE_URL must be set in CI — refusing to fall back to localhost');
+}
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -181,21 +209,31 @@ export default defineConfig({
     ['json', { outputFile: 'test-results/results.json' }],
   ],
   use: {
-    baseURL: process.env.E2E_BASE_URL || 'http://localhost:3000',
+    baseURL: process.env.E2E_BASE_URL ?? DEV_URL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
     actionTimeout: 10_000,
     navigationTimeout: 30_000,
   },
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-  },
+
+  // Only start a server when testing locally. Pointing at a deployed
+  // environment while also booting a local server tests the wrong target.
+  webServer: process.env.E2E_BASE_URL
+    ? undefined
+    : {
+        command: DEV_COMMAND,
+        url: DEV_URL,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+      },
 });
 ```
+
+If the port or dev command cannot be determined from the repository, say so in the
+Output Contract and leave the constants as explicit TODOs rather than guessing —
+a config that looks complete but points at the wrong port costs more to debug
+than one that is visibly unfinished.
 
 ## Repeatability Commands
 
@@ -223,22 +261,75 @@ npx playwright show-report
 
 Before generating Playwright code, read the project's `package.json` or `package-lock.json`.
 
-### Playwright Version Rules
+### Playwright API Availability
 
-| Version | Rule |
-|---------|------|
-| < 1.27 | Do NOT use `getByRole`, `getByLabel`, `getByTestId` (use `locator` with CSS) |
-| < 1.30 | Do NOT use `toPass()` assertion |
-| < 1.32 | Do NOT use `filter({ hasNot })` |
-| < 1.35 | Do NOT use `expect(locator).toBeAttached()` |
-| ≥ 1.40 | Prefer `webServer` config over manual startup scripts |
+Each row is the version that **introduced** the API. Below that version the API
+does not exist and the generated test will throw at runtime.
 
-### Node.js Version Rules
+| API | Introduced | Below that version, use instead |
+|-----|-----------|--------------------------------|
+| `getByRole` / `getByLabel` / `getByTestId` / `getByPlaceholder` | 1.27 | `locator()` with a stable attribute selector |
+| `expect(...).toPass()` | 1.29 | `expect.poll()` (1.21+) or a manual retry loop |
+| `filter({ hasNot })` / `filter({ hasNotText })` | 1.33 | `filter({ has })` inverted at the locator level |
+| `expect(locator).toBeAttached()` | 1.33 | `expect(locator).toHaveCount(1)` |
+| `page.frameLocator()` | 1.17 | `page.frame({ name })` + frame-scoped queries |
+| `Locator.contentFrame()` | 1.43 | `page.frameLocator(...)` directly |
+| `webServer` in config | 1.14 | manual startup script + readiness poll |
 
-| Version | Rule |
-|---------|------|
-| < 16 | Playwright ≥ 1.30 not supported |
-| < 18 | Playwright ≥ 1.40 not supported; warn about EOL |
+Verify before generating: `npx playwright --version`, or read the pinned
+`@playwright/test` version in `package.json` / lockfile. When the version cannot
+be determined, restrict output to APIs available in the oldest version the repo
+could plausibly be on, and say so in the Output Contract.
+
+### Node.js Compatibility
+
+There are **two different Node constraints** and they do not agree. Quoting one
+while meaning the other is how a project ends up nominally installable and
+formally unsupported.
+
+#### 1. Package engine minimum — what blocks `npm install`
+
+From the `engines.node` field of the published `@playwright/test` manifest:
+
+| Playwright | `engines.node` |
+|-----------|----------------|
+| 1.25 – 1.34 | `>=14` |
+| 1.35 – 1.44 | `>=16` |
+| 1.45 – 1.61 | `>=18` |
+| 1.62+ | `>=20` |
+
+Read the other way when Node is what is pinned: Node 16 caps you at Playwright
+1.44, Node 18 caps you at 1.61.
+
+This is a floor, not an endorsement. Below it, install fails outright — so never
+present "ready to run".
+
+#### 2. Officially supported runtime — what Playwright tests against
+
+From Playwright's documented System requirements:
+
+> Node.js: latest 22.x, 24.x or 26.x.
+
+Plus Windows 11+/Server 2019+/WSL, macOS 14+, and Debian 12–13 or Ubuntu
+22.04/24.04/26.04 (x86-64 or arm64).
+
+#### Reconciling them
+
+Node 20 satisfies `engines` for Playwright 1.62 but sits **outside** the supported
+matrix. Both statements are true and neither replaces the other:
+
+| Installed Node | `npm install` | Supported? | What to say |
+|---------------|---------------|-----------|-------------|
+| below the `engines` floor | fails | no | upgrade required; not runnable |
+| meets `engines`, outside the supported list | succeeds | no | runnable, unsupported — flag it, do not claim "supported" |
+| latest 22.x / 24.x / 26.x | succeeds | yes | fully supported |
+
+Report which of the three the project is in. "It installs" is not "it is
+supported", and an unsupported-runtime bug will not be accepted upstream.
+
+Release notes add a third, coarser signal: Node 16 support was removed in 1.54 and
+Node 18 deprecated in the same release. Treat Node 18 and 20 as "works now,
+migrate to an actively supported major".
 
 ### Framework Adaptation
 

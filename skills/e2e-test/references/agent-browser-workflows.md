@@ -10,6 +10,7 @@ Use this file for exploration, failure reproduction, and flow-to-code conversion
 4. [Command Reference](#4-command-reference)
 5. [Screenshot and Evidence Strategy](#5-screenshot-and-evidence-strategy)
 6. [Common Pitfalls](#6-common-pitfalls)
+7. [Command Starters](#7-command-starters)
 
 ## 1) Exploration Workflow
 
@@ -72,11 +73,13 @@ Use Agent Browser when:
 
 ```bash
 # 1. set up same state as failing test
-agent-browser open <URL-from-failing-test>
+agent-browser open "${E2E_BASE_URL}/login"
 
-# 2. follow the exact steps from the test
-agent-browser fill @email "user@test.com"
-agent-browser fill @password "password"
+# 2. follow the exact steps from the test.
+#    Pass credentials by env reference — a literal typed here lands in the shell
+#    history and in this transcript.
+agent-browser fill @email "${E2E_USER}"
+agent-browser fill @password "${E2E_PASS}"
 agent-browser click @btn-signin
 agent-browser wait navigation
 
@@ -132,11 +135,16 @@ agent-browser snapshot -i
 
 Playwright conversion:
 ```ts
+// The signup password is a real credential for the account being created —
+// read it from the environment rather than committing a literal.
+const SIGNUP_PASS = process.env.E2E_SIGNUP_PASS;
+test.skip(!SIGNUP_PASS, 'E2E_SIGNUP_PASS not set — see docs/e2e-setup.md');
+
 test('new user can register', async ({ page }) => {
   await page.goto('/signup');
   await page.getByLabel('Name').fill('Test User');
   await page.getByLabel('Email').fill(`e2e-${Date.now()}@example.com`);
-  await page.getByLabel('Password').fill('StrongP@ss1');
+  await page.getByLabel('Password').fill(SIGNUP_PASS!);
   await page.getByRole('button', { name: 'Register' }).click();
 
   await page.waitForURL('**/welcome');
@@ -148,6 +156,8 @@ Key differences from Agent Browser version:
 - Dynamic email (`Date.now()`) for data isolation.
 - `getByLabel`/`getByRole` instead of snapshot `@ref` IDs.
 - `expect()` assertion instead of visual inspection.
+- Credential from `process.env` with a skip guard, not the literal typed during
+  exploration.
 
 ## 4) Command Reference
 

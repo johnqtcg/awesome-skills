@@ -16,6 +16,7 @@ Use this file when writing or refactoring Playwright code that should live in th
 10. [Page Object vs Domain Helper](#10-page-object-vs-domain-helper)
 11. [Multi-Browser and Viewport](#11-multi-browser-and-viewport)
 12. [Error Recovery and Retry](#12-error-recovery-and-retry)
+12b. [Iframes and Embedded Third-Party Content](#12b-iframes-and-embedded-third-party-content)
 13. [Accessibility Testing](#13-accessibility-testing)
 14. [Visual Regression](#14-visual-regression)
 15. [Mobile and Desktop E2E](#15-mobile-and-desktop-e2e)
@@ -30,13 +31,27 @@ Prefer reusable authenticated setup over logging in through the UI in every test
 // global-setup.ts
 import { chromium, FullConfig } from '@playwright/test';
 
+// globalSetup runs before any test exists, so `test.skip` cannot guard it.
+// Validate here and throw a message that names what is missing — otherwise a
+// missing credential surfaces as a login-timeout in every single test.
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is required for auth setup — see docs/e2e-setup.md`);
+  }
+  return value;
+}
+
 async function globalSetup(config: FullConfig) {
+  const user = requireEnv('E2E_USER');
+  const pass = requireEnv('E2E_PASS');
+
   const browser = await chromium.launch();
   const page = await browser.newPage();
 
   await page.goto(`${config.projects[0].use.baseURL}/login`);
-  await page.getByLabel('Email').fill(process.env.E2E_USER!);
-  await page.getByLabel('Password').fill(process.env.E2E_PASS!);
+  await page.getByLabel('Email').fill(user);
+  await page.getByLabel('Password').fill(pass);
   await page.getByRole('button', { name: 'Sign in' }).click();
   await page.waitForURL('**/dashboard');
 
@@ -146,8 +161,19 @@ Do not share mutable records across parallel tests unless the flow is intentiona
 ```ts
 import { request } from '@playwright/test';
 
+// Fail loudly at the point of misconfiguration. Helpers run outside a test, so
+// `test.skip` is unavailable here — an unset var would otherwise surface as an
+// opaque "invalid URL" deep inside the request layer.
+function requireEnv(name: string): string {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`${name} is required for test-data seeding — see docs/e2e-setup.md`);
+  }
+  return value;
+}
+
 async function createTestUser(): Promise<{ email: string; password: string }> {
-  const api = await request.newContext({ baseURL: process.env.E2E_API_URL });
+  const api = await request.newContext({ baseURL: requireEnv('E2E_API_URL') });
   const resp = await api.post('/api/test/users', {
     data: { prefix: `e2e-${Date.now()}` },
   });
@@ -155,7 +181,7 @@ async function createTestUser(): Promise<{ email: string; password: string }> {
 }
 
 async function deleteTestUser(email: string): Promise<void> {
-  const api = await request.newContext({ baseURL: process.env.E2E_API_URL });
+  const api = await request.newContext({ baseURL: requireEnv('E2E_API_URL') });
   await api.delete(`/api/test/users/${encodeURIComponent(email)}`);
 }
 ```
@@ -248,10 +274,40 @@ test('payment page handles gateway timeout', async ({ page }) => {
 
 ## 6) Wait Strategy (Advanced)
 
+### Never Wait on `networkidle`
+
+Playwright's own API reference marks `networkidle` **DISCOURAGED** for both
+`page.goto({ waitUntil })` and `page.waitForLoadState()`, with the guidance:
+"Don't use this method for testing, rely on web assertions to assess readiness
+instead."
+
+It fails in two directions:
+
+- **Never settles** on any page with polling, analytics beacons, chat widgets, or
+  an open websocket — the wait burns the full timeout and the test fails.
+- **Settles too early** on a page that idles between a skeleton render and a
+  lazily-triggered second fetch, so you snapshot or assert the loading state.
+
+```ts
+// WRONG — proxy signal, DISCOURAGED upstream
+await page.goto('/dashboard');
+await page.waitForLoadState('networkidle');
+await expect(page.getByTestId('total')).toHaveText('42');
+
+// CORRECT — assert the state you actually depend on; expect() auto-retries
+await page.goto('/dashboard');
+await expect(page.getByTestId('total')).toHaveText('42');
+```
+
+The valid `waitUntil` / `waitForLoadState` states are `load` (default),
+`domcontentloaded`, and `commit`. Reach for one only when no user-visible signal
+exists — an `expect()` on real content is almost always available and strictly
+better, because it retries and reports what was actually on screen.
+
 ### Polling Assertion with `toPass`
 
 ```ts
-// retry an assertion block until it passes (Playwright ≥ 1.30)
+// retry an assertion block until it passes (Playwright ≥ 1.29)
 await expect(async () => {
   const resp = await page.request.get('/api/jobs/123');
   expect(resp.status()).toBe(200);
@@ -424,6 +480,84 @@ test('feature behind flag', async ({ page }) => {
 });
 ```
 
+## 12b) Iframes and Embedded Third-Party Content
+
+A payment field, an embedded map, a rich-text editor, or an OAuth consent screen
+usually lives in an `<iframe>`. Page-level locators **do not** cross the frame
+boundary — `page.getByLabel('Card number')` finds nothing when the input is
+inside a Stripe iframe. This is the single most common "the selector is correct
+but the test can't find it" report.
+
+### `frameLocator` — Enter a Frame
+
+```ts
+test('user pays with a card in the embedded payment iframe', async ({ page }) => {
+  await page.goto('/checkout');
+
+  // Scope into the frame, then locate inside it. The chain auto-waits for both
+  // the frame and the element.
+  const payment = page.frameLocator('iframe[title="Secure payment input"]');
+  await payment.getByLabel('Card number').fill('4242424242424242');
+  await payment.getByLabel('Expiry').fill('12/34');
+  await payment.getByLabel('CVC').fill('123');
+
+  // The submit button belongs to YOUR page, not the frame.
+  await page.getByRole('button', { name: 'Pay now' }).click();
+  await expect(page.getByRole('heading', { name: 'Payment received' })).toBeVisible();
+});
+```
+
+Prefer a stable frame selector: `iframe[title="…"]`, `iframe[name="…"]`, or a
+`data-testid` your own markup controls. A positional `iframe:nth-of-type(2)`
+breaks as soon as a second widget is embedded.
+
+### `contentFrame` — Element to Frame
+
+When you already hold a locator for the `<iframe>` element, convert it rather
+than re-querying:
+
+```ts
+const frameEl = page.getByTestId('editor-frame');
+await expect(frameEl).toBeVisible();          // assert the frame element itself
+const editor = frameEl.contentFrame();        // Locator → FrameLocator
+await editor.getByRole('textbox').fill('Hello');
+```
+
+`Locator.contentFrame()` requires Playwright **≥ 1.43**. Below that, select the
+frame directly with `page.frameLocator(...)`.
+
+### Nested Frames
+
+Chain one level at a time; there is no combined selector:
+
+```ts
+page.frameLocator('#outer').frameLocator('#inner').getByRole('button', { name: 'Save' })
+```
+
+### Rules
+
+| Situation | Do |
+|-----------|-----|
+| Element not found, but visible in the browser | Check whether it is inside an iframe before touching the selector |
+| Cross-origin iframe (Stripe, PayPal, reCAPTCHA) | `frameLocator` works — Playwright is not bound by same-origin policy |
+| Asserting the frame *exists* | Assert on the `<iframe>` locator; assert content through the FrameLocator |
+| Third-party widget content | Do not assert its internal DOM — you do not control it. Assert your page's resulting state |
+| a11y scans | `.exclude()` third-party frames; you cannot fix their violations |
+| reCAPTCHA / bot checks | Do not automate. Use a test key or a bypass flag, and document it |
+
+### Side-Effect Gate for Payment Iframes
+
+A payment iframe means real money is one misconfiguration away. Before writing
+the test, confirm and record:
+
+- The provider is in **sandbox/test mode** (Stripe test keys begin `pk_test_` /
+  `sk_test_` — a `pk_live_` key in an E2E config is a stop-the-line finding).
+- Card numbers are the provider's documented **test** numbers, never a real PAN.
+  A test card is published dummy data, not a secret — but the API keys are.
+- No webhook fires into a production system.
+
+If sandbox mode cannot be confirmed, stop and scaffold. Do not run the flow.
+
 ## 13) Accessibility Testing
 
 Integrate automated accessibility checks into E2E journeys. Accessibility defects found during user flow traversal are higher-signal than static-analysis-only scans because they reflect the real rendered DOM state.
@@ -503,7 +637,11 @@ const CRITICAL_PAGES = ['/login', '/signup', '/dashboard', '/settings', '/checko
 for (const path of CRITICAL_PAGES) {
   test(`${path} passes WCAG 2.1 AA`, async ({ page }) => {
     await page.goto(path);
-    await page.waitForLoadState('networkidle');
+
+    // Wait on a real readiness signal, not on network quiet. `networkidle` is
+    // DISCOURAGED by Playwright and never fires on pages with polling,
+    // analytics beacons, or open websockets.
+    await expect(page.getByRole('main')).toBeVisible();
 
     const results = await new AxeBuilder({ page })
       .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
@@ -554,10 +692,13 @@ test('homepage renders correctly', async ({ page }) => {
 ```ts
 test('dashboard chart renders', async ({ page }) => {
   await page.goto('/dashboard');
-  await page.waitForLoadState('networkidle');
 
-  // element-level screenshot for targeted comparison
+  // Assert the chart has actually rendered before snapshotting. Do not use
+  // `waitForLoadState('networkidle')` — it is DISCOURAGED by Playwright and a
+  // dashboard that polls for live data never reaches network idle at all.
   const chart = page.getByTestId('revenue-chart');
+  await expect(chart.getByRole('img', { name: /revenue/i })).toBeVisible();
+
   await expect(chart).toHaveScreenshot('revenue-chart.png', {
     maxDiffPixels: 100,
   });
@@ -821,5 +962,41 @@ test.describe('React Native Web app', () => {
 | Native iOS/Android | Detox, Maestro, or Appium | Out of Playwright scope |
 | React Native Web | Playwright (standard web test) | `testID` maps to `data-testid` |
 | Electron | Playwright `_electron` API | Built-in support |
-| Tauri | Playwright WebView debugging | Connect to WebView port |
+| Tauri | WebdriverIO + `@wdio/tauri-service` | **Out of Playwright scope** — see below |
 | Progressive Web App | Playwright + mobile emulation | Test install prompt separately |
+
+### Tauri — Do Not Route to Playwright
+
+Tauri renders through the OS webview (WKWebView on macOS, WebView2 on Windows,
+WebKitGTK on Linux), not through a browser Playwright ships and controls. There is
+no supported way to attach Playwright to a Tauri app.
+
+Tauri's official testing route is **WebDriver**. Per the Tauri v2 docs, the
+recommended setup is **WebdriverIO with `@wdio/tauri-service`**, which works on
+Windows, Linux, and macOS. By default that service runs an embedded WebDriver
+server inside the app, so no external driver is needed — this is how macOS is
+supported. It can also drive the platform's native WebDriver through
+`tauri-driver` on Windows and Linux, or CrabNebula's cross-platform fork of
+`tauri-driver` on all platforms (a paid API key is required for macOS). Selenium
+is documented as an alternative to WebdriverIO.
+
+Scaffold with:
+
+```bash
+npm create wdio@latest ./
+# choose "Desktop Testing", then "Tauri" at the framework prompt
+```
+
+The service exposes Tauri API access via `browser.tauri.execute()`, plus IPC
+command mocking and frontend/backend log capture.
+
+When asked for E2E tests on a Tauri app:
+
+1. Say plainly that Playwright is not the right tool and why.
+2. Route to WebdriverIO + `@wdio/tauri-service`.
+3. Verify the driver path for the target OS before claiming anything is runnable
+   — macOS via the embedded server, or the paid CrabNebula fork.
+4. If the Tauri frontend is a normal web app served over HTTP in dev, its
+   **browser-rendered** journeys can still be covered by Playwright against the
+   dev server. Say explicitly that this does not test the packaged desktop
+   binary, the webview itself, or any Tauri IPC command.

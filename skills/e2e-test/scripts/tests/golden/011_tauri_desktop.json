@@ -1,26 +1,33 @@
 {
   "id": "011_tauri_desktop",
-  "description": "Add E2E tests for a Tauri 2.0 desktop app — skill should configure Playwright to connect to the Tauri WebView port, reference the Electron-style API, and apply platform constraints",
-  "scenario_type": "version_constrained",
+  "description": "Add E2E tests for a Tauri 2.0 desktop app — skill must NOT route to Playwright. Tauri renders in the OS webview (WKWebView / WebView2 / WebKitGTK), which Playwright cannot attach to. The official route is WebDriver via WebdriverIO + @wdio/tauri-service. The previous version of this fixture asserted the opposite and locked in a wrong answer.",
+  "scenario_type": "stop_condition",
   "context": {
     "task": "Write E2E tests for a Tauri 2.0 desktop app with embedded WebView UI",
     "environment": "local",
     "platform": "Tauri desktop app",
-    "playwright_version": "1.40",
-    "webview_debug_port_available": true
+    "playwright_version": "1.40"
   },
-  "expected_runner": "Playwright",
+  "expected_runner": "webdriverio",
   "expected_gates": ["Version and Platform Gate", "Configuration Gate"],
   "expected_platform_notes": [
-    "Connect to WebView port",
-    "Playwright WebView debugging"
+    "Out of Playwright scope",
+    "WebdriverIO",
+    "@wdio/tauri-service",
+    "tauri-driver"
   ],
+  "expected_deferral_tools": ["WebdriverIO", "tauri-driver"],
   "skill_rules_that_must_fire": [
     "Version and Platform Gate",
     "Platform Decision Matrix",
     "Tauri",
+    "WebdriverIO",
+    "@wdio/tauri-service",
+    "tauri-driver",
+    "Out of Playwright scope"
+  ],
+  "must_not_appear": [
     "Playwright WebView debugging",
-    "Connect to WebView port",
-    "_electron"
+    "Connect to WebView port"
   ]
 }

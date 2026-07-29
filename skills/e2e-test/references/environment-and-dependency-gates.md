@@ -28,12 +28,46 @@ Check:
 npm run dev -- --port 3000 &
 curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
 # expect 200 or 302
+```
 
-# check env var availability
-echo "E2E_BASE_URL=${E2E_BASE_URL:-MISSING}"
-echo "E2E_USER=${E2E_USER:-MISSING}"
+**Never echo a secret's value to check whether it is set.** CI logs, screen
+recordings, and agent transcripts all capture stdout. Probe presence only:
+
+```bash
+# CORRECT — reports state, never the value
+for v in E2E_BASE_URL E2E_USER E2E_PASS; do
+  if [ -n "${!v:-}" ]; then echo "${v}	available"; else echo "${v}	missing"; fi
+done
+```
+
+### `available` vs `declared`
+
+A live process environment gives only two answers. A repository gives three, and
+the middle one is the trap:
+
+| Evidence | State |
+|----------|-------|
+| non-empty value in the process env, or in `.env` / `.env.local` / `.env.test` | `available` |
+| name present in `.env.example`, **or** `E2E_PASS=` with nothing after the `=` | `declared` |
+| name absent everywhere | `missing` |
+
+`.env.example` is documentation. Even a filled-in value there is a worked example,
+not configuration — it can never make a variable `available`. A project whose only
+evidence is a template cannot run, and reporting it as ready is worse than
+reporting it blocked, because the failure then surfaces mid-run.
+
+`scripts/discover_e2e_needs.sh` reports these three states per variable and keeps
+`declared` out of the blocker list: CI may inject the value at run time, so it is
+a question to confirm, not a verdict.
+
+```bash
+# WRONG — prints the password into the log
 echo "E2E_PASS=${E2E_PASS:-MISSING}"
 ```
+
+Non-secret values (`E2E_BASE_URL`) may be printed when useful for debugging, but
+keep one uniform probe so a secret is never printed by accident when the list
+grows.
 
 ### If Local Env is Incomplete
 

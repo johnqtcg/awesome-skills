@@ -1,7 +1,7 @@
 ---
 name: e2e-test
 description: "Design, maintain, and execute reliable end-to-end tests for critical user journeys with Agent Browser as first choice for exploration and Playwright as the preferred code path for suites and CI. Use for E2E strategy, journey coverage, flaky test triage, artifact collection, CI gating, regression prevention, and browser automation tasks."
-allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(npx playwright*), Bash(playwright*), Bash(npm run*), Bash(curl*)
+allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go vet*), Bash(npx playwright*), Bash(playwright*), Bash(npm run*), Bash(npm ci*), Bash(curl*), Bash(agent-browser*), Bash(bash scripts/*), Bash(python3 scripts/*)
 ---
 
 # E2E test
@@ -19,44 +19,31 @@ Use this skill to create E2E coverage that is deterministic, evidence-backed, an
 | Use Agent Browser for exploration or repro | §Runner Strategy + Load `references/agent-browser-workflows.md` |
 | Design CI gates for E2E suites | §Operating Model → CI gate design + Load `references/environment-and-dependency-gates.md` |
 | Avoid common Playwright mistakes | Load `references/anti-examples.md` |
+| Test content inside an iframe (payment, editor, OAuth) | Load `references/playwright-deep-patterns.md` §Iframes |
+| Handle a Tauri or native-mobile app | §Version and Platform Gate → Platform Scope Boundary |
+| Check generated spec code before reporting | Run `python3 scripts/lint_e2e_spec.py <file.spec.ts>` |
 | See a fully worked E2E output example | Load `references/golden-examples.md` |
 
-## Use This Skill For
-
-- selecting high-value journeys for E2E coverage
-- creating or updating Playwright tests
-- using Agent Browser to explore, debug, and reproduce flows
-- flaky test triage with traces and artifacts
-- CI gate design for critical journeys
-- browser automation tasks where reproducibility matters
-
-Do not use this skill for:
-
-- visual design review with no automated journey value
-- performance/load testing
-- tests that require guessed secrets, endpoints, or private accounts
+Do not use this skill for visual design review with no automated journey value,
+performance/load testing, or tests that would require guessed secrets, endpoints,
+or private accounts.
 
 ## Load References Selectively
 
-For every E2E task, before making coverage or quality gate decisions:
-→ Load `references/checklists.md` for the 5-checklist suite: pre-run readiness, journey coverage, flaky test triage, quarantine protocol, and result reporting checklists.
+Load on demand, not up front. A typical Playwright task needs the first two rows
+and nothing else.
 
-For every E2E task, to confirm environment is ready before running tests:
-→ Load `references/environment-and-dependency-gates.md` for environment readiness gates per context (local, preview, staging, CI), dependency version checks, and browser/driver compatibility tables.
-
-For Playwright / JS projects only (skip for Go, Python, or non-JS):
-→ Load `references/playwright-patterns.md` for selector strategy (data-testid priority), wait patterns (avoid `waitForTimeout`), assertion contracts, `playwright.config.ts` baseline, and version/platform compatibility gates.
-→ Load `references/playwright-deep-patterns.md` for advanced patterns: auth state reuse, fixture design, test data isolation, HTTP mocking, serial vs parallel execution, and CI engineering (sharding, retry, artifact upload).
-→ Load `references/anti-examples.md` for the catalog of 12 common Playwright mistakes (hard-coded sleeps, fragile selectors, state leakage, missing retries) with corrected alternatives.
-
-When using Agent Browser for exploration or failure reproduction:
-→ Load `references/agent-browser-workflows.md` for Agent Browser command patterns, exploration-to-code conversion workflow, failure reproduction steps, and handoff format from exploration to Playwright code.
-
-When shaping the final E2E report or triaging a flaky test result:
-→ Load `references/golden-examples.md` for full output contract examples covering Playwright journeys and Go HTTP E2E tasks, including expected field formats and scorecard verdicts.
-
-Before gate decisions, run to collect repository facts:
-→ Run `scripts/discover_e2e_needs.sh` for auto-detection of Playwright, Node.js, Go, existing test files, required env vars, and CI platform — output feeds directly into framework selection and gate configuration.
+| When | Load / run | Contents |
+|------|-----------|----------|
+| Every task, before coverage or gate decisions | `references/checklists.md` | 5 checklists: pre-run readiness, journey coverage, flaky triage, quarantine, result reporting |
+| Every task, before claiming runnable | `references/environment-and-dependency-gates.md` | Readiness gates per context (local / preview / staging / CI), `available` vs `declared` vs `missing`, dependency matrix |
+| Before gate decisions | `bash scripts/discover_e2e_needs.sh` | Detects runner, Node, framework, existing tests, env-var states, CI platform. Report facts, not guesses |
+| Writing Playwright code (JS only) | `references/playwright-patterns.md` | Selector order (`getByRole` first), wait patterns, assertion contracts, config baseline, API-introduction + Node tables |
+| Auth, fixtures, data isolation, mocking, iframes, sharding | `references/playwright-deep-patterns.md` | The advanced layer — large; open the section you need |
+| A mistake not among the seven below | `references/anti-examples.md` | Extended catalog only, no overlap with §Anti-Examples here |
+| Using Agent Browser | `references/agent-browser-workflows.md` | Commands, exploration→code conversion, repro steps, handoff format |
+| Shaping the final report | `references/golden-examples.md` | Full output-contract examples (Playwright + Go). **All figures in it are synthetic** |
+| Grading generated spec code | `python3 scripts/lint_e2e_spec.py <file>` | Deterministic check of C1–C4 / S1 / S3 / S5 / H2 + W1. Evidence, not a verdict |
 
 ## Runner Strategy
 
@@ -116,10 +103,22 @@ Before generating or updating runnable tests:
 
 - scan repository config, scripts, env files, docs, and existing tests
 - list required variables, accounts, feature flags, and service dependencies
-- mark each as:
-  - `available`
-  - `missing`
-  - `unknown`
+- mark each with one of these four states — the same vocabulary
+  `scripts/discover_e2e_needs.sh` emits:
+
+| State | Means | Consequence |
+|-------|-------|-------------|
+| `available` | a non-empty value exists now (process env or a real `.env`) | usable |
+| `declared` | the name is known but no value is supplied here — a `.env.example` entry, or `E2E_PASS=` with nothing after it | **not** usable; confirm the runtime source before claiming runnable |
+| `missing` | no evidence the project uses this variable at all | scaffold or stop |
+| `unknown` | not yet inspected | inspect before deciding |
+
+`declared` is the state most easily mistaken for `available`. A template file
+proves a variable is *expected*, never that a value exists. Treating the two as
+the same is what turns "cannot run" into a false "ready".
+
+Never print a variable's value to check whether it is set — report the state. CI
+logs, screen recordings, and agent transcripts all capture stdout.
 
 If required values are missing:
 
@@ -127,9 +126,13 @@ If required values are missing:
 - generate placeholder-only scaffolding with explicit TODOs and skip guards when code output is still useful
 - otherwise stop and report the exact blockers
 
+Guard **every** variable the suite needs, not just the first one. A
+`test.skip(!USER)` leaves an unset `PASS` to reach the page as `undefined`, which
+surfaces as a login failure rather than "you forgot to set PASS".
+
 In every result include:
 
-- required variable list
+- required variable list with each variable's state
 - example export block or config shape
 - missing variables
 
@@ -186,17 +189,53 @@ Before recommending Playwright code or config, adapt to the repository's actual 
 
 | Signal | Adaptation |
 |--------|------------|
-| Playwright `< 1.27` | Prefer `locator` and stable attribute selectors. Do not assume `getByRole`, `getByLabel`, `getByTestId`, or `getByPlaceholder` are available. |
-| Playwright `< 1.30` | Be conservative with newer trace and snapshot ergonomics; keep config minimal and explicit. |
-| Playwright `< 1.35` | Avoid assuming newer helper APIs without checking the installed version first. |
-| Node `< 16` | Treat as upgrade-required for modern Playwright usage; do not present a "ready to run" claim. |
-| Node `< 18` | Avoid assuming newer Web API defaults and modern runner ergonomics without verification. |
+| Playwright `< 1.27` | Prefer `locator` and stable attribute selectors. `getByRole`, `getByLabel`, `getByTestId`, and `getByPlaceholder` do not exist yet. |
+| Playwright `< 1.29` | No `expect(...).toPass()`. Use `expect.poll()` (1.21+) instead. |
+| Playwright `< 1.33` | No `filter({ hasNot })` and no `expect(locator).toBeAttached()`. |
+| Node below the pinned Playwright's `engines.node` floor | `npm install` fails. Not runnable — do not claim "ready to run". |
+| Node meets `engines` but is outside Playwright's supported list (latest 22.x / 24.x / 26.x) | Runnable but **unsupported**. Say so; do not report it as supported. |
+
+Two different Node constraints exist — the `engines.node` install floor and the
+documented supported-runtime list — and they do not agree. Both tables are in
+`references/playwright-patterns.md` §Node.js Compatibility.
+
+Never wait on `waitForLoadState('networkidle')` at any version — Playwright marks
+it DISCOURAGED. Assert the user-visible state instead.
+
+The full API-introduction and Node-compatibility tables live in
+`references/playwright-patterns.md` §Version and Platform Gate. Read the
+project's pinned version before generating code; when it cannot be determined,
+target the oldest plausible version and say so in the Output Contract.
 
 Framework adaptation checklist:
 - **Next.js**: verify `baseURL`, server startup, and auth/session bootstrapping strategy.
 - **SPA**: prefer explicit waits on route or API completion, not arbitrary sleeps.
 - **SSR**: assert server-rendered and hydrated states separately when needed.
 - **Monorepo**: locate the owning package, config file, and CI entrypoint before generating commands.
+
+### Platform Scope Boundary
+
+Playwright is not the answer everywhere. Route away from it rather than
+generating code that cannot run:
+
+| Platform | Route to | Why |
+|----------|----------|-----|
+| Native iOS / Android | Detox, Maestro, or Appium | No browser to drive |
+| **Tauri** | WebdriverIO + `@wdio/tauri-service` | Renders in the OS webview (WKWebView / WebView2 / WebKitGTK); Playwright cannot attach. See `references/playwright-deep-patterns.md` §Tauri |
+| Electron | Playwright `_electron` | Supported natively |
+| React Native **Web** | Playwright | Standard DOM; `testID` → `data-testid` |
+
+Say plainly that the tool does not fit, name the right one, and stop. A
+plausible-looking Playwright suite for a Tauri app is worse than no answer.
+
+### Content Inside Iframes
+
+Page-level locators do not cross a frame boundary. Embedded payment fields,
+editors, and OAuth screens need `frameLocator`. When an element is visibly on
+screen but "not found", check for an iframe before changing the selector — see
+`references/playwright-deep-patterns.md` §Iframes and Embedded Third-Party
+Content. Payment iframes additionally require the Side-Effect Gate: confirm
+sandbox mode before running anything.
 
 ## Playwright-First Engineering Rules
 
@@ -378,6 +417,17 @@ When the output will be consumed by CI or downstream tooling, append:
 ## Quality Scorecard
 
 For non-Playwright runners (Go HTTP, Python requests, etc.), mark Playwright-specific items as **N/A**. Count only applicable items when computing pass rates.
+
+List every item including the N/A ones. Dropping a row and dividing by a smaller
+denominator inflates the score.
+
+For Playwright output, run `python3 scripts/lint_e2e_spec.py <file>` before
+reporting. It mechanically checks C1, C2, C3, C4, S1, S3, S5, and H2, plus W1
+(network wait armed after its trigger — an extra check, not a scorecard item).
+It does **not** check S2, S4, S6, H1, H3, H4 — those need repository and CI
+context it cannot see, so assess them yourself. A clean report is weaker
+evidence than a dirty one: it is a heuristic pass, not a parser, and cannot see
+through helpers or page objects.
 
 ### Critical (any FAIL → overall FAIL)
 

@@ -4,6 +4,16 @@
 > Evaluation date: 2026-03-11
 > Evaluation target: `e2e-test`
 
+> **Staleness note (2026-07-29).** The skill was substantially revised after this
+> evaluation: incorrect Playwright API version gates were corrected against
+> upstream release notes, `networkidle` usage was removed, Tauri was rerouted to
+> WebdriverIO, a credential-leaking environment probe was fixed, iframe coverage
+> was added, the discovery script was rewritten, and a forward-eval grader
+> (`scripts/lint_e2e_spec.py`) was added alongside 211 regression tests.
+> The §5 file-size and token-cost figures below describe the pre-revision files
+> and are no longer accurate. The assertion pass rates in §3 were not re-run.
+> Read this report as a record of the 2026-03-11 state, not the current one.
+
 ---
 
 `e2e-test` is an end-to-end testing practice skill for critical user journeys. It supports designing E2E coverage strategy, handling flaky tests, defining CI gates, and turning exploratory verification into maintainable automated tests. Its three main strengths are: preferring Agent Browser for exploration and reproduction, then Playwright or the project’s native test framework for code, with a clear tool path; built-in environment gates, runner selection, and result-strength control for honest degradation across tech stacks instead of rigid templates; and structured output plus machine-readable JSON for test governance, triage, and CI integration.
