@@ -158,15 +158,28 @@ class TestScorecard(unittest.TestCase):
         self.assertTrue("any FAIL" in data or "any fail" in data.lower(),
                         "critical tier missing one-vote-veto rule")
 
-    def test_standard_tier(self):
+    def test_standard_tier_is_type_aware(self):
+        """The tier used to be a flat six-item list with a 4/6 bar, which the skill's
+        own Library template could not clear. It must now declare applicability."""
         data = skill_text()
         self.assertIn("Standard Tier", data)
-        self.assertIn("4/6", data)
+        self.assertIn("Applies to", data)
+        self.assertIn("passed / applicable", data)
+        for scope in ("Service, Monorepo, Lightweight", "only when the repo has a linter"):
+            self.assertIn(scope, data, f"missing applicability rule: {scope}")
 
     def test_hygiene_tier(self):
         data = skill_text()
         self.assertIn("Hygiene Tier", data)
-        self.assertIn("3/4", data)
+        self.assertIn("needs a human", data)
+
+    def test_unscoreable_items_are_named(self):
+        """C4, S6 and H4 need a human. Naming them stops the card from quietly
+        counting a guess as a pass."""
+        data = skill_text()
+        self.assertRegex(data, r"C4 \(routing\)")
+        self.assertRegex(data, r"S6 \(audience\)")
+        self.assertRegex(data, r"H4 \(optional-section")
 
     def test_critical_items(self):
         data = skill_text()
@@ -466,7 +479,10 @@ class TestOutputContract(unittest.TestCase):
         self.assertIn("Machine-Readable Summary (JSON)", data)
         self.assertIn('"project_type"', data)
         self.assertIn('"scorecard"', data)
-        self.assertIn('"result": "PASS"', data)
+        self.assertIn('"machine_result"', data)
+        self.assertIn('"final_result": "PENDING_HUMAN_REVIEW"', data,
+                      "a clean machine run with C4 unjudged is not a finished PASS")
+        self.assertIn('"unchecked"', data)
 
     def test_field_count(self):
         data = skill_text()
@@ -697,6 +713,70 @@ class TestLintReadmeScript(unittest.TestCase):
         workflow = data[data.index("Generation Workflow"):]
         self.assertIn("lint_readme.py", workflow,
                       "the self-check step must be part of the workflow, not a footnote")
+
+    def test_live_eval_runner_exists_and_is_wired(self):
+        """The live layer is the one remaining evidence gap, so the path to closing it
+        must be a script someone can run, not a sentence in a doc."""
+        runner = SKILL_DIR / "scripts" / "run_live_eval.sh"
+        self.assertTrue(runner.exists(), "scripts/run_live_eval.sh missing")
+        import os
+        self.assertTrue(os.access(str(runner), os.X_OK), "runner not executable")
+        body = runner.read_text()
+        self.assertIn("README_GEN_EVAL_CMD", body)
+        self.assertIn("exit 2", body, "an auth failure must not share an exit code with "
+                                      "a graded failure")
+        regression = (SKILL_DIR / "scripts" / "run_regression.sh").read_text()
+        self.assertIn("run_live_eval.sh", regression,
+                      "the gap message must name the script that closes it")
+        coverage = COVERAGE_DOC.read_text()
+        self.assertIn("run_live_eval.sh", coverage)
+
+    def test_no_fixed_scorecard_denominators_anywhere(self):
+        """Cross-file guard. SKILL.md moved to `passed / applicable` but
+        references/checklist.md still told the refactor reviewer "Critical 4/4,
+        Standard >= 4/6, Hygiene >= 3/4" — reintroducing the exact rule that made the
+        skill's own Library template unpassable, at the final-review step.
+
+        A historical mention ("the old `4/6` and `3/4`") is fine; a *requirement*
+        stated with a fixed denominator is not."""
+        banned = [
+            re.compile(r"(?i)(?:critical|standard|hygiene)\s*:?\s*(?:>=|≥)?\s*\d+/(?:4|6)\b"),
+            re.compile(r"(?i)\d+/(?:4|6)\s+to\s+pass"),
+        ]
+        allowed_context = re.compile(r"(?i)\b(old|previous|formerly|was|used to)\b")
+        offenders = []
+        targets = [SKILL_MD] + sorted((SKILL_DIR / "references").glob("*.md"))
+        for f in targets:
+            for lineno, line in enumerate(f.read_text().splitlines(), 1):
+                if any(b.search(line) for b in banned) and not allowed_context.search(line):
+                    offenders.append(f"{f.name}:{lineno}: {line.strip()[:90]}")
+        self.assertEqual([], offenders,
+                         "fixed scorecard denominators found:\n" + "\n".join(offenders))
+
+    def test_checklist_states_the_applicable_rule(self):
+        data = CHECKLIST_REF.read_text()
+        self.assertIn("applicable", data)
+        self.assertIn("UNCHECKED", data)
+        self.assertIn("PENDING_HUMAN_REVIEW", data,
+                      "the refactor checklist must know a clean machine run is not a "
+                      "finished PASS")
+
+    def test_live_probe_uses_no_gnu_only_binary(self):
+        """Behaviour is covered by test_forward_eval.py::LiveRunnerBehaviorTest, which
+        executes the runner. This one pins the portability decision that behaviour
+        cannot show on a single platform: no `timeout(1)`, which is GNU coreutils and
+        absent from stock macOS."""
+        body = (SKILL_DIR / "scripts" / "run_live_eval.sh").read_text()
+        self.assertNotRegex(body, r"(?m)^\s*(?:g)?timeout\s+\d",
+                            "timeout(1) is not portable; use subprocess(timeout=)")
+        self.assertIn("subprocess.run", body,
+                      "the probe should run through Python for a portable timeout")
+        self.assertIn("shell=True", body,
+                      "the probe must invoke the command the same way the test layer "
+                      "does, or it vouches for a different code path")
+        self.assertIn("[[:space:]]*READY[[:space:]]*$", body,
+                      "the sentinel must be a whole-line match; `grep -q READY` also "
+                      "accepts NOT_READY and UNREADY")
 
     def test_every_finding_code_is_documented_in_the_module(self):
         source = LINT_SCRIPT.read_text()

@@ -180,3 +180,31 @@ Response:
 {"status": "ok", "users": [{"id": 1, "name": "Alice"}]}
 ```
 ```
+
+---
+
+## Anti-Example: Metrics with no committed artifact
+
+BAD:
+
+```markdown
+High-throughput order service — 10K+ TPS, p99 under 20ms, 94% test coverage.
+
+BenchmarkValidate-8    5000000    240 ns/op
+```
+
+(No load test, no committed benchmark output, and `.codecov.yml` only sets `target: 80%`.
+Every number here is unverifiable and goes stale silently.)
+
+GOOD:
+
+```markdown
+Order service backed by PostgreSQL with a Redis cache layer.
+
+Coverage target is 80%, configured in `.codecov.yml`.
+
+`validator_test.go` defines `BenchmarkValidate`; run it with `go test -bench=.`.
+```
+
+(A config file proves a *target*; only a committed result artifact proves a *measurement*.
+Show how to reproduce the number instead of asserting it.)

@@ -35,7 +35,10 @@ A manifest proves a **toolchain**; only an artifact proves a **result**.
   exists, `make <target>` when that exact target is in the Makefile.
 - Not evidence-backed: coverage percentages, test counts, benchmark numbers, throughput,
   latency, or a response body — unless the repo commits the artifact they come from
-  (`.codecov.yml`, a checked-in `benchstat` output, a golden fixture).
+  (a checked-in `benchstat` output, a golden fixture, a committed coverage report).
+- **A config file proves a target, never a measurement.** `.codecov.yml` with `target: 80%`
+  licenses "the coverage target is 80%", not "coverage is 80%" — the latter asserts a
+  result the repo does not record. The linter enforces that split.
 - If a repo has a manifest but no test files, still show the toolchain command and add
   `No test files found in repo` — the command is real, the coverage claim would not be.
 
@@ -57,13 +60,21 @@ A manifest proves a **toolchain**; only an artifact proves a **result**.
 Decide target readers (contributors / operators / API consumers / end users) and output
 language (Chinese / English / bilingual). If unspecified, follow the existing repo docs and
 keep audience assumptions in working notes, not in the README. This gate also owns the
-lightweight decision — see §Project Type Routing.
+lightweight decision (§Project Type Routing).
 
 ### 2) Project Type Routing
 
-Discovery emits `project_type detected` (Service / Library / CLI / Monorepo — selects the
-**language command snippets**) and `project_type effective` (selects the **template and
-required sections**).
+Two independent questions, two sources:
+
+| Question | Answered by |
+|---|---|
+| Which sections, in what order | `project_type effective` → the template |
+| What the commands say | the **manifest in the repo** (`go.mod`, `package.json`, `Cargo.toml`, `pyproject.toml`) → `references/language-snippets.md` |
+
+`project_type detected` classifies the repo as Service, Library, CLI, or Monorepo, and is
+kept alongside `effective` so a lightweight promotion does not erase what the project
+structurally is. It does **not** choose the command snippets — a Go CLI and a Node CLI
+share a type and share no commands.
 
 **`effective` is the single answer** — generation, the Output Contract, and
 `scripts/lint_readme.py` all read it, so they cannot disagree.
@@ -91,13 +102,10 @@ Run discovery first and read its verdict — do not re-derive these by hand:
 bash "<path-to-skill>/scripts/discover_readme_needs.sh"
 ```
 
-The script emits an `entrypoint` inventory and a `verdict` line. Minimum evidence: at least
-one entrypoint, a determined project type, a located command source. `verdict status
-DEGRADED` names which of the three is missing.
-
+Minimum evidence: at least one entrypoint (the script emits an inventory), a determined
+project type, a located command source. `verdict status DEGRADED` names which is missing.
 When degraded: output Project Overview plus `Not found in repo` sections only, set
-`degraded: true` in the assistant response, and list each missing item with a suggested
-resolution.
+`degraded: true` in the response, and list each missing item with a suggested resolution.
 
 ### 4) Badge Detection Gate (Mandatory)
 
@@ -120,12 +128,9 @@ Detection order, which is also render order:
 **CI status** → **Coverage** → **Language version** → **License** → **Release**.
 
 Only emit badges whose URL is derivable from repo evidence. For a private repo, skip the
-external badge URLs and add:
-
+external URLs and add:
 `Badge note: repository is private; external badge URLs may not render outside authorized viewers.`
-
-→ URL templates per badge type and the community-file mapping live in
-`references/badges-and-governance.md`.
+→ URL templates and the community-file mapping: `references/badges-and-governance.md`.
 
 ## Community and Governance Files
 
@@ -144,10 +149,7 @@ Scan before drafting; absent targets are recorded per §Evidence Precedence, nev
 |---|---|
 | Entrypoints | `main.go`, `cmd/*`, `package.json` `bin`/`main`, `src/main.rs`, `[project.scripts]`, executable scripts |
 | Build/test hubs | `Makefile`, `go.mod`, `package.json`, `pyproject.toml`, `Cargo.toml` |
-| CI and release | `.github/workflows/*` |
-| Runtime/config | `.env.example`, `config/*`, `application.yml`, `docker-compose.yml` |
-| Governance | `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md` |
-| Existing docs | `README*.md`, `docs/*` |
+| CI, config, governance, docs | `.github/workflows/*` · `.env.example`, `config/*`, `docker-compose.yml` · `LICENSE`, `CONTRIBUTING.md`, `SECURITY.md`, `CHANGELOG.md` · `README*.md`, `docs/*` |
 
 ## Command Priority
 
@@ -155,8 +157,8 @@ Scan before drafting; absent targets are recorded per §Evidence Precedence, nev
 `Cargo.toml`) → CI workflow command → direct tool invocation.
 
 Every command must resolve against one of these — a `make` target absent from the Makefile
-is a fabrication, not a suggestion, and each half of `make test && make deploy` is checked
-separately. On conflict, load `references/command-priority.md`.
+is a fabrication, and each half of `make test && make deploy` is checked separately, as is
+anything behind `sudo`/`VAR=x`. On conflict, load `references/command-priority.md`.
 
 ## Structure Policy
 
@@ -176,11 +178,8 @@ evidence exists. Missing a **primary** section (Quick Start / Installation / Usa
 Repository Overview, per type) is a Critical defect; missing any other required section is
 Standard — `lint_readme.py` reports them as R009 and R012 respectively.
 
-**Sections and commands are separate axes.** This matrix picks sections from
-`project_type effective`; the commands inside them come from
-`references/language-snippets.md`, picked by the manifest the repo has. A Node CLI and a Go
-CLI share Template C and share none of their command blocks. The matrix is the same table
-`lint_readme.py` enforces (`REQUIRED_SECTIONS`), kept in sync by
+**Sections and commands are separate axes** (§Project Type Routing). This matrix is the
+same table `lint_readme.py` enforces (`REQUIRED_SECTIONS`), kept in sync by
 `test_forward_eval.py::RequiredSectionSyncTest`.
 
 For public homepages, order the top of the file: value proposition → highlights →
@@ -231,40 +230,16 @@ For CLI tools, converters, and generators, show one complete example: the input 
 then the resulting file name or response shape. **No-fabrication constraint**: with no
 sample output, fixture, or documented response format in the repo, show the invocation and
 describe the destination generically — never an invented JSON body, row count, or status
-line.
-
-```markdown
-schema-gen generate --format json --output ./schemas ./internal/models
-# → writes schema file(s) to ./schemas/
-```
+line: `schema-gen generate --output ./schemas ./internal/models  # → writes to ./schemas/`
 
 ## Anti-Examples (BAD / GOOD Markdown Pairs)
 
-Most common failure — process-state labels in the README body:
-
-BAD:
-
-````markdown
-## Testing — Status: Not verified in this environment
-
-| Command | Verified |
-|---------|----------|
-| `make test` | ⚠️ Not verified |
-````
-
-GOOD:
-
-````markdown
-## Testing
-
-```bash
-make test
-make lint
-```
-````
-
-→ Load `references/anti-examples.md` for the full catalog (fabricated badges, guessed
-config, monorepo tree dumps, double-language headings, output-without-input).
+The most common failure is process-state labels in the README body — a `## Testing —
+Status: Not verified` heading, or a `| Command | Verified |` table. The rule is absolute
+(§Command Verifiability Gate); the worked BAD/GOOD pair, plus fabricated badges, guessed
+config, unbacked metrics, monorepo tree dumps, double-language headings, and
+output-without-input, are all in `references/anti-examples.md`. Load it before refactoring
+an existing README.
 
 ## Generation Workflow
 
@@ -292,49 +267,47 @@ entrypoint, env var, Makefile target, CI workflow, `LICENSE`, Go version, and th
 ## Output Style
 
 Short, direct prose; fenced blocks for trees and commands; no internal rubric language.
-Explanatory notes about *why* a section looks the way it does belong outside the document,
-never inside it.
+Notes about *why* a section looks the way it does belong outside the document.
 
 ## Evidence Mapping Output (Required)
 
-Output this in the assistant response, not inside the README:
+Output this in the assistant response, not inside the README. Every non-trivial section
+maps to at least one evidence source, or to `Not found in repo`; one line per section.
 
 | README Section | Evidence File(s) | Evidence Snippet/Reason |
 |---|---|---|
 | Quick Start | `Makefile`, `go.mod` | target/command exists |
-| Configuration | `.env.example`, `config/*` | variables defined |
-
-Every non-trivial section maps to at least one evidence source, or to `Not found in repo`;
-one line per section.
+| Configuration | `.env.example` | variables defined |
 
 ## Output Contract (Mandatory Fields)
 
 | # | Field | Required | Description |
 |---|-------|----------|-------------|
-| 1 | `project_type` | Always | service / library / cli / monorepo / lightweight |
+| 1 | `project_type` | Always | the `effective` type: service / library / cli / monorepo / lightweight |
 | 2 | `language` | Always | en / zh / bilingual |
 | 3 | `template_used` | Always | Template A–E name |
 | 4 | `evidence_mapping` | Always | Section → evidence file table |
-| 5 | `scorecard` | Always | 3-tier scorecard result |
+| 5 | `scorecard` | Always | 3-tier result, denominators = applicable items |
 | 6 | `degraded` | When applicable | whether evidence was insufficient |
-| 7 | `missing_evidence` | When degraded | Missing items and suggested actions |
-| 8 | `badges_added` | When applicable | Badge types added, or "skipped (reason)" |
-| 9 | `sections_omitted` | When applicable | Optional sections skipped, with reason |
+| 7 | `missing_evidence` | When degraded | missing items and suggested actions |
+| 8 | `badges_added` | When applicable | badge types added, or "skipped (reason)" |
+| 9 | `sections_omitted` | When applicable | optional sections skipped, with reason |
 
 ### Machine-Readable Summary (JSON)
 
 ```json
 {
-  "project_type": "service",
-  "language": "zh",
-  "template_used": "Template A: Service",
+  "project_type": "service", "language": "zh", "template_used": "Template A: Service",
   "degraded": false,
-  "scorecard": {"critical": "4/4", "standard": "5/6", "hygiene": "4/4", "result": "PASS"},
+  "scorecard": {"critical": "3/3", "standard": "5/5", "hygiene": "3/3"},
+  "machine_result": "PASS", "final_result": "PENDING_HUMAN_REVIEW",
+  "unchecked": ["C4", "S6", "H4"],
   "badges_added": ["CI", "Coverage", "Go Version", "License"],
-  "sections_omitted": [],
-  "missing_evidence": []
+  "sections_omitted": [], "missing_evidence": []
 }
 ```
+
+Denominators are *applicable* items; `scripts/lint_readme.py` emits this block.
 
 ## README Quality Scorecard (3-Tier)
 
@@ -343,56 +316,70 @@ Critical Tier — any FAIL means the whole output FAILs:
 | # | Check | PASS Rule |
 |---|-------|-----------|
 | C1 | Evidence-backed claims | Every non-trivial statement traces to a repo file |
-| C2 | No fabricated content | Zero guessed commands, URLs, config values, paths, or metrics |
-| C3 | Primary onboarding path present and actionable | Reader gets running in ≤ 3 steps. The path is per type: **Quick Start** for Service / Monorepo / Lightweight, **Installation + Usage** for CLI / Library — the same set `lint_readme.py` treats as primary (R009) |
-| C4 | Correct project type routing | Template matches the discovery verdict |
+| C2 | No fabricated content | Zero guessed commands, URLs, config values, paths, metrics |
+| C3 | Primary onboarding path present and actionable | Reader gets running in ≤ 3 steps. Per type: **Quick Start** for Service / Monorepo / Lightweight, **Installation + Usage** for CLI / Library — the set `lint_readme.py` treats as primary (R009) |
+| C4 | Correct project type routing | Template matches the discovery verdict — **needs a human** |
 
-Standard Tier — ≥ 4/6 to PASS:
+Standard Tier — **items that do not apply leave the denominator**:
 
-| # | Check | PASS Rule |
-|---|-------|-----------|
-| S1 | Command source attribution | Commands traced to Makefile / scripts / native tools |
-| S2 | Structure section with purpose | Key directories listed with one-line descriptions |
-| S3 | Config/env section present | Required variables documented, source file cited |
-| S4 | Testing commands included | Test + lint commands from a real command source |
-| S5 | Badges evidence-based | Only real URLs; private-repo fallback applied if needed |
-| S6 | Audience and language explicit | Stated in working notes, or in README when it helps |
+| # | Check | Applies to | PASS Rule |
+|---|-------|-----------|-----------|
+| S1 | Command source attribution | all | Every command resolves to a Makefile / script / manifest |
+| S2 | Structure section with purpose | Service, Monorepo, Lightweight | Key directories listed with one-line descriptions |
+| S3 | Config/env section present | Service, or any type with `.env.example` / `config/` | Required variables documented, source cited |
+| S4 | Testing commands included | all | A test command; **plus** a lint command only when the repo has a linter |
+| S5 | Badges evidence-based | all | Only real URLs; private-repo fallback applied if needed |
+| S6 | Audience and language explicit | all — **needs a human** | Stated in working notes, or in README when it helps |
 
-Hygiene Tier — ≥ 3/4 to PASS:
+Scoring is `passed / applicable`; the bar is two thirds of applicable, rounded up — the old
+`4/6` and `3/4` expressed so they survive items dropping out. (Why: a Library has no
+Structure section, must not invent Configuration, and cannot show a lint command for a repo
+with no linter — against a flat six-item list it lost three automatically and scored 3/6.)
+S4 judges what a target *runs*, not what it is named: `make check-types` running
+`tsc --noEmit` is not a test command.
+
+Hygiene Tier — same `passed / applicable` rule; H4 needs a human and is excluded:
 
 | # | Check | PASS Rule |
 |---|-------|-----------|
 | H1 | Maintenance trigger note | "Update this README when…" section present |
 | H2 | No internal process labels | No verification state or scorecard language in the body |
 | H3 | Navigation and ToC quality | Sized to complexity; every label matches its heading |
-| H4 | Optional sections gated | Architecture / Deployment / API only when evidence exists |
+| H4 | Optional sections gated | Architecture / Deployment / API only when evidence exists — **needs a human** |
 
-Output format: `Critical: X/4 | Standard: X/6 | Hygiene: X/4 → PASS/FAIL`
+Output: `Critical: X/N | Standard: X/N applicable | Hygiene: X/N applicable → machine …;
+final …`. Name the N/A items and those needing a human, so a shrinking denominator stays
+visible. **`machine_result` and `final_result` are separate**: C4 (routing), S6 (audience)
+and H4 (optional-section gating) are the three a script cannot settle, and C4 is *Critical*.
+So a clean machine run is `machine_result: PASS` + `final_result: PENDING_HUMAN_REVIEW`,
+becoming a real PASS only once you have judged those three. A machine FAIL stays FAIL —
+"pending" never softens a failure.
 
-`scripts/lint_readme.py` mechanically checks the **high-frequency** violations of C1, C2,
-H2, H3: undefined `make`/npm targets, env vars absent from `.env.example`, non-existent
-paths, placeholder residue, metrics with no committed artifact, unevidenced badges, missing
-required sections, ToC/heading mismatches, process labels.
+`scripts/lint_readme.py` computes the whole card and checks the **high-frequency**
+violations: undefined `make`/npm targets (including behind `sudo`/`VAR=x` prefixes and on
+each half of a `&&` chain), env vars absent from `.env.example`, non-existent paths,
+placeholder residue, metrics with no committed artifact, unevidenced badges, missing
+required sections, ToC/heading mismatches, process labels. It also asserts every shipped
+golden example clears its own tier.
 
 It is a floor, not the tier. A linter-clean README can still fail C1/C2 — a plausible but
-wrong prose claim, a command that exists yet does the wrong thing, a structure description
-that is stale rather than invented. Read the output as "no *detectable* fabrication", then
-judge the tiers yourself.
+wrong claim, a command that exists yet does the wrong thing, a structure description that is
+stale rather than invented. Read it as "no *detectable* fabrication", then judge the three
+UNCHECKED items yourself.
 
 ## Load References Selectively
 
-- Generating from scratch or switching template → `references/templates.md`
-  (Template A–E skeletons and the prerequisites format).
-- Filling a template's command blocks → `references/language-snippets.md`
-  (Go / Node / Python / Rust install, build, test, lint, and version lines).
-- Calibrating output quality for a detected type → `references/golden-<type>.md`; index at
-  `references/golden-examples.md`.
-- Command conflicts across Makefile / package.json / CI → `references/command-priority.md`.
-- Final review of a refactor → `references/checklist.md`.
-- Refactoring a README with suspected anti-patterns → `references/anti-examples.md`.
-- Chinese or bilingual output → `references/bilingual-guidelines.md`.
-- Monorepo detected → `references/monorepo-rules.md`.
-- Badge URL templates and governance-file mapping → `references/badges-and-governance.md`.
+| Load… | When |
+|---|---|
+| `references/templates.md` | generating from scratch or switching template (Template A–E, prerequisites format) |
+| `references/language-snippets.md` | filling a template's command blocks (Go / Node / Python / Rust) |
+| `references/golden-<type>.md` | calibrating output quality; index at `references/golden-examples.md` |
+| `references/command-priority.md` | command conflicts across Makefile / package.json / CI |
+| `references/checklist.md` | final review of a refactor |
+| `references/anti-examples.md` | refactoring a README with suspected anti-patterns |
+| `references/bilingual-guidelines.md` | Chinese or bilingual output |
+| `references/monorepo-rules.md` | monorepo detected |
+| `references/badges-and-governance.md` | badge URLs and governance-file mapping |
 
 Run `scripts/discover_readme_needs.sh` first (workflow step 3) to collect repo facts
 deterministically, and `scripts/lint_readme.py` last (step 11) to check the draft against

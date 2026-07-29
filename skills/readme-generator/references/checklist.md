@@ -51,7 +51,7 @@ Comprehensive three-phase checklist for generating and reviewing README document
 | 2 | No duplicated sections | Scan for repeated content |
 | 3 | Headings are scannable | Short, action-oriented, no redundant prefixes |
 | 4 | Root README links to deeper docs/modules | Check `docs/` and submodule READMEs |
-| 5 | 3-tier scorecard completed | Critical 4/4, Standard ≥ 4/6, Hygiene ≥ 3/4 |
+| 5 | 3-tier scorecard completed | Critical: every **applicable** item PASS. Standard / Hygiene: ≥ ⌈2/3 × applicable⌉. Items marked N/A leave the denominator; items marked UNCHECKED (C4, S6, H4) must be settled by hand before the result is anything better than `PENDING_HUMAN_REVIEW`. Run `scripts/lint_readme.py` for the card |
 | 6 | Update trigger note present | "This README should be updated when..." section |
 | 7 | Evidence mapping table output | Every major section has at least one evidence source |
 | 8 | No internal process labels in README body | No `Verified`, `PASS/FAIL`, scorecard language |
@@ -170,4 +170,4 @@ When improving an existing README rather than generating from scratch:
 | 7 | Re-evaluate project type | Repo may have grown from CLI to service |
 | 8 | Check language consistency | Don't mix ZH/EN heading styles |
 | 9 | Add evidence mapping | Map each section to its source file |
-| 10 | Run 3-tier scorecard | Ensure Critical tier all PASS |
+| 10 | Run 3-tier scorecard | `python3 scripts/lint_readme.py <repo> <readme>`; every applicable Critical item PASS, then settle C4/S6/H4 by hand |

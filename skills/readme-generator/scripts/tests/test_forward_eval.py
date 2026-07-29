@@ -421,6 +421,19 @@ class GraderPropertiesTest(_RepoCase):
         self.assertIn("R006", self.codes(
             "# x\n\n## Quality Scorecard\n\nCritical: 4/4\n")[1])
 
+    def test_command_wrappers_do_not_hide_the_command(self) -> None:
+        """The matchers anchor on `^make` / `^npm`, so `CI=1 make deploy` and
+        `sudo make deploy` ran past the undefined-target check."""
+        for wrapped in ("CI=1 make deploy", "sudo make deploy", "env X=1 make deploy",
+                        "sudo -E CI=1 make deploy", "time make deploy"):
+            with self.subTest(cmd=wrapped):
+                self.assertIn("R001", self.codes(f"# x\n\n```bash\n{wrapped}\n```\n")[1])
+
+    def test_wrappers_on_a_defined_target_stay_clean(self) -> None:
+        for wrapped in ("CI=1 make test", "sudo make lint"):
+            with self.subTest(cmd=wrapped):
+                self.assertNotIn("R001", self.codes(f"# x\n\n```bash\n{wrapped}\n```\n")[1])
+
     def test_chained_commands_are_each_checked(self) -> None:
         """`^make\\s+(\\w+)` matched only the head of the line, so the second half of
         `make test && make deploy` was never looked at."""
@@ -485,6 +498,100 @@ class GraderPropertiesTest(_RepoCase):
             codes = {f.code for f in findings}
             self.assertNotIn("R013", codes)
             self.assertIn("R009", codes, "an override must re-enable the section checks")
+
+    def test_service_is_still_graded_on_structure_and_config(self) -> None:
+        """Applicability must narrow the tier for Library, not gut it for Service."""
+        card = lint_readme.scorecard("# x\n\nA service.\n", self.facts)
+        self.assertEqual("FAIL", card["standard"]["S2"])
+        self.assertEqual("FAIL", card["standard"]["S3"])
+
+    def test_lint_item_applies_only_when_the_repo_has_a_linter(self) -> None:
+        """Requiring a lint command from a repo with no linter asks the README to
+        invent one, which C2 then flags — the two rules must not fight."""
+        self.assertIn("lint", self.facts.make_targets)
+        card = lint_readme.scorecard(read_exemplar("go_service", "good.md"), self.facts)
+        self.assertEqual("PASS", card["standard"]["S4"])
+        no_lint = "# x\n\n## Testing\n\n```bash\nmake test\n```\n"
+        self.assertEqual("FAIL",
+                         lint_readme.scorecard(no_lint, self.facts)["standard"]["S4"])
+
+    def test_pass_is_not_claimed_while_a_critical_item_is_unjudged(self) -> None:
+        """C4 (routing) is a Critical item no script settles. Reporting the whole card
+        as PASS on a clean machine run overstated it: the machine verdict and the final
+        verdict are now separate values."""
+        card = lint_readme.scorecard(read_exemplar("go_service", "good.md"), self.facts)
+        self.assertEqual("PASS", card["machine_result"])
+        self.assertEqual("PENDING_HUMAN_REVIEW", card["final_result"])
+        self.assertIn("C4", card["unchecked"])
+        self.assertNotIn("result", card, "the ambiguous single key must be gone")
+
+    def test_final_result_tracks_machine_result_when_it_fails(self) -> None:
+        """PENDING_HUMAN_REVIEW is only for an otherwise-clean run — a failure must not
+        be softened into 'pending'."""
+        card = lint_readme.scorecard("# x\n\nA service.\n", self.facts)
+        self.assertEqual("FAIL", card["machine_result"])
+        self.assertEqual("FAIL", card["final_result"])
+
+    def test_test_command_is_matched_by_what_the_target_runs(self) -> None:
+        """A generic `check` counted as a test signal, so `make check-types` running
+        `tsc --noEmit` satisfied S4 while running no tests. Resolve the recipe."""
+        repo = self.repo
+        (repo / "Makefile").write_text(
+            (repo / "Makefile").read_text()
+            + "check-types:\n\ttsc --noEmit\ncheck:\n\tgo test ./...\n")
+        facts = lint_readme.scan_repo(repo)
+        def s4(cmd):
+            return lint_readme.scorecard(
+                f"# x\n\n## Testing\n\n```bash\n{cmd}\nmake lint\n```\n",
+                facts)["standard"]["S4"]
+        self.assertEqual("FAIL", s4("make check-types"), "tsc --noEmit is not a test run")
+        self.assertEqual("PASS", s4("make check"), "its recipe is `go test ./...`")
+        self.assertEqual("PASS", s4("make test"))
+        self.assertEqual("PASS", s4("pytest"))
+        self.assertEqual("FAIL", s4("make lint"))
+
+    def test_makefile_recipe_forms_all_resolve(self) -> None:
+        """Only the indented-recipe form was parsed, so `check: test` and
+        `check: ; go test ./...` produced an empty recipe and S4 rejected a correct
+        README. A false negative cannot let fabrication through, but failing honest work
+        is its own kind of wrong."""
+        forms = {
+            "indented":     ("check", "check:\n\tgo test ./...\n", True),
+            "aggregate":    ("check", "check: test\n\ntest:\n\tgo test ./...\n", True),
+            "inline":       ("check", "check: ; go test ./...\n", True),
+            "chain":        ("ci", "ci: check\n\ncheck: test\n\ntest:\n\tgo test ./...\n", True),
+            "continuation": ("check", "check: \\\n\ttest\n\ntest:\n\tgo test ./...\n", True),
+            "lint-only":    ("check", "check: fmt\n\nfmt:\n\tgofmt -l .\n", False),
+        }
+        for name, (target, makefile, expected) in forms.items():
+            with self.subTest(form=name):
+                with tempfile.TemporaryDirectory() as tmp:
+                    repo = Path(tmp)
+                    (repo / "go.mod").write_text("module x\n\ngo 1.22\n")
+                    (repo / "main.go").write_text("package main\n")
+                    (repo / "Makefile").write_text(makefile)
+                    facts = lint_readme.scan_repo(repo)
+                    got = lint_readme._has_test_command(
+                        f"# x\n\n```bash\nmake {target}\n```\n", facts)
+                self.assertEqual(expected, got, f"{name}: {makefile!r}")
+
+    def test_prerequisite_cycle_terminates(self) -> None:
+        """`a: b` / `b: a` is rejected by make itself but can exist in a half-written
+        Makefile; unguarded recursion would hang the linter rather than fail it."""
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            (repo / "go.mod").write_text("module x\n\ngo 1.22\n")
+            (repo / "main.go").write_text("package main\n")
+            (repo / "Makefile").write_text("a: b\n\nb: a\n")
+            facts = lint_readme.scan_repo(repo)
+            self.assertFalse(lint_readme._has_test_command(
+                "# x\n\n```bash\nmake a\n```\n", facts))
+
+    def test_unchecked_items_are_named_not_counted(self) -> None:
+        card = lint_readme.scorecard(read_exemplar("go_service", "good.md"), self.facts)
+        self.assertEqual(["C4", "H4", "S6"], card["unchecked"])
+        self.assertEqual("5/5", card["totals"]["standard"],
+                         "S6 must leave the denominator, not count as a pass")
 
     def test_exit_status_keys_on_critical_alone(self) -> None:
         F = lint_readme.Finding
@@ -583,6 +690,47 @@ class GoldenExamplesSurviveTheGrader(unittest.TestCase):
                     f"skill checks output with",
                 )
 
+    def _card(self, name):
+        manifest = json.loads((self.REPOS / f"{name}.json").read_text())
+        readme = self.extract_readme(
+            (self.GOLDEN_DIR / manifest["golden_file"]).read_text())
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            for rel, content in manifest["files"].items():
+                target = repo / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
+            facts = lint_readme.scan_repo(repo, project_type=manifest["project_type"])
+            return manifest, lint_readme.scorecard(readme, facts)
+
+    def test_golden_examples_pass_their_own_scorecard(self):
+        """The gap that let a real contradiction hide: this class ran the linter, which
+        never computed the Standard tier. Graded against the flat six-item list, the
+        skill's own golden Library example lost S2 (no Structure), S3 (must not invent
+        Configuration) and S4 (no linter in that repo) and scored 3/6 — below the bar the
+        skill grades output with."""
+        for name in ("service", "library", "cli", "monorepo", "lightweight"):
+            with self.subTest(golden=name):
+                manifest, card = self._card(name)
+                self.assertEqual(
+                    "PASS", card["machine_result"],
+                    f"{manifest['golden_file']} fails the skill's own scorecard: "
+                    f"{card['summary']}\n  standard={card['standard']}",
+                )
+                self.assertEqual(
+                    "PENDING_HUMAN_REVIEW", card["final_result"],
+                    "C4 is Critical and is never machine-scored, so even a clean run "
+                    "is not a finished PASS",
+                )
+
+    def test_library_scorecard_excludes_structure_and_config(self):
+        """Pin the applicability itself, not just the aggregate — a future edit making
+        S2/S3 universal again must fail here, loudly."""
+        _, card = self._card("library")
+        self.assertEqual("N/A", card["standard"]["S2"])
+        self.assertEqual("N/A", card["standard"]["S3"])
+        self.assertEqual("UNCHECKED", card["standard"]["S6"])
+
     def test_golden_repo_signals_are_not_vacuous(self):
         """A fixture that omitted the files the README cites would make the check
         pass by having nothing to contradict."""
@@ -668,6 +816,71 @@ class LiveForwardEval(unittest.TestCase):
 
     def test_rust_workspace(self) -> None:
         self._run("rust_workspace")
+
+
+class LiveRunnerBehaviorTest(unittest.TestCase):
+    """Execute scripts/run_live_eval.sh against stub commands and assert the exit code
+    and reason it actually produces.
+
+    The previous coverage grepped the script's source for the strings `READY`,
+    `probe_rc` and so on. That confirms the words are present; it cannot notice that
+    `grep -q READY` accepts `NOT_READY`, `UNREADY` and `READY-ish` — which it did. Text
+    assertions about a script are not tests of the script.
+    """
+
+    RUNNER = SKILL_DIR / "scripts" / "run_live_eval.sh"
+
+    def run_with(self, cmd: str, timeout_s: str = "2"):
+        env = dict(os.environ)
+        env["README_GEN_EVAL_CMD"] = cmd
+        env["READMEer_PROBE_TIMEOUT"] = timeout_s
+        return subprocess.run(
+            ["bash", str(self.RUNNER)], env=env,
+            capture_output=True, text=True, timeout=300,
+        )
+
+    def test_sentinel_must_be_a_whole_line(self) -> None:
+        for bad in ("NOT_READY", "UNREADY", "READY-ish", "I am READY to go", "readyish"):
+            with self.subTest(output=bad):
+                proc = self.run_with(f"cat >/dev/null; echo {bad!r}")
+                self.assertEqual(2, proc.returncode,
+                                 f"{bad!r} was accepted as the READY sentinel")
+                self.assertIn("never produced a line containing only READY", proc.stdout)
+
+    def test_exact_sentinel_passes_the_probe(self) -> None:
+        proc = self.run_with("cat >/dev/null; echo READY")
+        self.assertIn("auth probe OK", proc.stdout)
+        # The stub emits READY, not a README, so the graded run then fails — exit 1,
+        # which is the "model ran and was rejected" code, distinct from setup failure.
+        self.assertEqual(1, proc.returncode, proc.stdout[-400:])
+
+    def test_surrounding_whitespace_is_tolerated(self) -> None:
+        proc = self.run_with("cat >/dev/null; printf '  READY  \\n'")
+        self.assertIn("auth probe OK", proc.stdout)
+
+    def test_missing_command_is_a_setup_failure(self) -> None:
+        proc = self.run_with("definitely-not-a-real-cli-xyz")
+        self.assertEqual(2, proc.returncode)
+        self.assertIn("not found on PATH", proc.stdout)
+
+    def test_nonzero_probe_is_a_setup_failure(self) -> None:
+        proc = self.run_with("cat >/dev/null; exit 3")
+        self.assertEqual(2, proc.returncode)
+        self.assertIn("probe exited non-zero", proc.stdout)
+
+    def test_timeout_is_a_setup_failure_and_is_portable(self) -> None:
+        """`timeout(1)` is GNU coreutils and absent from stock macOS; the probe uses
+        subprocess(timeout=) so this passes on both platforms."""
+        proc = self.run_with("cat >/dev/null; sleep 30", timeout_s="2")
+        self.assertEqual(2, proc.returncode)
+        self.assertIn("timed out", proc.stdout)
+
+    def test_setup_failure_never_shares_an_exit_code_with_a_graded_failure(self) -> None:
+        setup = self.run_with("cat >/dev/null; exit 3").returncode
+        graded = self.run_with("cat >/dev/null; echo READY").returncode
+        self.assertEqual(2, setup)
+        self.assertEqual(1, graded)
+        self.assertNotEqual(setup, graded)
 
 
 class LiveHarnessPlumbingTest(unittest.TestCase):

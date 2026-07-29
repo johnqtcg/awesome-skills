@@ -50,7 +50,7 @@ if [[ -z "${README_GEN_EVAL_CMD:-}" ]]; then
   echo "       and every golden example the skill ships survives that grader."
   echo "       NOT verified: that a live model reliably produces a passing README."
   echo ""
-  echo "       Enable it (needs an authenticated CLI — a sandboxed subprocess without"
-  echo "       credentials exits 'Not logged in', which now FAILs rather than skips):"
-  echo "         README_GEN_EVAL_CMD='claude -p --model sonnet' bash scripts/run_regression.sh"
+  echo "       Run it with:  bash scripts/run_live_eval.sh"
+  echo "       It needs an AUTHENTICATED CLI. Unauthenticated it aborts with exit 2 and"
+  echo "       grades nothing, so a setup failure can never be read as a skill result."
 fi

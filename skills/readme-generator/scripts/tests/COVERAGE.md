@@ -1,7 +1,7 @@
 # readme-generator Skill — Test Coverage Matrix
 
-**Total: 263 tests** — 110 contract + 43 golden-scenario + 42 discovery-behavioral +
-68 forward-eval. Five of the 68 are skipped unless `README_GEN_EVAL_CMD` is set.
+**Total: 287 tests** — 115 contract + 43 golden-scenario + 42 discovery-behavioral +
+87 forward-eval. Five of the 87 are skipped unless `README_GEN_EVAL_CMD` is set.
 
 These numbers are pinned by `test_skill_contract.py::TestCoverageDocIsCurrent`, which
 counts the live suite and fails when this file drifts. The previous version of this
@@ -30,14 +30,14 @@ meta-language the skill forbids, and citing a `testdata/` path the example repo 
 a missing Documentation Maintenance section that Template B had gained but the golden
 example had not.
 
-## 1. Contract Tests (`test_skill_contract.py`) — 110
+## 1. Contract Tests (`test_skill_contract.py`) — 115
 
 | # | Class | Tests | Covers |
 |---|-------|-------|--------|
 | 1 | TestFrontmatter | 3 | Name, description keywords, description length |
 | 2 | TestGates | 6 | 5 gates present, gate count, project types listed |
 | 3 | TestAntiExamples | 4 | Section exists, BAD/GOOD count ≥ 7, topic coverage, code blocks |
-| 4 | TestScorecard | 8 | 3-Tier section, tier thresholds, all 14 items, output format |
+| 4 | TestScorecard | 9 | 3-Tier section, type-aware Standard applicability, all 14 items, the three items needing a human, output format |
 | 5 | TestSelectiveLoading | 3 | Section exists, all refs listed, loading conditions |
 | 6 | TestBadgeStrategy | 3 | Section, detection order, private-repo fallback |
 | 7 | TestEvidenceMapping | 3 | Section, table format, `Not found in repo` rule |
@@ -55,7 +55,7 @@ example had not.
 | 19 | TestDegradationPatterns | 5 | Section, 4 levels, degraded in skill, depth, evidence column |
 | 20 | TestCrossCuttingIntegrity | 5 | SKILL.md ≤ 600 and ≤ 400 lines, refs exist, no orphaned reference, total content ≥ 1500 |
 | 21 | TestTemplateRequiredSections | 5 | Each template satisfies its type's matrix; no foreign sections; License fallback present; no verification language |
-| 22 | TestLintReadmeScript | 3 | Linter exists, wired into the workflow, every finding code has a severity |
+| 22 | TestLintReadmeScript | 7 | Linter exists, wired into the workflow, every finding code has a severity |
 | 23 | TestCoverageDocIsCurrent | 3 | This file's totals match the live suite; no phantom class names |
 | 24 | TestGoldenSectionOrders | 2 | Golden section orders satisfy the same per-type matrix |
 
@@ -95,7 +95,7 @@ dirs`, `CI present`, `deployment surface`, `public distribution surface` — whe
 and records it with `lint_readme.py --type=lightweight`, which is what keeps one value that
 generation, the Output Contract, and the linter all read.
 
-## 4. Forward Evaluation (`test_forward_eval.py`) — 68
+## 4. Forward Evaluation (`test_forward_eval.py`) — 87
 
 Fixture repositories are JSON manifests (`forward_eval/*/repo.json`) materialized into a
 temp dir per test — not files checked into `skills/`, which would have pytest collecting a
@@ -110,11 +110,43 @@ fixture's own `tests/test_core.py`.
 | 4b | LightweightGrading | 4 | Effective type is `lightweight` while base stays `cli`; a Template E README is not graded against Template C |
 | 4b | RustWorkspaceGrading | 4 | `crates/*` workspace reaches READY with both modules as entrypoints; `cargo --workspace` accepted |
 | 4b | FalsePassRegressions | 6 | The five ways a fabricated README scored PASS against v1 of the grader, plus primary-vs-secondary section severity |
-| 4b | GraderPropertiesTest | 17 | Build outputs exempt, module paths exempt, slash-separated alternatives exempt, external-repo paths exempt, `scorecard` as topic vs self-report, prose backticks not command-checked, nested fences, severity → exit status |
+| 4b | GraderPropertiesTest | 27 | Build outputs exempt, module paths exempt, slash-separated alternatives exempt, external-repo paths exempt, `scorecard` as topic vs self-report, prose backticks not command-checked, nested fences, severity → exit status |
 | 4b | RequiredSectionSyncTest | 2 | SKILL.md matrix ↔ `lint_readme.REQUIRED_SECTIONS` |
-| 4b | GoldenExamplesSurviveTheGrader | 3 | Each shipped `references/golden-<type>.md` README, linted against a repo built from that file's own Repo signals |
+| 4b | GoldenExamplesSurviveTheGrader | 5 | Each shipped `references/golden-<type>.md` README, linted **and scorecarded** against a repo built from that file's own Repo signals |
 | 4c | LiveForwardEval | 5 | **Skipped by default.** One per fixture. Grades against the fixture's full `good` budget (zero findings), not just "no Critical" |
+| 4d | LiveRunnerBehaviorTest | 7 | **Executes** `run_live_eval.sh` against stub commands: whole-line sentinel (rejects `NOT_READY` / `UNREADY` / `READY-ish` / READY-in-prose), missing binary, non-zero probe, portable timeout, and setup-vs-graded exit codes never colliding |
 | 4d | LiveHarnessPlumbingTest | 4 | Stubbed writer runs end-to-end; a configured-but-broken command FAILs rather than skips; every scenario has a live test; the live budget forbids standard findings too |
+
+### Scorecard applicability
+
+`scorecard()` grades the three tiers with four verdicts per item — `PASS`, `FAIL`, `N/A`,
+`UNCHECKED` — and reports `passed / applicable`, not `passed / total`.
+
+| Item | Applies to | Why it matters |
+|---|---|---|
+| S2 Structure | Service, Monorepo, Lightweight | a Library README has no Structure section |
+| S3 Configuration | Service, or any type with `.env.example` / `config/` | a Library must not invent one |
+| S4 Testing | all — but the **lint** half only when the repo has a linter | otherwise the tier demands a command C2 then flags as fabricated |
+| C4, S6, H4 | never machine-scored | routing correctness, audience declaration, and optional-section gating need a human; they are named and excluded, never counted as passes |
+
+**S4 resolves what a target runs, not what it is called.** A generic `check` used to count
+as a test signal, so `make check-types` running `tsc --noEmit` satisfied "testing commands
+included" while running no tests. The scan reads Makefile recipes and `package.json` script
+bodies, so `make check` whose recipe is `go test ./...` passes and `make check-types` does
+not. Recipe parsing covers all three idiomatic forms — indented recipe, `check: test`
+aggregate (resolved recursively, with cycle detection), and `check: ; cmd` inline — plus
+escaped-newline continuations. Handling only the indented form was a **false negative**:
+it could not admit fabrication, but it rejected correct READMEs.
+
+**`machine_result` and `final_result` are distinct.** C4 is a *Critical* item that is never
+machine-scored, so a clean run reports `machine_result: PASS` with
+`final_result: PENDING_HUMAN_REVIEW`. A machine FAIL stays FAIL — "pending" never softens a
+failure. Reporting a single `PASS` while a Critical item sat unjudged was optimistic.
+
+Before this, the tier was a flat six-item list with a `4/6` bar. A correct Library README
+built from the skill's own Template B lost S2, S3 and S4 automatically and scored 3/6 —
+**the skill could not pass its own Standard tier.** It went unnoticed because the golden
+tests ran only the linter and never computed the card; both are now checked.
 
 ### Grader check codes
 
@@ -157,11 +189,17 @@ design, so a warning must not break a caller's gate — but it must not read as 
    model is *shown* pass the grader it is *checked* with. None of that shows a live model
    reliably produces a passing README; only 4c does.
 
-   Running it needs an authenticated CLI. Attempted 2026-07-28 inside a sandboxed
-   subprocess: `claude -p` returned `Not logged in · Please run /login`, so the run
-   FAILed with "HARNESS FAULT" — which is the designed behaviour (a broken harness must
-   not read as green), but it means the layer has not yet been executed against a real
-   model. `run_regression.sh` prints the gap and the exact invocation.
+   Run it with `bash scripts/run_live_eval.sh`. It probes authentication first and
+   aborts with **exit 2** if the CLI is not logged in, grading nothing — so a setup
+   failure can never be misread as a skill result. Exit 1 means the model was driven and
+   its README was rejected; exit 0 means all five project types produced a zero-finding
+   README.
+
+   Attempted 2026-07-28 in this sandbox: `claude -p` returns
+   `Not logged in · Please run /login` (no credentials reachable from a sandboxed
+   subprocess — no `ANTHROPIC_API_KEY`, no readable credentials file), so the layer has
+   still not been executed against a real model. When someone runs it, record the model
+   and date here.
 2. Golden scenarios (layer 2) remain document-level; layer 4 supersedes them for behavior.
 3. The grader checks command *existence*, not command *correctness* — a `make test` that is
    defined but broken passes R001. Nothing here executes the documented commands.

@@ -62,8 +62,10 @@ class Finding:
 class RepoFacts:
     root: Path
     # `project_type` is the EFFECTIVE type — what generation, the output contract, and
-    # this linter must all agree on. `base_type` is the language/layout classification
-    # before the lightweight promotion, kept because it still selects command snippets.
+    # this linter must all agree on. `base_type` is the structural classification before
+    # any lightweight override, kept so the override does not erase what the project is.
+    # Neither selects the command snippets: the MANIFEST in the repo does that
+    # (SKILL.md §Project Type Routing).
     project_type: str = "unknown"
     base_type: str = "unknown"
     verdict: str = "DEGRADED"
@@ -91,6 +93,11 @@ class RepoFacts:
     # Numbers the repository actually commits, as strings ("80", "92.4").
     # A README percentage is only defensible if it appears here.
     coverage_numbers: set = field(default_factory=set)
+    # target/script name -> recipe body. A target's NAME is not evidence of what it
+    # does: `make check-types` running `tsc --noEmit` is not a test command.
+    # {target: {"recipe": str, "prereqs": [...]}}; see _make_effective_recipe.
+    make_recipes: dict = field(default_factory=dict)
+    npm_script_bodies: dict = field(default_factory=dict)
     # True only when a committed file contains benchmark OUTPUT (a line with
     # ns/op), not merely a `func Benchmark…` declaration.
     has_benchmark_output: bool = False
@@ -198,10 +205,89 @@ def scan_repo(root, project_type: str = "") -> RepoFacts:
         or any(t in facts.make_targets for t in ("cover", "coverage", "test-cover"))
         or any("cover" in s for s in facts.npm_scripts)
     )
+    facts.make_recipes = _make_recipes(root)
+    facts.npm_script_bodies = _npm_script_bodies(root)
     facts.coverage_numbers = _coverage_numbers(root, facts.paths)
     facts.has_benchmarks = _has_benchmarks(root, facts.paths)
     facts.has_benchmark_output = _has_benchmark_output(root, facts.paths)
     return facts
+
+
+# `target: prereqs ; inline-recipe` — all three parts optional after the colon.
+_MAKE_RULE = re.compile(r"^([A-Za-z0-9_.\-]+)\s*:(?!=)([^;\n]*)(?:;(.*))?$")
+
+
+def _make_recipes(root: Path) -> dict:
+    """{target: {"recipe": str, "prereqs": [str]}} — enough to answer "does this target
+    run tests?" without executing anything.
+
+    Three forms have to work, because all three are idiomatic:
+
+        check:            ← indented recipe on following lines
+        \tgo test ./...
+
+        check: test       ← aggregate: the work is in a prerequisite
+
+        check: ; go test ./...    ← inline recipe after a semicolon
+
+    Only the first was parsed, so the other two produced an empty recipe and S4 rejected
+    a perfectly good README. That is a false negative — it cannot let fabrication
+    through, but it fails honest work, which is its own kind of wrong.
+    """
+    mk = root / "Makefile"
+    if not mk.is_file():
+        return {}
+    try:
+        text = mk.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {}
+    # Join escaped-newline continuations before parsing.
+    text = re.sub(r"\\\n\s*", " ", text)
+    rules, current = {}, None
+    for line in text.splitlines():
+        m = _MAKE_RULE.match(line)
+        if m:
+            current = m.group(1)
+            entry = rules.setdefault(current, {"recipe": "", "prereqs": []})
+            entry["prereqs"] += [w for w in m.group(2).split() if not w.startswith("$")]
+            if m.group(3):
+                entry["recipe"] += m.group(3).strip() + "\n"
+            continue
+        if current and (line.startswith("\t") or line.startswith("    ")):
+            rules[current]["recipe"] += line.strip() + "\n"
+        elif line.strip() and not line.startswith("#"):
+            current = None
+    return rules
+
+
+def _make_effective_recipe(target: str, rules: dict, _seen=None) -> str:
+    """Recipe of `target` plus, recursively, the recipes of its prerequisites.
+
+    `_seen` guards against a cycle (`a: b` / `b: a`), which make itself rejects but a
+    half-written Makefile can still contain — and which would otherwise hang the linter.
+    """
+    if _seen is None:
+        _seen = set()
+    if target in _seen or target not in rules:
+        return ""
+    _seen.add(target)
+    entry = rules[target]
+    parts = [entry["recipe"]]
+    for prereq in entry["prereqs"]:
+        parts.append(_make_effective_recipe(prereq, rules, _seen))
+    return "".join(parts)
+
+
+def _npm_script_bodies(root: Path) -> dict:
+    pj = root / "package.json"
+    if not pj.is_file():
+        return {}
+    try:
+        data = json.loads(pj.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    scripts = data.get("scripts") if isinstance(data, dict) else None
+    return {k: str(v) for k, v in scripts.items()} if isinstance(scripts, dict) else {}
 
 
 _COVERAGE_CONFIGS = (".codecov.yml", "codecov.yml", ".coveralls.yml", "Makefile",
@@ -444,10 +530,27 @@ PROCESS_LABEL_PATTERNS = [
 ]
 
 
+# `sudo`, `env`, and `NAME=value` prefixes are not part of the command being run, but
+# the matchers below anchor on `^make` / `^npm`. Without stripping them,
+# `CI=1 make deploy` and `sudo make deploy` slipped past the undefined-target check.
+_WRAPPER = re.compile(
+    r"^(?:sudo(?:\s+-\w+)*\s+|env\s+|command\s+|time\s+|nohup\s+|exec\s+|"
+    r"[A-Za-z_][A-Za-z0-9_]*=(?:\"[^\"]*\"|'[^']*'|\S*)\s+)+"
+)
+
+
+def strip_wrappers(cmd: str) -> str:
+    prev = None
+    while prev != cmd:
+        prev = cmd
+        cmd = _WRAPPER.sub("", cmd, count=1).lstrip()
+    return cmd
+
+
 def _check_commands(text: str, f: RepoFacts) -> list:
     out = []
     for cmd in shell_commands(text):
-        head = cmd.split("#", 1)[0].strip()
+        head = strip_wrappers(cmd.split("#", 1)[0].strip())
         if not head:
             continue
 
@@ -766,6 +869,180 @@ def _check_required_sections(text: str, f: RepoFacts) -> list:
     return out
 
 
+# ── Scorecard ───────────────────────────────────────────────────
+# Keep in sync with SKILL.md §README Quality Scorecard (guarded by
+# tests/test_skill_contract.py::TestScorecardApplicability).
+
+NA = "N/A"
+UNCHECKED = "UNCHECKED"
+
+# S2/S3/S4 were uniform requirements, which made the skill's own Template B
+# unpassable: a Library README has no Structure section, must not invent a
+# Configuration section, and cannot show a lint command a repo without a linter does
+# not have. Three automatic failures out of six meant a correct Library README scored
+# 3/6 and failed the tier the skill grades it with.
+STANDARD_SCOPE = {
+    "S2": ("service", "monorepo", "lightweight"),
+    "S3": ("service",),
+}
+
+
+# Explicit runners only. A generic `check` used to count, so `make check-types` running
+# `tsc --noEmit` satisfied "testing commands included" while running no tests at all.
+_TEST_RUNNER = re.compile(
+    r"\b(?:go\s+test|cargo\s+test|mvn\s+(?:\S+\s+)*test|gradle\s+\S*test|dotnet\s+test|"
+    r"pytest|py\.test|python\s+-m\s+pytest|tox|nose2|"
+    r"jest|vitest|mocha|ava|node\s+--test|npm\s+(?:run\s+)?test|yarn\s+test|pnpm\s+test|"
+    r"rspec|phpunit|ctest|bats|gotestsum)\b",
+    re.IGNORECASE,
+)
+_LINT_RUNNER = re.compile(
+    r"\b(?:golangci-lint|go\s+vet|staticcheck|cargo\s+clippy|ruff|flake8|pylint|mypy|"
+    r"eslint|biome|prettier\s+--check|rubocop|checkstyle|clang-tidy|shellcheck)\b",
+    re.IGNORECASE,
+)
+
+
+def _resolve(head: str, f: RepoFacts) -> str:
+    """Return the text to inspect: a wrapper target's recipe when we can read it,
+    otherwise the command itself. `make check` whose recipe is `go test ./...` is a test
+    command; `make check-types` whose recipe is `tsc --noEmit` is not. The target NAME
+    settles neither."""
+    m = re.match(r"^make\s+(?:-C\s+\S+\s+)?([A-Za-z0-9_.\-]+)", head)
+    if m:
+        return _make_effective_recipe(m.group(1), f.make_recipes) or head
+    m = re.match(r"^(?:npm|pnpm|yarn|bun)\s+(?:run\s+)?([A-Za-z0-9_:\-]+)", head)
+    if m:
+        return f.npm_script_bodies.get(m.group(1), head)
+    return head
+
+
+def _has_test_command(text: str, f: RepoFacts) -> bool:
+    for cmd in shell_commands(text):
+        head = strip_wrappers(cmd.split("#", 1)[0].strip())
+        if _TEST_RUNNER.search(_resolve(head, f)):
+            return True
+    return False
+
+
+def _has_lint_command(text: str, f: RepoFacts) -> bool:
+    for cmd in shell_commands(text):
+        head = strip_wrappers(cmd.split("#", 1)[0].strip())
+        if _LINT_RUNNER.search(_resolve(head, f)):
+            return True
+    return False
+
+
+def _section_present(text: str, key: str) -> bool:
+    blob = "\n".join(t.lower() for _, t in headings(text))
+    return any(alias in blob for alias in SECTION_ALIASES.get(key, [key]))
+
+
+def scorecard(readme_text: str, facts: RepoFacts, findings=None) -> dict:
+    """Compute the three tiers, marking each item PASS / FAIL / N/A / UNCHECKED.
+
+    Two honesty rules are baked in:
+
+    * **N/A items leave the denominator.** A Library is not graded on Configuration.
+      The tier is reported as "passed/applicable", so a correct README of any type can
+      reach the bar.
+    * **UNCHECKED is not PASS.** Audience declaration (S6), template-routing
+      correctness (C4), and optional-section gating (H4) need a human. They are named
+      and excluded rather than silently counted as passes.
+    """
+    findings = lint(readme_text, facts) if findings is None else findings
+    codes = {f.code for f in findings}
+    ptype = facts.project_type
+    has_config_evidence = facts.has_env_example or any(
+        p == "config" or p.startswith("config/") for p in facts.paths)
+    repo_has_linter = (
+        any("lint" in t for t in facts.make_targets)
+        or any("lint" in sc for sc in facts.npm_scripts)
+        or any(p.startswith((".golangci", ".eslintrc", "eslint.config", ".ruff")) or
+               p in ("ruff.toml", ".flake8") for p in facts.paths)
+    )
+
+    def scoped(item, extra=False):
+        allowed = STANDARD_SCOPE.get(item)
+        if allowed is None:
+            return True
+        return ptype in allowed or extra
+
+    critical = {
+        "C1": "FAIL" if codes & {"R003", "R004", "R007"} else "PASS",
+        "C2": "FAIL" if codes & {"R001", "R002", "R005", "R008"} else "PASS",
+        "C3": "FAIL" if "R009" in codes else "PASS",
+        "C4": UNCHECKED,   # the type is an input here, not something to verify
+    }
+    standard = {
+        "S1": "FAIL" if codes & {"R001", "R002"} else "PASS",
+        "S2": ("PASS" if _section_present(readme_text, "structure") else "FAIL")
+              if scoped("S2") else NA,
+        "S3": ("PASS" if _section_present(readme_text, "configuration") else "FAIL")
+              if scoped("S3", extra=has_config_evidence) else NA,
+        "S4": _score_testing(readme_text, facts, repo_has_linter),
+        "S5": "FAIL" if "R008" in codes else "PASS",
+        "S6": UNCHECKED,   # audience/language live in the response, not the file
+    }
+    hygiene = {
+        "H1": "PASS" if _section_present(readme_text, "maintenance") else "FAIL",
+        "H2": "FAIL" if "R006" in codes else "PASS",
+        "H3": "FAIL" if "R010" in codes or "R011" in codes else "PASS",
+        "H4": UNCHECKED,
+    }
+
+    def tally(tier):
+        applicable = {k: v for k, v in tier.items() if v not in (NA, UNCHECKED)}
+        passed = sum(1 for v in applicable.values() if v == "PASS")
+        return passed, len(applicable)
+
+    cp, ct = tally(critical)
+    sp, st = tally(standard)
+    hp, ht = tally(hygiene)
+    # Two thirds of applicable items, rounded up — the same bar 4/6 and 3/4 expressed
+    # so it survives items dropping out as N/A.
+    s_bar = -(-2 * st // 3)
+    h_bar = -(-2 * ht // 3)
+    machine = "PASS" if (cp == ct and sp >= s_bar and hp >= h_bar) else "FAIL"
+    if "R013" in codes:
+        machine = "INCOMPLETE"
+
+    unchecked = sorted(k for tier in (critical, standard, hygiene)
+                       for k, v in tier.items() if v == UNCHECKED)
+    # C4 is a Critical item and is never machine-scored, so a clean run has not
+    # established that the whole card passes — only that nothing a script can see is
+    # wrong. Reporting that as PASS overstates it; the human step is not optional.
+    if machine == "PASS" and unchecked:
+        final = "PENDING_HUMAN_REVIEW"
+    else:
+        final = machine
+    return {
+        "critical": critical, "standard": standard, "hygiene": hygiene,
+        "totals": {"critical": f"{cp}/{ct}", "standard": f"{sp}/{st}",
+                   "hygiene": f"{hp}/{ht}"},
+        "thresholds": {"standard": s_bar, "hygiene": h_bar},
+        "machine_result": machine,
+        "final_result": final,
+        "summary": (f"Critical: {cp}/{ct} | Standard: {sp}/{st} applicable "
+                    f"(need {s_bar}) | Hygiene: {hp}/{ht} applicable (need {h_bar}) "
+                    f"-> machine {machine}; final {final}"),
+        "unchecked": unchecked,
+        "not_applicable": sorted(k for tier in (critical, standard, hygiene)
+                                 for k, v in tier.items() if v == NA),
+    }
+
+
+def _score_testing(readme_text: str, facts: RepoFacts, repo_has_linter: bool) -> str:
+    """S4. A test command is always required. Lint is required only when the repo has
+    a linter to run — demanding one of a repo with no lint config asks the README to
+    invent a command, which C2 then flags."""
+    if not _has_test_command(readme_text, facts):
+        return "FAIL"
+    if repo_has_linter and not _has_lint_command(readme_text, facts):
+        return "FAIL"
+    return "PASS"
+
+
 def lint(readme_text: str, facts: RepoFacts) -> list:
     findings = []
     findings += _check_commands(readme_text, facts)
@@ -836,10 +1113,21 @@ def main(argv: list) -> int:
     facts = scan_repo(repo, project_type=override)
     print(f"# project_type={facts.project_type} (base={facts.base_type}) "
           f"verdict={facts.verdict}")
-    findings = lint(readme.read_text(encoding="utf-8"), facts)
+    text = readme.read_text(encoding="utf-8")
+    findings = lint(text, facts)
     for f in findings:
         print(f)
-    print(json.dumps(summarize(findings), ensure_ascii=False))
+    card = scorecard(text, facts, findings)
+    print("# " + card["summary"])
+    if card["not_applicable"]:
+        print("# not applicable to this project type: "
+              + ", ".join(card["not_applicable"]))
+    if card["unchecked"]:
+        print("# needs a human before this is a PASS: " + ", ".join(card["unchecked"]))
+    print(json.dumps({**summarize(findings), "scorecard": card["totals"],
+                      "machine_result": card["machine_result"],
+                      "final_result": card["final_result"],
+                      "unchecked": card["unchecked"]}, ensure_ascii=False))
     return 1 if any(f.severity == CRITICAL for f in findings) else 0
 
 
