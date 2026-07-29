@@ -1,15 +1,16 @@
 {
   "id": "BENCH-010",
-  "title": "Profile-guided workflow — pprof shows mallocgc hotspot, skill writes targeted benchmark",
+  "title": "Profile-guided workflow \u2014 pprof shows mallocgc hotspot, skill writes targeted benchmark",
   "type": "workflow",
   "severity": "none",
   "benchmark_snippet": "# User provides CPU pprof output showing:\n# runtime.mallocgc  45%  45%\n# encodeToken        30%  75%\n# User asks: 'What benchmark should I write?'",
   "expected_feedback": "confirm hotspot from pprof (mallocgc in encodeToken), write BenchmarkEncodeToken with -memprofile flag, note data_basis=pprof profile",
   "coverage_rules": [
-    "Run pprof first",
-    "identify top-3 hotspots",
+    "Profile the **running program**",
+    "is circular",
     "-cpuprofile",
     "runtime.mallocgc"
   ],
-  "reference": "references/pprof-analysis.md"
+  "reference": "references/pprof-analysis.md",
+  "note": "coverage_rules updated 2026-07-29: the Scope Gate used to say 'Run pprof first' for the no-baseline case, which is circular under `go test -bench` \u2014 there are no benchmarks to profile yet. The rule now points at the running program (or a single minimal benchmark of the suspect path), and this fixture tracks that wording."
 }

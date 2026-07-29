@@ -20,15 +20,15 @@ Deep-dive for generating and interpreting pprof profiles. The `-alloc_objects` v
 ```bash
 # CPU only (use -run=^$ to skip unit tests)
 go test -bench=BenchmarkEncode -benchmem -count=1 \
-    -cpuprofile cpu.prof -run=^$ ./pkg/...
+    -cpuprofile cpu-encode-before.prof -run=^$ ./pkg/...
 
 # Memory only
 go test -bench=BenchmarkEncode -benchmem -count=1 \
-    -memprofile mem.prof -run=^$ ./pkg/...
+    -memprofile mem-encode-before.prof -run=^$ ./pkg/...
 
 # Both at once
 go test -bench=BenchmarkEncode -benchmem -count=1 \
-    -cpuprofile cpu.prof -memprofile mem.prof -run=^$ ./pkg/...
+    -cpuprofile cpu-encode-before.prof -memprofile mem-encode-before.prof -run=^$ ./pkg/...
 
 # Differential: capture before and after separately
 go test -bench=. -count=1 -memprofile mem-before-pool.prof -run=^$ ./...
@@ -44,7 +44,7 @@ In the diff view: **red** = regression, **green** = improvement, **gray** = unch
 ## Web UI Tabs
 
 ```bash
-go tool pprof -http=:6060 cpu.prof
+go tool pprof -http=:6060 cpu-encode-before.prof
 ```
 
 | Tab | Best for |
@@ -59,7 +59,7 @@ go tool pprof -http=:6060 cpu.prof
 ## CLI Commands
 
 ```bash
-go tool pprof mem.prof
+go tool pprof mem-encode-before.prof
 (pprof) top          # Top 10 by self (flat) cost
 (pprof) top -cum     # Top 10 by cumulative cost (includes callees)
 (pprof) top20
@@ -122,23 +122,74 @@ go build -gcflags="-m=2" ./pkg/... 2>&1   # verbose: shows reasoning
 
 ---
 
+## Heap Profile: the Four Views
+
+A Go heap profile carries four sample types. `runtime/pprof` documents `-inuse_space` as the
+default.
+
+| Flag | Measures | Use for |
+|---|---|---|
+| `-alloc_objects` | allocation **count** since process start, including everything already freed | GC pressure — the churn rate |
+| `-alloc_space` | allocated **bytes** since process start, including everything already freed | which call sites move the most bytes |
+| `-inuse_objects` | objects **live** at the sample | retention: how many objects are still held |
+| `-inuse_space` | bytes **live** at the sample | closest available answer to "how big is the heap" |
+
+**`alloc_*` is a lifetime total, not a footprint.** Code that allocates and immediately discards
+1 KB a million times reports roughly 1 GB of `alloc_space` while the live heap never exceeds a
+few KB. Reading `alloc_space` as "memory used" is the single most common misreading of a Go heap
+profile, and it sends you optimising churn when the complaint was residency (or vice versa).
+
+**None of the four is RSS.** Resident set size also includes the runtime's own structures,
+goroutine and OS thread stacks, spans that are free but not yet returned to the OS, and anything
+allocated through cgo. A heap profile showing 300 MB live against 4 GB RSS is not a
+contradiction and not necessarily a leak — see the OS for RSS (`ps`, `/proc/<pid>/status`).
+
+Pick by the question being asked:
+
+| Complaint | Flag |
+|---|---|
+| "GC runs constantly" / "it's slow" | `-alloc_objects` |
+| "one call site allocates enormous buffers" | `-alloc_space` |
+| "the process is too big" / "memory grows" | `-inuse_space` |
+
+---
+
 ## Mutex & Block Profiling
 
-Enable in code first:
+**Under `go test` you do not enable these in code.** The testing package does it for you:
+`-blockprofile` applies `-test.blockprofilerate` (default 1) via `runtime.SetBlockProfileRate`,
+and `-mutexprofile` applies `-test.mutexprofilefraction` (default 1) via
+`runtime.SetMutexProfileFraction` — see `src/testing/testing.go`, where both are set before the
+run starts. Adding an `init()` duplicates that and hides the rate you are actually sampling at.
+
+```bash
+go test -bench=BenchmarkCacheGet -benchmem -count=1 -run=^$ \
+    -mutexprofile mutex-cacheget-before.prof \
+    -blockprofile block-cacheget-before.prof ./...
+
+go tool pprof -http=:6060 mutex-cacheget-before.prof   # time spent waiting for locks
+go tool pprof -http=:6060 block-cacheget-before.prof   # where goroutines block
+```
+
+Change the rate with the flags, not with code:
+
+```bash
+# sample 1 blocking event in 100 — cheaper on a very hot path
+go test -bench=. -benchmem -run=^$ -blockprofile block-cacheget-sampled.prof -blockprofilerate=100 ./...
+```
+
+**An `init()` *is* the right tool for a long-running service**, which has no `go test` flags to
+set the rate for it:
+
 ```go
+// in a service binary, not a test
 func init() {
-    runtime.SetMutexProfileFraction(1) // capture all contention
-    runtime.SetBlockProfileRate(1)      // capture all goroutine blocks
+    runtime.SetMutexProfileFraction(1) // 1 = capture every contention event
+    runtime.SetBlockProfileRate(1)     // 1 = capture every blocking event, in ns
 }
 ```
 
-```bash
-go test -bench=BenchmarkCacheGet -count=1 \
-    -mutexprofile mutex.prof -blockprofile block.prof -run=^$ ./...
-
-go tool pprof -http=:6060 mutex.prof   # where time is spent waiting for locks
-go tool pprof -http=:6060 block.prof   # where goroutines block
-```
+Both carry runtime cost at rate 1; in production sample far more sparsely.
 
 - High `flat` on a specific `Lock` call → that lock is contended → reduce scope, use `sync.RWMutex`, or shard data
 - `runtime.chanrecv` / `runtime.chansend` in block profile → channel is a bottleneck

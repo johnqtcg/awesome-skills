@@ -255,7 +255,7 @@ class TestAutoScorecard(unittest.TestCase):
         """The Critical tier used to demand a `package-level sink` outright, which would fail a
         correct `for b.Loop()` benchmark — b.Loop needs no sink. It must grade the property
         (body cannot be optimised away) and accept either loop form."""
-        self.assertIn("Critical — any failure means redo", self.text)
+        self.assertIn("Critical — any applicable failure means redo", self.text)
         self.assertIn("cannot be optimised away", self.text)
         self.assertIn("no sink required", self.text)
         self.assertIn("Grade the property, not the presence of a `sink` identifier", self.text)
@@ -264,14 +264,14 @@ class TestAutoScorecard(unittest.TestCase):
         self.assertIn("b.RunParallel", self.text)
 
     def test_standard_tier_exists_with_5_items(self) -> None:
-        self.assertIn("Standard — 4 of 5 must pass", self.text)
+        self.assertIn("Standard — ≥ 80% of applicable items", self.text)
         self.assertIn("-count=10", self.text)
         self.assertIn("sub-benchmarks across", self.text)
         self.assertIn("`benchstat`", self.text)
         self.assertIn("alloc target stated", self.text)
 
     def test_hygiene_tier_exists_with_4_items(self) -> None:
-        self.assertIn("Hygiene — 3 of 4 must pass", self.text)
+        self.assertIn("Hygiene — ≥ 75% of applicable items", self.text)
         self.assertIn("Parallel benchmark", self.text)
         self.assertIn("top-3 hotspot", self.text)
         self.assertIn("Environment noted", self.text)
@@ -451,6 +451,49 @@ class TestCrossFileConsistency(unittest.TestCase):
         lines = len(self.benchstat_guide.splitlines())
         self.assertGreaterEqual(lines, 80,
                                 f"benchstat-guide.md too short: {lines} lines (min 80)")
+
+
+class TestCoverageDocIsCurrent(unittest.TestCase):
+    """COVERAGE.md claimed 96 tests and a 378-line SKILL.md while the suite had 105 and the
+    file had 419. A coverage document that overstates the suite is worse than none, because
+    it is read as evidence. These checks make the numbers falsifiable.
+
+    Counting uses unittest's loader rather than an AST walk: `ReferenceTemplateCompileTests`
+    inherits its two compile tests from `TemplateCompileTests`, so parsing `def test_` finds
+    109 where the loader collects 111. The number in the doc must be the collected one.
+    """
+
+    DOC = Path(__file__).resolve().parent / "COVERAGE.md"
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        import unittest as ut
+        loader = ut.TestLoader()
+        suite = loader.discover(str(Path(__file__).resolve().parent), pattern="test_*.py")
+        cls.collected = suite.countTestCases()
+        cls.doc = cls.DOC.read_text(encoding="utf-8")
+
+    def test_total_matches_the_collected_suite(self) -> None:
+        m = re.search(r"\*\*Total tests: (\d+) collected\*\*", self.doc)
+        self.assertIsNotNone(m, "COVERAGE.md has no '**Total tests: N collected**' line")
+        self.assertEqual(
+            self.collected, int(m.group(1)),
+            f"COVERAGE.md claims {m.group(1)}; the loader collects {self.collected}",
+        )
+
+    def test_line_budget_figure_matches_the_file(self) -> None:
+        actual = len(SKILL_MD.read_text(encoding="utf-8").splitlines())
+        m = re.search(r"SKILL\.md line budget \| (\d+)/(\d+)", self.doc)
+        self.assertIsNotNone(m, "no SKILL.md line-budget row in COVERAGE.md")
+        self.assertEqual(actual, int(m.group(1)),
+                         f"COVERAGE.md says {m.group(1)} lines; the file has {actual}")
+        self.assertLessEqual(actual, int(m.group(2)))
+
+    def test_golden_layer_is_not_described_as_forward_eval(self) -> None:
+        """The golden layer checks fixture metadata; calling it behavioural evidence is the
+        overstatement this doc now has to avoid."""
+        self.assertIn("fixture-consistency testing, not forward evaluation", self.doc)
+        self.assertRegex(self.doc, r"(?i)no forward eval")
 
 
 if __name__ == "__main__":

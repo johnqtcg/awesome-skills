@@ -2,16 +2,24 @@
 
 ## Installation and Basic Usage
 
+Install once:
+
 ```bash
 go install golang.org/x/perf/cmd/benchstat@latest
+```
 
-# Capture baseline
+**Summarise one variant.** Runs top-to-bottom on its own; makes no A/B claim:
+
+```bash
 go test -bench=. -benchmem -count=10 ./pkg/... | tee old.txt
+benchstat old.txt
+```
 
-# Make your change, then capture new run
-go test -bench=. -benchmem -count=10 ./pkg/... | tee new.txt
+**Compare two variants.** Do *not* get `new.txt` by repeating the block above with the other
+checkout — that is the sequential pattern §Interleave A and B exists to replace. Produce both
+files there, then:
 
-# Compare
+```bash
 benchstat old.txt new.txt
 ```
 
@@ -96,8 +104,12 @@ be before you can see it.
 | `5–10%` | Noisy | Use `-benchtime=2s` or `-count=20` |
 | `> 10%` | Unreliable | Check for background processes, thermal throttling |
 
-A change smaller than the `±` of either side is not measurable on that machine, whatever the
-p-value says.
+A change comparable to or smaller than the `±` of either side is unlikely to be resolvable on
+that machine — treat it as below the noise floor and reduce noise or add samples before
+believing it. This is a practical reading of the interval, not a theorem: benchstat's
+significance verdict comes from the p-value against `-alpha`, and an effect narrower than the
+displayed range can still test significant if the two distributions separate cleanly.
+Where the two disagree, distrust both and stabilise the machine.
 
 ## Common Options
 
@@ -129,22 +141,81 @@ go test -bench=. -benchmem -count=10 -benchtime=5s ./... | tee new.txt
 ```
 
 **When to use count=10 vs count=20:**
-- `count=10`: standard comparison; detects ≥15% changes reliably when `±` ≤3%
+- `count=10`: the usual starting point for a comparison; on a quiet machine showing `±` ≤3% it
+  will typically surface changes in the low tens of percent
 - `count=20`: for subtle changes (< 10%) or noisy environments
 - Never use `count=5` for comparative claims; use `count=5` only for exploratory runs
 
-**What extra samples actually buy.** The smallest effect you can resolve shrinks with the
-*square root* of the sample count, not linearly:
+**What extra samples actually buy — a rule of thumb, not a guarantee.** For an average over
+independent, identically distributed samples, the standard error shrinks with the *square root*
+of the sample count, so the smallest resolvable effect scales roughly as `1/√n`:
 
-| `-count` | Relative detectable effect |
+| `-count` | Relative detectable effect (approx.) |
 |---|---|
 | 5 | baseline (1.00×) |
 | 10 | 0.71× — about **29%** finer |
 | 20 | 0.50× — half the baseline |
 
-So `5 → 10` is a meaningful but modest gain; **quadrupling to `-count=20` is what halves it**.
-Reducing machine noise usually beats adding samples: a run at `±1%` resolves more than twice
-the detail of a run at `±3%`, at any count.
+Read that as direction and rough magnitude. Two things stop it from being exact:
+
+- **benchstat does not test a mean.** It reports **medians** and compares distributions with a
+  non-parametric test, judging significance by p-value against `-alpha` (default 0.05) and
+  showing a confidence range at `-confidence` (default 0.95) — all visible in `benchstat -h`.
+  A rank test's power depends on the shape of the two distributions, not on `√n` alone.
+- **Benchmark samples are frequently not independent.** Thermal throttling, frequency scaling
+  and background load drift *during* a run, so consecutive samples correlate. When that
+  happens, extra samples buy less than `1/√n` predicts — sometimes much less, because you are
+  sampling the same drift repeatedly rather than sampling noise afresh.
+
+The practical consequence is unchanged, and is the part to remember: `5 → 10` is a modest gain,
+**quadrupling to `-count=20` is what halves the resolvable effect**, and reducing machine noise
+usually beats adding samples — a run at `±1%` resolves more detail than a run at `±3%` at any
+count.
+
+## Interleave A and B — do not run all of A, then all of B
+
+The second correlation problem above has a cheap fix that costs no extra samples. If the
+machine warms up, or a background job starts halfway through, running every `old` sample before
+every `new` sample bakes that drift straight into the difference you are about to attribute to
+your change. Alternating the two spreads any drift across both sides.
+
+**Compile both variants first, then alternate the binaries.** Switching branches inside the
+measurement loop is the version of this that goes wrong: it fails outright on a dirty worktree,
+assumes particular branch names, leaves you parked on the wrong branch if the loop is
+interrupted, and folds compilation into the window you are timing.
+
+```bash
+# BAD: all of old, then all of new — drift is confounded with the change
+go test -bench=. -benchmem -count=10 ./... > old.txt
+git switch feature && go test -bench=. -benchmem -count=10 ./... > new.txt
+
+# ALSO BAD: alternating, but by switching the worktree 20 times mid-measurement.
+# Fails on a dirty tree, hardcodes branch names, leaves you on `feature` if interrupted,
+# and folds compilation into the timing window.
+for i in $(seq 10); do
+    git switch main -q    && go test -bench=. -count=1 ./... >> old.txt
+    git switch feature -q && go test -bench=. -count=1 ./... >> new.txt
+done
+
+# GOOD: build once per variant, restore your branch, then alternate two fixed binaries.
+# `go test -c` compiles a SINGLE package — `-o file` with ./pkg/... fails with
+# "with multiple packages, -o must refer to a directory or /dev/null".
+git switch main    -q && go test -c -o /tmp/old.bench ./pkg/mypkg
+git switch feature -q && go test -c -o /tmp/new.bench ./pkg/mypkg
+git switch -       -q
+
+bash scripts/run_interleaved_bench.sh /tmp/old.bench /tmp/new.bench /tmp/bench-out 10
+```
+
+The script refuses to overwrite an existing `old.txt`/`new.txt` rather than appending to it,
+writes results outside the repository, validates its arguments, and runs benchstat at the end.
+
+A compiled test binary takes its flags with a `-test.` prefix (`-test.bench`, `-test.count`,
+`-test.benchmem`, `-test.run`) — the bare forms only work through `go test`.
+
+benchstat consumes the appended files exactly the same way — it groups by benchmark name, not
+by position — so interleaving changes nothing except which run the drift lands on. When a
+comparison is close to the noise floor, this is usually worth more than doubling `-count`.
 
 ## Noise Reduction Checklist
 

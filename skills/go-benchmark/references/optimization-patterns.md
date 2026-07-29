@@ -63,14 +63,28 @@ For maps: `make(map[K]V, expectedSize)` avoids bucket growth. Useful when the ma
 Use when: `runtime.convT` / `runtime.convTslice` / `runtime.convTstring` in profile.
 
 ```go
-// BAD: boxes string into any on every call
+// COSTLY WHEN IT ESCAPES: boxing a string into any
 func log(msg any) { /* ... */ }
-log(item.Name) // allocates
+log(item.Name)
 
-// GOOD: use concrete type or a dedicated overload
+// GOOD: concrete type or a dedicated overload — no boxing to reason about
 func logString(msg string) { /* ... */ }
-logString(item.Name) // no alloc
+logString(item.Name)
 ```
+
+**Boxing is not unconditionally an allocation.** Converting to an interface needs somewhere to
+put the value, but escape analysis decides whether that is the heap or the stack. Measured on
+Go 1.26 darwin/arm64:
+
+| Case | Result |
+|---|---|
+| stored to a package-level `any` (escapes) | `16 B/op`, `1 allocs/op` |
+| passed to a `//go:noinline` function that only reads it | `0 B/op`, `0 allocs/op` |
+
+So the rule is "boxing that **escapes** allocates", not "boxing allocates". Confirm with
+`go build -gcflags='-m'` (look for `escapes to heap` on the conversion) or `-benchmem` before
+restructuring an API around it. The `runtime.convT*` entries in a profile are the reliable
+signal, because those only appear for conversions that actually allocated.
 
 Similarly: `fmt.Sprintf` in hot paths boxes every argument. Replace with `strconv`:
 

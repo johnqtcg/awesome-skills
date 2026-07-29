@@ -1,15 +1,16 @@
 {
   "id": "BENCH-006",
-  "title": "Good parallel benchmark for concurrent-safe cache — well-formed b.RunParallel",
+  "title": "Good parallel benchmark for concurrent-safe cache \u2014 well-formed b.RunParallel",
   "type": "good_practice",
   "severity": "none",
-  "benchmark_snippet": "var sinkAny any\n\nfunc BenchmarkCacheGet(b *testing.B) {\n    cache := NewCache(1000)\n    populateCache(cache)\n    b.ResetTimer()\n    b.RunParallel(func(pb *testing.PB) {\n        for pb.Next() {\n            sinkAny, _ = cache.Get(\"key-42\")\n        }\n    })\n}",
-  "expected_feedback": "no violations; correctly uses RunParallel, sinks result, ResetTimer before parallel block",
+  "benchmark_snippet": "var sinkTotal atomic.Int64\n\nfunc BenchmarkCacheGet(b *testing.B) {\n    cache := NewCache(1000)\n    populateCache(cache)\n    b.ResetTimer()\n    b.RunParallel(func(pb *testing.PB) {\n        var acc int // goroutine-local: nothing shared while the timer runs\n        for pb.Next() {\n            v, _ := cache.Get(\"key-42\")\n            if v != nil {\n                acc++\n            }\n        }\n        sinkTotal.Add(int64(acc)) // one atomic publish per goroutine, after the loop\n    })\n}",
+  "expected_feedback": "no violations; RunParallel with a goroutine-local accumulator published once via atomic after the loop, ResetTimer before the parallel block, survives -race",
   "coverage_rules": [
     "b.RunParallel",
     "pb.Next()",
     "parallel benchmark",
     "var sink"
   ],
-  "reference": "references/benchmark-patterns.md"
+  "reference": "references/benchmark-patterns.md",
+  "note": "Was a data race until 2026-07-29: every goroutine wrote the package-level `sinkAny`, so this fixture asserted `good_practice`/`no violations` on code that fails `go test -race` with WARNING: DATA RACE \u2014 the exact defect the skill's Critical Rule 4 forbids. A forward-eval graded against it would have marked a correct agent wrong. Now executed under -race by test_templates_compile.py::GoldenGoodPracticeRaceTests."
 }
