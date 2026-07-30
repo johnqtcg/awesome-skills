@@ -30,8 +30,9 @@ or private accounts.
 
 ## Load References Selectively
 
-Load on demand, not up front. A typical Playwright task needs the first two rows
-and nothing else.
+Load on demand, not up front. A typical Playwright coding task needs the two
+every-task rows plus `playwright-patterns.md` — three files. Everything below that
+is conditional; open it when the trigger in the first column actually applies.
 
 | When | Load / run | Contents |
 |------|-----------|----------|
@@ -129,6 +130,16 @@ If required values are missing:
 Guard **every** variable the suite needs, not just the first one. A
 `test.skip(!USER)` leaves an unset `PASS` to reach the page as `undefined`, which
 surfaces as a login failure rather than "you forgot to set PASS".
+
+Place the guard where it can still prevent the read: file scope, inside the test,
+or in a `beforeEach` / `beforeAll` hook. A guard in one test says nothing about
+another test.
+
+A `test.skip` in `afterEach` / `afterAll` is worse than useless. Measured on
+Playwright 1.62.0 (`scripts/verify_hook_semantics.sh`): the test body **runs**,
+reads the unset value, and the run is then reported as **skipped** — so a suite
+that should have failed loudly reports as skipped instead. Never put a guard in an
+`after` hook.
 
 In every result include:
 

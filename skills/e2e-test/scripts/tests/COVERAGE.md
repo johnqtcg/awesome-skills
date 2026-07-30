@@ -12,10 +12,13 @@ Regenerate with `bash scripts/run_regression.sh`.
 
 | Suite | Tests |
 |-------|------:|
-| `test_skill_contract.py` | 172 |
+| `test_skill_contract.py` | 184 |
 | `test_golden_scenarios.py` | 54 |
 | `test_discover_script.py` | 44 |
-| **Total** | **270** |
+| **Total** | **282** |
+
+Plus one **opt-in** verifier not counted above:
+`scripts/verify_hook_semantics.sh` (8 real-Playwright checks; needs npm).
 
 Both invocation forms must be green: `python3 <file>` and
 `python3 -m pytest scripts/tests`. They differ — this repo's `pytest.ini` sets
@@ -79,6 +82,74 @@ about the skill's *internal consistency*, which no single-file test could catch.
 | `test_supported_runtime_kept_separate_from_engine_floor` | quoting `engines.node` as if it were the supported-runtime list. Node 20 satisfies `engines` for 1.62 but is outside the documented "latest 22.x, 24.x or 26.x" — "installs" is not "supported" |
 | `TestProgressiveDisclosureBudget` | SKILL.md creeping past ~500 lines by accretion; every reference lacking a stated load condition; the 1000-line deep-patterns reference being presented as a whole-file read |
 | `test_reference_does_not_duplicate_the_core_seven` / `test_toc_lists_every_case` / `test_every_reference_file_has_a_toc` | anti-examples.md restating SKILL.md's seven cases (≈150 duplicated lines) and being the only reference with no TOC |
+
+### Fourth review round (2026-07-30)
+
+| Class / test | Guards against |
+|--------------|----------------|
+| `test_after_each_guard_protects_nothing` / `test_after_all_guard_protects_nothing` | all four Playwright hooks being treated as promotable guards. Only `beforeEach` / `beforeAll` run early enough to stop a read; a `test.skip` in `afterEach` / `afterAll` executes after the body has already used the value, so it suppressed the finding while protecting nothing |
+| `test_before_each_guard_still_protects` / `test_before_all_guard_still_protects` | over-correcting the above and losing coverage for the hooks that *do* protect |
+| `test_only_before_hooks_are_promotable` | the regex regressing to match all four hook names again — asserted at the source level, not only behaviourally |
+| `test_guard_placement_documented` | the linter enforcing hook ordering that the skill never teaches |
+| `test_typical_task_claim_matches_the_table` | the lead sentence undercounting its own table ("the first two rows and nothing else", while writing Playwright code also needs `playwright-patterns.md`) |
+| `test_core_seven_enumeration_matches_skill_md_exactly` | the restated core-seven list drifting from SKILL.md. It had been written from the *deleted* half of anti-examples.md, so it named "asserting implementation detail" — a case SKILL.md does not have — and omitted "Pseudo-runnable scaffold without test.skip". The dedup test only checked for heading collisions, so a wrong enumeration passed |
+
+### Fifth review round (2026-07-30) — the hook rule is now measured, not assumed
+
+Round 4's hook rule was pinned by unit tests that encoded my own assumption about
+Playwright's runtime. A reviewer correctly noted that this proves nothing about
+the external framework: `beforeAll` runs once per worker, and `TestInfo.skip` is
+documented as skipping "the currently running test" — which is not obviously a
+thing that exists yet inside `beforeAll`. The docs never cover the combination.
+
+Resolved by measurement rather than by weakening the rule.
+`scripts/verify_hook_semantics.sh` installs `@playwright/test` and runs a real
+suite (no browser needed — none of its specs use the `page` fixture). Observed on
+**1.62.0**:
+
+| Scenario | Body ran? | Reported |
+|----------|-----------|----------|
+| `beforeAll` guard, 2 tests | no | 2 skipped |
+| `beforeAll` guard, `--retries=2` | no | 2 skipped |
+| `beforeAll` guard, `--workers=2`, 4 tests / 2 files | no | 4 skipped |
+| `beforeEach` guard | no | 1 skipped |
+| describe-scoped `beforeAll` guard | no (inside) | group skipped, **sibling outside ran** |
+| `beforeAll` guard, condition `false` | yes | 1 passed |
+| `afterAll` guard | **yes** | 1 skipped |
+| `afterEach` guard | **yes** | 1 skipped |
+
+Two conclusions. The `beforeAll` promotion is correct, including the scope
+containment the linter depends on. And the `after`-hook case is worse than "does
+not help": the body runs, reads the unset value, and the run is then **relabelled
+skipped** — a suite that should have failed loudly reports as skipped instead.
+That is now taught in SKILL.md and as an anti-example, with the evidence table.
+
+| Class / test | Guards against |
+|--------------|----------------|
+| `test_hook_semantics_claim_is_backed_by_a_real_run` | the verifier disappearing or losing a scenario; also that a failed npm install exits 2 and is not read as a pass |
+| `test_measured_hook_matrix_is_recorded` | the observed matrix and its Playwright version vanishing from the source, turning evidence back into an assertion |
+| `test_after_hook_hazard_documented_with_evidence` | the relabelled-skipped hazard being softened back to "does not help" |
+| `test_verifier_asserts_both_directions_and_exit_code` | the verifier's own checks being one-directional. Its first version compared only a generic `BODY_RAN` marker, which the describe-scope spec never prints — so that case asserted nothing about the guarded test and would have stayed green if the guard had leaked. The runner's exit code was also ignored. Both fixed; the check now takes must-contain **and** must-not-contain needles plus an expected exit code |
+
+The verifier was then mutation-tested — a checker nobody has seen fail is not
+known to work:
+
+| Mutation | Detected as |
+|----------|-------------|
+| remove the guard from the describe-scoped spec (inside test leaks) | `FAIL missing['1 passed'] missing['1 skipped'] unexpected['INSIDE_RAN']`, exit 1 |
+| flip one case's expected exit code | `FAIL exit=0(want 1)`, exit 1 |
+| unmutated | all 8 PASS, exit 0 |
+
+The first mutation is the one the original `check()` would have passed.
+
+The verifier is **opt-in** — it needs network and takes ~1 minute, so
+`run_regression.sh` does not call it. Re-run it when bumping the Playwright
+version this skill targets:
+
+```bash
+bash scripts/verify_hook_semantics.sh            # latest
+PW_VERSION=1.55.0 bash scripts/verify_hook_semantics.sh
+```
 
 ### Forward evaluation
 
@@ -155,11 +226,15 @@ Stated plainly rather than rounded up to "100%".
    indirection, resolve imported constants, or see through a page object. It is
    built to prefer a miss over a false alarm, so a clean report is weaker
    evidence than a dirty one.
-3. **Generated Playwright code is never executed.** No browser runs in CI here.
-   TypeScript examples are not type-checked; the Go golden example *is*
-   compile-verified (`go vet`, `go build -tags e2e`, `gofmt`).
+3. **The skill's TypeScript examples are never executed or type-checked.** No
+   browser runs in CI here. Two partial exceptions: the Go golden example is
+   compile-verified (`go vet`, `go build -tags e2e`, `gofmt`), and
+   `verify_hook_semantics.sh` runs a real Playwright suite — but only for hook
+   semantics, on purpose-written specs, not on the examples the skill ships.
 4. **Version facts are pinned, not polled.** `TestVersionFactsAreCorrect` locks
-   in values verified against upstream on 2026-07-29. It detects local edits,
-   not new Playwright releases. Re-verify when bumping guidance.
+   in values verified against upstream on 2026-07-29, and the hook matrix was
+   measured on Playwright 1.62.0. Both detect local edits, not new Playwright
+   releases. Re-verify — including `verify_hook_semantics.sh` — when bumping the
+   targeted version.
 5. **Agent Browser commands are unverified.** The command reference is
    documentation only; no test confirms the CLI's actual surface.

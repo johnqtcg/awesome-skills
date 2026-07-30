@@ -1,12 +1,21 @@
 # Anti-Examples — Extended Catalog
 
-Every case here exists **only in this file**. The seven core anti-examples
-(unconditional sleep, fragile CSS chain, shared mutable data, UI login instead of
-`storageState`, silent whole-suite serialization, asserting implementation detail,
-guessing env values) live in `SKILL.md` §Anti-Examples and are not repeated —
-loading both used to mean reading the same seven twice.
+Every case here exists **only in this file**. It needs more context than an
+always-loaded file should carry.
 
-These need more context than an always-loaded file should carry.
+The seven core cases live in `SKILL.md` §Anti-Examples and are not repeated here —
+loading both used to mean reading the same seven twice. Those seven are, verbatim:
+
+1. Unconditional waitForTimeout in assertions
+2. Fragile CSS selector chains
+3. Shared mutable data across tests
+4. Guessing env values or credentials
+5. Silently serializing entire suite
+6. Repeating login instead of storageState
+7. Pseudo-runnable scaffold without test.skip
+
+If a mistake you are checking for is in that list, you already have it — this file
+adds nothing on those.
 
 ## Table of Contents
 
@@ -17,11 +26,16 @@ These need more context than an always-loaded file should carry.
 - [Branching on element visibility](#branching-on-element-visibility)
 - [Asserting a third-party widget's internals](#asserting-a-third-party-widgets-internals)
 - [Network wait armed after the action that triggers it](#network-wait-armed-after-the-action-that-triggers-it)
+- [Skip guard in an `after` hook](#skip-guard-in-an-after-hook)
 - [`test.describe` body doing async setup](#testdescribe-body-doing-async-setup)
 
 Mechanically checked by `python3 scripts/lint_e2e_spec.py`: `networkidle`,
-iframe boundary (partially — it detects the frame API, not its absence), visibility
-branching, and network-wait ordering. The rest need your judgement.
+network-wait ordering, and skip-guard-in-an-`after`-hook (via C4). Not checked:
+iframe boundary, retries hiding bugs, unmasked snapshots, visibility branching,
+third-party internals, async describe body — those need your judgement.
+
+The `after`-hook case is additionally verified against a real Playwright run by
+`bash scripts/verify_hook_semantics.sh` (opt-in; needs npm).
 
 ## Waiting on `networkidle`
 
@@ -169,6 +183,47 @@ await expect(page.getByText('Address confirmed')).toBeVisible();
 
 Same ordering rule for `waitForRequest`, `waitForEvent`, and
 `context.waitForEvent('page')`.
+
+## Skip guard in an `after` hook
+
+An `after` hook runs once the body has finished, so a guard there cannot stop the
+read it was written to prevent. Worse, Playwright still honours the skip: the run
+is **relabelled skipped after the body already ran**, so a suite that should have
+failed on unset config reports as skipped and nobody investigates.
+
+Measured on Playwright 1.62.0 — `scripts/verify_hook_semantics.sh` asserts this:
+
+| Guard location | Body runs? | Reported as |
+|----------------|-----------|-------------|
+| file scope / test body / `beforeEach` / `beforeAll` | no | skipped |
+| `afterEach` / `afterAll` | **yes** | skipped |
+
+BAD:
+```ts
+const PASS = process.env.E2E_PASS;
+
+test.afterEach(async () => {
+  test.skip(!PASS, 'password missing');   // too late — body already used PASS
+});
+
+test('user signs in', async ({ page }) => {
+  await page.getByLabel('Password').fill(PASS!);
+});
+```
+
+GOOD:
+```ts
+const PASS = process.env.E2E_PASS;
+test.skip(!PASS, 'E2E_PASS not set — see docs/e2e-setup.md');
+
+test('user signs in', async ({ page }) => {
+  await page.getByLabel('Password').fill(PASS!);
+});
+```
+
+A `beforeAll` guard is also valid and covers every test in its scope — verified
+across retries, two workers, and describe nesting, where it correctly skips only
+the group it belongs to.
 
 ## `test.describe` body doing async setup
 

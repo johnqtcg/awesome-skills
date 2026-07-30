@@ -324,18 +324,40 @@ _SCOPE_RE = re.compile(
     r"\btest\s*\(|\btest\.describe(?!\.configure)(?:\.\w+)?\s*\(|"
     r"\btest\.(?:beforeEach|afterEach|beforeAll|afterAll)\s*\("
 )
-_HOOK_RE = re.compile(r"\btest\.(?:beforeEach|afterEach|beforeAll|afterAll)\b")
+# Only a *before* hook runs early enough to stop a test that would read the
+# variable. `test.skip` inside afterEach/afterAll executes after the body has
+# already run, so it provides no protection and must not be promoted.
+#
+# This is a claim about Playwright's runtime, not about this file, so it is
+# measured rather than assumed. `scripts/verify_hook_semantics.sh` runs a real
+# Playwright suite and asserts the matrix below. Observed on 1.62.0:
+#
+#   guard in beforeAll, 2 tests            -> both skipped, no body ran
+#   guard in beforeAll, --retries=2        -> skipped, no body ran
+#   guard in beforeAll, --workers=2 (4)    -> all skipped, no body ran
+#   guard in beforeEach                    -> skipped, no body ran
+#   guard in describe-scoped beforeAll     -> only that group skipped; sibling ran
+#   guard in beforeAll, false condition    -> test ran (negative control)
+#   guard in afterAll / afterEach          -> BODY RAN, then reported "skipped"
+#
+# The last row is why after-hooks must not count: the read happens anyway, and
+# the run is then relabelled skipped — so a suite that would have failed on an
+# unset variable reports as skipped instead. Re-run the verifier when bumping the
+# Playwright version this skill targets.
+_BEFORE_HOOK_RE = re.compile(r"\btest\.(?:beforeEach|beforeAll)\b")
 
 
 def _scopes(code: str) -> list[tuple[int, int, bool]]:
-    """Every scope block as (start, end, is_hook), outermost first.
+    """Every scope block as (start, end, is_before_hook), outermost first.
 
-    `start` is the index of the call keyword so nesting comparisons work.
+    `start` is the index of the call keyword so nesting comparisons work. The
+    flag marks only before-hooks; an after-hook is an ordinary block whose guard
+    covers nothing beyond itself.
     """
     out = []
     for m in _SCOPE_RE.finditer(code):
         end = _call_end(code, m.end())
-        out.append((m.start(), end, bool(_HOOK_RE.search(m.group(0)))))
+        out.append((m.start(), end, bool(_BEFORE_HOOK_RE.search(m.group(0)))))
     return out
 
 
@@ -351,7 +373,11 @@ def _guard_coverage(code: str) -> list[tuple[str, int, int]]:
 
     A guard at file scope covers the whole file. A guard inside a `beforeEach` /
     `beforeAll` hook is promoted to the hook's own enclosing scope, because
-    `test.skip` in a hook does skip every test in that scope.
+    `test.skip` there runs before each test and does skip them.
+
+    An `afterEach` / `afterAll` guard is **not** promoted: it executes after the
+    body has already read the variable, so it protects nothing. Treating all four
+    hooks alike made this a false negative.
     """
     scopes = _scopes(code)
     coverage = []

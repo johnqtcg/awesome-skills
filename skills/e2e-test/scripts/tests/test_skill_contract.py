@@ -510,6 +510,26 @@ class TestProgressiveDisclosureBudget(unittest.TestCase):
             "reference rather than raising this number.",
         )
 
+    def test_typical_task_claim_matches_the_table(self) -> None:
+        """The lead sentence must not undercount the table it introduces.
+
+        It said "the first two rows and nothing else" while row 4 is required for
+        writing Playwright code — the common case. Any file named as needed by a
+        typical task must appear in that sentence.
+        """
+        text = SKILL_MD.read_text()
+        section = text[
+            text.index("## Load References Selectively") : text.index("## Runner Strategy")
+        ]
+        lead = section[: section.index("| When |")]
+        self.assertNotIn(
+            "first two rows and nothing else",
+            lead,
+            "lead sentence contradicts the table: a Playwright task also needs "
+            "playwright-patterns.md",
+        )
+        self.assertIn("playwright-patterns.md", lead)
+
     def test_no_reference_is_loaded_unconditionally(self) -> None:
         """Every reference must state when to load it, so nothing is loaded 'just
         in case'. Two are marked every-task by design; the rest are conditional."""
@@ -737,6 +757,18 @@ class TestNoCredentialLeakInProbes(unittest.TestCase):
         text = (REFS_DIR / "environment-and-dependency-gates.md").read_text()
         self.assertIn("Never echo a secret's value", text)
 
+    def test_guard_placement_documented(self) -> None:
+        """The linter enforces hook ordering; the skill must also teach it.
+
+        Asserts the valid placements and the prohibition, not one exact phrase —
+        the wording was tightened once already when the behaviour was measured.
+        """
+        skill = SKILL_MD.read_text()
+        for placement in ["file scope", "beforeEach", "beforeAll"]:
+            self.assertIn(placement, skill, f"valid guard placement missing: {placement}")
+        self.assertIn("afterEach", skill)
+        self.assertIn("Never put a guard in an", skill)
+
 
 class TestAntiExampleCountClaimIsAccurate(unittest.TestCase):
     """SKILL.md claimed a "catalog of 12" while anti-examples.md held 7.
@@ -795,14 +827,38 @@ class TestAntiExampleCountClaimIsAccurate(unittest.TestCase):
         anti_headings = [
             h.lower() for h in re.findall(r"^## (.+)$", anti, re.MULTILINE)
         ]
-        # The distinctive noun of each core case must not head a section here.
-        for core in ["waitforTimeout in assertions", "fragile css selector chain"]:
+        for core in skill_cases:
             self.assertNotIn(
                 core.lower(),
                 anti_headings,
                 f"core case {core!r} is duplicated in anti-examples.md",
             )
         self.assertIn("extended", anti.split("\n")[0].lower())
+
+    def test_core_seven_enumeration_matches_skill_md_exactly(self) -> None:
+        """The restated list must equal SKILL.md's headings verbatim.
+
+        The previous prose summary named "asserting implementation detail" — a case
+        from the *deleted* half of this file, not from SKILL.md, whose seventh case
+        is "Pseudo-runnable scaffold without test.skip". The dedup test only
+        checked that headings did not collide, so a wrong enumeration passed.
+        """
+        text = SKILL_MD.read_text()
+        section = text[
+            text.index("## Anti-Examples") : text.index("## Agent Browser Bridge")
+        ]
+        skill_cases = re.findall(r"^### \d+\) (.+)$", section, re.MULTILINE)
+
+        anti = (REFS_DIR / "anti-examples.md").read_text()
+        header = anti[: anti.index("## Table of Contents")]
+        listed = re.findall(r"^\d+\.\s+(.+)$", header, re.MULTILINE)
+
+        self.assertEqual(
+            skill_cases,
+            listed,
+            "the core-seven list in anti-examples.md must match SKILL.md's "
+            "§Anti-Examples headings exactly, in order",
+        )
 
     def test_reference_has_a_table_of_contents(self) -> None:
         """It was the only reference file without one, at 311 lines."""
@@ -1282,6 +1338,137 @@ test('user opens the dashboard', async ({ page }) => {
 });
 """
         self.assertNotIn("C4", self.rules(source))
+
+    HOOK_SOURCE = """
+const P = process.env.E2E_PASS;
+
+test.%s(async () => {
+  test.skip(!P, 'password missing');
+});
+
+test('user signs in with the seeded account', async ({ page }) => {
+  await page.getByLabel('Password').fill(P!);
+  await expect(page.getByText('Welcome')).toBeVisible();
+});
+"""
+
+    def test_after_each_guard_protects_nothing(self) -> None:
+        """`afterEach` runs after the body has already read the variable.
+
+        All four hooks were treated alike, so an afterEach guard suppressed the
+        finding entirely — a guard that cannot possibly prevent the read.
+        """
+        self.assertIn("C4", self.rules(self.HOOK_SOURCE % "afterEach"))
+
+    def test_after_all_guard_protects_nothing(self) -> None:
+        self.assertIn("C4", self.rules(self.HOOK_SOURCE % "afterAll"))
+
+    def test_before_each_guard_still_protects(self) -> None:
+        self.assertNotIn("C4", self.rules(self.HOOK_SOURCE % "beforeEach"))
+
+    def test_before_all_guard_still_protects(self) -> None:
+        self.assertNotIn("C4", self.rules(self.HOOK_SOURCE % "beforeAll"))
+
+    def test_hook_semantics_claim_is_backed_by_a_real_run(self) -> None:
+        """The hook rule is a claim about Playwright's runtime, not about this repo.
+
+        Round 4 pinned it with unit tests that only encoded my assumption. A
+        reviewer correctly pointed out that this proves nothing about the external
+        framework. `verify_hook_semantics.sh` runs a real Playwright suite; this
+        test only checks that the evidence path exists and stays wired up.
+        """
+        script = SKILL_DIR / "scripts" / "verify_hook_semantics.sh"
+        self.assertTrue(script.exists(), "hook-semantics verifier is missing")
+        import os
+
+        self.assertTrue(os.access(script, os.X_OK), "verifier is not executable")
+
+        text = script.read_text()
+        # It must cover both directions and the scenarios that could break the rule.
+        for scenario in [
+            "beforeAll",
+            "beforeEach",
+            "afterAll",
+            "afterEach",
+            "--retries=2",
+            "--workers=2",
+            "describe",
+            "false condition",
+        ]:
+            self.assertIn(scenario, text, f"verifier does not cover: {scenario}")
+        # An install failure must not read as a passing verification.
+        self.assertIn("exit 2", text)
+        self.assertIn("NOT a verdict", text)
+
+    def test_verifier_asserts_both_directions_and_exit_code(self) -> None:
+        """A one-directional check can be vacuously satisfied.
+
+        The describe-scope case prints INSIDE_RAN / OUTSIDE_RAN, but the original
+        `check()` only looked for the generic BODY_RAN marker — a needle that
+        never appears in that spec at all. It therefore proved nothing about the
+        inside test and would have stayed green if the guard had leaked. The
+        runner's exit code was also ignored, so a failing run whose summary
+        happened to contain the expected substring could pass.
+
+        Mutation-tested: removing the guard from the scope spec, and flipping one
+        expected exit code, both make the verifier exit 1.
+        """
+        text = (SKILL_DIR / "scripts" / "verify_hook_semantics.sh").read_text()
+
+        # must-contain and must-not-contain are both consumed.
+        self.assertIn("must-not-contain", text)
+        self.assertIn("unexpected[", text)
+        self.assertIn("missing[", text)
+
+        # The exit code participates in the verdict.
+        self.assertIn("want_exit", text)
+        self.assertIn("exit=${rc}(want", text)
+
+        # The scope case asserts the guarded test did NOT run, and that the
+        # summary shows one of each outcome.
+        scope_call = next(
+            ln for ln in text.split("\n") if "contained to group" in ln
+        )
+        following = text[text.index(scope_call) :].split("\n")[1]
+        combined = scope_call + following
+        self.assertIn("INSIDE_RAN", combined)
+        self.assertIn("OUTSIDE_RAN", combined)
+        self.assertIn("1 passed", combined)
+        self.assertIn("1 skipped", combined)
+
+        # Empty-array expansion must be guarded: macOS ships bash 3.2, where
+        # "${arr[@]}" on an empty array is an unbound-variable error under set -u.
+        self.assertIn("[@]+", text)
+
+    def test_measured_hook_matrix_is_recorded(self) -> None:
+        """The observed behaviour and the version it was observed on must be in
+        the source, so the next reader sees evidence rather than an assertion."""
+        src = (SKILL_DIR / "scripts" / "lint_e2e_spec.py").read_text()
+        self.assertIn("verify_hook_semantics.sh", src)
+        self.assertIn("Observed on 1.62.0", src)
+        self.assertIn("BODY RAN", src)
+
+    def test_after_hook_hazard_documented_with_evidence(self) -> None:
+        """The dangerous part is not just "it does not help" — the body runs and
+        the run is then relabelled skipped, hiding a failure."""
+        skill = SKILL_MD.read_text()
+        self.assertIn("verify_hook_semantics.sh", skill)
+        self.assertIn("reported as **skipped**", skill)
+        anti = (REFS_DIR / "anti-examples.md").read_text()
+        self.assertIn("Skip guard in an `after` hook", anti)
+        self.assertIn("relabelled skipped", anti)
+
+    def test_only_before_hooks_are_promotable(self) -> None:
+        """Pin the intent at the source level too, so the regex cannot regress
+        to matching all four hook names."""
+        src = (SKILL_DIR / "scripts" / "lint_e2e_spec.py").read_text()
+        m = re.search(r"_BEFORE_HOOK_RE\s*=\s*re\.compile\(\s*r?[\"'](.+?)[\"']", src)
+        self.assertIsNotNone(m, "_BEFORE_HOOK_RE not found")
+        pattern = m.group(1)
+        self.assertIn("beforeEach", pattern)
+        self.assertIn("beforeAll", pattern)
+        self.assertNotIn("afterEach", pattern)
+        self.assertNotIn("afterAll", pattern)
 
     def test_alias_with_fallback_is_not_tracked(self) -> None:
         """`const T = process.env.X ?? ''` can never be undefined."""
