@@ -5,6 +5,41 @@
 > Evaluation subject: `tech-doc-writer`
 ---
 
+Snapshot note: this report evaluates the `tech-doc-writer` skill as of **2026-03-17**. Gate
+numbering has changed since: the evaluated snapshot had a five-gate layout in which the Quality
+Scorecard was Gate 4, whereas the current skill has four gates (0 Execution Integrity, 1 Repo
+Context Scan, 2 Classify Type and Audience, 3 Quality Scorecard). References to "Gate 4: Quality
+Scorecard" below describe what is now **Gate 3**, and the old "Gate 1 / Gate 3" pairing described
+what are now Gate 1 and Gate 2. Structural counts (SKILL.md line count, token estimates) and the
+**9.01/10** weighted total refer to the evaluated snapshot, not to the current head.
+
+> **First live A/B, 2026-07-30 — the 9.01 was not reproduced.** A with/without-skill forward
+> evaluation was run against a live model (`claude -p --model sonnet`, 3 scenarios × 2 arms, one
+> sample per cell). **Neither arm produced a document the grader accepts: 0/3 with the skill and
+> 0/3 without**, and the raw failed-check total was 8 with versus 7 without. Two per-check
+> differences favour the skill clearly — the base model never volunteers applicable-item
+> denominators (3/3 failures vs 1/3), and minimal-diff over-run halves (57 changed lines vs 112
+> against a 40-line budget) — while the reference-loading count is a grader asymmetry rather than
+> a regression. Details, including the five harness defects the run exposed, are in
+> `skills/tech-doc-writer/scripts/tests/COVERAGE.md`. Treat the 9.01/10 below as unreproduced
+> pending a fresh multi-sample benchmark.
+
+> **Post-evaluation update — 2026-07-30:** Two capabilities scored above have since been rebuilt,
+> so the 9.01 total understates some dimensions and overstates one. Anti-staleness was metadata
+> *presence* only at the time of scoring — `last_updated: 2000-01-01` produced zero findings —
+> and now compares document age against a declared `review_cadence`. The mechanical layer gained
+> required-column checking for parameter tables, CommonMark `~~~`/nested-fence handling, a
+> metadata-vs-H1 consistency check, and detection of the two-space Pangu case. Gate 0 gained a
+> three-level verification ladder (executed / sourced / unverified) because the previous single
+> Critical item demanded executed commands for stacks the tool grant cannot run, making the top
+> tier unreachable for most runbooks. Repository conventions are now enforced through
+> `.techdocrc.json` rather than being conceded in Gate 1 and contradicted in Phase 4. Scorecard
+> items that were absolutes ("zero synonym mixing", 80 % structured information for every type)
+> are now type-scoped. A with/without-skill forward evaluation against a live model was run for
+> the first time on 2026-07-30; see `scripts/tests/ab_eval.py` and
+> `scripts/tests/COVERAGE.md`. None of this is reflected in the score below and should be
+> measured in a fresh benchmark.
+
 `tech-doc-writer` is a technical-writing skill for drafting, reviewing, and improving structured engineering documents such as runbooks, troubleshooting guides, API docs, and RFC/ADR-style design docs. Its three main strengths are: document-type classification and audience analysis up front, so structure and depth match the reader’s goal; quality gates for metadata, conclusion-first writing, rollback paths, and SPA titles, which make the output more maintainable and easier to use; and review/improve workflows with scorecards, anti-examples, and structured output, so documentation feedback is concrete rather than vague.
 
 ## 1. Evaluation Overview

@@ -5,10 +5,11 @@ description: >
   故障报告, API文档). Use when users ask to write/draft/review/improve a
   technical document, create an RFC/ADR, write a runbook or operation guide,
   produce API docs, or create any structured technical writing deliverable.
-  Audience-aware, evidence-based, with quality gates and anti-staleness
-  enforcement. Supports concept docs, task docs, reference docs,
-  troubleshooting docs, and design docs (RFC/ADR).
-allowed-tools: Read, Write, Edit, Grep, Glob, Bash(git log*), Bash(git diff*), Bash(go vet*), Bash(go build*), Bash(go test*), Bash(*lint_doc.py*)
+  Audience-aware, evidence-based, with quality gates, a mechanical linter, and
+  staleness detection (age against review cadence, not merely a date field).
+  Supports concept docs, task docs, reference docs, troubleshooting docs, and
+  design docs (RFC/ADR).
+allowed-tools: Read, Write, Edit, Grep, Glob, Bash(git log*), Bash(git diff*), Bash(git show*), Bash(go vet*), Bash(go build*), Bash(go test*), Bash(make -n*), Bash(kubectl explain*), Bash(helm template*), Bash(terraform validate*), Bash(docker compose config*), Bash(*lint_doc.py*)
 ---
 
 # Tech Doc Writer
@@ -54,11 +55,43 @@ Gates are serial. Each must pass before the next. If a gate cannot be executed, 
 
 - Never fabricate document content that claims to be from the codebase (commands, configs, API parameters) without verifying it actually exists.
 - Never claim you verified a command is runnable unless you actually executed it.
-- If you cannot verify a fact, mark it explicitly: `<!-- UNVERIFIED: ... -->`.
+- Every command in a delivered document carries a **verification level** (below). Unlabelled commands are treated as V3.
+
+#### The Verification Ladder
+
+This skill documents runbooks for stacks it cannot execute — `kubectl`, `docker`, `npm`,
+`psql`, `terraform apply`. Only read-only and dry-run probes are granted (see
+`allowed-tools`), so "the command was executed" is not achievable for most task docs. Two
+different properties were previously conflated under one Critical item, which made the top
+quality tier unreachable by construction for exactly the documents this skill exists to write.
+They are now separate:
+
+| Level | Meaning | How it is established |
+|---|---|---|
+| **V1 executed** | Ran it; the pasted output is real | A granted read-only/dry-run probe, or output the user supplied |
+| **V2 sourced** | Traced to a checked-in artefact | `Grep`/`Read` a Makefile target, CI workflow, deploy script, or existing runbook — **cite the file and line** |
+| **V3 unverified** | Neither | Must carry `<!-- UNVERIFIED: <what could not be checked> -->` |
+
+- **Form is always required, at every level**: no unfilled `<placeholders>`, no shell-fragile
+  quoting, one logical command per block, expected output shown. This is what the Critical
+  scorecard item asks for, and it is achievable regardless of tool permissions.
+- **Provenance is reported, never assumed.** State the level per command block, or once per
+  section when uniform. A V2 command without a citation is V3.
+- **Escalation when V1 is genuinely required** (a destructive step, an unfamiliar flag, a
+  version-specific behaviour): ask the user to run it and paste the output, or to grant the
+  specific command. Do not silently downgrade to V3 and present the doc as complete.
+- Never upgrade a level because the command "obviously works".
 
 ### Gate 1: Repo Context Scan
 
-Before writing, quickly scan for existing doc conventions (`docs/`, `CONTRIBUTING.md`, `.markdownlint.json`, `.vale.ini`). Adapt to what exists — consistency with the repo trumps this skill's defaults. If conflicting conventions are found → **STOP and ASK** which to follow.
+Before writing, quickly scan for existing doc conventions (`docs/`, `CONTRIBUTING.md`, `.markdownlint.json`, `.vale.ini`, `.techdocrc.json`). Adapt to what exists — consistency with the repo trumps this skill's defaults. If conflicting conventions are found → **STOP and ASK** which to follow.
+
+**Record the convention, do not just obey it.** Where the repo's metadata differs from this
+skill's default — metadata at the foot of the page, `maintainer:` instead of `owner:`, a
+`published`/`archived` status vocabulary, no frontmatter permitted at all — write a
+`.techdocrc.json` so the linter enforces *the repository's* schema. Otherwise Gate 1 concedes
+the point and Phase 4 immediately contradicts it by reporting every local field as missing.
+`python3 scripts/lint_doc.py <file> --print-config` prints the schema and the effective merge.
 
 ### Gate 2: Classify Type and Audience
 
@@ -72,7 +105,12 @@ Classify the document **and** its audience before writing anything:
 | Diagnose a failure | Troubleshooting doc | What happened? Why? How to fix/prevent? |
 | Record a decision | Design doc (RFC/ADR) | Why this approach? What was rejected? |
 
-If the user's request maps to multiple types → **STOP and ASK** before proceeding.
+If the user's request maps to multiple types, apply the **dominant-purpose rule** before
+escalating: when one reader goal clearly carries the document, write that type and cross-link
+the secondary material (a runbook may carry a short "why this works" preamble without becoming
+a concept doc). Only when two purposes are genuinely co-equal — neither is subordinate, and
+splitting would break either one — → **STOP and ASK**. Record the classification and, if you
+applied the dominant-purpose rule, which purpose you subordinated.
 
 **Audience** — state explicitly: (1) who is the reader, (2) what must they do, (3) what do they already know. Mixed audience → use funnel structure (Executive Summary → Overview → Technical Detail → Appendix); load [writing-quality-guide.md §Funnel Structure](references/writing-quality-guide.md) for the pattern.
 
@@ -87,7 +125,15 @@ Run after writing/reviewing. Results must be reported in the output.
 of doc types, or `[..., when X]`. Score like this:
 
 1. **Determine applicability first.** An item is `N/A` when its tag excludes this doc type, or
-   when its `when` condition does not hold (no diagrams present, not an API doc, …).
+   when its `when` condition does not hold. Resolve each condition **from the document you
+   produced**, by the same rule the tooling uses — not from intent:
+
+   | Condition | Holds when the document… |
+   |---|---|
+   | `diagrams present` | contains a Mermaid block, an embedded image, or a numbered figure |
+   | `version-sensitive` | **the body** pins a concrete version (`Redis 7.2.1`, `Go 1.24`). Filling `applicable_versions` does not by itself make the item applicable — a live run counted it as applicable on that basis and over-stated its denominator by one |
+   | `api doc` | documents HTTP statuses or a machine-readable error-code column |
+   | `a related doc exists` | n/a — this item is unconditional; declaring the document standalone satisfies it |
 2. **`N/A` items leave the denominator.** The threshold is a ratio of *applicable* items, not a
    fixed count: the Standard and Hygiene tiers each need **≥ ⅔ of their applicable items**,
    rounded up.
@@ -102,11 +148,11 @@ five doc types — a Concept doc has only 2 applicable Standard items, Reference
 prints the applicable counts so the denominator is not guessed.
 
 **Critical (any FAIL → document not deliverable)**
-- [ ] Commands are copy-paste-runnable [task, troubleshooting] or code is marked as snippet [concept]
+- [ ] Commands are copy-paste-runnable **in form** and each carries a verification level (Gate 0); no V3 command is presented as verified [task, troubleshooting] or code is marked as snippet [concept]
 - [ ] Every key step has expected output and verification [task, troubleshooting]
 - [ ] Document has metadata: owner + last_updated + status [all]
-- [ ] Terminology is consistent — zero synonym mixing [all]
-- [ ] Parameter/field tables complete — Type, Required, Default, Description columns all filled; no empty cells or `TBD` [reference]
+- [ ] Terminology is consistent **after first definition** — a term may be introduced once as `中文（English）` or `English (中文)`, and one form is used thereafter [all]
+- [ ] Parameter/field tables complete — Type, Required, Default, Description columns all present and filled; no empty cells or `TBD` [reference]
 
 **Standard (≥ ⅔ of applicable items, rounded up)**
 - [ ] Conclusion/core message appears in the first paragraph, not buried at the end [all — especially troubleshooting: root cause upfront]
@@ -118,13 +164,20 @@ prints the applicable counts so the denominator is not guessed.
 
 **Hygiene (≥ ⅔ of applicable items, rounded up)**
 - [ ] Diagrams have title, legend, and terms consistent with prose [all, when diagrams present]
-- [ ] Cross-references to related docs where appropriate [all]
-- [ ] Short paragraphs; 80%+ structured info in lists/tables [all]
+- [ ] Cross-references to related docs — or an explicit note that this document is standalone [all]
+- [ ] 80%+ of information carried in lists or tables [reference, task, troubleshooting]
+- [ ] Paragraphs stay scannable: none longer than ~8 lines, every multi-item enumeration is a list [concept, design]
 - [ ] `applicable_versions` field present [all, when version-sensitive]
 - [ ] Maintenance trigger conditions noted (when must this doc be updated?) [task, troubleshooting]
 - [ ] Prevention section with quantifiable monitoring/alerting thresholds [troubleshooting]
 
 Critical failures block delivery. Record scorecard results in output.
+
+Two items were absolutes that no design doc could satisfy: **80 % structured information** suits
+a reference or runbook and harms an argument carried in prose, so it is type-scoped and paired
+with a scannability item; **zero synonym mixing** is now consistency *after* first definition, so
+a bilingual doc may name a thing once in both languages. Both are mirrored in
+`lint_doc.SCORECARD`; a contract test fails if the two drift.
 
 ## Degradation Strategy
 
@@ -191,7 +244,10 @@ Apply these rules while writing:
 - All code: self-contained (includes imports), comments explain WHY not WHAT, show failure path.
 
 **Visual expression**:
-- Use diagrams when: 3+ components interact, state transitions, sequential interactions.
+- Consider a diagram when 3+ components interact, or for state transitions and sequential
+  interactions. This is a prompt to consider, not a quota: prose is the better choice when the
+  interaction is linear (A calls B calls C) or when the components are named once and never
+  referenced again. A diagram that restates a single sentence costs maintenance and pays nothing.
 - Prefer Mermaid (GitHub/GitLab native) or ASCII art (diffable).
 - **Mermaid complexity limit**: Keep diagrams ≤ 15 nodes. If logic requires more, split into multiple sub-diagrams with cross-references. Overly complex Mermaid frequently fails to render.
 - Every diagram: title + legend + naming consistent with prose.
@@ -236,19 +292,45 @@ Run the scorecard in two layers:
    ```bash
    python3 scripts/lint_doc.py <file.md> --type <doc_type>
    ```
-   It deterministically checks the regex-decidable scorecard subset: metadata block (owner/status/last_updated), `TBD`/empty cells in tables, single H1 with SPA length, fenced code blocks carrying language tags, and Pangu spacing in CJK-Latin mixed text. Critical lint failures block delivery, same as scorecard Critical items.
-2. **Judgment layer** — evaluate the remaining scorecard items (conclusion-first, terminology consistency, prerequisites completeness) by reading the document.
+   It deterministically checks the regex-decidable scorecard subset:
 
-Fix Critical failures from either layer before delivering.
+   | Check | Severity | What it decides |
+   |---|---|---|
+   | `metadata` / `status-value` / `date-format` | critical | required fields present, status in vocabulary, date a real calendar date |
+   | `fence-balance` | critical | no unclosed fence (an unclosed one blinds every later check) |
+   | `table-cells` | critical for `reference` | no `TBD` or empty cells |
+   | `table-columns` | critical for `reference` | a parameter table actually declares Type / Required / Default / Description |
+   | `staleness` | warning | age measured against the declared `review_cadence`, or the 365-day default; future dates flagged |
+   | `maintenance` | warning | a task/troubleshooting doc says when it must be revised |
+   | `title-h1-match` | warning | metadata `title` and the H1 name the same document |
+   | `single-h1` / `title-weight` | warning | one H1, within the weight budget, filler-free |
+   | `code-fence-lang` | warning | every fence carries a language tag (` ``` ` and `~~~`) |
+   | `pangu-spacing` | warning | **exactly** one space between CJK and Latin — zero and two both fail |
+   | `applicable-versions` | warning | declared when the body pins a version |
+
+   Critical lint failures block delivery, same as scorecard Critical items. Add `--scorecard`
+   for the computed denominators, `--today YYYY-MM-DD` to pin the staleness reference date, and
+   `--config`/`.techdocrc.json` to enforce the repository's own conventions (Gate 1).
+2. **Judgment layer** — evaluate the remaining scorecard items (conclusion-first, terminology consistency, prerequisites completeness, verification levels) by reading the document.
+
+Fix Critical failures from either layer before delivering. The mechanical layer is a floor, not
+a proof: it cannot tell whether the prose is correct, only whether the checkable structure holds.
 
 ### Phase 5: Metadata
-Add to the top of every document:
+
+**This block is the default, not a mandate.** Where Gate 1 found a repository convention, that
+convention wins — record it in `.techdocrc.json` (metadata at the page foot, alternative field
+names via `aliases`, a different status vocabulary, or `"location": "none"` for systems that
+forbid an in-document block) and the linter will check the repo's schema instead of this one.
+Absent any local convention, add to the top of every document:
+
 ```yaml
 ---
-title: <Document Title>
+title: <Document Title>          # must match the H1
 owner: <responsible person>
 status: draft | active | needs-update | deprecated
 last_updated: YYYY-MM-DD          # must be a real calendar date, not just the right shape
+review_cadence: monthly | quarterly | biannually   # drives the staleness window
 applicable_versions: <e.g. Go 1.24+, MySQL 8.0>   # required when the body pins a version
 ---
 ```
@@ -257,6 +339,11 @@ applicable_versions: <e.g. Go 1.24+, MySQL 8.0>   # required when the body pins 
 content is known to have drifted but which is still the best available reference. Omitting it
 forces a false choice between `active` (implying it is correct) and `deprecated` (implying it
 should not be read). `lint_doc.py` accepts all four values and rejects anything else.
+
+`review_cadence` is what turns `last_updated` from a decoration into a check. Without it the
+linter falls back to a 365-day window; with it, a monthly runbook is reported as stale after 60
+days. A doc still marked `active` past its window is reported with the remedy named, because
+`active` asserts the content is correct.
 
 ## Hard Rules
 
@@ -284,13 +371,16 @@ A stale doc is worse than no doc. When writing, also establish maintenance:
 
 **Periodic review cadence**:
 
-| Frequency | Cycle | Example |
-|-----------|-------|---------|
-| High (release, deploy, incident) | Monthly | Release runbook |
-| Medium (dev workflows) | Quarterly | Dev environment setup |
-| Low (background knowledge) | Biannually | Architecture design doc |
+| Frequency | Cycle | `review_cadence` | Example |
+|-----------|-------|---|---------|
+| High (release, deploy, incident) | Monthly | `monthly` | Release runbook |
+| Medium (dev workflows) | Quarterly | `quarterly` | Dev environment setup |
+| Low (background knowledge) | Biannually | `biannually` | Architecture design doc |
 
-When delivering, recommend the appropriate review cadence for the document.
+Write the cadence into the metadata, not only into the delivery message. A recommendation in
+chat is unenforceable; `review_cadence: monthly` is what lets `lint_doc.py` report the document
+as overdue two months later. A doc with no declared cadence falls back to a 365-day window,
+which for a release runbook is nine months too late.
 
 ## Load References Selectively
 
@@ -315,7 +405,14 @@ When the user explicitly asks about doc CI pipelines, PR templates, auto-generat
 
 ## Output Contract
 
-Every invocation must end with this structured block. Use the exact field names.
+**Deliver the document as one contiguous markdown document** — frontmatter and body together,
+never with the frontmatter split into its own ` ```yaml ` fence. A split document has no
+frontmatter as far as any tool is concerned; the linter and every doc-site parser read the
+leading `---` block of *one* document. Answering inline, wrap the whole document in a
+four-backtick ` ````markdown ` fence (four, so inner `bash`/`json` blocks nest legally) or
+delimit it with `<!-- BEGIN DOCUMENT -->` / `<!-- END DOCUMENT -->`.
+
+Then end with this block, as plain text rather than inside a code fence. Use the exact field names.
 
 ```
 ── tech-doc-writer output ──
@@ -368,4 +465,24 @@ denominator moves with the doc type, which is the whole point of §Gate 3's scor
 Run `scripts/run_regression.sh` to verify skill integrity:
 - **Contract tests**: SKILL.md structure, reference files, template coverage
 - **Linter tests**: behavioral tests of `scripts/lint_doc.py` against fixture documents
-- **Coverage matrix**: `scripts/tests/COVERAGE.md`
+- **Template tests**: every shipped skeleton passes this skill's own gate, and each table
+  placeholder agrees with its column
+- **Cross-layer drift**: `rationale/` and `evaluate/` still describe *this* skill; the Phase 4
+  check table and the linter agree in both directions
+- **Linter self-check**: the bundled reference docs pass the linter they ship with
+- **Coverage matrix**: `scripts/tests/COVERAGE.md`, including false-positive rates measured
+  against a real 987-file corpus
+
+The forward evaluation needs a model and is opt-in:
+
+```bash
+# one arm — does a model following this skill produce a passing document?
+TECH_DOC_EVAL_CMD='<model command reading stdin>' python3 -m unittest \
+  discover -s scripts/tests -p 'test_forward_eval.py'
+# both arms — does the skill add anything over the same model without it?
+TECH_DOC_EVAL_CMD='<model command reading stdin>' python3 scripts/tests/ab_eval.py
+```
+
+Without that hook, `run_regression.sh` reports **PASS WITH SKIPS** rather than PASS: the harness
+plumbing and the grader's ability to discriminate are exercised on every run via a stub, but a
+stub replays a stored document and cannot measure a model.

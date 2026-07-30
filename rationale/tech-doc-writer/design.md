@@ -161,18 +161,36 @@ This is crucial because it separates "the doc looks decent" from "the doc is act
 
 This is highly practical because the most dangerous documentation failure is not awkward phrasing, but presenting unverified content as authoritative fact. The `UNVERIFIED` marker makes uncertainty explicit and prevents polished-looking hallucinations from being mistaken for truth. The evaluation's code-example comparison supports this too: the base model could already write solid code examples, but with-skill added the extra layer of unverified-content discipline that documentation needs.
 
-### 4.6 The Degradation Strategy Uses Levels 1 / 2 / 2.5 / 3
+### 4.6 Degradation Separates the Resolution Order from the Delivery Level
 
-The skill does not insist on pretending complete information exists. Instead it requires graded degradation:
+The skill does not insist on pretending complete information exists. It splits one decision that
+used to be muddled together into two orthogonal ones.
 
-- Level 1: Full,
-- Level 2: Partial,
-- Level 2.5: Active Retrieval,
-- Level 3: Scaffold.
+**How ambiguity gets resolved — Retrieve → Ask → Assume**, a fixed sequence, each step running
+only if the previous one failed:
 
-The most important step is Level 2.5. Before degrading to a scaffold, the skill requires at least one round of active retrieval to see whether the repository already contains the missing facts.
+| Step | Action |
+|---|---|
+| **R1 Retrieve** | Search the repo/doc corpus — existing docs' stated audience, README, `CONTRIBUTING`, ADRs, callers of the code being documented. One focused round. |
+| **R2 Ask** | One consolidated question naming the specific missing facts. Asked once, not once per gap. |
+| **R3 Assume** | Proceed on an explicit, labelled assumption. |
 
-This is mature design because technical-writing gaps are often not "the information does not exist," but "the information may exist in the repo and has not been retrieved yet." Level 2.5 encodes retrieval as a required gate, which reduces both premature scaffolding and content fabrication. Even though the evaluation did not strongly exercise this path, it remains one of the skill's clearest differentiators from a generic writing prompt.
+**What gets delivered — Level 1 Full / Level 2 Partial / Level 3 Scaffold.**
+
+The important part is that these are two axes, not one. An earlier draft had a "Level 2.5:
+Active Retrieval" wedged into the delivery scale, which conflated *how the skill decided* with
+*what the reader receives* — retrieval is an action, not a deliverable, and a reader cannot be
+handed "a Level 2.5". Worse, Gate 2 said "unclear audience → STOP and ASK" while the level table
+said "audience uncertain → assume the broadest and continue", with no stated ordering: two runs
+could legitimately do opposite things on identical input.
+
+Retrieval-before-degrading survives as R1, and it is still the differentiator from a generic
+writing prompt — technical-writing gaps are usually not "the information does not exist" but
+"the information is in the repo and has not been retrieved yet." What changed is that R1 is now
+a step in a state machine whose transitions are defined, `R3` requires a bounded definition of
+"cannot ask" (pre-authorised, non-interactive, or already declined — never merely "the user has
+not replied yet"), and every response must record which step resolved it. A `Level 2` claim with
+no resolution line is an unproven degradation, and the forward-eval grader rejects it.
 
 ### 4.7 It Enforces Conclusion First
 
@@ -314,7 +332,7 @@ The evaluation already shows that the base model can write solid engineering pro
 | API docs, parameter references, and design docs | Very suitable | Type templates and metadata rules are highly useful |
 | Reviewing or improving existing docs | Very suitable | Scorecards and before/after fixes are very practical |
 | Mixed-audience engineering docs | Very suitable | Funnel structure helps layer information |
-| Information gaps that may still be answerable from the repo | Very suitable | Level 2.5 active retrieval is valuable |
+| Information gaps that may still be answerable from the repo | Very suitable | R1 retrieval runs before any degradation |
 | Short one-off notes with no maintenance expectations | Not always optimal | The framework intentionally adds governance overhead |
 
 ## 8. Conclusion

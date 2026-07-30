@@ -10,6 +10,7 @@ Treat documentation with the same rigor as code. Add these checks to the CI pipe
 
 | Check | Tool | Purpose |
 |-------|------|---------|
+| Scorecard floor + staleness | `scripts/lint_doc.py` | Metadata, table completeness, fences, Pangu spacing, and document age vs. review cadence |
 | Markdown format | markdownlint | Heading levels, list indentation, blank lines |
 | Spelling | cspell / aspell | Catch typos in mixed Chinese/English text |
 | Link validity | markdown-link-check | Detect dead links and 404s |
@@ -18,11 +19,54 @@ Treat documentation with the same rigor as code. Add these checks to the CI pipe
 
 ### Implementation Priority
 
-1. **markdownlint** — catches 80% of formatting issues with near-zero setup.
-2. **markdown-link-check** — dead links are the fastest path to reader distrust.
-3. **cspell** — add a `.cspell.json` with custom dictionary for domain terms.
-4. **Vale** — higher setup cost but catches terminology drift.
-5. **Code block compilation** — extract blocks into `_example_test.go` files.
+1. **`lint_doc.py`** — no install step, and it is the only check here that notices a document
+   has gone stale. Run it over changed docs on every PR, and over the whole tree on a schedule
+   (staleness is a function of the clock, so it surfaces with no commit to trigger it).
+2. **markdownlint** — catches 80% of formatting issues with near-zero setup.
+3. **markdown-link-check** — dead links are the fastest path to reader distrust.
+4. **cspell** — add a `.cspell.json` with custom dictionary for domain terms.
+5. **Vale** — higher setup cost but catches terminology drift.
+6. **Code block compilation** — extract blocks into `_example_test.go` files.
+
+### Adapting the Linter to Your Conventions (`.techdocrc.json`)
+
+The linter's defaults encode *this skill's* conventions. Your repository's conventions outrank
+them (SKILL.md Gate 1), so declare them once instead of arguing with the tool on every file.
+Drop a `.techdocrc.json` beside your docs — the nearest one to the linted file wins, so a
+`docs/` subtree may differ from the repository root.
+
+```json
+{
+  "metadata": {
+    "location": "footer",
+    "required": ["title", "maintainer", "state", "updated"],
+    "aliases": { "owner": ["maintainer"], "last_updated": ["updated"] },
+    "status_field": "state",
+    "status_values": ["wip", "published", "archived"],
+    "date_field": "updated"
+  },
+  "staleness": { "max_age_days": 180, "grace_days": 14 },
+  "title": { "require_h1_match": false },
+  "tables": { "reference_required_columns": ["type", "description"] }
+}
+```
+
+| Key | Use when |
+|---|---|
+| `metadata.location` | `footer` for page metadata at the end; `none` when in-document blocks are forbidden (both metadata and staleness checks then report as skipped rather than failing) |
+| `metadata.aliases` | The repo already uses `maintainer:`/`author:`/`updated:` and renaming every doc is not worth it |
+| `metadata.status_values` | A different lifecycle vocabulary |
+| `staleness.*` | A different review rhythm, or `"enabled": false` for an archive |
+| `title.require_h1_match` | A deliberate convention of long sidebar titles and short headings |
+| `pangu.*` | English-only repos (`"enabled": false`), or a house style that tolerates loose spacing |
+| `tables.reference_required_columns` | Your parameter tables genuinely need a different column set |
+
+Verify the merge before trusting it — a typo in a section name is rejected rather than silently
+ignored, but a typo in a *field* name is not:
+
+```bash
+python3 scripts/lint_doc.py docs/some-page.md --print-config
+```
 
 ### Example GitHub Actions Workflow
 

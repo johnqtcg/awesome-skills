@@ -41,7 +41,14 @@ Maps to the 10-item quality checklist from `skill最佳实践.md` Appendix C:
 | Headings | title **weight** budget (CJK 1.0 / Latin 0.5, leading `RFC-042:` exempt), filler rejected at any length, multiple H1 warned, H1 inside fence not counted |
 | Code fences | untagged fence warned |
 | Pangu spacing | violation detected with line number; inline code + fenced blocks exempt; **CJK-slash regression** (`读/写` prose must not mask violations — URL_RE was `\w`-based and Python `\w` matches CJK); real paths/URLs still exempt |
-| CLI contract | exit 0 clean / 1 critical / 1 with `--strict` on warnings / 2 unreadable file |
+| CLI contract | exit 0 clean / 1 critical / 1 with `--strict` on warnings / 2 unreadable file / **3 bad config or bad `--today`** |
+| **Staleness** (`StalenessTests`) | 26-year-old date reported; fresh date silent; **future date** reported; declared `review_cadence` tightens the window and its absence widens it to the 365-day default; `active` status names the remedy; window configurable; whole check switchable; an unparseable date is left to `date-format` so one defect yields one finding |
+| **Maintenance triggers** (`MaintenanceTriggerTests`) | task doc with no trigger reported; satisfied by a `## Maintenance` heading, by a CJK heading, or by `review_cadence`; concept docs exempt; the word "maintenance" in prose does **not** count (only a heading does) |
+| **Reference table columns** (`ReferenceTableColumnTests`) | `Field \| Description` alone is critical; complete table passes; CJK column names accepted; error-code tables are not parameter tables; non-`reference` types untouched; corroboration rule (a neutral heading needs ≥2 of the 4 columns before firing); required set configurable |
+| **CommonMark fences** (`CommonMarkFenceTests`) | pangu inside `~~~` not reported; untagged `~~~` reported; unclosed `~~~` critical; a `~~~` does not close a ` ``` `; triple backticks nest inside a four-backtick fence (no phantom H1 or untagged fence); an info string never closes a fence; `scan()` reports state for delimiters and contents |
+| **Title ↔ H1** (`TitleH1MatchTests`) | divergence reported; match silent; `RFC-042:` prefix difference tolerated; case and trailing punctuation ignored; configurable off for long-nav-title conventions |
+| **Pangu, exactly one space** (`PanguSpacingTests`) | two spaces reported; **four or more left alone** (indentation/alignment); table padding exempt; **exempt-span regression**: blanking inline code to the empty string merged the surrounding spaces, so `` 中 `git-commit` skill `` read as a double space — 78 findings across this repository, all false; both sub-rules configurable |
+| **Configuration** (`ConfigTests`) | defaults unchanged with no config; `aliases` accept a repo's own field names; status vocabulary, required-field set, title budget all overridable; `location: footer` and `location: none`; deep merge keeps unmentioned siblings; discovery walks up; nearest config wins; unknown top-level key rejected (a typo'd section would otherwise be silently ignored); malformed JSON exits 3; `--print-config` documents the schema |
 
 ## Golden Scenario Tests (`test_golden_scenarios.py`)
 
@@ -156,6 +163,112 @@ backticks with no info string), and a test asserts each template reaches its own
 | Golden keywords | `test_golden_scenarios.py` | rules exist for each scenario (drift protection) | the produced document |
 | **Forward eval** | `test_forward_eval.py` | a graded **document**: type, resolution path, scorecard **arithmetic**, `lint_doc.py` over the emitted markdown, minimal-diff, severity grouping, scaffold integrity | that a *live* model passes — needs the opt-in hook |
 | Live plumbing | `stub_writer.py` via `LiveHarnessPlumbingTest` | the live path runs end to end, honours `LOAD:` on a second turn, and still **fails** on bad input | model behaviour — the stub replays a stored document |
+| Cross-layer drift | `test_cross_layer_drift.py` | `rationale/` and `evaluate/` still describe *this* skill; gates contiguous, every cited reference/script exists, the Phase 4 check table and the linter agree in both directions | whether the rationale's *reasoning* is sound |
+| **Live A/B** | `ab_eval.py` | with-skill vs. without-skill through the same grader — whether the skill *adds* anything, not just whether it works | one sample per cell; not a statistical result |
 
 Counts drift, so they are not restated here; `run_regression.sh` reports the live totals and
 distinguishes **PASS**, **PASS WITH SKIPS** (e.g. `TECH_DOC_EVAL_CMD` unset), and **FAIL**.
+
+## Grading the Linter on a Real Corpus
+
+Fixture tests establish that a check fires when it should. They cannot establish that it stays
+quiet when it should, because a fixture only contains what the author thought to put in it. Every
+new check was therefore run over all **987 markdown files in this repository** before shipping,
+and two of the four were wrong on first contact:
+
+| Check | First measurement | Cause | After the fix |
+|---|---|---|---|
+| `pangu-spacing` multi-space | **78 findings, 78 false** | Exempt spans (inline code, URLs) were blanked to the empty string, merging the spaces on either side: `` 中 `git-commit` skill `` became `中  skill` | **1 finding, genuinely a double space** (`bestpractice/基础篇.md`) |
+| `table-columns` | **39 findings** with every file forced to `--type reference` | A first column named `Field` was treated as sufficient evidence of a parameter table, catching `Field \| Value` and `Flag \| Purpose` | **15**, all comparison tables in files that would never be classified `reference`; corroboration now requires a parameter-declaring heading or ≥2 of the 4 columns already present |
+| `staleness`, `maintenance` | no false positives | — | unchanged |
+
+`table-columns` is CRITICAL and therefore blocks delivery, so its trigger is deliberately
+conservative: a false positive rejects a correct document, which costs more than a miss.
+
+The fence rewrite was measured the same way, by diffing every finding on every file against the
+previous implementation. It **removes** 116 `code-fence-lang` and 6 `single-h1` false positives
+(four-backtick wrappers whose inner ` ``` ` blocks were miscounted) and **adds** 10
+`fence-balance` findings. Those 10 were checked by hand: they are real unclosed fences in *other*
+skills, where a nested block was written with a three-backtick outer fence. Left unfixed here —
+a different skill's defect is not this change's business — but worth reporting.
+
+## What the First Live Run Found (2026-07-30)
+
+The forward-eval harness had never been pointed at a model. The first run found **four defects in
+the harness, not in the skill** — the writer's output was substantively correct and was reported
+as failing every structural check. All four were invisible to the stub, because a stub replays a
+stored document instead of consulting the skill's rules or emitting the skill's output format.
+
+| Defect | Symptom | Why no fixture could catch it |
+|---|---|---|
+| Prompt never stated the run context | Fixture 004 requires "R2 asking is unavailable", but the prompt never said the run was non-interactive. The writer correctly asked one consolidated question — the right move under §Resolution Order — and was graded as failing all six checks. | The stub never reads the resolution rules; only a model applies them. |
+| Nested `claude -p` inherited plan mode | The writer replied "I'm in plan mode but the tools this workflow requires aren't available" and emitted no document. | A harness-isolation property; nothing in the skill or fixtures touches it. |
+| `\W{0,6}` could not span the contract's column alignment | `mode:` + eleven spaces + `Write` did not match, so a writer following the Output Contract *exactly* was reported as declaring no mode, no doc type, no resolution path. | The exemplars use a bullet shape (`- **Critical**: …`), never the aligned form the contract prescribes. The grader was written against the exemplars. |
+| `\btype` cannot match inside `doc_type` | `_` is a word character, so the grader matched only the prose forms `type:` / `doc type:` — never the contract's real field name. | Same cause; found by the new guard test the moment it was pointed at the contract's own shape. |
+| `SCORE_CLAIM_RE` was line-anchored | The contract puts two tiers on one line (`Critical: 4/4 applicable | Standard: 5/5 applicable |`); only the first was seen. | Same cause. |
+
+`test_grader_accepts_the_contract_format_skill_md_prescribes` now pins the grader against a block
+built in SKILL.md's own shape, and `MODE_RE` / `DOC_TYPE_RE` / `RESOLUTION_RE` are defined once
+and shared with that test — a test that re-types the pattern it is meant to pin only proves the
+copy is self-consistent, which is how this drift survived in the first place.
+
+**The transferable lesson**: an opt-in test layer that has never been executed is not coverage.
+Every one of these five bugs sat in a file whose own tests were green.
+
+### The measured result, stated plainly
+
+`claude -p --model sonnet`, 3 scenarios × 2 arms, one sample per cell, grader fixes applied:
+
+| scenario | with | without |
+|---|---|---|
+| `runbook_write` | FAIL (3) | FAIL (2) |
+| `improve_minimal_diff` | FAIL (1) | FAIL (2) |
+| `review_troubleshooting` | FAIL (4) | FAIL (3) |
+| **scenarios passing** | **0/3** | **0/3** |
+
+**Neither arm produced a document the grader accepts, and the raw failed-check total is worse
+with the skill than without it (8 vs 7).** That is the honest headline, and it does not reproduce
+the 9.01/10 in `evaluate/`. The grader is all-or-nothing over ~8 checks, so "0/3" means "no run
+was flawless", not "the skill does nothing" — but it is emphatically not a pass.
+
+Per-check, where the two arms actually differ:
+
+| failure kind | with | without | reading |
+|---|---|---|---|
+| no scorecard arithmetic at all | 1 | 3 | **clear skill gain** — the base model never volunteers applicable-item denominators |
+| minimal-diff over-run | 57 lines | 112 lines | **clear skill gain** — both exceed the 40-line budget, the skill halves the over-run |
+| reference not cited / not loaded | 4 | 2 | **not comparable** — see below |
+| emitted doc fails a lint critical | 1 | 1 | no difference (unclosed fence vs. missing `title`) |
+| wrong denominator | 1 | 0 | skill-specific failure mode: only an arm that reports arithmetic can get it wrong |
+
+Output was also more concise with the skill in 2 of 3 scenarios (5 991 vs 6 819 and 4 229 vs
+5 426 characters).
+
+**The reference count is a grader asymmetry, not a skill regression.** The with arm is scored on
+two checks there — did it cite the reference, *and* did it actually request the file over the
+`LOAD:` protocol — while the without arm is offered no references and can only fail the first.
+Subtracting the two LOAD-only failures gives 6 vs 7, which is a tie within the noise of a
+one-sample-per-cell run. Note also that `LOAD:` is an artefact **invented by this harness** to
+make progressive disclosure observable; a real Claude Code run has `Read`/`Grep` and never sees
+it, so failing it is weak evidence about the skill.
+
+**What this does and does not license.** It licenses two claims: the skill reliably produces
+scorecard arithmetic that the base model omits entirely, and it roughly halves minimal-diff
+over-run. It does not license "the skill produces passing documents" — on this sample it does
+not — and one sample per cell cannot separate a real effect from run-to-run variance. A
+`runbook_write` with-arm run earlier in the same session *did* follow the `LOAD:` protocol and
+the graded one did not, from an identical prompt. A fresh benchmark with several samples per
+cell is owed before any score is quoted.
+
+## Remaining Gaps
+
+1. **One sample per A/B cell.** `ab_eval.py` runs each scenario once per arm. Model output
+   varies between runs, so a single cell flipping is not evidence of a regression. Treat the
+   summary as directional and re-run before drawing a conclusion from any single scenario.
+2. **The grader is this skill's own rubric.** Both arms are scored against the contract the
+   skill defines, which is the only way to compare them mechanically, but it means the without
+   arm is judged partly on conventions it was never told. The `SHAPE_HINT` in `ab_eval.py`
+   levels the formatting playing field; it cannot level the conceptual one.
+3. **`table-columns` recall is untested against a real reference-doc corpus.** This repository
+   contains no hand-written API reference docs, so the check's miss rate is unmeasured — only
+   its false-positive rate is.

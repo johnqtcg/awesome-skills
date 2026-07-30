@@ -155,8 +155,38 @@ def applicable_bounds(tier: str, doc_type, doc: str | None = None):
     return base, base + cond
 
 
+# Field-value gap tolerance.
+#
+# The Output Contract in SKILL.md column-aligns its values (`mode:` followed by eleven spaces),
+# and the grader's original `\W{0,6}` could not span that padding — so the grader was unable to
+# match the format the skill itself prescribes. It had been written against the bullet-list
+# shape the static exemplars happen to use, and because the live eval had never run against a
+# model, nothing compared the two. A model that followed the contract exactly was reported as
+# having declared no mode, no doc type and no resolution path.
+#
+# `[^\w\n]` rather than `\W` keeps the match on one line: `\W` matches newlines, so a generous
+# bound would let a key on one line pair with an unrelated value further down.
+GAP = r"[^\w\n]{0,24}"
+
+# Defined once and shared with the guard test below. A test that re-types the pattern it is
+# meant to pin proves only that the copy is self-consistent — which is precisely how the grader
+# drifted away from the Output Contract unnoticed.
+MODE_RE = re.compile(rf"(?im)^{GAP}mode{GAP}(write|review|improve)")
+# `doc(?:ument)? ` required a SPACE, and `\btype` cannot match inside `doc_type` because `_` is a
+# word character — so the grader never matched the Output Contract's real field name, only the
+# prose forms `type:` and `doc type:`. `[ _]?` covers all three.
+DOC_TYPE_RE = re.compile(
+    rf"(?i)\b(?:doc(?:ument)?[ _]?)?type{GAP}(?P<dt>{'|'.join(DOC_TYPES)})\b")
+RESOLUTION_RE = re.compile(rf"(?i)resolution{GAP}R[123]")
+
+
+# `(?:^|\|)` rather than `^`: SKILL.md's contract puts two tiers on one line separated by `|`
+# (`Critical: 4/4 applicable (1 N/A) | Standard: 5/5 applicable |`), and a line-anchored pattern
+# saw only the first of them — so a model following the contract was reported as having omitted
+# the Standard tier. The optional `scorecard` prefix covers the first tier sharing its line with
+# the field label. Both shapes matter: the aligned contract form and the exemplars' bullet form.
 SCORE_CLAIM_RE = re.compile(
-    r"(?im)^[\s\-*>|]*\**(Critical|Standard|Hygiene)\**\s*[:：]?\s*"
+    r"(?im)(?:^|\|)[\s\-*>]*(?:scorecard[^\w\n]{0,24})?\**(Critical|Standard|Hygiene)\**\s*[:：]?\s*"
     r"(?:.*?\b(\d+)\s*/\s*(\d+)\s*applicable|.*?\bn/a\s*\(0 applicable\))"
 )
 
@@ -211,7 +241,17 @@ def check_scorecard_arithmetic(output: str, doc_type, doc: str | None = None):
 
 
 def run_linter(doc: str, doc_type, tmp: Path):
-    """Return (returncode, stdout) from lint_doc.py over the emitted document."""
+    """Return (returncode, stdout) from lint_doc.py over the emitted document.
+
+    Deliberately *not* passing `--today`: the document was written moments ago and should carry
+    today's date, so the system clock is the right reference. Pinning a date here would report a
+    correctly-dated fresh document as post-dated. This stays safe only because staleness is a
+    warning and the grader gates on criticals — promoting staleness to critical would make this
+    date-dependent, so pin `--today` at that point.
+
+    `tmp` is a system temp directory, outside any repository, so no `.techdocrc.json` is
+    discovered and the emitted document is always graded against the default conventions.
+    """
     path = tmp / "emitted.md"
     path.write_text(doc, encoding="utf-8")
     argv = [sys.executable, str(LINTER), str(path)]
@@ -236,7 +276,7 @@ def grade(output: str, fixture: dict, tmp: Path, requested=None):
 
     # 1. Mode declared and correct.
     want_mode = fixture["expected_mode"]
-    m = re.search(r"(?im)^\W{0,6}mode\W{0,6}(write|review|improve)", output)
+    m = MODE_RE.search(output)
     if not m:
         reasons.append("no mode declared (Write|Review|Improve)")
     elif m.group(1).lower() != want_mode.lower():
@@ -244,12 +284,12 @@ def grade(output: str, fixture: dict, tmp: Path, requested=None):
 
     # 2. Doc type: must be stated, and match when the fixture pins one.
     want_type = fixture.get("expected_doc_type")
-    stated = re.search(rf"(?i)\b(doc(?:ument)? )?type\W{{0,6}}({'|'.join(DOC_TYPES)})\b", output)
+    stated = DOC_TYPE_RE.search(output)
     if want_type:
         if not stated:
             reasons.append(f"doc type not stated (expected {want_type!r})")
-        elif stated.group(2).lower() != want_type.lower():
-            reasons.append(f"doc type: stated {stated.group(2)!r}, expected {want_type!r}")
+        elif stated.group("dt").lower() != want_type.lower():
+            reasons.append(f"doc type: stated {stated.group("dt")!r}, expected {want_type!r}")
     elif not stated and not re.search(
             r"(?i)stop|clarif|not yet determined|undetermined|which .{0,20}\?|"
             r"tell me|what I need from you|type-neutral", output):
@@ -258,7 +298,7 @@ def grade(output: str, fixture: dict, tmp: Path, requested=None):
 
     # 3. Resolution path + degradation level (the state machine being deterministic is the
     #    whole point of §Resolution Order — an ungrounded level claim is what it replaced).
-    if not re.search(r"(?i)resolution\W{0,4}R[123]", output):
+    if not RESOLUTION_RE.search(output):
         reasons.append("no `Resolution: R1|R2|R3` path recorded")
     want_level = fixture.get("expected_level")
     if want_level:
@@ -290,7 +330,7 @@ def grade(output: str, fixture: dict, tmp: Path, requested=None):
         # the scorecard must be internally consistent with its own classification. Passing
         # None here made every item count as applicable, so a correct concept-doc scorecard
         # was reported as wrong.
-        effective_type = want_type or (stated.group(2).lower() if stated else None)
+        effective_type = want_type or (stated.group("dt").lower() if stated else None)
         reasons += check_scorecard_arithmetic(output, effective_type, doc)
 
     # 6. Behavioral: the emitted document must survive the mechanical linter.
@@ -361,6 +401,45 @@ class GraderSelfTest(unittest.TestCase):
         import tempfile
         self.tmp = Path(tempfile.mkdtemp(prefix="tdw-eval-"))
         self.addCleanup(__import__("shutil").rmtree, self.tmp, ignore_errors=True)
+
+    def test_grader_accepts_the_contract_format_skill_md_prescribes(self):
+        """The exemplars are hand-written, so they can drift from the contract they illustrate.
+
+        They use a compact `mode: Write` bullet shape. SKILL.md's Output Contract column-aligns
+        its values, and the grader's `\\W{0,6}` gap could not span eleven spaces of padding — so a
+        model that followed the contract *exactly* was reported as declaring no mode, no doc type
+        and no resolution path, and the first scorecard tier (which shares its line with the
+        `scorecard:` label) went undetected. Nothing caught it because the exemplars never used
+        the aligned form and the live eval had never been run.
+
+        This test builds the block from SKILL.md's own template shape, so the grader and the
+        contract cannot drift apart again.
+        """
+        block = (
+            "── tech-doc-writer output ──\n"
+            "mode:           Write\n"
+            "resolution:     R1 (retrieved) — CONTRIBUTING.md names the on-call rota\n"
+            "degradation:    Level 1 (Full)\n"
+            "doc_type:       task\n"
+            "audience:       backend dev / deploy service / knows Docker\n"
+            "scorecard:      Critical: 4/4 applicable (1 N/A) | Standard: 5/5 applicable |\n"
+            "                Hygiene: 3/3 applicable (2 conditional)\n"
+            "files:          [docs/deploy.md]\n"
+            "maintenance:    cadence: monthly; triggers: deploy script change\n"
+            "assumptions:    [none]\n")
+
+        self.assertRegex(block, MODE_RE,
+                         "grader must match the aligned `mode:` field SKILL.md prescribes")
+        self.assertRegex(block, DOC_TYPE_RE,
+                         "grader must match the `doc_type:` field name, not only `type:`")
+        self.assertEqual("task", DOC_TYPE_RE.search(block).group("dt"))
+        self.assertRegex(block, RESOLUTION_RE,
+                         "grader must match the aligned `resolution:` field")
+        tiers = {tier for tier, _n, _d in SCORE_CLAIM_RE.findall(block)}
+        self.assertEqual(
+            {"Critical", "Standard", "Hygiene"}, tiers,
+            "all three tiers must be detected, including the one sharing a line with "
+            f"the `scorecard:` label — got {sorted(tiers)}")
 
     def test_good_exemplars_pass(self):
         for scenario, fx in SCENARIOS.items():
@@ -557,6 +636,24 @@ class ScenarioIntegrityTests(unittest.TestCase):
         self.assertIn("max_changed_lines", fx)
 
 
+# The run context the fixtures were written against, stated explicitly.
+#
+# Found by finally pointing the harness at a live model: fixture 004 expects Level 2 and says so
+# in as many words — "R1 retrieval finds nothing and R2 asking is unavailable, so R3 assumes" —
+# but the prompt never told the writer either of those things. A live model therefore did the
+# *correct* thing under §Resolution Order (one consolidated question, R2) and was graded as
+# failing all six checks. The stub could never surface this: it replays a stored document and
+# never consults the resolution rules at all.
+RUN_CONTEXT = """\
+--- run context (this is a non-interactive batch evaluation) ---
+- There is NO repository, codebase, or doc corpus available. R1 retrieval is a no-op; say so.
+- You CANNOT ask the user anything: this is a batch run and there is no second party to answer.
+  Per §Resolution Order this satisfies "cannot ask", so R2 is unavailable and you proceed to R3.
+- Do not use tools or explore the filesystem. Answer from the request and the skill alone.
+- Emit the complete document plus the output-contract block in your reply.
+"""
+
+
 @unittest.skipUnless(
     LIVE_CMD,
     "set TECH_DOC_EVAL_CMD to a shell command that reads a prompt on stdin and writes the "
@@ -595,7 +692,7 @@ class LiveForwardEval(unittest.TestCase):
                 if fixture.get("original_document"):
                     request += ("\n\nExisting document:\n```markdown\n"
                                 + fixture["original_document"] + "\n```")
-                prompt = (f"{skill}{attached}\n\n---\nUser request: {request}\n")
+                prompt = (f"{skill}{attached}\n{RUN_CONTEXT}\n---\nUser request: {request}\n")
                 proc = subprocess.run(LIVE_CMD, shell=True, input=prompt,
                                       capture_output=True, text=True, timeout=900,
                                       errors="replace")

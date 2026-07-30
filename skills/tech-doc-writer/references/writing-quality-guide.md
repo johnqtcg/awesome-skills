@@ -98,6 +98,13 @@ The second version lets the reader decide in 1 second whether to keep reading.
 **GOOD** — explicit subject, consistent term:
 > Error: 视频数据包不完整，**该错误**主要发生在**主播端**上下麦的瞬间。**数据包**不完整会造成**接收端**出现花屏。
 
+**What the rule does not forbid.** The Critical scorecard item is consistency *after first
+definition*, not the absence of a second name anywhere. Introducing both names once — `数据包
+（packet）` on first use, then `数据包` thereafter — is correct, and a bilingual glossary entry
+is correct. The defect above is alternating between the two forms with no definition, so the
+reader cannot tell whether `packet` and `数据包` are the same thing. An absolute "zero synonym
+mixing" reading would have made every bilingual document unpassable.
+
 ---
 
 ### Verbose vs. Concise

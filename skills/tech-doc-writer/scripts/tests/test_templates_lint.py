@@ -82,6 +82,73 @@ def _fill_placeholders(body: str) -> str:
     return body
 
 
+# ── Semantic placeholder agreement ─────────────────────────────────────────────
+#
+# Filling placeholders and linting the result proves a template is *lintable*. It cannot prove
+# the placeholders mean anything, because `<http>` is exactly as non-empty as `<scenario>`. Four
+# table bodies had been copy-pasted between templates and never re-labelled — the Concept
+# doc's "Scenario | Use? | Reason" rows read `<version> | ✓ | <migration>`, and its alternatives
+# comparison read `<http> | <trigger> | <action>` under "This Approach | Alternative A |
+# Alternative B". Every one passed the lint layer while actively misleading anyone copying it.
+
+# Placeholders that carry no column-specific meaning and are acceptable anywhere.
+GENERIC_PLACEHOLDERS = {
+    "value", "values", "text", "x", "y", "n", "link", "...", "etc", "name", "one sentence",
+}
+# Extra tokens a given header word justifies, where the useful hint is not the header's own
+# wording: a `Required` cell is more usefully labelled `<yes/no>` than `<required>`.
+HEADER_SYNONYMS = {
+    "required": {"yes", "no", "y", "n"},
+    "status": {"http"},
+    "since": {"version"},
+    "description": {"desc", "constraint", "constraints", "meaning", "notes", "note"},
+    "use?": {"use", "yes", "no"},
+    "criteria": {"acceptance"},
+}
+
+
+def _words(cell: str) -> list[str]:
+    return re.sub(r"[^a-z0-9]+", " ", re.sub(r"[`*]", "", cell.strip().lower())).split()
+
+
+def _tables(body: str):
+    """Yield (header_cells, [(line_no, row_cells), ...]) for each table in a template body."""
+    lines = body.splitlines()
+    for i, line in enumerate(lines):
+        if not line.lstrip().startswith("|") or i + 1 >= len(lines):
+            continue
+        nxt = lines[i + 1]
+        if not (nxt.lstrip().startswith("|") and set(nxt) <= set(" |:-") and "-" in nxt):
+            continue
+        header = [c.strip() for c in line.strip().strip("|").split("|")]
+        rows, j = [], i + 2
+        while j < len(lines) and lines[j].lstrip().startswith("|"):
+            rows.append((j + 1, [c.strip() for c in lines[j].strip().strip("|").split("|")]))
+            j += 1
+        yield header, rows
+
+
+def _placeholder_disagreements(body: str):
+    """Return [(column, placeholder, header)] where a placeholder contradicts its column."""
+    out = []
+    for header, rows in _tables(body):
+        for _line_no, cells in rows:
+            for idx, cell in enumerate(cells):
+                if idx >= len(header):
+                    continue
+                for placeholder in re.findall(r"<([^<>]+)>", cell):
+                    tokens = _words(placeholder)
+                    if not tokens or set(tokens) & GENERIC_PLACEHOLDERS:
+                        continue
+                    allowed = set(_words(header[idx]))
+                    for word in list(allowed):
+                        allowed |= HEADER_SYNONYMS.get(word, set())
+                    if set(tokens) & allowed:
+                        continue
+                    out.append((header[idx], placeholder, header))
+    return out
+
+
 class TemplateLintTests(unittest.TestCase):
 
     def test_templates_were_found(self):
@@ -194,6 +261,37 @@ class TemplateLintTests(unittest.TestCase):
                       "the decision lifecycle must be a distinct field from document `status`")
         self.assertRegex(body, r"(?m)^status:\s*draft\b",
                          "document status must use the linter's vocabulary")
+
+    def test_every_table_placeholder_agrees_with_its_column(self):
+        """The lint layer proves a template is fillable; this proves the labels mean something.
+
+        `<http>` is exactly as non-empty as `<scenario>`, so four mis-pasted table bodies passed
+        every existing check while telling the reader to put an HTTP status in a "Reason" column.
+        """
+        for heading, _dt, body in _templates():
+            with self.subTest(template=heading):
+                bad = _placeholder_disagreements(body)
+                self.assertEqual(
+                    [], bad,
+                    "placeholder contradicts its column — "
+                    + "; ".join(f"{col!r} holds <{ph}> (header {hdr})" for col, ph, hdr in bad))
+
+    def test_the_placeholder_checker_actually_rejects_a_mismatch(self):
+        """Grade the grader: a checker that passes everything would look identical above."""
+        mismatched = (
+            "| Scenario | Use? | Reason |\n|---|---|---|\n| <version> | ✓ | <migration> |\n")
+        bad = _placeholder_disagreements(mismatched)
+        self.assertEqual(2, len(bad), f"both mislabelled cells must be caught: {bad}")
+        self.assertEqual({"Scenario", "Reason"}, {col for col, _ph, _hdr in bad})
+
+        corrected = (
+            "| Scenario | Use? | Reason |\n|---|---|---|\n| <scenario> | ✓ | <reason> |\n")
+        self.assertEqual([], _placeholder_disagreements(corrected))
+
+    def test_generic_placeholders_are_allowed_anywhere(self):
+        """Otherwise the check would force pedantic labels on genuinely free-form cells."""
+        self.assertEqual([], _placeholder_disagreements(
+            "| Dimension | Option A |\n|---|---|\n| Cost | <value> |\n"))
 
     def test_yaml_trailing_comments_are_parsed(self):
         """Templates annotate their frontmatter. Before the fix, `status: draft  # notes` was

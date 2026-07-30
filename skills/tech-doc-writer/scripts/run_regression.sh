@@ -42,11 +42,33 @@ if [ -n "${SKIPPED_N:-}" ] && [ "$SKIPPED_N" -gt 0 ]; then
         # missing is a real model writing the document rather than a stub replaying one.
         note_skip "no live model configured (${SKIPPED_N} test; set TECH_DOC_EVAL_CMD). \
 Harness plumbing and grader discrimination ARE covered via stub_writer.py; unmeasured here is \
-whether a model following this skill produces a passing document."
+whether a model following this skill produces a passing document. For the with/without-skill \
+comparison run: TECH_DOC_EVAL_CMD='<model cmd>' python3 scripts/tests/ab_eval.py"
     else
         note_skip "${SKIPPED_N} test(s) skipped (see the -v output above)"
     fi
 fi
+
+echo ""
+echo "--- Linter self-check (the linter must pass its own gate on the skill's own docs) ---"
+# A linter whose own reference docs fail it is not trustworthy. Templates are excluded: they are
+# skeletons full of placeholders and are covered by test_templates_lint.py instead.
+# These are guides, not deliverable documents, so only the structural criticals are meaningful —
+# fence balance and table integrity. `location: none` skips the metadata and staleness checks,
+# which apply to documents the skill produces, not to its own reference material.
+LINT_CFG="$(mktemp "${TMPDIR:-/tmp}/tdw-lintcfg.XXXXXX")"
+printf '{"metadata":{"location":"none"}}' > "$LINT_CFG"
+trap 'rm -f "$TEST_LOG" "$LINT_CFG"' EXIT
+for f in references/*.md; do
+    [ "$f" = "references/templates.md" ] && continue   # skeletons; see test_templates_lint.py
+    if OUT=$(python3 scripts/lint_doc.py "$f" --config "$LINT_CFG" 2>&1); then
+        echo "  OK: $f ($(printf '%s\n' "$OUT" | grep -m1 '^lint_doc: [0-9]'))"
+    else
+        echo "  FAIL: $f"
+        printf '%s\n' "$OUT" | sed 's/^/      /'
+        FAIL=1
+    fi
+done
 
 echo ""
 echo "--- Line count check ---"

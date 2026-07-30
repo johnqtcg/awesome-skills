@@ -95,16 +95,16 @@ last_updated: YYYY-MM-DD # must be a real calendar date
 
 | Scenario | Use? | Reason |
 |----------|------|--------|
-| <version> | ✓ | <migration> |
-| <version> | ✗ | <migration> |
+| <scenario> | ✓ | <reason> |
+| <scenario> | ✗ | <reason> |
 
 ## 5. Comparison with Alternatives
 
 | Dimension | This Approach | Alternative A | Alternative B |
 |-----------|--------------|---------------|---------------|
-| Pros | <http> | <trigger> | <action> |
-| Cons | <http> | <trigger> | <action> |
-| Best for | <http> | <trigger> | <action> |
+| Pros | <this-approach> | <alternative-a> | <alternative-b> |
+| Cons | <this-approach> | <alternative-a> | <alternative-b> |
+| Best for | <this-approach> | <alternative-a> | <alternative-b> |
 
 ## 6. Minimal Example
 <Runnable or annotated code/config that demonstrates the concept.
@@ -141,7 +141,7 @@ applicable_versions: <e.g. API v2>
 
 | Field | Type | Required | Default | Description | Since |
 |-------|------|----------|---------|-------------|-------|
-| <field> | <type> | <yes/no> | <default> | <constraint> | <notes> |
+| <field> | <type> | <yes/no> | <default> | <constraint> | <version> |
 
 ## 3. Example Request and Response
 
@@ -188,7 +188,7 @@ Content-Type: application/json
 
 | Date | Change | Author |
 |------|--------|--------|
-| <version> | <change> | <migration> |
+| <date> | <change> | <author> |
 ````
 
 ---
@@ -267,11 +267,11 @@ last_updated: YYYY-MM-DD # must be a real calendar date
 
 | Dimension    | Option A | Option B |
 |-------------|----------|----------|
-| Core approach | <change> | <migration> |
-| Complexity | <change> | <migration> |
-| Performance | <change> | <migration> |
-| Ops cost | <change> | <migration> |
-| Risk | <change> | <migration> |
+| Core approach | <option-a> | <option-b> |
+| Complexity | <option-a> | <option-b> |
+| Performance | <option-a> | <option-b> |
+| Ops cost | <option-a> | <option-b> |
+| Risk | <option-a> | <option-b> |
 
 ## 4. Decision
 Chosen: Option <X>.
