@@ -1,0 +1,36 @@
+{
+  "id": "002_go_library",
+  "description": "Go module with no cmd/ directory, no main.go and no container manifest. Readers import it rather than run it, so it must route to library docs, not service docs.",
+  "git": true,
+  "base_commit": {
+    "go.mod": "module example.com/sdk\n\ngo 1.22\n",
+    "Makefile": "test:\n\tgo test ./...\n",
+    "README.md": "# sdk\n",
+    "doc.go": "// Package sdk is a client library.\npackage sdk\n",
+    "client.go": "package sdk\n\ntype Client struct{}\n",
+    "client_test.go": "package sdk\n\nimport \"testing\"\n\nfunc TestClient(t *testing.T) {}\n"
+  },
+  "worktree_edit": {
+    "client.go": "\nfunc (c *Client) Close() error { return nil }\n"
+  },
+  "expect": {
+    "status": "OK",
+    "dominant": "go",
+    "polyglot": "no",
+    "primary": "makefile",
+    "likely": "library",
+    "sources": {
+      "worktree": 1,
+      "staged": 0,
+      "untracked": 0,
+      "base_range": 0
+    },
+    "total_unique": 1,
+    "scope_contains": [
+      "client.go"
+    ],
+    "codemaps": "absent",
+    "doc_ci": "absent",
+    "new_source": 0
+  }
+}

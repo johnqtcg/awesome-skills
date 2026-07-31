@@ -108,9 +108,11 @@ skill 也明确要求：如果用户没指定语言，就跟随仓库现有语�
 
 `update-doc` 明确要求：
 
-- 先根据 `git diff --name-only` 或受影响代码路径推断文档范围
+- 先合并四个独立的变更来源推断文档范围——工作区、暂存区、未跟踪文件、以及 `<base>...HEAD`；git 不可用时退回到受影响的代码路径
 - 优先做受影响 section 的 patch
 - 只有用户要求时才扩大成更大范围重写
+
+这个闸门最初只读 `git diff --name-only`。该命令只报告已跟踪文件的未暂存改动，因此暂存过的改动、或者一个刚建好还没 add 的新模块，对闸门是完全不可见的——而新模块恰恰是最需要补文档的那类变更。现在由 `scripts/discover_doc_scope.sh` 取四个来源的并集，并把无法解析的来源明确标出来，这样拿到的是一个“部分范围”的如实报告，而不是被当成“没有任何改动”。
 
 这层设计非常关键，因为很多文档更新任务其实不是“重写 README”，而是“修 1-2 处已经和代码不一致的地方”。如果没有 diff scope 纪律，模型很容易顺手把整篇文档重排一遍，结果：
 
@@ -324,7 +326,7 @@ skill 的关键增量不在内容正确本身，而在“能指回哪段代码�
 当以下内容发生变化时，这份文档应该同步更新：
 
 - `skills/update-doc/SKILL.md` 中的 hard rules、pre-update gates、轻量 / 完整输出模式、Codemap 输出契约、CI 文档漂移护栏、质量评分卡或输出格式发生变化。
-- `skills/update-doc/references/update-doc.md`、`project-routing.md` 或 `ci-drift.md` 中的关键规则发生变化。
+- `skills/update-doc/references/update-doc.md`、`evidence-commands.md`、`project-routing.md` 或 `ci-drift.md` 中的关键规则发生变化。
 - `evaluate/update-doc-skill-eval-report.md` 或 `evaluate/update-doc-skill-eval-report.zh-CN.md` 中支撑本文判断的核心结果发生变化。
 
 建议按季度复查一次；如果 `update-doc` 的项目类型路由、输出模式、codemap 契约或漂移护栏机制有明显重构，则应立即复查。
@@ -332,7 +334,10 @@ skill 的关键增量不在内容正确本身，而在“能指回哪段代码�
 ## 10. 相关阅读
 
 - `skills/update-doc/SKILL.md`
+- `skills/update-doc/scripts/discover_doc_scope.sh`
+- `skills/update-doc/scripts/validate_frontmatter.py`
 - `skills/update-doc/references/update-doc.md`
+- `skills/update-doc/references/evidence-commands.md`
 - `skills/update-doc/references/project-routing.md`
 - `skills/update-doc/references/ci-drift.md`
 - `evaluate/update-doc-skill-eval-report.md`

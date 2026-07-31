@@ -1,0 +1,34 @@
+{
+  "id": "007_ci_only_command_source",
+  "description": "No Makefile, task runner, package manifest or native toolchain file. The only place a command is defined is the CI workflow, so CI becomes the authoritative source and must be cited by path. The workflow also runs markdownlint, so doc CI is present.",
+  "git": true,
+  "base_commit": {
+    "README.md": "# ops\n",
+    "scripts/deploy.sh": "#!/usr/bin/env bash\necho deploy\n",
+    "scripts/rollback.sh": "#!/usr/bin/env bash\necho rollback\n",
+    ".github/workflows/ci.yml": "name: ci\non: [push]\njobs:\n  lint:\n    runs-on: ubuntu-latest\n    steps:\n      - run: markdownlint README.md\n      - run: bash scripts/deploy.sh --dry-run\n"
+  },
+  "worktree_edit": {
+    "scripts/deploy.sh": "echo extra\n"
+  },
+  "expect": {
+    "status": "OK",
+    "dominant": "GENERIC",
+    "polyglot": "no",
+    "primary": "ci",
+    "likely": "UNKNOWN",
+    "sources": {
+      "worktree": 1,
+      "staged": 0,
+      "untracked": 0,
+      "base_range": 0
+    },
+    "total_unique": 1,
+    "scope_contains": [
+      "scripts/deploy.sh"
+    ],
+    "codemaps": "absent",
+    "doc_ci": "present",
+    "new_source": 0
+  }
+}

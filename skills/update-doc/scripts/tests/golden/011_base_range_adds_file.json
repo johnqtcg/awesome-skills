@@ -1,0 +1,28 @@
+{
+  "id": "011_base_range_adds_file",
+  "description": "The discriminating twin of 010: identical base commit, but the branch adds a source file instead of editing one. SOURCE base_range and TOTAL_UNIQUE are the same as 010 — only NEW_SOURCE separates them. If NEW_SOURCE ever stops being computed from adds only, 010 and 011 become indistinguishable and one of them fails.",
+  "git": true,
+  "base_commit": {
+    "go.mod": "module example.com/svc\n\ngo 1.22\n",
+    "Dockerfile": "FROM golang:1.22\n",
+    "Makefile": "run:\n\tgo run .\n",
+    "README.md": "# svc\n",
+    "main.go": "package main\n\nfunc main() {}\n"
+  },
+  "branch_commit": {
+    "worker.go": "package main\n\nfunc worker() {}\n"
+  },
+  "expect": {
+    "status": "OK",
+    "dominant": "go",
+    "polyglot": "no",
+    "primary": "makefile",
+    "likely": "service",
+    "sources": { "worktree": 0, "staged": 0, "untracked": 0, "base_range": 1 },
+    "total_unique": 1,
+    "new_source": 1,
+    "scope_contains": ["worker.go"],
+    "codemaps": "absent",
+    "doc_ci": "absent"
+  }
+}

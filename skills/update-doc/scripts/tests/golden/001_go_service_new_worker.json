@@ -1,0 +1,51 @@
+{
+  "id": "001_go_service_new_worker",
+  "description": "Go service on a feature branch: one committed file, one untracked new worker entrypoint, one worktree doc edit. The untracked worker is invisible to a bare `git diff --name-only`, which is the exact drift this skill exists to prevent.",
+  "git": true,
+  "base_commit": {
+    "go.mod": "module example.com/svc\n\ngo 1.22\n",
+    "Makefile": "run:\n\tgo run ./cmd/api\n\ntest:\n\tgo test ./...\n",
+    "Dockerfile": "FROM golang:1.22\n",
+    "README.md": "# svc\n\nAn HTTP service.\n",
+    "cmd/api/main.go": "package main\n\nfunc main() {}\n",
+    "internal/http/server.go": "package http\n\ntype Server struct{}\n"
+  },
+  "branch_commit": {
+    "internal/queue/client.go": "package queue\n\nimport \"os\"\n\nvar url = os.Getenv(\"REDIS_URL\")\n"
+  },
+  "worktree_edit": {
+    "README.md": "\nSee docs/.\n"
+  },
+  "untracked": {
+    "cmd/worker/main.go": "package main\n\nfunc main() {}\n"
+  },
+  "expect": {
+    "status": "OK",
+    "dominant": "go",
+    "polyglot": "no",
+    "primary": "makefile",
+    "likely": "service",
+    "sources": {
+      "worktree": 1,
+      "staged": 0,
+      "untracked": 1,
+      "base_range": 1
+    },
+    "total_unique": 3,
+    "scope_contains": [
+      "cmd/worker/main.go",
+      "internal/queue/client.go",
+      "README.md"
+    ],
+    "codemaps": "absent",
+    "doc_ci": "absent",
+    "new_source": 2,
+    "resolved": {
+      "build": "native (go build ./...)",
+      "test": "makefile (make test)",
+      "lint": "native (go vet ./...)",
+      "run": "makefile (make run)",
+      "install": "native (go mod download)"
+    }
+  }
+}

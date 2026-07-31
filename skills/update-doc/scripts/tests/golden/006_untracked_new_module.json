@@ -1,0 +1,36 @@
+{
+  "id": "006_untracked_new_module",
+  "description": "Regression for the diff-scope defect. A whole new module exists only as untracked files. This is the change most likely to need new documentation and the one a bare `git diff --name-only` is guaranteed to miss.",
+  "git": true,
+  "base_commit": {
+    "go.mod": "module example.com/svc\n\ngo 1.22\n",
+    "Dockerfile": "FROM golang:1.22\n",
+    "README.md": "# svc\n",
+    "main.go": "package main\n\nfunc main() {}\n"
+  },
+  "untracked": {
+    "internal/billing/service.go": "package billing\n\ntype Service struct{}\n",
+    "internal/billing/repo.go": "package billing\n\ntype Repo struct{}\n"
+  },
+  "expect": {
+    "status": "OK",
+    "dominant": "go",
+    "polyglot": "no",
+    "primary": "native",
+    "likely": "service",
+    "sources": {
+      "worktree": 0,
+      "staged": 0,
+      "untracked": 2,
+      "base_range": 0
+    },
+    "total_unique": 2,
+    "scope_contains": [
+      "internal/billing/service.go",
+      "internal/billing/repo.go"
+    ],
+    "codemaps": "absent",
+    "doc_ci": "absent",
+    "new_source": 2
+  }
+}

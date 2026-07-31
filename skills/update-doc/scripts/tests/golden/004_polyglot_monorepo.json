@@ -1,0 +1,65 @@
+{
+  "id": "004_polyglot_monorepo",
+  "description": "Workspace with three languages across services/ and packages/. Polyglot detection is a routing input: the root index table needs per-module language and command source because no single toolchain command covers every module. MODULES must report each module's own source — the root Makefile does not build the TypeScript package or the Python service.",
+  "git": true,
+  "base_commit": {
+    "go.work": "go 1.22\n\nuse ./services/api\n",
+    "Makefile": "test:\n\t$(MAKE) -C services/api test\n",
+    "README.md": "# platform\n",
+    "services/api/go.mod": "module example.com/api\n\ngo 1.22\n",
+    "services/api/main.go": "package main\n\nfunc main() {}\n",
+    "services/api/handler.go": "package main\n",
+    "services/api/router.go": "package main\n",
+    "services/etl/main.py": "if __name__ == '__main__':\n    pass\n",
+    "services/etl/handler.py": "def handle():\n    pass\n",
+    "services/etl/loader.py": "def load():\n    pass\n",
+    "services/etl/parser.py": "def parse():\n    pass\n",
+    "packages/ui/index.ts": "export const x = 1;\n",
+    "packages/ui/render.ts": "export const y = 2;\n",
+    "packages/ui/package.json": "{\n  \"name\": \"ui\",\n  \"scripts\": {\n    \"build\": \"vite build\"\n  }\n}\n",
+    "services/etl/pyproject.toml": "[project]\nname = \"etl\"\n"
+  },
+  "worktree_edit": {
+    "services/etl/loader.py": "\ndef load_v2():\n    pass\n"
+  },
+  "expect": {
+    "status": "OK",
+    "dominant": "python",
+    "polyglot": "yes",
+    "primary": "makefile",
+    "likely": "monorepo",
+    "sources": {
+      "worktree": 1,
+      "staged": 0,
+      "untracked": 0,
+      "base_range": 0
+    },
+    "total_unique": 1,
+    "scope_contains": [
+      "services/etl/loader.py"
+    ],
+    "codemaps": "absent",
+    "doc_ci": "absent",
+    "new_source": 0,
+    "modules": {
+      "packages/ui": [
+        "build: package-scripts (npm run build)",
+        "install: NOT_FOUND"
+      ],
+      "services/api": [
+        "build: native (go build ./...)",
+        "run: native (go run .)"
+      ],
+      "services/etl": [
+        "test: NOT_FOUND"
+      ]
+    },
+    "resolved": {
+      "build": "NOT_FOUND",
+      "test": "makefile (make test)",
+      "lint": "NOT_FOUND",
+      "run": "NOT_FOUND",
+      "install": "NOT_FOUND"
+    }
+  }
+}

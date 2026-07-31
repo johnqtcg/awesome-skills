@@ -1,0 +1,34 @@
+{
+  "id": "009_untracked_new_language",
+  "description": "A Go repository into which an untracked Python module has just been added. `git ls-files` lists only tracked files, so language detection built on it alone would still report DOMINANT go and POLYGLOT no — and the skill would load the Go evidence commands for a change that is entirely Python. Detection must union in the untracked set.",
+  "git": true,
+  "base_commit": {
+    "go.mod": "module example.com/svc\n\ngo 1.22\n",
+    "main.go": "package main\n\nfunc main() {}\n",
+    "Makefile": "run:\n\tgo run .\n",
+    "README.md": "# svc\n",
+    "handler.go": "package main\n",
+    "router.go": "package main\n"
+  },
+  "untracked": {
+    "etl/loader.py": "def load():\n    pass\n",
+    "etl/parse.py": "def parse():\n    pass\n",
+    "etl/sink.py": "def sink():\n    pass\n",
+    "etl/schema.py": "SCHEMA = {}\n",
+    "etl/runner.py": "def run():\n    pass\n",
+    "etl/util.py": "def util():\n    pass\n"
+  },
+  "expect": {
+    "status": "OK",
+    "dominant": "python",
+    "polyglot": "yes",
+    "primary": "makefile",
+    "likely": "UNKNOWN",
+    "sources": { "worktree": 0, "staged": 0, "untracked": 6, "base_range": 0 },
+    "total_unique": 6,
+    "new_source": 6,
+    "scope_contains": ["etl/loader.py", "etl/util.py"],
+    "codemaps": "absent",
+    "doc_ci": "absent"
+  }
+}

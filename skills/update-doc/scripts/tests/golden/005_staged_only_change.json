@@ -1,0 +1,35 @@
+{
+  "id": "005_staged_only_change",
+  "description": "Regression for the diff-scope defect. Every change is staged and the working tree is clean, so a bare `git diff --name-only` returns nothing and a scope gate built on it would report 'no changes' and document nothing.",
+  "git": true,
+  "base_commit": {
+    "go.mod": "module example.com/svc\n\ngo 1.22\n",
+    "Dockerfile": "FROM golang:1.22\n",
+    "Makefile": "run:\n\tgo run .\n",
+    "README.md": "# svc\n",
+    "main.go": "package main\n\nfunc main() {}\n"
+  },
+  "staged": {
+    "internal/feature/new.go": "package feature\n\nimport \"os\"\n\nvar Flag = os.Getenv(\"FEATURE_X\")\n"
+  },
+  "expect": {
+    "status": "OK",
+    "dominant": "go",
+    "polyglot": "no",
+    "primary": "makefile",
+    "likely": "service",
+    "sources": {
+      "worktree": 0,
+      "staged": 1,
+      "untracked": 0,
+      "base_range": 0
+    },
+    "total_unique": 1,
+    "scope_contains": [
+      "internal/feature/new.go"
+    ],
+    "codemaps": "absent",
+    "doc_ci": "absent",
+    "new_source": 1
+  }
+}

@@ -6,6 +6,23 @@
 
 ---
 
+> **Scope note (added 2026-07-31).** The scores below were measured against the
+> version of `update-doc` current on 2026-03-19. That version resolved diff scope
+> from `git diff --name-only` alone, which reports only unstaged edits to tracked
+> files; staged changes and newly created files were outside the gate entirely.
+> The "Project-type routing and diff scope 10/10" figure in §7.2 therefore reflects
+> routing behavior, not a verified diff-scope gate. The skill has since replaced
+> that gate with `scripts/discover_doc_scope.sh`, which reconciles four change
+> sources. These numbers have **not** been re-measured against the current version.
+>
+> A gated harness now exists (`scripts/run_live_eval.sh`) and its grader is proven to
+> discriminate a grounded update from a fabricated one, but no model has been run
+> against the current version. The harness installs the skill under
+> `.claude/skills/` and invokes `/update-doc` rather than pasting SKILL.md into a
+> prompt, because the pasted form measures a different artifact.
+
+---
+
 `update-doc` is a documentation-synchronization skill for patching or rebuilding repository docs after code changes, including README files, codemaps, and related engineering documentation. Its three main strengths are: project-type routing plus lightweight/full output modes, which keep updates scoped to the actual repository shape and the size of the change; evidence-backed diffs, scorecards, and codemap contracts, which make documentation updates traceable instead of ad hoc; and CI drift guardrails plus maintenance guidance, which reduce the chance that documentation falls behind the code again after future changes.
 
 ## 1. Evaluation Overview

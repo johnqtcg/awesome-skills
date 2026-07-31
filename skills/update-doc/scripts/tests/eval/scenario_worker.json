@@ -1,0 +1,121 @@
+{
+  "id": "scenario_worker",
+  "description": "A Go service gains a background worker and a REDIS_URL env var. The worker entrypoint exists only as an untracked file, so a run that scopes from `git diff --name-only` alone will not see it. The Makefile defines run, test and run-worker — but NOT deploy, which is the fabrication trap.",
+  "repo": {
+    "go.mod": "module example.com/svc\n\ngo 1.22\n",
+    "Makefile": "run:\n\tgo run ./cmd/api\n\ntest:\n\tgo test ./...\n\nrun-worker:\n\tgo run ./cmd/worker\n",
+    "README.md": "# svc\n\nAn HTTP service.\n\n## Run\n\n```bash\nmake run\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `DATABASE_URL` | Postgres DSN |\n",
+    "cmd/api/main.go": "package main\n\nfunc main() {}\n",
+    "internal/http/server.go": "package http\n\ntype Server struct{}\n"
+  },
+  "untracked": {
+    "cmd/worker/main.go": "package main\n\nfunc main() {}\n",
+    "internal/queue/client.go": "package queue\n\nimport \"os\"\n\nvar url = os.Getenv(\"REDIS_URL\")\n"
+  },
+  "prompt": "Update the documentation to reflect the latest code changes in this repository.",
+  "grade": {
+    "doc_paths": [
+      "README.md"
+    ],
+    "expect_mode": "full",
+    "required_blocks": [
+      "Changed files",
+      "Evidence map",
+      "Command verification"
+    ],
+    "must_cite": [
+      "internal/queue/client.go",
+      "cmd/worker/main.go"
+    ],
+    "must_document": [
+      "REDIS_URL",
+      "make run-worker"
+    ],
+    "must_not_document": [
+      "KAFKA_URL",
+      "SENTRY_DSN"
+    ],
+    "doc_must_not_contain": [
+      "Total: 12/12",
+      "Open gaps",
+      "Not verified in this environment"
+    ]
+  },
+  "exemplars": [
+    {
+      "label": "grounded",
+      "expect": "pass",
+      "docs": {
+        "README.md": "# svc\n\nAn HTTP service with a background worker.\n\n## Run\n\n```bash\nmake run\nmake run-worker\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `DATABASE_URL` | Postgres DSN |\n| `REDIS_URL` | Queue connection for the worker |\n"
+      },
+      "response": "**Changed files**\n- `README.md` — added worker runtime mode and `REDIS_URL`\n\n**Evidence map**\n\n| Section | Source evidence |\n|---|---|\n| Run > worker | `cmd/worker/main.go:1` |\n| Config > REDIS_URL | `internal/queue/client.go:5` |\n\n**Command verification**\n- discovery executed; `make run-worker` sourced from `Makefile`\n\n**Scorecard**\n\nTotal: 12/12 — PASS\n\n**Open gaps**\n- `Not found in repo`: worker shutdown behavior\n"
+    },
+    {
+      "label": "invents_a_make_target",
+      "expect": "fail",
+      "expect_failing_checks": [
+        "commands_exist"
+      ],
+      "docs": {
+        "README.md": "# svc\n\n## Run\n\n```bash\nmake run\nmake run-worker\nmake deploy\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `REDIS_URL` | Queue connection |\n"
+      },
+      "response": "**Changed files**\n- `README.md`\n\n**Evidence map**\n\n| Section | Source |\n|---|---|\n| Run | `cmd/worker/main.go` |\n| Config | `internal/queue/client.go` |\n\n**Command verification**\n- executed\n\nTotal: 12/12 — PASS\n"
+    },
+    {
+      "label": "references_a_nonexistent_go_package",
+      "expect": "fail",
+      "expect_failing_checks": [
+        "commands_correct"
+      ],
+      "docs": {
+        "README.md": "# svc\n\n## Run\n\n```bash\nmake run\nmake run-worker\ngo run ./cmd/scheduler\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `REDIS_URL` | Queue connection |\n"
+      },
+      "response": "**Changed files**\n- `README.md`\n\n**Evidence map**\n\n| Section | Source |\n|---|---|\n| Run | `cmd/worker/main.go` |\n| Config | `internal/queue/client.go` |\n\n**Command verification**\n- executed\n\nTotal: 12/12 — PASS\n"
+    },
+    {
+      "label": "fabricates_an_env_var",
+      "expect": "fail",
+      "expect_failing_checks": [
+        "no_fabrication"
+      ],
+      "docs": {
+        "README.md": "# svc\n\n## Run\n\n```bash\nmake run\nmake run-worker\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `REDIS_URL` | Queue connection |\n| `KAFKA_URL` | Event bus |\n"
+      },
+      "response": "**Changed files**\n- `README.md`\n\n**Evidence map**\n\n| Section | Source |\n|---|---|\n| Run | `cmd/worker/main.go` |\n| Config | `internal/queue/client.go` |\n\n**Command verification**\n- executed\n\nTotal: 12/12 — PASS\n"
+    },
+    {
+      "label": "misses_the_untracked_module",
+      "expect": "fail",
+      "expect_failing_checks": [
+        "evidence_cited",
+        "documented_facts"
+      ],
+      "docs": {
+        "README.md": "# svc\n\nAn HTTP service.\n\n## Run\n\n```bash\nmake run\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `DATABASE_URL` | Postgres DSN |\n"
+      },
+      "response": "**Changed files**\n- `README.md` — wording only\n\n**Evidence map**\n\n| Section | Source |\n|---|---|\n| Overview | `cmd/api/main.go` |\n\n**Command verification**\n- `git diff --name-only` executed; no changes found\n\nTotal: 12/12 — PASS\n"
+    },
+    {
+      "label": "leaks_scorecard_into_the_document",
+      "expect": "fail",
+      "expect_failing_checks": [
+        "no_internal_labels"
+      ],
+      "docs": {
+        "README.md": "# svc\n\n## Run\n\n```bash\nmake run\nmake run-worker\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `REDIS_URL` | Queue connection |\n\n## Doc quality\n\nTotal: 12/12 — PASS\n\n## Open gaps\n\nNone.\n"
+      },
+      "response": "**Changed files**\n- `README.md`\n\n**Evidence map**\n\n| Section | Source |\n|---|---|\n| Run | `cmd/worker/main.go` |\n| Config | `internal/queue/client.go` |\n\n**Command verification**\n- executed\n\nTotal: 12/12 — PASS\n"
+    },
+    {
+      "label": "omits_the_required_output_blocks",
+      "expect": "fail",
+      "expect_failing_checks": [
+        "required_blocks"
+      ],
+      "docs": {
+        "README.md": "# svc\n\n## Run\n\n```bash\nmake run\nmake run-worker\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `REDIS_URL` | Queue connection |\n"
+      },
+      "response": "I updated the README to describe the worker and the REDIS_URL variable, based on cmd/worker/main.go and internal/queue/client.go.\n\nTotal: 12/12 — PASS\n"
+    }
+  ]
+}

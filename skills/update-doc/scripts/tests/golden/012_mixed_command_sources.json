@@ -1,0 +1,42 @@
+{
+  "id": "012_mixed_command_sources",
+  "description": "The case a repo-level PRIMARY answers wrongly: a Makefile that defines only `lint`, with build/test/run living in package.json scripts. PRIMARY is still makefile because a Makefile exists, so a document written from PRIMARY alone would print `make build` for a target that does not exist. Each kind must resolve independently. It also ships no lockfile, so the package manager is genuinely unknown and `install` must resolve to NOT_FOUND rather than defaulting to npm.",
+  "git": true,
+  "base_commit": {
+    "Makefile": "lint:\n\teslint .\n",
+    "package.json": "{\n  \"name\": \"app\",\n  \"scripts\": {\n    \"build\": \"tsc\",\n    \"start\": \"node dist/index.js\",\n    \"test\": \"vitest\"\n  }\n}\n",
+    "README.md": "# app\n",
+    "index.ts": "export const x = 1;\n",
+    "lib.ts": "export const y = 2;\n"
+  },
+  "worktree_edit": {
+    "lib.ts": "export const z = 3;\n"
+  },
+  "expect": {
+    "status": "OK",
+    "dominant": "node",
+    "polyglot": "no",
+    "primary": "makefile",
+    "likely": "UNKNOWN",
+    "sources": {
+      "worktree": 1,
+      "staged": 0,
+      "untracked": 0,
+      "base_range": 0
+    },
+    "total_unique": 1,
+    "new_source": 0,
+    "scope_contains": [
+      "lib.ts"
+    ],
+    "codemaps": "absent",
+    "doc_ci": "absent",
+    "resolved": {
+      "build": "package-scripts (npm run build)",
+      "test": "package-scripts (npm run test)",
+      "lint": "makefile (make lint)",
+      "run": "package-scripts (npm run start)",
+      "install": "NOT_FOUND"
+    }
+  }
+}

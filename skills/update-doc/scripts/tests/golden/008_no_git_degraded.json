@@ -1,0 +1,31 @@
+{
+  "id": "008_no_git_degraded",
+  "description": "A source tree with no git repository. Discovery must degrade rather than fail: language, command source, project type and doc inventory are all still derivable, and the skill has a documented fallback to explicit file evidence. Every diff source reports zero, and that zero must be labelled DEGRADED_NO_GIT rather than read as 'nothing changed'.",
+  "git": false,
+  "base_commit": {
+    "go.mod": "module example.com/svc\n\ngo 1.22\n",
+    "Makefile": "run:\n\tgo run ./cmd/api\n",
+    "Dockerfile": "FROM golang:1.22\n",
+    "README.md": "# svc\n",
+    "cmd/api/main.go": "package main\n\nfunc main() {}\n",
+    "docs/CODEMAPS/INDEX.md": "# Codemaps\n"
+  },
+  "expect": {
+    "status": "DEGRADED_NO_GIT",
+    "dominant": "go",
+    "polyglot": "no",
+    "primary": "makefile",
+    "likely": "service",
+    "sources": {
+      "worktree": 0,
+      "staged": 0,
+      "untracked": 0,
+      "base_range": 0
+    },
+    "total_unique": 0,
+    "scope_contains": [],
+    "codemaps": "present",
+    "doc_ci": "absent",
+    "new_source": 0
+  }
+}

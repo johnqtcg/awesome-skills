@@ -1,0 +1,28 @@
+{
+  "id": "010_base_range_modify_only",
+  "description": "A branch that only edits existing files. `git diff --name-only <base>...HEAD` reports the same shape here as it would for a newly added file, so TOTAL_UNIQUE cannot distinguish the two. NEW_SOURCE must read 0 so the lightweight-mode rule is not wrongly escalated. Paired with 011, which is byte-identical except that the branch adds a file instead of editing one.",
+  "git": true,
+  "base_commit": {
+    "go.mod": "module example.com/svc\n\ngo 1.22\n",
+    "Dockerfile": "FROM golang:1.22\n",
+    "Makefile": "run:\n\tgo run .\n",
+    "README.md": "# svc\n",
+    "main.go": "package main\n\nfunc main() {}\n"
+  },
+  "branch_commit": {
+    "main.go": "package main\n\nfunc main() { println(\"v2\") }\n"
+  },
+  "expect": {
+    "status": "OK",
+    "dominant": "go",
+    "polyglot": "no",
+    "primary": "makefile",
+    "likely": "service",
+    "sources": { "worktree": 0, "staged": 0, "untracked": 0, "base_range": 1 },
+    "total_unique": 1,
+    "new_source": 0,
+    "scope_contains": ["main.go"],
+    "codemaps": "absent",
+    "doc_ci": "absent"
+  }
+}

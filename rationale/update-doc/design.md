@@ -108,9 +108,16 @@ The evaluation showed this as one of the most stable skill-only differences: wit
 
 `update-doc` explicitly requires:
 
-- inferring documentation scope from `git diff --name-only` or directly impacted code paths,
+- inferring documentation scope by reconciling four independent change sources — working tree, staged, untracked, and `<base>...HEAD` — or, when git is unavailable, directly impacted code paths,
 - patching affected sections first,
 - expanding into broader rewrites only when requested.
+
+The gate originally read scope from `git diff --name-only` alone. That command reports
+only unstaged edits to tracked files, so a staged change or a newly created module was
+invisible to the gate — and a new module is precisely the change most likely to need new
+documentation. `scripts/discover_doc_scope.sh` now takes the union of all four sources and
+labels the ones it cannot resolve, so a partial scope is reported rather than silently
+treated as "nothing changed".
 
 This is critical because many documentation-update tasks are not "rewrite the README." They are "repair the 1-2 places that no longer match the code." Without diff-scope discipline, a model can easily decide to reorganize the whole document, which leads to:
 
@@ -324,7 +331,7 @@ From a design perspective, the skill expresses a clear principle: **the key to h
 This document should be updated when:
 
 - the Hard Rules, Pre-Update Gates, Lightweight / Full Output Modes, Codemap Output Contract, CI Drift Guardrails, Quality Scorecard, or Output Format in `skills/update-doc/SKILL.md` change,
-- key rules in `skills/update-doc/references/update-doc.md`, `project-routing.md`, or `ci-drift.md` change,
+- key rules in `skills/update-doc/references/update-doc.md`, `evidence-commands.md`, `project-routing.md`, or `ci-drift.md` change,
 - key supporting results in `evaluate/update-doc-skill-eval-report.md` or `evaluate/update-doc-skill-eval-report.zh-CN.md` change.
 
 Review quarterly; review immediately if the project-type routing rules, output modes, codemap contract, or drift-guardrail mechanisms of `update-doc` change substantially.
@@ -332,7 +339,10 @@ Review quarterly; review immediately if the project-type routing rules, output m
 ## 10. Further Reading
 
 - `skills/update-doc/SKILL.md`
+- `skills/update-doc/scripts/discover_doc_scope.sh`
+- `skills/update-doc/scripts/validate_frontmatter.py`
 - `skills/update-doc/references/update-doc.md`
+- `skills/update-doc/references/evidence-commands.md`
 - `skills/update-doc/references/project-routing.md`
 - `skills/update-doc/references/ci-drift.md`
 - `evaluate/update-doc-skill-eval-report.md`

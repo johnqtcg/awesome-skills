@@ -1,0 +1,141 @@
+{
+  "id": "scenario_node_workspace",
+  "description": "A pnpm project with a justfile. Exercises the wrapper vocabulary the Go/Makefile scenario cannot reach: pnpm run, bare pnpm, and just. The lockfile is pnpm-lock.yaml, so `npm run` is itself a fabricated command here even though the script name is real.",
+  "repo": {
+    "package.json": "{\n  \"name\": \"web\",\n  \"scripts\": {\n    \"build\": \"vite build\",\n    \"test\": \"vitest run\"\n  }\n}\n",
+    "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+    "justfile": "lint:\n\teslint .\n",
+    "README.md": "# web\n\n## Commands\n\n```bash\npnpm run build\n```\n",
+    "src/index.ts": "export const start = () => {};\n",
+    "src/render.ts": "export const render = () => {};\n"
+  },
+  "untracked": {
+    "src/queue.ts": "export const QUEUE_URL = process.env.QUEUE_URL;\n"
+  },
+  "prompt": "Update the documentation to reflect the latest code changes in this repository.",
+  "grade": {
+    "doc_paths": [
+      "README.md"
+    ],
+    "expect_mode": "full",
+    "required_blocks": [
+      "Changed files",
+      "Evidence map",
+      "Command verification"
+    ],
+    "must_cite": [
+      "src/queue.ts"
+    ],
+    "must_document": [
+      "QUEUE_URL",
+      "pnpm run build"
+    ],
+    "must_not_document": [
+      "REDIS_URL",
+      "DATABASE_URL"
+    ],
+    "doc_must_not_contain": [
+      "Total: 12/12",
+      "Open gaps"
+    ]
+  },
+  "exemplars": [
+    {
+      "label": "grounded",
+      "expect": "pass",
+      "docs": {
+        "README.md": "# web\n\n## Commands\n\n```bash\npnpm run build\npnpm run test\njust lint\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `QUEUE_URL` | Queue endpoint |\n"
+      },
+      "response": "**Changed files**\n- `README.md`\n\n**Evidence map**\n\n| Section | Source |\n|---|---|\n| Config > QUEUE_URL | `src/queue.ts:1` |\n\n**Command verification**\n- discovery executed; `RESOLVED` gave `build: package-scripts (pnpm run build)`\n\nTotal: 12/12 — PASS\n"
+    },
+    {
+      "label": "invents_a_pnpm_script",
+      "expect": "fail",
+      "expect_failing_checks": [
+        "commands_exist"
+      ],
+      "docs": {
+        "README.md": "# web\n\n## Commands\n\n```bash\npnpm run build\npnpm run deploy\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `QUEUE_URL` | Queue endpoint |\n"
+      },
+      "response": "**Changed files**\n- `README.md`\n\n**Evidence map**\n\n| Section | Source |\n|---|---|\n| Config | `src/queue.ts` |\n\n**Command verification**\n- executed\n\nTotal: 12/12 — PASS\n"
+    },
+    {
+      "label": "invents_a_just_target",
+      "expect": "fail",
+      "expect_failing_checks": [
+        "commands_exist"
+      ],
+      "docs": {
+        "README.md": "# web\n\n## Commands\n\n```bash\npnpm run build\njust deploy\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `QUEUE_URL` | Queue endpoint |\n"
+      },
+      "response": "**Changed files**\n- `README.md`\n\n**Evidence map**\n\n| Section | Source |\n|---|---|\n| Config | `src/queue.ts` |\n\n**Command verification**\n- executed\n\nTotal: 12/12 — PASS\n"
+    },
+    {
+      "label": "uses_bare_pnpm_for_a_missing_script",
+      "expect": "fail",
+      "expect_failing_checks": [
+        "commands_exist"
+      ],
+      "docs": {
+        "README.md": "# web\n\n## Commands\n\n```bash\npnpm build\npnpm start\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `QUEUE_URL` | Queue endpoint |\n"
+      },
+      "response": "**Changed files**\n- `README.md`\n\n**Evidence map**\n\n| Section | Source |\n|---|---|\n| Config | `src/queue.ts` |\n\n**Command verification**\n- executed\n\nTotal: 12/12 — PASS\n"
+    },
+    {
+      "label": "uses_the_wrong_package_manager",
+      "expect": "fail",
+      "expect_failing_checks": [
+        "commands_correct"
+      ],
+      "docs": {
+        "README.md": "# web\n\n## Commands\n\n```bash\npnpm run build\nnpm run test\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `QUEUE_URL` | Queue endpoint |\n"
+      },
+      "response": "**Changed files**\n- `README.md`\n\n**Evidence map**\n\n| Section | Source |\n|---|---|\n| Config | `src/queue.ts` |\n\n**Command verification**\n- executed\n\nTotal: 12/12 — PASS\n"
+    },
+    {
+      "label": "misses_the_untracked_module",
+      "expect": "fail",
+      "expect_failing_checks": [
+        "evidence_cited",
+        "documented_facts"
+      ],
+      "docs": {
+        "README.md": "# web\n\n## Commands\n\n```bash\npnpm run build\n```\n"
+      },
+      "response": "**Changed files**\n- none\n\n**Evidence map**\n\n| Section | Source |\n|---|---|\n| Commands | `package.json` |\n\n**Command verification**\n- `git diff --name-only` executed; no changes\n\nTotal: 12/12 — PASS\n"
+    },
+    {
+      "label": "fabricates_an_env_var",
+      "expect": "fail",
+      "expect_failing_checks": [
+        "no_fabrication"
+      ],
+      "docs": {
+        "README.md": "# web\n\n## Commands\n\n```bash\npnpm run build\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `QUEUE_URL` | Queue endpoint |\n| `REDIS_URL` | Cache |\n"
+      },
+      "response": "**Changed files**\n- `README.md`\n\n**Evidence map**\n\n| Section | Source |\n|---|---|\n| Config | `src/queue.ts` |\n\n**Command verification**\n- executed\n\nTotal: 12/12 — PASS\n"
+    },
+    {
+      "label": "leaks_scorecard_into_the_document",
+      "expect": "fail",
+      "expect_failing_checks": [
+        "no_internal_labels"
+      ],
+      "docs": {
+        "README.md": "# web\n\n## Commands\n\n```bash\npnpm run build\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `QUEUE_URL` | Queue endpoint |\n\nTotal: 12/12 — PASS\n"
+      },
+      "response": "**Changed files**\n- `README.md`\n\n**Evidence map**\n\n| Section | Source |\n|---|---|\n| Config | `src/queue.ts` |\n\n**Command verification**\n- executed\n\nTotal: 12/12 — PASS\n"
+    },
+    {
+      "label": "omits_the_required_output_blocks",
+      "expect": "fail",
+      "expect_failing_checks": [
+        "required_blocks"
+      ],
+      "docs": {
+        "README.md": "# web\n\n## Commands\n\n```bash\npnpm run build\n```\n\n## Config\n\n| Variable | Purpose |\n|---|---|\n| `QUEUE_URL` | Queue endpoint |\n"
+      },
+      "response": "I updated the README with QUEUE_URL from src/queue.ts.\n\nTotal: 12/12 — PASS\n"
+    }
+  ]
+}

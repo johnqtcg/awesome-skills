@@ -1,0 +1,35 @@
+{
+  "id": "003_node_cli",
+  "description": "Node package whose manifest declares `bin`. Readers install and invoke it, so it routes to CLI docs even though it also declares `main`. A scorer that treats bin and main as one 'has entrypoint' signal misroutes this to library.",
+  "git": true,
+  "base_commit": {
+    "package.json": "{\n  \"name\": \"tool\",\n  \"main\": \"index.js\",\n  \"bin\": { \"tool\": \"./index.js\" },\n  \"scripts\": { \"test\": \"node --test\" }\n}\n",
+    "README.md": "# tool\n",
+    "index.js": "process.env.TOOL_MODE;\n",
+    "lib/parse.js": "module.exports = {};\n",
+    "lib/render.js": "module.exports = {};\n"
+  },
+  "worktree_edit": {
+    "lib/parse.js": "\nmodule.exports.extra = 1;\n"
+  },
+  "expect": {
+    "status": "OK",
+    "dominant": "node",
+    "polyglot": "no",
+    "primary": "package-scripts",
+    "likely": "cli",
+    "sources": {
+      "worktree": 1,
+      "staged": 0,
+      "untracked": 0,
+      "base_range": 0
+    },
+    "total_unique": 1,
+    "scope_contains": [
+      "lib/parse.js"
+    ],
+    "codemaps": "absent",
+    "doc_ci": "absent",
+    "new_source": 0
+  }
+}
