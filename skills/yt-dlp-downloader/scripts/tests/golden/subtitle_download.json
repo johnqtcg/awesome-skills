@@ -1,10 +1,10 @@
 {
-  "scenario": "Downloading with embedded subtitles",
-  "required_keywords": [
-    "Subtitles",
-    "--list-subs",
+  "template_section": "5) Download With Embedded Subtitles",
+  "required_flags": [
     "--write-subs",
     "--embed-subs",
-    "--sub-lang"
-  ]
+    "--sub-langs"
+  ],
+  "forbidden_flags": [],
+  "scenario": "Downloading with embedded subtitles"
 }

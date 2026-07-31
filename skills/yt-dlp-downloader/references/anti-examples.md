@@ -26,7 +26,7 @@ GOOD: yt-dlp -F "<url>"  →  pick the correct ID per video
 Probe with `--list-subs` first to avoid empty output.
 
 ```
-BAD:  yt-dlp --write-subs --sub-lang ja "<url>"  (hoping Japanese subs exist)
+BAD:  yt-dlp --write-subs --sub-langs ja "<url>"  (hoping Japanese subs exist)
 GOOD: yt-dlp --list-subs "<url>"  →  confirm "ja" exists  →  then add --write-subs
 ```
 

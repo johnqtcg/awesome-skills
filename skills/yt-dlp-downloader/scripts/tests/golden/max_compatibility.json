@@ -1,0 +1,14 @@
+{
+  "scenario": "Must-be-MP4/H.264 request",
+  "template_section": "1b) Single Video \u2014 Maximum Compatibility (H.264 + AAC, MP4)",
+  "required_flags": [
+    "--no-playlist",
+    "--merge-output-format",
+    "-f"
+  ],
+  "forbidden_flags": [
+    "--yes-playlist",
+    "bv*[vcodec"
+  ],
+  "format_selector_pattern": "/b\\[ext=mp4\\]\\[vcodec\\^=avc1\\]\\[acodec\\^=mp4a\\]"
+}

@@ -72,7 +72,9 @@ Use `--list-subs` before finalizing subtitle flags when availability is unknown.
 
 Use `-x --audio-format mp3 --audio-quality 0` when the user clearly wants an audio deliverable.
 
-**Preset alias alternative**: `--preset-alias mp3` is equivalent to `-x --audio-format mp3 --audio-quality 0 --embed-thumbnail --embed-metadata`.
+**Preset alias alternative**: `--preset-alias mp3` expands to `-f 'ba[acodec^=mp3]/ba/b' -x --audio-format mp3` and
+nothing else — add `--audio-quality 0 --embed-thumbnail --embed-metadata` yourself if
+you want them.
 
 Do not extract audio when the user only wants to preserve the original media and may later need video.
 

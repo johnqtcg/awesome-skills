@@ -24,7 +24,8 @@ Use this file for auth handling, output-path safety, error recovery, and version
 Add shell logging when troubleshooting or running batches:
 
 ```bash
-2>&1 | tee "<dir>/yt-dlp.log"
+2>&1 | tee "<dir>/yt-dlp.log"   # requires `set -o pipefail` first, or the
+                                #  shell reports tee's status, not yt-dlp's
 ```
 
 Use logs when:

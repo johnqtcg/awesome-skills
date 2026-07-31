@@ -1,8 +1,11 @@
 {
-  "scenario": "Downloading a live stream",
-  "required_keywords": [
-    "Live",
+  "template_section": "7) Live Stream Download",
+  "required_flags": [
     "--live-from-start",
-    "re:(?i)youtube.*twitch|twitch.*youtube"
-  ]
+    "--no-playlist"
+  ],
+  "forbidden_flags": [
+    "--wait-for-video"
+  ],
+  "scenario": "Downloading a live stream"
 }

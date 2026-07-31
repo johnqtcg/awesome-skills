@@ -1,10 +1,12 @@
 {
-  "scenario": "Downloading a full playlist",
-  "required_keywords": [
-    "Playlist",
+  "template_section": "3) Playlist Download",
+  "required_flags": [
     "--yes-playlist",
-    "%(playlist_title)",
-    "%(playlist_index)",
-    "--flat-playlist"
-  ]
+    "--download-archive",
+    "%(playlist_index)"
+  ],
+  "forbidden_flags": [
+    "--no-playlist"
+  ],
+  "scenario": "Downloading a full playlist"
 }

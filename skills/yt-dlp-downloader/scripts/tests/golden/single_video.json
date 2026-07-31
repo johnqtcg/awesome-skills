@@ -1,10 +1,16 @@
 {
-  "scenario": "Downloading a single public video",
-  "required_keywords": [
-    "Single video",
+  "template_section": "1) Single Video \u2014 Best Quality, MP4 Container When Possible",
+  "required_flags": [
     "--no-playlist",
-    "re:bv\\*\\+ba/b|bv\\*\\[",
+    "-f",
     "--merge-output-format",
-    "--download-archive"
-  ]
+    "--download-archive",
+    "-o"
+  ],
+  "forbidden_flags": [
+    "--yes-playlist",
+    "-x"
+  ],
+  "format_selector_pattern": "-f\\s+\"bv\\*\\+ba/b\"",
+  "scenario": "Downloading a single public video"
 }

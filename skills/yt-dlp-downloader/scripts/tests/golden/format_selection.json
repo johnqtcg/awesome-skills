@@ -1,10 +1,13 @@
 {
-  "scenario": "Advanced format selection with sorting",
-  "required_keywords": [
-    "Format Selection",
+  "template_section": "2) Fixed Resolution MP4",
+  "required_flags": [
+    "--no-playlist",
     "-S",
-    "re:res:1080|vcodec:h264",
-    "yt-dlp -F",
-    "Format Sorting"
-  ]
+    "--merge-output-format"
+  ],
+  "forbidden_flags": [
+    "--yes-playlist"
+  ],
+  "format_selector_pattern": "height<=\\d+",
+  "scenario": "Advanced format selection with sorting"
 }

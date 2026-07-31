@@ -70,11 +70,30 @@ ffmpeg -version
 
 **ffmpeg is required** when: merging video+audio (`-f bv*+ba`), embedding subtitles (`--embed-subs`), extracting audio (`-x`), embedding thumbnails (`--embed-thumbnail`), or using `--merge-output-format`.
 
-**yt-dlp-ejs + JS runtime**: Full YouTube support requires `yt-dlp-ejs` and a JavaScript runtime (deno recommended, node/bun/quickjs also work). If YouTube downloads fail with extraction errors, recommend:
+**yt-dlp-ejs + JS runtime**: Full YouTube support requires `yt-dlp-ejs` and a
+JavaScript runtime. Runtimes are tried in priority order **deno > node > quickjs >
+bun**, and only `deno` is enabled by default — to use a lower-priority one, pass
+`--no-js-runtimes` before `--js-runtimes <name>`.
+
+Minimum versions, from the yt-dlp/ejs "Runtime requirements" table (not the
+"Development requirements" table below it, which is stricter and applies to
+developing ejs itself):
+
+| Runtime | Required | Note |
+|---------|----------|------|
+| deno | `>=2.3` | recommended |
+| node | `>=22` | |
+| bun | `>=1.2.11, <=1.3.14` | **deprecated** |
+| quickjs | see the ejs README | supported, lowest priority |
+
 ```bash
 pip install yt-dlp-ejs
-# Ensure deno, node, or bun is in PATH
+# deno >= 2.3 recommended; node >= 22 also works
 ```
+
+Version floors move with ejs releases — confirm against
+<https://github.com/yt-dlp/ejs> rather than trusting this table if a runtime is
+rejected.
 
 If a dependency is missing: state `Not available in this environment`, name the exact missing dependency, and provide the install command.
 
@@ -83,10 +102,18 @@ If a dependency is missing: state `Not available in this environment`, name the 
 **STOP and ASK** if:
 - URL is not provided
 - Output directory is unspecified and matters (batch/playlist)
-- Resolution preference is unclear ("good quality" — what resolution?)
+- A stated constraint cannot be satisfied without a number (a storage cap, a
+  target device, "must fit on X") — ask for the number
 - Playlist scope is ambiguous (full playlist vs single video from playlist URL)
 - Subtitle language is needed but not specified
 - Multiple URLs given without clear batch vs individual intent
+
+**Do not stop for vague quality wording.** "Good quality", "high quality" and
+"best" all resolve to the default best-practical selector. Apply it, and state
+the assumption in the Output Contract's Inputs field: the user can correct one
+line of a delivered command far more cheaply than answering a question they did
+not think they had to answer. Ask only when a constraint makes the number
+load-bearing (see above).
 
 ### 4) Probe Gate
 
@@ -140,7 +167,19 @@ Apply these unless the user requests otherwise:
 -o "<dir>/%(title).200s [%(id)s].%(ext)s"
 ```
 
-Append `2>&1 | tee "<dir>/yt-dlp.log"` when logging is useful (batch, troubleshooting, unstable network).
+When logging is useful (batch, troubleshooting, unstable network), tee the output —
+but set `pipefail` first, or the shell reports **tee's** exit status and a failed
+download looks like a success, which contradicts the Execution Integrity Gate:
+
+```bash
+set -o pipefail
+yt-dlp ... 2>&1 | tee "<dir>/yt-dlp.log"
+```
+
+If `pipefail` is unavailable (plain `sh`, some CI runners), use yt-dlp's own
+sink instead of a pipe: `--print-to-file "%(filepath)s" "<dir>/yt-dlp.log"` for
+paths, or simply redirect with `> "<dir>/yt-dlp.log" 2>&1`, which preserves the
+exit status.
 
 ## Anti-Examples (Core Mistakes)
 
@@ -197,11 +236,25 @@ Every response must include these 7 fields:
 
 ## Load References Selectively
 
-For every download task, during scenario classification (Step 1):
-→ Load `references/scenario-templates.md` for 8 complete command templates (single video, playlist, audio extraction, subtitles, authenticated, live stream, SponsorBlock, resolution-capped) to use as the base command.
+**A simple public single-video request needs no reference file.** The template
+below plus §Defaults is the whole command; loading more costs context and buys
+nothing:
 
-For every task, before formatting the final answer:
-→ Load `references/golden-examples.md` for fully worked output contract examples showing correct Scenario / Command / Defaults / Execution / Output fields per scenario type.
+```bash
+yt-dlp --no-playlist -f "bv*+ba/b" --merge-output-format mp4 \
+  --download-archive "<dir>/.yt-dlp-archive.txt" --continue --no-overwrites \
+  --retries 10 --fragment-retries 10 \
+  -o "<dir>/%(title).200s [%(id)s].%(ext)s" "<url>"
+```
+
+For any other scenario — playlist, audio, subtitles, auth, live, SponsorBlock,
+resolution or codec constraints:
+→ Load `references/scenario-templates.md` for the complete templates (including
+   1b for a guaranteed-H.264/AAC MP4) to use as the base command.
+
+When the output contract's shape is unclear, or the scenario is composite:
+→ Load `references/golden-examples.md` for fully worked examples showing correct
+   Scenario / Command / Defaults / Execution / Output fields per scenario type.
 
 When choosing between format selectors, playlist modes, or subtitle strategies:
 → Load `references/decision-rules.md` for decision trees covering format selector priority (`bv*+ba` vs `-f best`), playlist scope flags, subtitle embedding vs external file, and archive file usage.
@@ -213,7 +266,7 @@ When the user reports auth errors, extraction failures, or throttling, or when c
 → Load `references/safety-and-recovery.md` for browser cookie extraction steps, retry flags, yt-dlp-ejs install guide, and throttling recovery patterns.
 
 When reviewing or self-checking a generated command for common mistakes:
-→ Load `references/anti-examples.md` for the full catalog of 8 yt-dlp anti-examples with corrected alternatives.
+→ Load `references/anti-examples.md` for the remaining 5 of the 9 anti-examples (2, 4, 6, 7, 8) with corrected alternatives.
 
 ## Bundled Assets
 

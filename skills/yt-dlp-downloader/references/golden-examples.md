@@ -4,7 +4,7 @@ These examples show the expected answer shape. Keep the final response compact.
 
 ## 1) Public Single Video
 
-- **Scenario**: single public video, best practical MP4
+- **Scenario**: single public video, best quality (MP4 container when the streams can be remuxed)
 - **Inputs**: URL provided, output dir `~/Downloads/video`, no subtitles, no cookies
 - **Probe**: skipped — default best-quality download, public video
 - **Final command**:
@@ -84,7 +84,7 @@ These examples show the expected answer shape. Keep the final response compact.
 - **Final command** (after confirming zh-Hans available):
   ```bash
   yt-dlp --yes-playlist -f "bv*+ba/b" --merge-output-format mp4 \
-    --write-subs --sub-lang "zh-Hans" --sub-format vtt --embed-subs \
+    --write-subs --sub-langs "zh-Hans" --sub-format vtt --embed-subs \
     --download-archive "<dir>/.yt-dlp-archive.txt" \
     --continue --no-overwrites --retries 10 --fragment-retries 10 \
     -o "<dir>/%(playlist_title).120s/%(playlist_index)05d - %(title).200s [%(id)s].%(ext)s" \

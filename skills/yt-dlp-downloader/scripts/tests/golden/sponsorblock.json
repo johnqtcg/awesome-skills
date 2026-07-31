@@ -1,10 +1,8 @@
 {
-  "scenario": "Using SponsorBlock to remove sponsor segments",
-  "required_keywords": [
-    "SponsorBlock",
-    "--sponsorblock-remove",
-    "sponsor",
-    "selfpromo",
-    "--sponsorblock-mark"
-  ]
+  "template_section": "8) SponsorBlock Integration",
+  "required_flags": [
+    "--sponsorblock-remove"
+  ],
+  "forbidden_flags": [],
+  "scenario": "Using SponsorBlock to remove sponsor segments"
 }

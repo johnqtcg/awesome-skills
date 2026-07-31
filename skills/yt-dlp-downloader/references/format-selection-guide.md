@@ -76,9 +76,27 @@ The `-S` flag provides a more intuitive alternative to complex `-f` expressions:
 | `quality` | Overall quality score |
 
 **When to use `-S` vs `-f`**:
-- Use `-S` when expressing **preferences** (best effort matching)
-- Use `-f` when you need **hard constraints** (must be ≤1080p)
-- Combine both: `-f "bv*+ba/b" -S "res:1080,vcodec:h264"` (hard filter + soft sort)
+
+- `-S` (`--format-sort`) changes *which format counts as "best"*. Every field is a
+  **preference**, never a filter. `-S "res:1080"` means "rank 1080p highest"; when
+  nothing at or below 1080p exists it still downloads — picking the smallest format
+  **above** 1080p. It cannot express a cap.
+- `-f` with a bracket filter is the only hard constraint: `bv*[height<=1080]` will
+  not select 1440p, and yt-dlp reports "Requested format is not available" instead.
+- Combining them is a preference on top of a constraint, not "hard filter + soft sort"
+  unless the `-f` itself constrains the same dimension:
+
+```bash
+# WRONG — `-S res:1080` is not a cap; a 1440p-only video downloads at 1440p
+-f "bv*+ba/b" -S "res:1080,vcodec:h264"
+
+# RIGHT — the cap lives in -f; -S only orders what survives it
+-f "bv*[height<=1080]+ba/b[height<=1080]" -S "vcodec:h264"
+```
+
+The same distinction applies to codecs: `-S "vcodec:h264"` prefers H.264 and silently
+accepts AV1 when no H.264 exists, while `bv*[vcodec^=avc1]` refuses. See
+`scenario-templates.md § 1b` for the constrained form.
 
 ## Probing Formats
 
