@@ -2,8 +2,12 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   "mlx-whisper>=0.4.0",
-#   "mlx-lm>=0.22.0",
+#   # MLX is Apple-Silicon only. Without these markers `uv run` tries to resolve
+#   # them on Linux/Windows/Intel Mac, where they do not exist — contradicting
+#   # the platform table in SKILL.md.
+#   "mlx-whisper>=0.4.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+#   "mlx-lm>=0.22.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+#   # Installs everywhere; it is the CPU fallback backend and also useful on Mac.
 #   "faster-whisper>=1.2.1",
 #   "opencc-python-reimplemented>=0.1.7",
 #   "python-docx>=1.1.2",
@@ -51,11 +55,21 @@ PDF_CJK_FONT_CANDIDATES = [
     Path("/System/Library/Fonts/Supplemental/Songti.ttc"),
 ]
 PDF_CJK_FONT_NAME = "LocalTranscriptCJK"
-MODEL_DOWNLOAD_ROOT = Path("/tmp/local-transcript/models")
-CACHE_ROOT = Path("/tmp/local-transcript/cache")
+MODEL_DOWNLOAD_ROOT = Path(
+    os.environ.get("LOCAL_TRANSCRIPT_MODELS", "/tmp/local-transcript/models")
+).expanduser()
+# Hardcoding an absolute path leaves no recourse where /tmp is not writable
+# (sandboxes, locked-down CI, shared hosts). The default is unchanged.
+CACHE_ROOT = Path(
+    os.environ.get("LOCAL_TRANSCRIPT_CACHE", "/tmp/local-transcript/cache")
+).expanduser()
 AUDIO_CACHE_VERSION = "2026-03-14-v3"
 RAW_TRANSCRIPT_CACHE_VERSION = "2026-03-14-v3"
 CLEAN_TRANSCRIPT_CACHE_VERSION = "2026-03-14-v11"
+# Bump when the proofreading prompt changes: cached cleaned text produced by an
+# older prompt is not interchangeable with new output.
+PROOFREAD_PROMPT_VERSION = "1"
+
 MLX_LLM_DEFAULT_MODEL = "mlx-community/Qwen2.5-7B-Instruct-4bit"
 MLX_LLM_FAST_MODEL = "mlx-community/Qwen2.5-3B-Instruct-4bit"
 CHINESE_CHAR_RE = re.compile(r"[\u3400-\u9fff]")
@@ -151,7 +165,7 @@ def save_minimal_docx(paragraphs: list[str], output_path: Path) -> None:
         )
         docx_zip.writestr("word/document.xml", "\n".join(document_xml))
 
-ZH_REPLACEMENTS = {
+_EMBEDDED_ZH_REPLACEMENTS = {
     # ASR systematic errors: token spacing / casing
     "V P N": "VPN",
     "VPM": "VPN",
@@ -174,6 +188,33 @@ ZH_REPLACEMENTS = {
     "灿案": "惨案",
     "奇外死亡": "奇怪死亡",
 }
+
+
+def _load_zh_replacements() -> dict[str, str]:
+    """Sidecar JSON is the source of truth; the embedded table is the fallback.
+
+    The two used to be maintained separately and drifted. Loading the file when
+    it is present makes divergence impossible; keeping the embedded copy means
+    the script still works when copied out on its own.
+    """
+    sidecar = Path(__file__).resolve().parent / "zh_replacements.json"
+    if sidecar.exists():
+        try:
+            raw = json.loads(sidecar.read_text(encoding="utf-8"))
+            loaded = {k: v for k, v in raw.items() if not k.startswith("_")}
+            if loaded:
+                return loaded
+        except (json.JSONDecodeError, OSError):
+            pass
+    return dict(_EMBEDDED_ZH_REPLACEMENTS)
+
+
+ZH_REPLACEMENTS = _load_zh_replacements()
+
+# Derived from the table's contents, so it can never disagree with it.
+BUILTIN_REPLACEMENTS_VERSION = hashlib.sha256(
+    json.dumps(ZH_REPLACEMENTS, ensure_ascii=False, sort_keys=True).encode("utf-8")
+).hexdigest()[:12]
 
 EN_REPLACEMENTS = {
     "V P N": "VPN",
@@ -278,6 +319,22 @@ def parse_args() -> argparse.Namespace:
         help="Enable LLM proofreading for English transcripts (off by default).",
     )
     parser.add_argument(
+        "--emit-raw-asr",
+        metavar="PATH",
+        help="Also write the untouched ASR output (before OpenCC, replacements, "
+             "punctuation normalisation and re-segmentation). Use this for a true "
+             "raw baseline; --no-llm-proofread still produces cleaned text.",
+    )
+    parser.add_argument(
+        "--unify-names",
+        action="store_true",
+        help="Enable the frequency-based Chinese proper-noun unification pass. "
+             "OFF by default: it is a character-frequency heuristic with no lexicon, "
+             "so a legitimate low-frequency word can be rewritten into a frequent "
+             "one it happens to differ from by a single character "
+             "(e.g. 苹果醋 -> 苹果汁). Review the run log when you enable it.",
+    )
+    parser.add_argument(
         "--language",
         help="Language hint for ASR (e.g. 'zh', 'en'). Auto-detected if omitted.",
     )
@@ -377,10 +434,32 @@ def build_mode_identity(mode_config: ModeConfig) -> str:
 
 
 def resolve_media_fingerprint(input_path: Path) -> str:
+    """Identify the media well enough that a swapped file cannot reuse its cache.
+
+    Path + size + whole-second mtime collided when a file was replaced within the
+    same second by content of the same length — plausible for generated or
+    re-encoded media. Nanosecond mtime plus a sample of the head, middle and tail
+    closes that without reading a multi-gigabyte file: an edit that preserves
+    size, nanosecond timestamp AND all three sampled windows is not something
+    that happens by accident.
+    """
     stat = input_path.stat()
-    return hashlib.sha256(
-        f"{input_path.resolve()}|{stat.st_size}|{int(stat.st_mtime)}".encode("utf-8")
-    ).hexdigest()
+    digest = hashlib.sha256()
+    digest.update(f"{input_path.resolve()}|{stat.st_size}|{stat.st_mtime_ns}".encode("utf-8"))
+    window = 64 * 1024
+    try:
+        with open(input_path, "rb") as handle:
+            digest.update(handle.read(window))
+            if stat.st_size > window * 2:
+                handle.seek(max(0, stat.st_size // 2 - window // 2))
+                digest.update(handle.read(window))
+                handle.seek(max(0, stat.st_size - window))
+                digest.update(handle.read(window))
+    except OSError:
+        # Unreadable media is the transcriber's problem to report, not the
+        # fingerprint's; fall back to metadata alone.
+        pass
+    return digest.hexdigest()
 
 
 def resolve_audio_cache_path(input_path: Path) -> Path:
@@ -389,29 +468,82 @@ def resolve_audio_cache_path(input_path: Path) -> Path:
     return CACHE_ROOT / "audio" / f"{cache_key}.wav"
 
 
-def resolve_raw_cache_path(input_path: Path, mode_config: ModeConfig) -> Path:
+def resolve_raw_cache_path(
+    input_path: Path, mode_config: ModeConfig, language_hint: str | None = None
+) -> Path:
+    """Key the raw ASR cache on everything that changes the transcript.
+
+    `--language` is part of that: transcribing the same file with `--language ja`
+    after an auto-detected run must not silently return the first result. The
+    hint is passed to the decoder, so it belongs in the identity.
+    """
     media_key = resolve_media_fingerprint(input_path)
+    language_key = (language_hint or "auto").strip().lower()
     cache_key = hashlib.sha256(
-        f"{RAW_TRANSCRIPT_CACHE_VERSION}|{media_key}|{build_mode_identity(mode_config)}".encode("utf-8")
+        f"{RAW_TRANSCRIPT_CACHE_VERSION}|{media_key}|{build_mode_identity(mode_config)}"
+        f"|lang={language_key}".encode("utf-8")
     ).hexdigest()
     return CACHE_ROOT / "raw" / f"{cache_key}.json"
 
 
-def resolve_clean_cache_path(input_path: Path, raw_text: str, language_hint: str | None, llm_enabled: bool) -> Path:
+def build_clean_identity(
+    llm_backend: str,
+    llm_model: str | None,
+    llm_proofread_en: bool,
+    asr_mode: str,
+    extra_replacements: dict[str, str] | None,
+) -> str:
+    """Everything that changes the cleaned text, as a stable string.
+
+    A boolean "was an LLM involved" is not enough. Every one of these changes the
+    output while leaving that boolean identical, so omitting any of them returns a
+    stale transcript that looks correct:
+
+    * backend (`local` vs `claude`) and the specific model;
+    * `--llm-proofread-en` — for an English file the backend is unchanged, only
+      this flag decides whether proofreading runs at all;
+    * `asr_mode`, because it selects the 3B model in `fast` and the 7B model
+      otherwise;
+    * the contents of a `--replacements-file`, not merely its path.
+    """
+    effective_model = llm_model or (
+        MLX_LLM_FAST_MODEL if asr_mode == "fast" else MLX_LLM_DEFAULT_MODEL
+    )
+    replacements_key = "none"
+    if extra_replacements:
+        payload = json.dumps(extra_replacements, ensure_ascii=False, sort_keys=True)
+        replacements_key = hashlib.sha256(payload.encode("utf-8")).hexdigest()[:16]
+    return "|".join([
+        f"backend={llm_backend}",
+        f"model={effective_model if llm_backend == 'local' else llm_backend}",
+        f"proofread_en={int(bool(llm_proofread_en))}",
+        f"asr_mode={asr_mode}",
+        f"prompt={PROOFREAD_PROMPT_VERSION}",
+        f"replacements={replacements_key}",
+        f"builtin_zh={BUILTIN_REPLACEMENTS_VERSION}",
+    ])
+
+
+def resolve_clean_cache_path(
+    input_path: Path,
+    raw_text: str,
+    language_hint: str | None,
+    clean_identity: str,
+) -> Path:
     media_key = resolve_media_fingerprint(input_path)
     raw_hash = hashlib.sha256(raw_text.encode("utf-8")).hexdigest()
     language_key = (language_hint or "auto").strip().lower()
-    llm_key = "llm" if llm_enabled else "nollm"
     cache_key = hashlib.sha256(
-        f"{CLEAN_TRANSCRIPT_CACHE_VERSION}|{media_key}|{raw_hash}|{language_key}|{llm_key}".encode("utf-8")
+        f"{CLEAN_TRANSCRIPT_CACHE_VERSION}|{media_key}|{raw_hash}|{language_key}"
+        f"|{clean_identity}".encode("utf-8")
     ).hexdigest()
     return CACHE_ROOT / "clean" / f"{cache_key}.json"
 
 
 def load_raw_transcript_cache(cache_path: Path) -> RawTranscript | None:
-    if not cache_path.exists():
+    data = _read_cache_json(cache_path)
+    if data is None:
         return None
-    data = json.loads(cache_path.read_text(encoding="utf-8"))
     language = data.get("language")
     raw_text = data.get("raw_text")
     segments = data.get("segments")
@@ -420,18 +552,68 @@ def load_raw_transcript_cache(cache_path: Path) -> RawTranscript | None:
     return RawTranscript(language=language, raw_text=raw_text, segments=segments)
 
 
+def _is_complete_wav(path: Path) -> bool:
+    """A non-empty file is not a finished WAV.
+
+    ffmpeg killed mid-extraction leaves bytes on disk that pass a size check and
+    then feed a truncated waveform to the ASR. Validate the RIFF/WAVE header and
+    that the declared chunk size roughly matches what is on disk.
+    """
+    try:
+        size = path.stat().st_size
+        if size < 44:  # smaller than a WAV header
+            return False
+        with open(path, "rb") as handle:
+            header = handle.read(12)
+        if header[:4] != b"RIFF" or header[8:12] != b"WAVE":
+            return False
+        declared = int.from_bytes(header[4:8], "little") + 8
+        return declared <= size
+    except OSError:
+        return False
+
+
+def _atomic_write_text(path: Path, payload: str) -> None:
+    """Write via a temp file in the same directory, then rename.
+
+    `write_text` leaves a truncated file behind when the process dies mid-write,
+    and the next run reads it as a valid cache. `os.replace` is atomic within a
+    filesystem, so a reader sees either the old file or the complete new one.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+    finally:
+        if tmp.exists():
+            tmp.unlink(missing_ok=True)
+
+
+def _read_cache_json(cache_path: Path) -> dict | None:
+    """Corrupt or unreadable cache is a miss, not a crash."""
+    if not cache_path.exists():
+        return None
+    try:
+        data = json.loads(cache_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError, OSError):
+        print(f"  WARNING: discarding corrupt cache file {cache_path.name}")
+        cache_path.unlink(missing_ok=True)
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def save_raw_transcript_cache(cache_path: Path, transcript: RawTranscript) -> None:
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(
-        json.dumps(asdict(transcript), ensure_ascii=False),
-        encoding="utf-8",
-    )
+    _atomic_write_text(cache_path, json.dumps(asdict(transcript), ensure_ascii=False))
 
 
 def load_clean_transcript_cache(cache_path: Path) -> tuple[str, str] | None:
-    if not cache_path.exists():
+    data = _read_cache_json(cache_path)
+    if data is None:
         return None
-    data = json.loads(cache_path.read_text(encoding="utf-8"))
     language = data.get("language")
     final_text = data.get("final_text")
     if not language or not final_text:
@@ -440,10 +622,9 @@ def load_clean_transcript_cache(cache_path: Path) -> tuple[str, str] | None:
 
 
 def save_clean_transcript_cache(cache_path: Path, language: str, final_text: str) -> None:
-    cache_path.parent.mkdir(parents=True, exist_ok=True)
-    cache_path.write_text(
+    _atomic_write_text(
+        cache_path,
         json.dumps({"language": language, "final_text": final_text}, ensure_ascii=False),
-        encoding="utf-8",
     )
 
 
@@ -461,7 +642,7 @@ def resolve_output_paths(
 
 
 def ensure_audio_cache(ffmpeg: str, input_path: Path, audio_cache_path: Path) -> tuple[Path, str]:
-    if audio_cache_path.exists() and audio_cache_path.stat().st_size > 0:
+    if audio_cache_path.exists() and _is_complete_wav(audio_cache_path):
         return audio_cache_path, "hit"
     audio_cache_path.parent.mkdir(parents=True, exist_ok=True)
     run_cmd([
@@ -492,6 +673,21 @@ def transcribe_audio_mlx(mode_config: ModeConfig, wav_path: Path, language_hint:
     t0 = time.time()
 
     try:
+        # `beam_size` and `best_of` reach DecodingOptions through
+        # transcribe(**decode_options). Without them `accurate` decoded exactly
+        # like `balanced` — same model, greedy search — and differed only in its
+        # cache key, while SKILL.md promised a higher beam size.
+        # beam_size applies at temperature 0; best_of covers the temperature
+        # fallbacks, so both are needed for the setting to hold across retries.
+        decode_options: dict[str, object] = {}
+        if mode_config.beam_size and mode_config.beam_size > 1:
+            decode_options["beam_size"] = mode_config.beam_size
+            decode_options["best_of"] = max(mode_config.beam_size, mode_config.best_of)
+        elif mode_config.best_of and mode_config.best_of > 1:
+            decode_options["best_of"] = mode_config.best_of
+        if decode_options:
+            print(f"  mlx-whisper: decoding with {decode_options}")
+
         result = mlx_whisper.transcribe(
             str(wav_path),
             path_or_hf_repo=mode_config.model_ref,
@@ -499,6 +695,7 @@ def transcribe_audio_mlx(mode_config: ModeConfig, wav_path: Path, language_hint:
             word_timestamps=False,
             fp16=True,
             condition_on_previous_text=False,
+            **decode_options,
         )
     except Exception as exc:
         fail(f"mlx-whisper transcription failed: {exc}")
@@ -621,6 +818,10 @@ def transcribe_audio(mode_config: ModeConfig, wav_path: Path, language_hint: str
 
 LLM_MAX_RETRIES = 2
 LLM_CHUNK_TIMEOUT = 180
+# A proofread may reflow lines but must not dissolve the paragraph structure.
+LLM_MIN_LINE_RATIO = 0.5
+# Three identical substantial lines in a row is a decode loop, not prose.
+LLM_MAX_REPEAT_RUN = 3
 LLM_LENGTH_TOLERANCE = 0.50
 
 
@@ -644,15 +845,67 @@ def _clean_llm_punctuation(text: str) -> str:
     return text
 
 
-def _validate_llm_output(original: str, corrected: str) -> bool:
-    """Reject LLM output that is clearly wrong."""
+# Openers an instruction-tuned model emits when it answers *about* the task
+# instead of performing it. Their presence means the chunk was not proofread.
+_LLM_META_PREFIXES = (
+    "以下是校对", "以下是修正", "以下为校对", "校对后的", "修正后的",
+    "here is the corrected", "here's the corrected", "corrected text:",
+    "sure,", "certainly,", "好的，",
+)
+
+_NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)*")
+
+
+def _repetition_run(text: str) -> int:
+    """Longest run of an identical non-trivial line — the classic decode loop."""
+    lines = [ln.strip() for ln in text.splitlines() if len(ln.strip()) > 8]
+    longest = run = 0
+    previous = None
+    for line in lines:
+        run = run + 1 if line == previous else 1
+        previous = line
+        longest = max(longest, run)
+    return longest
+
+
+def _validate_llm_output(original: str, corrected: str) -> tuple[bool, str]:
+    """Reject LLM output that is clearly not a faithful proofread.
+
+    A length check alone cannot see hallucination, dropped paragraphs, decode
+    loops or invented figures — all of which keep the length roughly intact. For
+    a transcript a confident rewrite is more damaging than a surviving ASR typo,
+    so each failure mode gets its own test and its own reason string.
+    """
     if not corrected:
-        return False
-    orig_len = len(original)
-    corr_len = len(corrected)
-    if corr_len < orig_len * (1 - LLM_LENGTH_TOLERANCE) or corr_len > orig_len * (1 + LLM_LENGTH_TOLERANCE):
-        return False
-    return True
+        return False, "empty output"
+
+    orig_len, corr_len = len(original), len(corrected)
+    if corr_len < orig_len * (1 - LLM_LENGTH_TOLERANCE):
+        return False, f"output too short ({corr_len} vs {orig_len} chars)"
+    if corr_len > orig_len * (1 + LLM_LENGTH_TOLERANCE):
+        return False, f"output too long ({corr_len} vs {orig_len} chars)"
+
+    head = corrected.lstrip()[:40].lower()
+    for prefix in _LLM_META_PREFIXES:
+        if head.startswith(prefix):
+            return False, f"model answered about the task instead of doing it: {prefix!r}"
+
+    orig_lines = len([ln for ln in original.splitlines() if ln.strip()])
+    corr_lines = len([ln for ln in corrected.splitlines() if ln.strip()])
+    if orig_lines >= 4 and corr_lines < orig_lines * LLM_MIN_LINE_RATIO:
+        return False, f"line structure collapsed ({corr_lines} vs {orig_lines} lines)"
+
+    run = _repetition_run(corrected)
+    if run >= LLM_MAX_REPEAT_RUN:
+        return False, f"repeated the same line {run} times (decode loop)"
+
+    # Numbers must not be invented. Dropping one can happen when ASR duplicated
+    # it; conjuring one that was never spoken is hallucination.
+    invented = set(_NUMBER_RE.findall(corrected)) - set(_NUMBER_RE.findall(original))
+    if invented:
+        return False, f"introduced numbers not present in the source: {sorted(invented)[:5]}"
+
+    return True, ""
 
 
 def _build_proofread_messages(
@@ -705,9 +958,10 @@ def _proofread_chunk_local(
                 max_tokens=max_tokens, sampler=sampler,
             )
             corrected = _clean_llm_punctuation(_strip_llm_meta(response))
-            if _validate_llm_output(chunk, corrected):
+            accepted, reason = _validate_llm_output(chunk, corrected)
+            if accepted:
                 return corrected
-            print(f"(validation failed, ", end="")
+            print(f"(rejected: {reason}, ", end="")
             if attempt < LLM_MAX_RETRIES:
                 print(f"retry {attempt + 1}) ", end="", flush=True)
                 continue
@@ -744,9 +998,10 @@ def _proofread_chunk_claude(
                 print("using original) ", end="")
                 break
             corrected = _clean_llm_punctuation(_strip_llm_meta(result.stdout))
-            if _validate_llm_output(chunk, corrected):
+            accepted, reason = _validate_llm_output(chunk, corrected)
+            if accepted:
                 return corrected
-            print(f"(validation failed, ", end="")
+            print(f"(rejected: {reason}, ", end="")
             if attempt < LLM_MAX_RETRIES:
                 print(f"retry {attempt + 1}) ", end="", flush=True)
                 continue
@@ -814,8 +1069,15 @@ def llm_proofread_full(
         model_obj, tokenizer_obj = _load_local_llm(model_name)
     elif backend == "claude":
         if not shutil.which("claude"):
-            print("  WARNING: claude CLI not found, skipping LLM proofreading")
-            return text
+            # Returning the text unchanged used to look like a successful
+            # proofread: the run reported "LLM proofreading: claude" and the
+            # result was cached under the claude identity, so installing the CLI
+            # later hit that un-proofread cache. Fail instead of degrading.
+            fail(
+                "LLM backend 'claude' was requested but the claude CLI is not on PATH. "
+                "Install it, choose --llm-backend local, or pass --no-llm-proofread "
+                "to skip proofreading deliberately."
+            )
 
     print(f"  LLM proofreading ({backend}): {len(chunks)} chunks (~{CHUNK_SIZE} chars each)")
     t0 = time.time()
@@ -963,16 +1225,35 @@ def _extract_cjk_names(text: str, min_len: int = 3, max_len: int = 4) -> dict[st
     return dict(candidates)
 
 
-def unify_proper_nouns(text: str, threshold_ratio: float = 0.10) -> str:
-    """Unify low-frequency variants of proper nouns to their high-frequency canonical form.
+def unify_proper_nouns(
+    text: str, threshold_ratio: float = 0.10
+) -> tuple[str, list[tuple[str, str, int]]]:
+    """Unify low-frequency variants of proper nouns to their high-frequency form.
 
-    Targets 3-4 char CJK names that share the same first character and differ by exactly
-    one character (typical ASR variants of the same name). Filters out common words using
-    a stopchar set.
+    Returns `(text, applied)` where `applied` is `[(variant, canonical, count)]`.
+
+    OFF BY DEFAULT — enable with `--unify-names`.
+
+    HEURISTIC, NOT ENTITY RECOGNITION. This slides a character window over the
+    text and groups by frequency; it has no lexicon and cannot tell a person's
+    name from an ordinary phrase. Any legitimate low-frequency word that differs
+    from a frequent one by a single character is rewritten: with 11 occurrences
+    of 苹果汁 and one of 苹果醋 the cider becomes juice. That is a deterministic
+    change of meaning, which is why the pass no longer runs unless asked for.
+
+    The guards below narrow the damage but cannot remove it — same length, same
+    first character and a frequency gap describe real distinct words as readily
+    as they describe ASR variants:
+
+    * a variant that is part of a longer frequent span is skipped, so an
+      overlapping window cannot swallow the phrase containing it;
+    * the canonical form must dominate — see MIN_CANONICAL_COUNT and
+      threshold_ratio — and every substitution is printed, so a wrong one is
+      visible in the run log rather than silent.
     """
     name_counts = _extract_cjk_names(text, min_len=3, max_len=4)
     if not name_counts:
-        return text
+        return text, []
 
     MIN_CANONICAL_COUNT = 5
     MAX_VARIANT_COUNT = 4
@@ -1004,20 +1285,36 @@ def unify_proper_nouns(text: str, threshold_ratio: float = 0.10) -> str:
             groups[canonical] = group[1:]
 
     if not groups:
-        return text
+        return text, []
 
-    replacements_applied = 0
+    def _is_nested_in_frequent_span(candidate: str) -> bool:
+        """True when the candidate only ever occurs inside a longer frequent span.
+
+        Without this the window that produced a 3-char slice of a 4-char name
+        competes with the name itself, and rewriting the slice corrupts the
+        surrounding phrase.
+        """
+        for other, other_count in name_counts.items():
+            if other != candidate and candidate in other and other_count >= MIN_CANONICAL_COUNT:
+                return True
+        return False
+
+    applied: list[tuple[str, str, int]] = []
     for canonical, variants in groups.items():
         for variant in variants:
+            if _is_nested_in_frequent_span(variant):
+                print(f"  Proper noun unification: skipped '{variant}' (part of a longer frequent span)")
+                continue
             old_count = text.count(variant)
             if old_count > 0:
                 text = text.replace(variant, canonical)
-                replacements_applied += old_count
+                applied.append((variant, canonical, old_count))
                 print(f"  Proper noun unification: '{variant}'({old_count}) → '{canonical}'({name_counts[canonical]})")
 
-    if replacements_applied:
-        print(f"  Unified {replacements_applied} proper noun variant(s)")
-    return text
+    if applied:
+        total = sum(count for _, _, count in applied)
+        print(f"  Unified {total} proper noun occurrence(s) across {len(applied)} variant(s)")
+    return text, applied
 
 
 def strip_trailing_garbage(text: str) -> str:
@@ -1050,6 +1347,7 @@ def clean_transcript(
     asr_mode: str = "balanced",
     extra_replacements: dict[str, str] | None = None,
     llm_proofread_en: bool = False,
+    unify_names: bool = False,
 ) -> tuple[str, str]:
     lines = normalize_lines(raw_text)
     language = infer_language(lines, raw_language_hint)
@@ -1073,7 +1371,8 @@ def clean_transcript(
             )
             joined_text = apply_replacements(joined_text, replacements)
             joined_text = normalize_zh_punctuation(joined_text)
-        joined_text = unify_proper_nouns(joined_text)
+        if unify_names:
+            joined_text, _ = unify_proper_nouns(joined_text)
     else:
         joined_text = apply_replacements(joined_text, EN_REPLACEMENTS)
         if llm_proofread_en and llm_backend != "none":
@@ -1212,7 +1511,7 @@ def main() -> None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
 
     audio_cache_path = resolve_audio_cache_path(input_path)
-    raw_cache_path = resolve_raw_cache_path(input_path, mode_config)
+    raw_cache_path = resolve_raw_cache_path(input_path, mode_config, language_hint)
     raw_cache = None if args.force_transcribe else load_raw_transcript_cache(raw_cache_path)
     audio_cache_status = "skipped"
 
@@ -1228,9 +1527,25 @@ def main() -> None:
         save_raw_transcript_cache(raw_cache_path, raw_transcript)
         raw_status = "miss"
 
-    llm_enabled = llm_backend != "none"
+    # The replacements file is read BEFORE the cache lookup: its contents are
+    # part of the cache identity, so resolving the key without them would let a
+    # changed table return the previous cleaning.
+    extra_replacements = None
+    if args.replacements_file:
+        rpath = Path(args.replacements_file).expanduser().resolve()
+        if rpath.exists():
+            raw = json.loads(rpath.read_text(encoding="utf-8"))
+            extra_replacements = {k: v for k, v in raw.items() if not k.startswith("_")}
+            print(f"  Loaded {len(extra_replacements)} extra replacements from {rpath}")
+        else:
+            print(f"  WARNING: replacements file not found: {rpath}")
+
+    unify_names = args.unify_names
+    clean_identity = build_clean_identity(
+        llm_backend, llm_model, llm_proofread_en, mode_config.name, extra_replacements
+    ) + f"|unify_names={int(unify_names)}"
     clean_cache_path = resolve_clean_cache_path(
-        input_path, raw_transcript.raw_text, raw_transcript.language, llm_enabled
+        input_path, raw_transcript.raw_text, raw_transcript.language, clean_identity
     )
     clean_cache = None if args.force_transcribe else load_clean_transcript_cache(clean_cache_path)
     if clean_cache is not None:
@@ -1241,24 +1556,21 @@ def main() -> None:
         gc.collect()
 
         title_hint = input_path.stem
-        extra_replacements = None
-        if args.replacements_file:
-            rpath = Path(args.replacements_file).expanduser().resolve()
-            if rpath.exists():
-                raw = json.loads(rpath.read_text(encoding="utf-8"))
-                extra_replacements = {k: v for k, v in raw.items() if not k.startswith("_")}
-                print(f"  Loaded {len(extra_replacements)} extra replacements from {rpath}")
-            else:
-                print(f"  WARNING: replacements file not found: {rpath}")
         print("Step 3: Cleaning and proofreading transcript ...")
         language, final_text = clean_transcript(
             raw_transcript.raw_text, raw_transcript.language,
             llm_backend=llm_backend, llm_model=llm_model, title_hint=title_hint,
             asr_mode=mode_config.name, extra_replacements=extra_replacements,
-            llm_proofread_en=llm_proofread_en,
+            llm_proofread_en=llm_proofread_en, unify_names=unify_names,
         )
         save_clean_transcript_cache(clean_cache_path, language, final_text)
         clean_status = "miss"
+
+    if args.emit_raw_asr:
+        raw_out = Path(args.emit_raw_asr).expanduser().resolve()
+        raw_out.parent.mkdir(parents=True, exist_ok=True)
+        raw_out.write_text(raw_transcript.raw_text, encoding="utf-8")
+        print(f"  Raw ASR text written to {raw_out}")
 
     print("Step 4: Writing output files ...")
     write_final_outputs(final_text, output_paths, input_path, language)
@@ -1271,7 +1583,24 @@ def main() -> None:
     print(f"ASR backend: {mode_config.backend}")
     print(f"Mode: {mode_config.name}")
     print(f"ASR model: {mode_config.model_ref}")
-    print(f"LLM proofreading: {llm_backend}" + (f" ({llm_model or MLX_LLM_DEFAULT_MODEL})" if llm_backend == "local" else ""))
+    # Report what actually ran. Two earlier inaccuracies: the 7B default was
+    # printed even in `fast` mode, which uses the 3B model, and the backend was
+    # printed for English transcripts that were never proofread because
+    # --llm-proofread-en was not given.
+    proofread_ran = llm_backend != "none" and (language == "zh" or llm_proofread_en)
+    if not proofread_ran:
+        skip_reason = (
+            "disabled" if llm_backend == "none"
+            else "not enabled for English (pass --llm-proofread-en)"
+        )
+        print(f"LLM proofreading: none ({skip_reason})")
+    elif llm_backend == "local":
+        effective_model = llm_model or (
+            MLX_LLM_FAST_MODEL if mode_config.name == "fast" else MLX_LLM_DEFAULT_MODEL
+        )
+        print(f"LLM proofreading: local ({effective_model})")
+    else:
+        print(f"LLM proofreading: {llm_backend}")
     print("Cache status:")
     print(f"  audio: {audio_cache_status}")
     print(f"  raw-asr: {raw_status}")
