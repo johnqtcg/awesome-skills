@@ -1,6 +1,6 @@
 ---
 name: local-transcript
-description: Transcribe a specified local video or audio file into cleaned final `.txt`, `.pdf`, or `.docx` transcripts using speech recognition with Apple Silicon GPU acceleration and LLM-based proofreading. Use when the user wants text extracted from a local media file path such as `.mp4`, `.mov`, `.mkv`, `.webm`, `.mp3`, `.m4a`, or `.wav`, and the output language should follow the spoken language in the media automatically. Prefer this skill for local-file transcription workflows that should produce cleaned transcripts with natural paragraphs, LLM-corrected Chinese text, and simplified Chinese output for Chinese speech.
+description: Transcribe a specified local video or audio file into cleaned final `.txt`, `.pdf`, or `.docx` transcripts using speech recognition with Apple Silicon GPU acceleration and optional LLM-based proofreading. Use when the user wants text extracted from a local media file path such as `.mp4`, `.mov`, `.mkv`, `.webm`, `.mp3`, `.m4a`, or `.wav`, and the output language should follow the spoken language in the media automatically. Prefer this skill for local-file transcription workflows that should produce cleaned transcripts with natural paragraphs, deterministic Chinese cleanup, and simplified Chinese output for Chinese speech. LLM proofreading is available but off by default.
 disable-model-invocation: true
 allowed-tools: Read, Write, Bash(whisper*), Bash(mlx_whisper*), Bash(ffmpeg*), Bash(uv run*)
 ---
@@ -9,7 +9,7 @@ allowed-tools: Read, Write, Bash(whisper*), Bash(mlx_whisper*), Bash(ffmpeg*), B
 
 ## Overview
 
-Use this skill to turn a local media file into cleaned final transcript files in `.txt`, `.pdf`, or `.docx` format. Extract audio with `ffmpeg`, transcribe with `mlx-whisper` (Apple Silicon GPU) or `faster-whisper` (CPU fallback), then clean and proofread the transcript using a two-layer correction pipeline — deterministic replacements for known ASR bugs, then LLM-based contextual proofreading for domain-specific and semantic errors.
+Use this skill to turn a local media file into cleaned final transcript files in `.txt`, `.pdf`, or `.docx` format. Extract audio with `ffmpeg`, transcribe with `mlx-whisper` (Apple Silicon GPU) or `faster-whisper` (CPU fallback), then clean the transcript with deterministic replacements for known ASR bugs. LLM contextual proofreading is an opt-in second layer (`--llm-backend local|claude`) — see §LLM Proofreading Is Opt-In for why it is not the default.
 
 ## Workflow
 
@@ -20,7 +20,7 @@ Use this skill to turn a local media file into cleaned final transcript files in
 5. Reuse cached audio/raw transcript/clean transcript layers when available.
 6. Extract or reuse 16 kHz mono WAV audio.
 7. Transcribe with the selected ASR backend (language auto-detected or user-specified via `--language`).
-8. Clean the transcript: simplified Chinese → deterministic replacements → LLM proofreading → post-LLM safety replacements.
+8. Clean the transcript: simplified Chinese → deterministic replacements → (opt-in) LLM proofreading → post-LLM safety replacements.
 9. Paragraphize and write the requested final file(s).
 
 ## Format Resolution Gate
@@ -41,8 +41,8 @@ fallbacks as an equivalent path — they are usable, not seamless.
 
 | Platform | ASR | LLM proofreading | Chinese PDF |
 |---|---|---|---|
-| Apple Silicon | `mlx-whisper` (GPU/ANE), default | `mlx-lm` + Qwen2.5, default, no API key | macOS system CJK fonts found automatically |
-| Intel Mac / Linux / Windows | `--backend faster-whisper` (CPU, markedly slower) | `--llm-backend claude` (needs the `claude` CLI) or `--no-llm-proofread` | **must install a CJK font**; the built-in candidates are macOS paths |
+| Apple Silicon | `mlx-whisper` (GPU/ANE), default | `mlx-lm` + Qwen2.5, opt-in, no API key | macOS system CJK fonts found automatically |
+| Intel Mac / Linux / Windows | `--backend faster-whisper` (CPU, markedly slower) | only `--llm-backend claude` (needs the `claude` CLI); `local` requires MLX | **must install a CJK font**; the built-in candidates are macOS paths |
 
 Packages by platform — do not install the whole list on a non-Mac:
 
@@ -50,9 +50,10 @@ Packages by platform — do not install the whole list on a non-Mac:
 - Apple Silicon: `mlx-whisper`, `mlx-lm`
 - Elsewhere: `faster-whisper` (`mlx-*` will not install and are not needed)
 
-On a non-Apple-Silicon machine the defaults do not apply: pass
-`--backend faster-whisper` and either `--llm-backend claude` or
-`--no-llm-proofread`, or the run fails on a missing `mlx` import.
+On a non-Apple-Silicon machine pass `--backend faster-whisper`, or the run
+fails on a missing `mlx` import. Proofreading needs no flag now that it is off
+by default; if you opt in there, it must be `--llm-backend claude` — `local`
+is MLX-only.
 
 The script bootstraps ASR models automatically if missing (downloaded from HuggingFace Hub).
 
@@ -114,13 +115,40 @@ cannot measure never looks like an environment that measured well.
 
 If a dependency is missing, stop and say which dependency is unavailable.
 
+## LLM Proofreading Is Opt-In
+
+`--llm-backend` defaults to `none`. Pass `--llm-backend local` (mlx-lm) or
+`--llm-backend claude` to turn the second correction layer on.
+
+The default was flipped after measuring the `local` backend
+(`Qwen2.5-7B-Instruct-4bit`) on three 30-minute Chinese podcast transcripts:
+
+- It corrected **none** of the ~130 homophone errors a human reader found
+  across the three (需求策/需求侧, 地域难度/地狱难度, 天王/天网, 万物被裹/万物百吉饼, …).
+- Three chunks across two runs failed output validation, exhausted their
+  retries, and fell back to the unproofread original — the documented
+  behaviour, but it means the pass cost time and returned nothing.
+- One chunk copied the prompt's own `待校对文本:` label into the transcript
+  body. Validation now rejects that (§Output validation), but it had shipped.
+- It dominated wall-clock: 350s of a 510s run.
+
+Three transcripts from one speaker is not a general verdict on LLM
+proofreading, and it says nothing about the `claude` backend, which was not
+measured. It is enough to stop paying for it by default.
+
+**Not attributable to the LLM**: a run also produced 128–185 `,，` artifacts
+per transcript. Those came from `join_lines()` treating a halfwidth comma as
+unpunctuated and appending a full-width one — a bug in this skill, now fixed
+and covered by regression tests. Do not cite it as evidence against the model.
+
 ## Known Risks and Their Switches
 
 | Behaviour | Default | Why |
 |---|---|---|
 | Chinese proper-noun unification (`--unify-names`) | **off** | A character-frequency heuristic with no lexicon. Any legitimate low-frequency word one character away from a frequent one is rewritten — with 11 `苹果汁` and one `苹果醋`, the cider becomes juice. Enable only when the audio is name-dense and you will read the run log, which prints every substitution. |
 | LLM proofreading of English (`--llm-proofread-en`) | off | ASR is already strong on English; proofreading risks more than it fixes. |
-| LLM backend unavailable | **hard failure** | A missing `claude` CLI used to return the text unchanged, report `LLM proofreading: claude`, and cache that un-proofread result. Now it stops and names the fix. Use `--no-llm-proofread` to skip proofreading deliberately. |
+| LLM backend unavailable | **hard failure** | A missing `claude` CLI used to return the text unchanged, report `LLM proofreading: claude`, and cache that un-proofread result. Now it stops and names the fix. Only reachable once you opt in with `--llm-backend`. |
+| LLM proofreading itself (`--llm-backend local\|claude`) | **off** | Measured net-negative on Chinese podcast speech — see §LLM Proofreading Is Opt-In. |
 
 ## Default Behavior
 
@@ -138,18 +166,18 @@ If a dependency is missing, stop and say which dependency is unavailable.
   - extracted WAV audio (validated by RIFF/WAVE header, not merely non-empty)
   - raw ASR transcript
   - cleaned final transcript (separate caches for LLM-proofread and non-proofread)
-- LLM proofreading: enabled by default for Chinese transcripts
-  - Default backend: `local` — uses `mlx-lm` on Apple Silicon GPU. No API key, no network, no cost.
+- LLM proofreading: **off by default** (`--llm-backend none`); opt in per run
+  - Optional backend: `local` — uses `mlx-lm` on Apple Silicon GPU. No API key, no network, no cost.
     - `balanced`/`accurate` mode: `Qwen2.5-7B-Instruct-4bit` (higher quality)
     - `fast` mode: `Qwen2.5-3B-Instruct-4bit` (faster, ~50% less proofreading time)
   - Alternative backend: `claude` — uses `claude -p` CLI (requires API access)
   - Splits text into ~2500-char chunks with 400-char context overlap from the previous chunk
   - Short tail chunks (<500 chars) are automatically merged into the previous chunk to avoid validation failures
   - Video/audio title is passed to the LLM as domain context for better proper-noun correction
-  - Output validation: rejects LLM responses that are too short/long or contain meta-commentary
+  - Output validation: rejects a response that is too short/long, opens with meta-commentary, collapses the line structure, loops on one line, invents a number, or **echoes one of the prompt's own field labels** (`待校对文本`, …) anywhere in the body — the label check ignores labels the source text already contained
   - Retry: failed/invalid chunks are retried up to 2 times before falling back to the original text
-  - Can be disabled with `--no-llm-proofread` or `--llm-backend none`
-  - For English transcripts, LLM proofreading is off by default; enable with `--llm-proofread-en` for complex content with non-English proper nouns
+  - Already the default; `--no-llm-proofread` and `--llm-backend none` remain accepted
+  - English transcripts need a second gate: `--llm-proofread-en` **in addition to** `--llm-backend`, since English is skipped even when a backend is selected
   - Custom model: `--llm-model <hf-repo>` to use a different MLX model
 - Language: auto-detected from speech, or user-specified via `--language zh` / `--language en`
 - Three-layer Chinese correction pipeline:
@@ -163,7 +191,7 @@ If a dependency is missing, stop and say which dependency is unavailable.
 
 ## Execution
 
-Run (default: mlx backend, balanced mode, LLM proofreading enabled):
+Run (default: mlx backend, balanced mode, no LLM proofreading):
 
 ```bash
 uv run /absolute/path/to/skills/local-transcript/scripts/local_transcript.py "/absolute/path/to/video.mp4"
@@ -181,10 +209,10 @@ Prioritize speed (smaller model, still fast on Apple Silicon):
 uv run /absolute/path/to/skills/local-transcript/scripts/local_transcript.py "/absolute/path/to/video.mp4" --mode fast
 ```
 
-Disable LLM proofreading (ASR-only output):
+Enable local LLM proofreading (off by default — read §LLM Proofreading Is Opt-In first):
 
 ```bash
-uv run /absolute/path/to/skills/local-transcript/scripts/local_transcript.py "/absolute/path/to/video.mp4" --llm-backend none
+uv run /absolute/path/to/skills/local-transcript/scripts/local_transcript.py "/absolute/path/to/video.mp4" --llm-backend local
 ```
 
 Use claude CLI for proofreading (requires API access):
@@ -205,10 +233,10 @@ Specify language explicitly (skip auto-detection):
 uv run /absolute/path/to/skills/local-transcript/scripts/local_transcript.py "/absolute/path/to/video.mp4" --language zh
 ```
 
-Enable LLM proofreading for English transcripts (off by default):
+Enable LLM proofreading for English transcripts (needs both flags — `--llm-proofread-en` alone does nothing while the backend is `none`):
 
 ```bash
-uv run /absolute/path/to/skills/local-transcript/scripts/local_transcript.py "/absolute/path/to/english-video.mp4" --llm-proofread-en
+uv run /absolute/path/to/skills/local-transcript/scripts/local_transcript.py "/absolute/path/to/english-video.mp4" --llm-backend local --llm-proofread-en
 ```
 
 Use CPU fallback backend:
@@ -239,6 +267,15 @@ uv run /absolute/path/to/skills/local-transcript/scripts/local_transcript.py "/a
 
 - Remove timestamps if present.
 - Collapse caption-style short lines into natural paragraphs.
+- **Paragraph breaks are layout, not sentence boundaries.** Whisper's Chinese
+  output carries almost no sentence terminators — 5 periods in a 10,000-character
+  transcript is typical — so `paragraphize()` cannot always break where a
+  sentence ends. It prefers a real terminator, overflows up to
+  `PARAGRAPH_HARD_RATIO`× the soft limit waiting for one, and then breaks
+  anyway **without inventing a period**. A paragraph that ends without
+  punctuation is continuing into the next one; that is honest, where the old
+  behaviour (stamping `。` on every length-based cut) split single sentences in
+  two and asserted a boundary the speaker never uttered.
 - For Chinese:
   1. Convert traditional to simplified Chinese.
   2. Apply deterministic replacements for universal Whisper ASR bugs (curated, cross-video).

@@ -190,21 +190,40 @@ The design value is that it separates two error families:
 
 The first family is best handled by deterministic replacement because it is almost free and highly reliable. The second family needs LLM context. In the evaluation, examples such as `大便车` → `搭便车` and `配剂制` → `配给制` show the value of the rule-based layer, while the document-wide consistency around "哈萨尼" shows why contextual correction and post-processing still matter.
 
-### 4.9 LLM Proofreading Is On by Default for Chinese but Off by Default for English
+### 4.9 LLM Proofreading Is Opt-In (revised 2026-08-02)
 
-The skill explicitly defines:
+The skill originally turned LLM proofreading on by default for Chinese and off
+for English, reasoning that Chinese ASR output carries more homophone and
+near-sound errors and therefore has more to gain. The reasoning about *where the
+errors are* was right. The assumption that the local model *fixes* them was
+never measured, and when it finally was, it did not hold.
 
-- LLM proofreading on by default for Chinese,
-- off by default for English,
-- but available for English through `--llm-proofread-en` when needed.
+Measured on three 30-minute Chinese podcast transcripts with the `local`
+backend (`Qwen2.5-7B-Instruct-4bit`):
 
-This is a sensible default strategy because:
+- zero of roughly 130 human-identified homophone errors were corrected
+  (需求策/需求侧, 地域难度/地狱难度, 天王/天网, 万物被裹/万物百吉饼, …);
+- three chunks across two runs failed validation, exhausted their retries and
+  fell back to the unproofread original;
+- one chunk copied the prompt's own `待校对文本:` label into the transcript body
+  (validation now rejects that, but it shipped);
+- the pass consumed 350s of a 510s run — still the main runtime cost, now with
+  no measured benefit to set against it.
 
-- Chinese ASR output is much more likely to contain homophone, near-sound, simplified/traditional, and punctuation issues,
-- many English cases are acceptable with raw ASR output,
-- LLM proofreading is also the main runtime cost in the full pipeline.
+So `--llm-backend` defaults to `none`. Both backends remain available per run,
+and `--llm-proofread-en` still gates English on top of the backend choice.
 
-In other words, the skill does not blindly add LLM to everything. It makes a language-sensitive default decision based on expected quality gain per unit of runtime.
+The scope of this claim: three transcripts, one speaker, one backend. It is not
+a verdict on LLM proofreading generally, and the `claude` backend was never
+measured. It is enough to stop paying the cost by default — the burden of proof
+belongs on the feature, not on the user who has to clean up after it.
+
+A separate lesson sits underneath this one. The same runs produced 128–185 `,，`
+artifacts per transcript, which looked like more LLM damage and was cited as
+such. It was not: `join_lines()` treated a halfwidth comma as unpunctuated and
+appended a full-width one. Blaming the model for the pipeline's own bug nearly
+buried a real defect, and is why §4.9's revision separates *measured model
+behaviour* from *artifacts we manufactured ourselves*.
 
 ### 4.10 Proper-Noun Unification Happens After the LLM Pass
 

@@ -1,5 +1,6 @@
 import hashlib
 import importlib.util
+import re
 import os
 import json
 from pathlib import Path
@@ -1094,3 +1095,165 @@ def test_introduced_errors_are_counted_even_when_net_cer_is_flat(tmp_path, capsy
     out = capsys.readouterr().out
     assert "introduced 1 character error" in out
     assert code == 1, "an even trade must not pass silently"
+
+
+# -- Mixed-width punctuation: the ",，" artifact -----------------------------
+# join_lines used to treat a line ending in a halfwidth comma as unpunctuated
+# and append a full-width one, manufacturing ",，" on every such boundary.
+# Observed 185 times in a single 31-minute transcript.
+
+def test_join_lines_does_not_append_a_second_comma_after_a_halfwidth_one():
+    module = load_module()
+    joined = module.join_lines(
+        ["今天要解读的是一本新书,", "叫做AI自动化与战争,", "副标题是军事科技复合体的兴起。"],
+        "zh",
+    )
+    assert not any(",，" in sentence for sentence in joined), joined
+
+
+def test_normalize_zh_punctuation_repairs_halfwidth_comma_before_any_character():
+    module = load_module()
+    # Before a full-width comma (the legacy artifact) and before Latin text —
+    # neither was reachable by the old both-sides CJK lookaround.
+    assert module.normalize_zh_punctuation("战役里,，Palantir开发") == "战役里，Palantir开发"
+    assert module.normalize_zh_punctuation("战役里,Palantir开发") == "战役里，Palantir开发"
+
+
+def test_clean_transcript_leaves_no_mixed_width_comma(monkeypatch):
+    module = load_module()
+    raw = "\n".join(["今天要解读的是一本新书,", "叫做AI自动化与战争,", "副标题是军事科技复合体的兴起。"])
+    language, final_text = module.clean_transcript(raw, raw_language_hint="zh")
+    assert language == "zh"
+    assert ",，" not in final_text
+    assert "," not in final_text
+
+
+# -- Paragraph breaks must not invent sentence boundaries -------------------
+# paragraphize used to cut at a character count and stamp "。" on the stump,
+# splitting single sentences in two ("把青霉素从一个科学项目。变成了...").
+
+def test_paragraphize_waits_for_the_sentence_to_end():
+    module = load_module()
+    clause = "复杂性投资的边际收益递减是本书的核心论点" * 14  # past the 260-char soft limit
+    tail = "而这条曲线最终会转负。"
+    paragraphs = [p for p in module.paragraphize([clause, tail], "zh").strip().split("\n\n") if p]
+    assert len(paragraphs) == 1, [p[:40] for p in paragraphs]
+    assert paragraphs[0] == clause + tail
+
+
+def test_paragraphize_bounds_overflow_without_stamping_a_period():
+    module = load_module()
+    clause = "没有句读一直讲下去的内容片段" * 15
+    paragraphs = [p for p in module.paragraphize([clause] * 5, "zh").strip().split("\n\n") if p]
+    assert len(paragraphs) >= 2, "an unterminated stream must still be bounded"
+    # An interior break is a layout decision, not a claim about the speech.
+    assert not paragraphs[0].endswith("。")
+    # The document does end, so its last paragraph may be terminated.
+    assert paragraphs[-1].endswith("。")
+
+
+def test_paragraphize_keeps_breaking_on_real_sentence_ends():
+    module = load_module()
+    sentence = "这是一段说完就收尾的完整句子内容。" * 20
+    paragraphs = [p for p in module.paragraphize([sentence] * 3, "zh").strip().split("\n\n") if p]
+    assert len(paragraphs) == 3
+
+
+# -- A leaked prompt label is a failed proofread ----------------------------
+# The model once copied "待校对文本:" into the middle of the answer; the
+# head-only prefix test could not see it.
+
+def test_validate_llm_output_rejects_a_leaked_prompt_label():
+    module = load_module()
+    accepted, reason = module._validate_llm_output(
+        "横轴是一个社会往复杂性里投入进去的东西包括人力粮食税收官员的脑力",
+        "横轴是一个社会往复杂性里投入进去的东西，待校对文本:，包括人力粮食税收官员的脑力",
+    )
+    assert accepted is False
+    assert "待校对文本" in reason
+
+
+def test_validate_llm_output_allows_a_label_the_source_already_contained():
+    module = load_module()
+    source = "我们把待校对文本这个说法解释一下再往下讲后面的内容"
+    accepted, reason = module._validate_llm_output(source, source + "。")
+    assert accepted is True, reason
+
+
+# -- LLM proofreading is opt-in --------------------------------------------
+
+def test_llm_proofreading_is_opt_in_on_the_command_line(monkeypatch):
+    module = load_module()
+    monkeypatch.setattr(sys, "argv", ["local_transcript.py", "clip.mp4"])
+    assert module.parse_args().llm_backend == "none"
+
+
+def test_clean_transcript_does_not_proofread_unless_asked(monkeypatch):
+    module = load_module()
+    called = []
+    monkeypatch.setattr(
+        module, "llm_proofread_full",
+        lambda *a, **k: called.append(True) or "",
+    )
+    module.clean_transcript("今天要解读的是一本新书。", raw_language_hint="zh")
+    assert called == []
+
+
+# -- SKILL.md must not drift from the code ---------------------------------
+
+def _skill_md() -> str:
+    return (Path(__file__).resolve().parents[2] / "SKILL.md").read_text(encoding="utf-8")
+
+
+def test_skill_md_does_not_claim_proofreading_is_on_by_default():
+    text = _skill_md()
+    # Scoped to the emitted claim, not to prose that explains the change.
+    assert "LLM proofreading: enabled by default" not in text
+    assert "LLM proofreading: **off by default**" in text
+
+
+def test_skill_md_documents_the_opt_in_rationale():
+    assert "## LLM Proofreading Is Opt-In" in _skill_md()
+
+
+def test_skill_md_default_matches_the_parser_default(monkeypatch):
+    module = load_module()
+    monkeypatch.setattr(sys, "argv", ["local_transcript.py", "clip.mp4"])
+    assert module.parse_args().llm_backend == "none"
+    assert "`--llm-backend` defaults to `none`" in _skill_md()
+
+
+def test_paragraph_overflow_stays_close_to_the_soft_limit():
+    """Whisper zh emits almost no sentence terminators, so the wait must be short.
+
+    With an unbounded wait every paragraph runs to the hard cap; the point of
+    the cap is that a transcript with no periods still reads like prose.
+    """
+    module = load_module()
+    assert module.PARAGRAPH_HARD_RATIO <= 1.5
+    clause = "一段没有句号的转写内容" * 12  # 132 chars, never terminates
+    paragraphs = [
+        p for p in module.paragraphize([clause] * 12, "zh").strip().split("\n\n") if p
+    ]
+    longest = max(len(p) for p in paragraphs)
+    assert longest <= 260 * module.PARAGRAPH_HARD_RATIO + len(clause)
+    assert len(paragraphs) >= 4, "an unpunctuated transcript must still be paragraphed"
+
+
+def test_llm_backend_help_does_not_advertise_local_as_the_default(capsys, monkeypatch):
+    """The help string is the second place a default is claimed. Keep it honest."""
+    module = load_module()
+    monkeypatch.setattr(sys, "argv", ["local_transcript.py", "--help"])
+    with pytest.raises(SystemExit):
+        module.parse_args()
+    help_text = capsys.readouterr().out
+    # "--llm-backend" also appears in the usage line and inside the
+    # --no-llm-proofread description, so anchor on the option-list entry: a
+    # line that starts at indent 2 and runs until the next option.
+    match = re.search(
+        r"^  --llm-backend .*?(?=^  --)", help_text, re.MULTILINE | re.DOTALL
+    )
+    assert match, help_text
+    section = match.group(0)
+    assert "Defaults to 'none'" in section, section
+    assert "(default)" not in section, "a stale default is advertised in --help"

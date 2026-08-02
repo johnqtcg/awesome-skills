@@ -299,9 +299,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--llm-backend",
         choices=("local", "claude", "none"),
-        default="local",
-        help="LLM backend for proofreading. 'local' uses mlx-lm + Qwen2.5 on Apple Silicon (default). "
-             "'claude' uses claude CLI. 'none' skips LLM proofreading.",
+        default="none",
+        help="LLM backend for proofreading. Defaults to 'none' — the pass is opt-in "
+             "(see SKILL.md 'LLM Proofreading Is Opt-In'). 'local' uses mlx-lm + "
+             "Qwen2.5 on Apple Silicon; 'claude' uses the claude CLI.",
     )
     parser.add_argument(
         "--llm-model",
@@ -823,6 +824,12 @@ LLM_MIN_LINE_RATIO = 0.5
 # Three identical substantial lines in a row is a decode loop, not prose.
 LLM_MAX_REPEAT_RUN = 3
 LLM_LENGTH_TOLERANCE = 0.50
+# How far a paragraph may overflow its soft limit while waiting for a sentence
+# to end, before it is cut regardless. Whisper's Chinese output carries almost
+# no sentence terminators (5 in a 10k-character transcript), so an unbounded
+# wait would produce 600-character paragraphs; 1.25 keeps the layout close to
+# the 260-character target while still letting a nearby sentence finish.
+PARAGRAPH_HARD_RATIO = 1.25
 
 
 def _strip_llm_meta(text: str) -> str:
@@ -854,6 +861,10 @@ _LLM_META_PREFIXES = (
 )
 
 _NUMBER_RE = re.compile(r"\d+(?:[.,]\d+)*")
+
+# Field labels used in _build_proofread_messages. Echoed back, they mean the
+# model reproduced the prompt instead of answering it.
+_LLM_PROMPT_LABELS = ("待校对文本", "上文内容（供参考上下文", "视频/音频标题")
 
 
 def _repetition_run(text: str) -> int:
@@ -894,6 +905,13 @@ def _validate_llm_output(original: str, corrected: str) -> tuple[bool, str]:
     corr_lines = len([ln for ln in corrected.splitlines() if ln.strip()])
     if orig_lines >= 4 and corr_lines < orig_lines * LLM_MIN_LINE_RATIO:
         return False, f"line structure collapsed ({corr_lines} vs {orig_lines} lines)"
+
+    # The prompt's own field labels must never surface in the answer. Only
+    # flag a label the source did not already contain, so a transcript that
+    # genuinely says these words is not rejected for quoting itself.
+    for label in _LLM_PROMPT_LABELS:
+        if label in corrected and label not in original:
+            return False, f"echoed the prompt label {label!r} into the text"
 
     run = _repetition_run(corrected)
     if run >= LLM_MAX_REPEAT_RUN:
@@ -1153,8 +1171,17 @@ def apply_replacements(text: str, replacements: dict[str, str]) -> str:
 
 
 def normalize_zh_punctuation(text: str) -> str:
-    text = re.sub(r"(?<=[\u3400-\u9fff]),(?=[\u3400-\u9fff])", "，", text)
+    # A halfwidth comma after a CJK character is a Chinese comma whatever
+    # follows it. The old both-sides lookaround only fired between two CJK
+    # characters, so it skipped ",Palantir" and — worse — the ",，" pair,
+    # because U+FF0C sits outside the range the lookahead demanded.
+    text = re.sub(r"(?<=[\u3400-\u9fff]),", "，", text)
     text = re.sub(r"(?<=[\u3400-\u9fff])\.(?=[\u3400-\u9fff])", "。", text)
+    # Collapse duplicates left behind by a mixed-width join. Repeated
+    # full-width punctuation is never intentional in a transcript.
+    text = re.sub(r"，{2,}", "，", text)
+    text = re.sub(r"。{2,}", "。", text)
+    text = re.sub(r"[，、]。", "。", text)
     text = re.sub(r"《\s+", "《", text)
     text = re.sub(r"\s+》", "》", text)
     return text
@@ -1169,7 +1196,10 @@ def join_lines(lines: list[str], language: str) -> list[str]:
     for line in lines:
         if language == "zh":
             if current:
-                separator = "" if re.search(r"[，。！？；：]$", current) else "，"
+                # Halfwidth marks count as punctuation too: without them a
+                # line ending in "," was treated as unpunctuated and got a
+                # second, full-width comma appended — the ",，" artifact.
+                separator = "" if re.search(r"[，。！？；：、,.!?;:]$", current) else "，"
                 current = f"{current}{separator}{line}"
             else:
                 current = line
@@ -1184,28 +1214,41 @@ def join_lines(lines: list[str], language: str) -> list[str]:
 
 
 def paragraphize(sentences: list[str], language: str) -> str:
+    """Group sentences into paragraphs, breaking only where one ends.
+
+    The length limit is a target, not a guillotine. Cutting between two
+    clauses and stamping a period on the stump fabricates a sentence
+    boundary the speaker never uttered and leaves the next paragraph
+    opening mid-thought, so overflow past the soft limit until the text
+    actually terminates. HARD_RATIO bounds the overflow for input that
+    never terminates at all.
+    """
     paragraphs: list[str] = []
     current: list[str] = []
     current_len = 0
     paragraph_limit = 260 if language == "zh" else 700
     sentence_limit = 4 if language == "zh" else 5
+    hard_limit = paragraph_limit * PARAGRAPH_HARD_RATIO
     joiner = "" if language == "zh" else " "
+    terminal_re = (
+        re.compile(r"[。！？!?…]$") if language == "zh" else re.compile(r"[.!?…]$")
+    )
 
     for sentence in sentences:
         current.append(sentence)
         current_len += len(sentence)
-        if current_len >= paragraph_limit or len(current) >= sentence_limit:
-            paragraph = joiner.join(current).strip()
-            if language == "zh" and not re.search(r"[。！？!?…]$", paragraph):
-                paragraph += "。"
-            paragraphs.append(paragraph)
+        reached = current_len >= paragraph_limit or len(current) >= sentence_limit
+        ends_sentence = bool(terminal_re.search(current[-1].strip()))
+        if (reached and ends_sentence) or current_len >= hard_limit:
+            paragraphs.append(joiner.join(current).strip())
             current = []
             current_len = 0
     if current:
-        paragraph = joiner.join(current).strip()
-        if language == "zh" and not re.search(r"[。！？!?…]$", paragraph):
-            paragraph += "。"
-        paragraphs.append(paragraph)
+        paragraphs.append(joiner.join(current).strip())
+    # Only the very last paragraph may be given a terminator: the document
+    # ends there, so nothing is being split in two.
+    if paragraphs and language == "zh" and not re.search(r"[。！？!?…]$", paragraphs[-1]):
+        paragraphs[-1] += "。"
     return "\n\n".join(paragraphs).strip() + "\n"
 
 
@@ -1341,7 +1384,7 @@ def strip_trailing_garbage(text: str) -> str:
 def clean_transcript(
     raw_text: str,
     raw_language_hint: str | None = None,
-    llm_backend: str = "local",
+    llm_backend: str = "none",
     llm_model: str | None = None,
     title_hint: str = "",
     asr_mode: str = "balanced",
