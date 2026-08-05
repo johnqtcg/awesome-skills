@@ -5,6 +5,7 @@
   "severity": "none",
   "code_snippet": "# User says: 'Can you help me set up a post-mortem process for our team?'\n# No specific incident. Wants a template and process guide.",
   "expected_feedback": "Degraded: Planning mode — no incident data. Cannot produce any incident-specific content. Can provide post-mortem template, process guide, severity framework, and review checklist. Must stop at Gate 1 (Incident Context Collection) for any incident-specific work.",
+  "lint_expectation": "not_a_document",
   "coverage_rules": [
     "No incident data",
     "Post-mortem template",

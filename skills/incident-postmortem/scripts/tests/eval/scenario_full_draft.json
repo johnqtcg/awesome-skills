@@ -1,0 +1,35 @@
+{
+  "id": "scenario_full_draft",
+  "description": "Complete evidence for one linear failure. Baseline: does the model produce a Draft/Standard document that passes the mechanical gate?",
+  "materials": {
+    "incident-logs.txt": "2024-03-15T14:18:02Z argocd  sync app=payment-api revision=9f2c1ab\n2024-03-15T14:23:41Z payment-api ERROR redis: dial tcp: missing address\n2024-03-15T14:23:55Z grafana  alert payment-slo error_rate=15.2%\n2024-03-15T14:26:10Z pagerduty incident=4821 triggered p99>500ms\n2024-03-15T14:28:33Z pagerduty incident=4821 acknowledged\n2024-03-15T14:45:07Z argocd  rollback app=payment-api revision=7c1de40\n2024-03-15T14:48:12Z grafana  alert payment-slo resolved error_rate=0.3%\n"
+  },
+  "prompt": "Write a post-mortem for INC-2024-0142 using incident-logs.txt. SEV-2, payment-api, ~12,000 transactions affected.",
+  "grade": {
+    "expect_mode": "draft",
+    "expect_depth": "standard",
+    "required_sections": [
+      "9.1",
+      "9.2",
+      "9.3",
+      "9.4",
+      "9.5",
+      "9.6",
+      "9.7",
+      "9.8",
+      "9.9"
+    ],
+    "max_critical_findings": 0,
+    "require_technique_named": true,
+    "must_mention": [
+      "INC-2024-0142",
+      "payment-api"
+    ],
+    "forbid_patterns": [
+      {
+        "label": "invented revenue figure (no transaction values were provided)",
+        "pattern": "\\$\\s?\\d[\\d,.]*\\s*(k|K|m|M|million)?\\b(?![^\\n]*\\b(unknown|not )\\b)"
+      }
+    ]
+  }
+}

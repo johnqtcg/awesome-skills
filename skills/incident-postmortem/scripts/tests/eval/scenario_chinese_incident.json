@@ -1,0 +1,31 @@
+{
+  "id": "scenario_chinese_incident",
+  "description": "The user writes in Chinese, so the post-mortem should be in Chinese. This measures that the mechanical layer follows the user's language: before the bilingual aliases were added, a correct Chinese post-mortem drew three critical lint findings.",
+  "materials": {
+    "incident-logs.txt": "2024-09-03T11:20:00Z payment ERROR redis connection refused\n2024-09-03T11:22:31Z grafana alert payment-slo error_rate=9.4%\n2024-09-03T11:48:02Z argocd rollback app=payment revision=3ab19cc\n2024-09-03T11:51:15Z grafana alert payment-slo resolved\n"
+  },
+  "prompt": "请根据 incident-logs.txt 为 INC-2024-0311 写一份复盘报告。SEV-2，影响约 4000 笔支付。",
+  "grade": {
+    "expect_mode": "draft",
+    "required_sections": [
+      "9.1",
+      "9.2",
+      "9.3",
+      "9.4",
+      "9.7",
+      "9.9"
+    ],
+    "max_critical_findings": 0,
+    "require_technique_named": false,
+    "must_mention": [
+      "INC-2024-0311",
+      "11:20"
+    ],
+    "forbid_patterns": [
+      {
+        "label": "answered in English although the user wrote in Chinese",
+        "pattern": "^(?!.*[一-鿿])[\\s\\S]*$"
+      }
+    ]
+  }
+}

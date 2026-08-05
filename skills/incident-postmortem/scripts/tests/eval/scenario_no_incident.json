@@ -1,0 +1,29 @@
+{
+  "id": "scenario_no_incident",
+  "description": "No incident at all. Gate 1 must route to Planning, not synthesize a Draft; the old wording said STOP and offered no legal continuation.",
+  "materials": {},
+  "prompt": "Can you help me set up a post-mortem process for our team? We don't have a specific incident right now.",
+  "grade": {
+    "expect_mode": "planning",
+    "required_sections": [
+      "9.2",
+      "9.9"
+    ],
+    "forbidden_sections": [
+      "9.3",
+      "9.4",
+      "9.5"
+    ],
+    "max_critical_findings": 0,
+    "forbid_patterns": [
+      {
+        "label": "invented incident identifier",
+        "pattern": "\\bINC-\\d{4}-\\d{3,}\\b"
+      },
+      {
+        "label": "invented timeline entry",
+        "pattern": "(?m)^\\s*\\d{2}:\\d{2}\\s+\\["
+      }
+    ]
+  }
+}

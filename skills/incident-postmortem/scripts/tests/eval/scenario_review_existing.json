@@ -1,0 +1,31 @@
+{
+  "id": "scenario_review_existing",
+  "description": "Review mode, the one mode no live scenario covered. The supplied post-mortem has three specific defects. §9.0 requires 9.7 for Review, and its improvement items are commitments, so they need an owner and a deadline — but not prevent/detect/mitigate, which classify system fixes rather than document fixes.",
+  "materials": {
+    "postmortem-draft.md": "# Post-mortem: checkout latency\n\n## Timeline\n09:15 latency climbed\n09:40 someone restarted the pods\n09:55 recovered\n\n## Root Cause\nAn engineer forgot to raise the thread pool before the sale started.\n\n## Action Items\n- Improve monitoring\n- Be more careful before sales\n"
+  },
+  "prompt": "Review postmortem-draft.md. Is it good enough to publish? Give me the findings and what to fix.",
+  "grade": {
+    "expect_mode": "review",
+    "required_sections": [
+      "9.2",
+      "9.7",
+      "9.9"
+    ],
+    "forbidden_sections": [
+      "9.3",
+      "9.5"
+    ],
+    "max_critical_findings": 0,
+    "must_mention": [
+      "source",
+      "owner"
+    ],
+    "forbid_patterns": [
+      {
+        "label": "blame carried over from the draft instead of reframed",
+        "pattern": "(?i)\\ban engineer forgot\\b"
+      }
+    ]
+  }
+}

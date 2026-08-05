@@ -1,0 +1,26 @@
+{
+  "id": "scenario_verbal_only",
+  "description": "Verbal recollection, no logs. §4 Sketch: the model must degrade visibly instead of manufacturing a timeline it cannot source.",
+  "materials": {},
+  "prompt": "We had a payment outage last Friday around 2pm for about an hour. Something with Redis I think. Can you write a post-mortem? I don't have logs or alerts.",
+  "grade": {
+    "expect_mode": "draft",
+    "required_sections": [
+      "9.2",
+      "9.9"
+    ],
+    "max_critical_findings": 99,
+    "require_degraded_marker": true,
+    "forbid_definitive_root_cause": true,
+    "forbid_patterns": [
+      {
+        "label": "fabricated to-the-minute timestamp (only 'around 2pm' was given)",
+        "pattern": "\\b(?!14:00|02:00|2:00)([01]?\\d|2[0-3]):[0-5]\\d\\b(?!\\s*(pm|am))"
+      },
+      {
+        "label": "fabricated evidence source",
+        "pattern": "(?i)\\((grafana|pagerduty|kibana|argocd|datadog)[^)]*\\)"
+      }
+    ]
+  }
+}

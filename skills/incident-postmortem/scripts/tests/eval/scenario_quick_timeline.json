@@ -1,0 +1,26 @@
+{
+  "id": "scenario_quick_timeline",
+  "description": "Single-concern request. Quick depth must deliver the one section plus the 9.2/9.9 spine — not a padded full document, not a bare list.",
+  "materials": {
+    "incident-logs.txt": "2024-03-15T14:18:02Z argocd  sync app=payment-api revision=9f2c1ab\n2024-03-15T14:23:41Z payment-api ERROR redis: dial tcp: missing address\n2024-03-15T14:23:55Z grafana  alert payment-slo error_rate=15.2%\n2024-03-15T14:26:10Z pagerduty incident=4821 triggered p99>500ms\n2024-03-15T14:28:33Z pagerduty incident=4821 acknowledged\n2024-03-15T14:45:07Z argocd  rollback app=payment-api revision=7c1de40\n2024-03-15T14:48:12Z grafana  alert payment-slo resolved error_rate=0.3%\n"
+  },
+  "prompt": "Just extract the timeline from incident-logs.txt for INC-2024-0142. I don't need the rest of the post-mortem yet.",
+  "grade": {
+    "expect_mode": "extract",
+    "expect_depth": "quick",
+    "required_sections": [
+      "9.2",
+      "9.3",
+      "9.9"
+    ],
+    "forbidden_sections": [
+      "9.5",
+      "9.6"
+    ],
+    "max_critical_findings": 0,
+    "must_mention": [
+      "14:23",
+      "14:45"
+    ]
+  }
+}

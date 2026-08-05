@@ -1,6 +1,7 @@
 # Root Cause Analysis Techniques
 
 ## Table of Contents
+0. Technique Selection
 1. 5-Why Analysis
 2. Fishbone (Ishikawa) Diagram
 3. Fault Tree Analysis
@@ -10,12 +11,39 @@
 
 ---
 
+## 0 Technique Selection
+
+Pick the technique from the incident's causal shape, then name your choice in §9.4.
+5-Why is the **default**, not a universal requirement — forcing a branching or
+AND-gated failure through a linear 5-Why is how the Single Cause Fallacy (§6) gets
+written into a document that looks rigorous.
+
+| Causal shape                                              | Technique      | Section |
+|-----------------------------------------------------------|----------------|---------|
+| One condition, one chain of consequences                  | 5-Why          | §1      |
+| One "why" has several independent answers                 | Branching 5-Why| §1      |
+| Many parallel factors, no single chain                    | Fishbone       | §2      |
+| Several defenses had to fail together                     | Fault tree     | §3      |
+| Safety-critical, regulatory, or compliance-driven review  | Fault tree     | §3      |
+| Impact amplified or recovery delayed by separate causes    | Factor mapping | §4      |
+
+Whichever you pick: reach depth >= 3, stop at a process or design decision rather
+than a human action, and describe the outcome as the **causal mechanism** — the
+failed controls and the conditions that had to hold — not as a single sentence that
+implies one culprit when several conditions were jointly necessary.
+
+Techniques compose. A fault tree that identifies three failed defenses is properly
+followed by a 5-Why on each defense, at whatever depth each one needs.
+
+---
+
 ## 1 5-Why Analysis
 
 ### When to Use
-- Default technique for all post-mortems
+- Default technique — correct for most incidents, but confirm the shape first (§0)
 - Best for incidents with a clear causal chain
 - Quick to execute, easy to understand
+- **Not** for parallel factors or AND-gated defense failures — see §0
 
 ### Process
 
@@ -123,7 +151,7 @@ would not have occurred. Each missing defense is a contributing factor.
 | Aspect | Root Cause | Contributing Factor |
 |--------|-----------|-------------------|
 | Definition | The change/condition without which the incident would not have occurred | Conditions that worsened impact or delayed recovery |
-| Count | Usually 1 (rarely 2) | Often 3-8 |
+| Count | 1 for a linear chain; one per failed defense for an AND-gated failure | Often 3-8 |
 | Fix priority | Highest — prevents recurrence | High — reduces blast radius |
 | Example | Empty config deployed | No automated rollback, outdated runbook |
 
@@ -204,6 +232,12 @@ Too many alerts dilute attention, causing real alerts to be ignored.
 
 Complex incidents rarely have a single cause. If your RCA identifies one cause
 and stops, you're probably missing contributing factors.
+
+The template's phrasing invites this: "the condition without which the incident
+would not have occurred" reads as though exactly one exists. When several conditions
+were **jointly** necessary — the AND gates in §3 — say so, and give each failed
+control its own action item. One root cause per failed defense is the correct output
+shape for an AND-gated incident, not a sign that the analysis is unfinished.
 
 ### Hindsight Bias
 

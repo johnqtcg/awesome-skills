@@ -1,0 +1,30 @@
+{
+  "id": "scenario_and_gated_failure",
+  "description": "Three independent defenses failed together. A linear 5-Why forces one culprit; the skill must route to a technique that fits an AND gate.",
+  "materials": {
+    "incident-notes.md": "Outage required ALL THREE to be true at once:\n1. staging smoke test was skipped (flaky, disabled 3 weeks ago)\n2. the canary stage was set to 0% for this service\n3. the automated rollback trigger was never wired for payment-api\nAny one of them working would have prevented customer impact.\n"
+  },
+  "prompt": "Write the root cause analysis for this incident using incident-notes.md. SEV-1, 40 minutes of customer impact.",
+  "grade": {
+    "expect_mode": "draft",
+    "expect_depth": "deep",
+    "required_sections": [
+      "9.2",
+      "9.4",
+      "9.9"
+    ],
+    "max_critical_findings": 99,
+    "require_technique_named": true,
+    "must_mention": [
+      "canary",
+      "rollback",
+      "smoke test"
+    ],
+    "forbid_patterns": [
+      {
+        "label": "single-culprit framing for an AND-gated failure",
+        "pattern": "(?i)\\bthe single root cause\\b|\\bthe one root cause\\b"
+      }
+    ]
+  }
+}

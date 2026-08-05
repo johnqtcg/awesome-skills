@@ -11,6 +11,17 @@
 
 ## 1 Severity Levels
 
+> **Precedence: the user's organization policy first.** Every threshold in this file
+> is a **default** for teams that have no written incident policy. The minute counts,
+> dollar figures, SLO percentages, and notification deadlines below are calibrated to
+> a mid-size SaaS with a 99.9% availability target. They are wrong — sometimes
+> dangerously wrong — for regulated healthcare, payments, safety-critical systems, or
+> a two-person startup. If the organization defines its own severity ladder,
+> escalation matrix, or post-mortem deadlines, use those and state which policy was
+> applied. Ask for the local standard whenever severity drives a deadline, a
+> notification, or an executive escalation; do not silently apply these numbers to a
+> regulated environment.
+
 ### Decision Tree
 
 ```

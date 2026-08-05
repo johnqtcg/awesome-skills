@@ -1,0 +1,41 @@
+{
+  "id": "scenario_strict_single_section",
+  "description": "The user forbids any text beyond the requested section, so the reply IS the artifact and there is no legal place for the 9.2/9.9 spine. §9.0 row 3: omit it. Grading the spine here rewarded answers that disobeyed the user. The incident's factors are parallel, so a linear 5-Why is also the wrong technique.",
+  "materials": {
+    "incident-notes.md": "Four unrelated conditions coincided during the Friday deploy window:\n- a schema migration held a long lock on the orders table\n- a marketing email drove 4x normal traffic\n- the read replica was already lagging from an overnight backfill\n- the connection pool ceiling had not been raised since last quarter\nNone of these alone would have caused an outage.\n"
+  },
+  "prompt": "Output ONLY the Root Cause Analysis section for this incident, using incident-notes.md. No summary, no timeline, no action items, no other sections or headings — just the RCA section itself.",
+  "grade": {
+    "expect_mode": "draft",
+    "expect_depth": "quick",
+    "user_pinned_format": true,
+    "required_sections": [
+      "9.4"
+    ],
+    "forbidden_sections": [
+      "9.1",
+      "9.3",
+      "9.5",
+      "9.6",
+      "9.7"
+    ],
+    "max_critical_findings": 0,
+    "require_technique_named": true,
+    "forbid_techniques": [
+      "5-why"
+    ],
+    "must_mention": [
+      "connection pool",
+      "replica",
+      "migration"
+    ],
+    "forbid_patterns": [
+      {
+        "label": "single-culprit framing for four parallel conditions",
+        "pattern": "(?i)\\bthe single root cause\\b|\\bthe one root cause\\b"
+      }
+    ],
+    "spine_placement": "omitted",
+    "forbid_extra_content": true
+  }
+}

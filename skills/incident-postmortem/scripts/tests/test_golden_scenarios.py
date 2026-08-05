@@ -1,6 +1,7 @@
 """Golden scenario tests for incident-postmortem skill."""
 
 import json
+import re
 import pathlib
 
 import pytest
@@ -13,7 +14,7 @@ VALID_TYPES = {"defect", "good_practice", "degradation_scenario", "workflow"}
 VALID_SEVERITIES = {"critical", "standard", "hygiene", "none"}
 REQUIRED_FIELDS = {
     "id", "title", "type", "severity", "code_snippet",
-    "expected_feedback", "coverage_rules", "reference",
+    "expected_feedback", "lint_expectation", "coverage_rules", "reference",
 }
 
 
@@ -388,3 +389,174 @@ class TestPM016:
 
     def test_expected_mentions_sev4(self):
         assert "sev-4" in self.fx["expected_feedback"].lower()
+
+# ── Corpus ↔ linter wiring ──────────────────────────────────────────
+# Before this class existed, zero fixtures were ever fed to the bundled
+# linter, and the flagship "good post-mortem" fixture failed it with a
+# critical finding. Every fixture now declares what the linter must do
+# with it, and the declaration is verified in both directions.
+
+import importlib.util  # noqa: E402  (kept local to this block)
+import sys  # noqa: E402
+
+_LINT_PATH = SKILL_DIR / "scripts" / "lint_postmortem.py"
+_spec = importlib.util.spec_from_file_location("lint_postmortem_golden", _LINT_PATH)
+lint_postmortem = importlib.util.module_from_spec(_spec)
+assert _spec and _spec.loader
+sys.modules[_spec.name] = lint_postmortem
+_spec.loader.exec_module(lint_postmortem)
+
+VALID_EXPECTATIONS_PREFIX = ("clean", "not_a_document", "flags:", "misses:")
+
+# The linter's heading regexes are deliberately loose (`^#{1,4}\s+.*timeline`) so
+# they match real-world headings like "## Timeline (UTC, all sourced)". That makes
+# them wrong for *this* guard: the prompt fixtures use `# User says: ...` comment
+# lines, and "# Document has timeline, root cause, action items" would read as both
+# headings at once. A section heading names its section, so anchor on the start of
+# the heading text.
+SECTION_HEADING_RE = {
+    "timeline": re.compile(r"(?mi)^#{1,4}\s+timeline\b"),
+    "action items": re.compile(r"(?mi)^#{1,4}\s+action items?\b"),
+}
+
+
+class TestLintExpectations:
+    """Each fixture's declared lint_expectation must hold against the real linter."""
+
+    def test_expectation_vocabulary(self):
+        for fx in _load_fixtures():
+            exp = fx["lint_expectation"]
+            assert exp.startswith(VALID_EXPECTATIONS_PREFIX), \
+                f"{fx['id']} has unknown lint_expectation {exp!r}"
+
+    def test_named_checks_exist(self):
+        """A flags:/misses: expectation must name a check the linter can emit."""
+        emitted = set()
+        for fx in _load_fixtures():
+            for f in lint_postmortem.lint(fx["code_snippet"]):
+                emitted.add(f.check)
+        # Every check the linter documents, so a typo'd name cannot pass silently.
+        documented = {
+            "timeline-utc", "timeline-source", "timeline-untimed", "timeline-order",
+            "timeline-timezone", "action-owner", "action-deadline",
+            "action-categories", "went-well", "uncovered-risks", "blame-language",
+            "sensitive-data",
+        }
+        assert emitted <= documented, f"undocumented check emitted: {emitted - documented}"
+        for fx in _load_fixtures():
+            exp = fx["lint_expectation"]
+            if ":" in exp:
+                name = exp.split(":", 1)[1]
+                assert name in documented, f"{fx['id']} names unknown check {name!r}"
+
+    def test_clean_fixtures_are_actually_clean(self):
+        for fx in _load_fixtures():
+            if fx["lint_expectation"] != "clean":
+                continue
+            findings = lint_postmortem.lint(fx["code_snippet"])
+            assert findings == [], \
+                f"{fx['id']} is declared lint-clean but reports: " \
+                + "; ".join(str(f) for f in findings)
+
+    def test_flags_fixtures_trigger_their_check(self):
+        for fx in _load_fixtures():
+            exp = fx["lint_expectation"]
+            if not exp.startswith("flags:"):
+                continue
+            want = exp.split(":", 1)[1]
+            names = {f.check for f in lint_postmortem.lint(fx["code_snippet"])}
+            assert want in names, \
+                f"{fx['id']} declares flags:{want} but linter reported {sorted(names)}"
+
+    def test_misses_fixtures_document_the_judgment_boundary(self):
+        """SKILL.md §8 claims judgment items stay with the reviewer. Prove it.
+
+        A `misses:` fixture asserts the mechanical layer genuinely cannot catch
+        this defect — so the claim is tested, not just asserted in prose.
+        """
+        for fx in _load_fixtures():
+            exp = fx["lint_expectation"]
+            if not exp.startswith("misses:"):
+                continue
+            want = exp.split(":", 1)[1]
+            names = {f.check for f in lint_postmortem.lint(fx["code_snippet"])}
+            assert want not in names, \
+                f"{fx['id']} declares misses:{want}, but the linter now catches it — " \
+                f"promote the fixture to flags:{want}"
+
+    def test_not_a_document_label_cannot_hide_a_broken_document(self):
+        """Guard the guard: `not_a_document` must be an excerpt or a prompt.
+
+        Without this, any full document that fails the linter could be silenced
+        by relabelling it.
+        """
+        for fx in _load_fixtures():
+            if fx["lint_expectation"] != "not_a_document":
+                continue
+            snippet = fx["code_snippet"]
+            has_both = all(rx.search(snippet) for rx in SECTION_HEADING_RE.values())
+            assert not has_both, \
+                f"{fx['id']} has both Timeline and Action Items sections, so it is a " \
+                f"whole document and must declare clean/flags:, not not_a_document"
+
+    def test_the_not_a_document_guard_has_teeth(self):
+        """Guard the guard: it must reject a full document and accept a prompt.
+
+        Anchoring too loosely made `# Document has timeline, ... action items` (a
+        prompt comment) read as two headings; anchoring at all is pointless if it
+        stops recognising a real document.
+        """
+        real_doc = "# PM\n\n## Timeline (UTC)\n- 14:23 x (log)\n\n## Action Items\n- y\n"
+        assert all(rx.search(real_doc) for rx in SECTION_HEADING_RE.values()), \
+            "guard must recognise a genuine whole document"
+        prompt = ("# User provides a post-mortem and says: 'Review this'\n"
+                  "# Document has timeline, root cause, action items, but no tests\n")
+        assert not all(rx.search(prompt) for rx in SECTION_HEADING_RE.values()), \
+            "guard must not read prompt prose as section headings"
+
+    def test_at_least_one_clean_and_one_flags_fixture(self):
+        exps = [fx["lint_expectation"] for fx in _load_fixtures()]
+        assert "clean" in exps, "corpus must contain a lint-clean reference document"
+        assert any(e.startswith("flags:") for e in exps), \
+            "corpus must contain a fixture that the linter actually rejects"
+
+
+class TestTemplateWorkedExample:
+    """The template's own worked example must pass the skill's own linter.
+
+    This is the regression that shipped: a document written in the official
+    template's format drew `[critical] timeline has no HH:MM-stamped entries`,
+    because the linter only understood `-`-prefixed timeline entries.
+    """
+
+    def _example(self) -> str:
+        text = (REFS_DIR / "postmortem-template.md").read_text(encoding="utf-8")
+        m = re.search(
+            r"<!-- WORKED-EXAMPLE-BEGIN -->\s*```markdown\n(.*?)\n```\s*"
+            r"<!-- WORKED-EXAMPLE-END -->", text, re.S)
+        assert m, "template must carry a delimited worked example"
+        return m.group(1)
+
+    def test_example_is_present_and_substantial(self):
+        assert len(self._example().splitlines()) >= 50
+
+    def test_example_lints_clean(self):
+        findings = lint_postmortem.lint(self._example())
+        assert findings == [], \
+            "template worked example must pass the bundled linter: " \
+            + "; ".join(str(f) for f in findings)
+
+    def test_example_uses_bare_timeline_and_table_actions(self):
+        """Pin the two formats the old linter could not read."""
+        ex = self._example()
+        assert re.search(r"(?m)^\d{2}:\d{2} \[[A-Z]+\]", ex), \
+            "example must exercise bare `HH:MM [PHASE]` timeline entries"
+        assert re.search(r"(?m)^\| AI-\d+ \|", ex), \
+            "example must exercise the Markdown action-items table"
+
+    def test_template_documents_mandatory_sections(self):
+        text = (REFS_DIR / "postmortem-template.md").read_text(encoding="utf-8")
+        required = text.split("## 2 Incident Summary Template")[0]
+        for section in ("## Mode & Depth", "## Uncovered Risks"):
+            assert section in required, \
+                f"template Required Sections must list {section} (SKILL.md §9)"
