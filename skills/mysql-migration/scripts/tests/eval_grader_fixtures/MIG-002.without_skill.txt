@@ -1,0 +1,11 @@
+This migration adds a column to the events table.
+
+Adding a column in MySQL is generally a fast operation. On a large table you may
+want to run it during a quiet period, since the server will need to rebuild the
+table. You could also consider using a tool like gh-ost.
+
+```sql
+ALTER TABLE events ADD COLUMN source VARCHAR(100);
+```
+
+That should be all you need.

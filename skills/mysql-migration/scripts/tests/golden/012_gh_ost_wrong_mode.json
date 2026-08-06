@@ -1,0 +1,29 @@
+{
+  "id": "MIG-012",
+  "title": "gh-ost --allow-on-master paired with a replica host, plus destructive cleanup defaults",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "# 'Standard' gh-ost template copied between teams\ngh-ost --host=replica-host --allow-on-master \\\n  --database=app --table=events \\\n  --alter='ADD COLUMN source VARCHAR(100) DEFAULT NULL' \\\n  --chunk-size=1000 --max-lag-millis=1500 \\\n  --initially-drop-ghost-table --initially-drop-old-table \\\n  --execute",
+  "context": {
+    "mysql_version": "8.0.32",
+    "table_rows": "80000000",
+    "replication": "source-2-replica"
+  },
+  "violated_rule": "gh-ost operation mode; destructive cleanup flags as defaults",
+  "expected_feedback": "CRITICAL: --allow-on-master is the explicit opt-in for pointing gh-ost AT THE MASTER. gh-ost's default mode already connects to a replica and migrates on the master, so pairing the flag with --host=replica-host shows the invocation was copied without being read. Remove --allow-on-master, or point --host at the master. Separately, --initially-drop-old-table and --initially-drop-ghost-table are disabled upstream on purpose: the _old table from a prior run is frequently the only surviving copy of the pre-migration data, and the ghost table may hold hours of work that --resume could continue. They belong in a one-off runbook entry, never in a reusable template.",
+  "coverage_rules": [
+    "--allow-on-master",
+    "--initially-drop-old-table",
+    "gh-ost",
+    "replica"
+  ],
+  "reference": "references/large-table-migration.md",
+  "lint": {
+    "mysql_version": "8.0.32",
+    "must_report": [
+      "MM017",
+      "MM018"
+    ],
+    "must_not_report": []
+  }
+}

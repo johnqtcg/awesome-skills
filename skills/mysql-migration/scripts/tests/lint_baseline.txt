@@ -1,0 +1,28 @@
+# Accepted lint findings for this skill's own documentation.
+#
+# Format:  CHECK_ID | path-suffix | evidence-substring
+#
+# Matching is by content, not line number: an entry follows the statement it was
+# written for, and stops matching when that statement changes or goes away. A
+# baseline entry that matches nothing FAILS the run, so an exemption cannot
+# outlive its reason. Anything not listed here still fails at its own severity,
+# so a newly introduced warning cannot blend into an accepted total.
+#
+# The self-lint runs at one MySQL version (8.0.35). Entries exist only where the
+# flagged block is correct for a DIFFERENT version that the same run cannot also
+# assume.
+
+# AE-14 exists to show that MySQL 5.7 accepts only ALGORITHM=DEFAULT / LOCK=DEFAULT
+# on ADD PARTITION. Its 5.7 line therefore must NOT carry an ALGORITHM clause, and
+# must not gain one — that is the entire point of the example. The 8.0 form
+# directly beneath it does carry ALGORITHM=INPLACE, LOCK=NONE and is linted normally.
+# Re-verify against ddl-algorithm-matrix.md section 4 before touching this line.
+#
+# NOTE: the MM015 companion entry that used to sit here was WRONG and has been
+# removed. The missing `SET SESSION lock_wait_timeout` was not a version
+# constraint at all — the guard is valid on every release — so the exemption was
+# hiding a real gap in the example rather than describing one. The example now
+# sets the guard, and only the genuinely version-bound ALGORITHM finding is
+# exempt. An exemption whose justification would not survive being written down
+# is not an exemption.
+MM014 | references/migration-anti-examples.md | ALTER TABLE events ADD PARTITION (PARTITION p2026_09 VALUES LESS THAN (20260901));

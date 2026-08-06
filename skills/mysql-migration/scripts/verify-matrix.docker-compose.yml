@@ -1,0 +1,78 @@
+# Disposable MySQL instances for scripts/verify_against_server.sh.
+#
+# These containers exist to be created, probed, and destroyed. They keep no
+# volumes and bind only to loopback, so nothing here can be mistaken for — or
+# reached from — anything that matters.
+#
+#   docker compose -f scripts/verify-matrix.docker-compose.yml up -d
+#   bash scripts/verify_matrix.sh
+#   docker compose -f scripts/verify-matrix.docker-compose.yml down
+#
+# Versions match the range the matrix claims (see SKILL.md section 1): 5.7, 8.0,
+# 8.4, 9.x. 8.0 is pinned below 8.0.12 as well, because the INSTANT-clause
+# boundary is the fact this skill got wrong twice and a single 8.0.x tag cannot
+# test both sides of it.
+
+services:
+  mysql57:
+    image: mysql:5.7
+    command: --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: verify
+    ports: ["127.0.0.1:33057:3306"]
+    tmpfs: ["/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pverify"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  # Below the 8.0.12 INSTANT-clause boundary: ALGORITHM=INSTANT must be rejected
+  # here for every operation, including SET DEFAULT.
+  mysql8011:
+    image: mysql:8.0.11
+    environment:
+      MYSQL_ROOT_PASSWORD: verify
+    ports: ["127.0.0.1:33011:3306"]
+    tmpfs: ["/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pverify"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  mysql80:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: verify
+    ports: ["127.0.0.1:33080:3306"]
+    tmpfs: ["/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pverify"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  mysql84:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: verify
+    ports: ["127.0.0.1:33084:3306"]
+    tmpfs: ["/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pverify"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  mysql9:
+    image: mysql:9
+    environment:
+      MYSQL_ROOT_PASSWORD: verify
+    ports: ["127.0.0.1:33090:3306"]
+    tmpfs: ["/var/lib/mysql"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-pverify"]
+      interval: 5s
+      timeout: 5s
+      retries: 30

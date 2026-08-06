@@ -11,6 +11,19 @@
   },
   "expected_feedback": "Standard: ALGORITHM=INSTANT is not available on MySQL 5.7. This ALTER will fail with an error. Use ALGORITHM=INPLACE, LOCK=NONE instead, which is supported for ADD COLUMN on 5.7.",
   "violated_rule": "DDL algorithm matches version",
-  "coverage_rules": ["algorithm", "version", "5.7", "INPLACE", "LOCK=NONE"],
-  "reference": "references/ddl-algorithm-matrix.md"
+  "coverage_rules": [
+    "algorithm",
+    "version",
+    "5.7",
+    "INPLACE",
+    "LOCK=NONE"
+  ],
+  "reference": "references/ddl-algorithm-matrix.md",
+  "lint": {
+    "mysql_version": "5.7.40",
+    "must_report": [
+      "MM001"
+    ],
+    "must_not_report": []
+  }
 }

@@ -12,6 +12,20 @@
   },
   "expected_feedback": "Standard: VARCHAR(60) → VARCHAR(100) in utf8mb4 crosses the 255-byte boundary (60×4=240 bytes → 100×4=400 bytes). This changes the internal length prefix from 1 byte to 2 bytes, forcing COPY algorithm — ALGORITHM=INSTANT will be rejected. On an 8M-row table, use ALGORITHM=INPLACE, LOCK=NONE, or consider gh-ost.",
   "violated_rule": "DDL algorithm matches version",
-  "coverage_rules": ["VARCHAR", "255", "boundary", "utf8mb4", "COPY", "length prefix"],
-  "reference": "references/ddl-algorithm-matrix.md"
+  "coverage_rules": [
+    "VARCHAR",
+    "255",
+    "boundary",
+    "utf8mb4",
+    "COPY",
+    "length prefix"
+  ],
+  "reference": "references/ddl-algorithm-matrix.md",
+  "lint": {
+    "mysql_version": "8.0.32",
+    "must_report": [
+      "MM006"
+    ],
+    "must_not_report": []
+  }
 }

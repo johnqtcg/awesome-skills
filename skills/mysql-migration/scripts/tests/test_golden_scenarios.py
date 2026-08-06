@@ -1,30 +1,72 @@
-"""Golden scenario tests for mysql-migration skill.
+"""Golden scenario tests for the mysql-migration skill.
 
-Validates behavioral coverage: each golden fixture exercises specific
-rules in SKILL.md and reference files. Tests verify fixture integrity
-(schema, type/severity constraints) and rule coverage (every
-coverage_rule phrase is findable in the combined documentation).
+Two layers, with different evidentiary weight:
+
+1. **Fixture integrity + rule coverage** — schema, type/severity constraints,
+   and that every `coverage_rule` phrase is findable in the docs. This proves
+   the corpus is well-formed and the docs mention the concept. It does NOT
+   prove any advice is correct: a fixture asserting a wrong practice would
+   still pass, which is exactly how MIG-008 shipped a reversed gh-ost
+   invocation as a "good practice" until the 2026-08-06 audit.
+
+2. **Linter verdicts (`lint` block)** — each fixture's `migration_snippet` is
+   run through scripts/lint_migration.py at the fixture's MySQL version, and
+   the reported check IDs are asserted against `must_report` / `must_not_report`.
+   This layer is falsifiable: it fails when the checker's judgement on real
+   statements changes.
+
+Neither layer invokes a model. Model-facing evaluation is a separate,
+unimplemented track — see scripts/tests/COVERAGE.md.
 """
 
+import importlib.util
 import json
 import pathlib
+import re
+import sys
+
 import pytest
 
 SKILL_DIR = pathlib.Path(__file__).resolve().parents[2]
 SKILL_MD = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
 REFS_DIR = SKILL_DIR / "references"
 GOLDEN_DIR = pathlib.Path(__file__).resolve().parent / "golden"
+LINTER_PATH = SKILL_DIR / "scripts" / "lint_migration.py"
+
+
+def _load_linter():
+    """Import lint_migration.py by path (pytest runs with --import-mode=importlib).
+
+    Must be registered in sys.modules before exec_module: the module pairs
+    `from __future__ import annotations` with @dataclass, whose field resolution
+    looks the module up by name.
+    """
+    spec = importlib.util.spec_from_file_location("mysql_migration_linter_golden", LINTER_PATH)
+    assert spec and spec.loader, f"cannot load {LINTER_PATH}"
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+LINT = _load_linter()
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 def _all_docs_lower() -> str:
-    """Concatenate SKILL.md + all references, lowercased for matching."""
+    """Concatenate SKILL.md + all references, lowercased and whitespace-normalized.
+
+    Collapsing runs of whitespace to a single space means a coverage phrase still
+    matches when the sentence containing it is re-wrapped. Without this, a purely
+    cosmetic reflow of a paragraph fails the suite while nothing about the
+    documented rule has changed.
+    """
     parts = [SKILL_MD]
     for f in sorted(REFS_DIR.glob("*.md")):
         parts.append(f.read_text(encoding="utf-8"))
-    return "\n".join(parts).lower()
+    return re.sub(r"\s+", " ", "\n".join(parts).lower())
 
 
 def _load_fixtures() -> list[dict]:
@@ -42,7 +84,7 @@ VALID_TYPES = {"defect", "good_practice", "degradation_scenario", "workflow"}
 VALID_SEVERITIES = {"critical", "standard", "hygiene", "none"}
 REQUIRED_FIELDS = {
     "id", "title", "type", "severity", "migration_snippet",
-    "expected_feedback", "coverage_rules", "reference",
+    "expected_feedback", "coverage_rules", "reference", "lint",
 }
 
 
@@ -54,7 +96,7 @@ class TestFixtureIntegrity:
     """Meta-level validation on all fixtures."""
 
     def test_minimum_fixture_count(self):
-        assert len(FIXTURES) >= 9, f"Expected ≥9 fixtures, found {len(FIXTURES)}"
+        assert len(FIXTURES) >= 15, f"Expected ≥15 fixtures, found {len(FIXTURES)}"
 
     def test_required_fields(self):
         for fix in FIXTURES:
@@ -91,7 +133,8 @@ class TestFixtureIntegrity:
         """Every coverage_rule phrase must be findable in combined docs."""
         for fix in FIXTURES:
             for rule in fix["coverage_rules"]:
-                assert rule.lower() in ALL_DOCS_LOWER, \
+                needle = re.sub(r"\s+", " ", rule.lower())
+                assert needle in ALL_DOCS_LOWER, \
                     f"{fix['id']}: coverage rule '{rule}' not found in docs"
 
 
@@ -282,3 +325,197 @@ class TestMIG010:
     def test_expected_mentions_dual_write(self):
         fb = self.fix["expected_feedback"].lower()
         assert "dual" in fb or "both column" in fb
+
+# ===========================================================================
+# Layer 2: Linter Verdicts — the falsifiable layer
+# ===========================================================================
+
+def _fixture_filename(fix: dict) -> str:
+    """Give the linter a filename whose extension selects the right lexer."""
+    snippet = fix["migration_snippet"]
+    if "gh-ost" in snippet or "pt-online-schema-change" in snippet:
+        return f"{fix['id']}.sh"
+    return f"{fix['id']}.sql"
+
+
+def _lint_ids(fix: dict) -> set:
+    cfg = fix["lint"]
+    findings = LINT.lint_text(
+        _fixture_filename(fix),
+        fix["migration_snippet"],
+        LINT.parse_version(cfg["mysql_version"]),
+        False,
+    )
+    return {f.check_id for f in findings}
+
+
+class TestLintExpectationsAreWellFormed:
+    """The lint block is a claim about behavior; keep it checkable."""
+
+    def test_every_fixture_declares_lint_expectations(self):
+        for fix in FIXTURES:
+            cfg = fix.get("lint")
+            assert isinstance(cfg, dict), f"{fix['id']}: missing lint block"
+            assert "mysql_version" in cfg, f"{fix['id']}: lint block needs mysql_version"
+            assert isinstance(cfg.get("must_report", []), list)
+            assert isinstance(cfg.get("must_not_report", []), list)
+
+    def test_lint_version_parses(self):
+        for fix in FIXTURES:
+            LINT.parse_version(fix["lint"]["mysql_version"])
+
+    def test_referenced_check_ids_exist(self):
+        for fix in FIXTURES:
+            cfg = fix["lint"]
+            for cid in list(cfg.get("must_report", [])) + list(cfg.get("must_not_report", [])):
+                assert cid in LINT.CHECK_REGISTRY, f"{fix['id']}: unknown check id {cid}"
+
+    def test_expectations_do_not_contradict(self):
+        for fix in FIXTURES:
+            cfg = fix["lint"]
+            overlap = set(cfg.get("must_report", [])) & set(cfg.get("must_not_report", []))
+            assert not overlap, f"{fix['id']}: {overlap} in both must_report and must_not_report"
+
+    def test_lint_version_matches_scenario_context(self):
+        """A fixture that lints at a different version than it describes is a trap."""
+        for fix in FIXTURES:
+            ctx_ver = (fix.get("context") or {}).get("mysql_version")
+            if not ctx_ver or ctx_ver == "unknown":
+                continue
+            assert fix["lint"]["mysql_version"] == ctx_ver, (
+                f"{fix['id']}: context says MySQL {ctx_ver} but lint block uses "
+                f"{fix['lint']['mysql_version']}"
+            )
+
+
+class TestLintVerdicts:
+    """Run the checker over each fixture's actual statements."""
+
+    @pytest.mark.parametrize("fix", FIXTURES, ids=[f["id"] for f in FIXTURES])
+    def test_must_report(self, fix):
+        expected = set(fix["lint"].get("must_report", []))
+        if not expected:
+            pytest.skip("no must_report expectations")
+        reported = _lint_ids(fix)
+        missing = expected - reported
+        assert not missing, (
+            f"{fix['id']}: checker did not report {sorted(missing)} "
+            f"(reported: {sorted(reported) or 'nothing'})"
+        )
+
+    @pytest.mark.parametrize("fix", FIXTURES, ids=[f["id"] for f in FIXTURES])
+    def test_must_not_report(self, fix):
+        forbidden = set(fix["lint"].get("must_not_report", []))
+        if not forbidden:
+            pytest.skip("no must_not_report expectations")
+        reported = _lint_ids(fix)
+        wrong = forbidden & reported
+        assert not wrong, f"{fix['id']}: checker wrongly reported {sorted(wrong)} on this snippet"
+
+    @pytest.mark.parametrize(
+        "fix", [f for f in FIXTURES if f["type"] == "good_practice"],
+        ids=[f["id"] for f in FIXTURES if f["type"] == "good_practice"])
+    def test_good_practice_fixtures_are_clean(self, fix):
+        """A fixture labelled 'good practice' must not contain a critical defect.
+
+        This is the assertion that would have caught MIG-008's reversed
+        --allow-on-master usage when it was introduced.
+        """
+        findings = LINT.lint_text(
+            _fixture_filename(fix),
+            fix["migration_snippet"],
+            LINT.parse_version(fix["lint"]["mysql_version"]),
+            False,
+        )
+        critical = [f for f in findings if f.severity == LINT.CRITICAL]
+        assert not critical, (
+            f"{fix['id']} is labelled good_practice but the checker found critical issues:\n"
+            + "\n".join(f"  [{f.check_id}] {f.message}" for f in critical)
+        )
+
+    @pytest.mark.parametrize(
+        "fix", [f for f in FIXTURES if f["type"] == "defect"],
+        ids=[f["id"] for f in FIXTURES if f["type"] == "defect"])
+    def test_defect_fixtures_declare_at_least_one_signal(self, fix):
+        """A defect fixture must either trip a check or say why it cannot.
+
+        MIG-014's defect is a wrong *review note* attached to correct SQL — no
+        statement-level signal exists, so it declares an empty must_report and
+        relies on must_not_report to pin the correct verdict.
+        """
+        cfg = fix["lint"]
+        if cfg.get("must_report"):
+            return
+        assert cfg.get("must_not_report"), (
+            f"{fix['id']}: a defect fixture with neither must_report nor must_not_report "
+            "asserts nothing about behavior"
+        )
+
+
+# ===========================================================================
+# Per-Fixture Behavioral Tests: audit regressions (2026-08-06)
+# ===========================================================================
+
+class TestMIG012:
+    """MIG-012: gh-ost operation-mode confusion."""
+    fix = next(f for f in FIXTURES if f["id"] == "MIG-012")
+
+    def test_type_severity(self):
+        assert self.fix["type"] == "defect"
+        assert self.fix["severity"] == "critical"
+
+    def test_snippet_pairs_replica_host_with_allow_on_master(self):
+        snip = self.fix["migration_snippet"]
+        assert "--allow-on-master" in snip and "replica" in snip
+
+    def test_expected_states_the_correct_semantics(self):
+        fb = self.fix["expected_feedback"].lower()
+        assert "at the master" in fb
+        assert "default mode" in fb
+
+
+class TestMIG013:
+    """MIG-013: partition clause algorithm rejection on 5.7."""
+    fix = next(f for f in FIXTURES if f["id"] == "MIG-013")
+
+    def test_type_severity(self):
+        assert self.fix["type"] == "defect"
+        assert self.fix["severity"] == "critical"
+
+    def test_expected_mentions_default_only(self):
+        fb = self.fix["expected_feedback"].lower()
+        assert "algorithm=default" in fb and "lock=default" in fb
+
+
+class TestMIG014:
+    """MIG-014: DROP COLUMN is not COPY — regression guard for the audited error."""
+    fix = next(f for f in FIXTURES if f["id"] == "MIG-014")
+
+    def test_expected_corrects_the_reviewer_not_the_sql(self):
+        fb = self.fix["expected_feedback"].lower()
+        assert "the sql is correct" in fb
+        assert "in place = yes" in fb or "inplace" in fb
+
+    def test_expected_does_not_recommend_gh_ost_for_this(self):
+        fb = self.fix["expected_feedback"].lower()
+        assert "for nothing" in fb or "adds a ghost table" in fb
+
+    def test_snippet_uses_inplace_lock_none(self):
+        assert "ALGORITHM=INPLACE, LOCK=NONE" in self.fix["migration_snippet"]
+
+
+class TestMIG015:
+    """MIG-015: ADD FOREIGN KEY + INPLACE with checks enabled."""
+    fix = next(f for f in FIXTURES if f["id"] == "MIG-015")
+
+    def test_type_severity(self):
+        assert self.fix["type"] == "defect"
+        assert self.fix["severity"] == "critical"
+
+    def test_expected_quotes_the_rule(self):
+        fb = self.fix["expected_feedback"]
+        assert "foreign_key_checks is disabled" in fb
+        assert "only the COPY algorithm is supported" in fb
+
+    def test_expected_states_no_online_and_validated_path(self):
+        assert "no online-and-validated path" in self.fix["expected_feedback"].lower()

@@ -1,0 +1,22 @@
+### 9.1 Context Gate
+MySQL Version 5.7.40, source-replica topology.
+
+### 9.3 Risk Assessment Table
+| # | DDL | Algorithm | Lock | Risk |
+| 1 | ADD COLUMN avatar_url | see below | see below | WARN |
+
+### 9.7 Rollback Plan
+Reversible by compensating DDL; the column is new and nullable.
+
+### 9.9 Uncovered Risks
+| Area | Reason |
+| Peak QPS | not supplied, assumed high |
+
+Scorecard: 10/12 PASS
+
+### 9.5 Migration SQL
+```sql
+SET SESSION lock_wait_timeout = 3;
+ALTER TABLE users ADD COLUMN avatar_url VARCHAR(255) DEFAULT NULL,
+  ALGORITHM=INPLACE, LOCK=NONE;
+```

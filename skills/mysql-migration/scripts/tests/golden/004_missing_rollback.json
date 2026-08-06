@@ -11,6 +11,18 @@
   },
   "expected_feedback": "Critical: DROP COLUMN is irreversible — once executed, the data is gone. No rollback SQL is provided. Before dropping, create a backup table for affected columns. Classify both statements as 'irreversible' and include a data recovery path.",
   "violated_rule": "Rollback SQL provided",
-  "coverage_rules": ["rollback", "irreversible", "DROP COLUMN", "backup"],
-  "reference": "SKILL.md"
+  "coverage_rules": [
+    "rollback",
+    "irreversible",
+    "DROP COLUMN",
+    "backup"
+  ],
+  "reference": "SKILL.md",
+  "lint": {
+    "mysql_version": "8.0.32",
+    "must_report": [
+      "MM025"
+    ],
+    "must_not_report": []
+  }
 }

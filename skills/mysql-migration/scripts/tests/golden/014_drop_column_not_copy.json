@@ -1,0 +1,31 @@
+{
+  "id": "MIG-014",
+  "title": "DROP COLUMN wrongly escalated to gh-ost on the belief that it requires COPY",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- Review note attached to the migration:\n--   \"DROP COLUMN always requires ALGORITHM=COPY before 8.0.29, so this 5.7\n--    table must go through gh-ost.\"\n-- V9__drop_legacy_flag.sql  (MySQL 5.7, 30M rows)\nSET SESSION lock_wait_timeout = 3;\nALTER TABLE accounts DROP COLUMN legacy_flag, ALGORITHM=INPLACE, LOCK=NONE;\n-- mysqldump of accounts taken and retained for 14 days before this ran",
+  "context": {
+    "mysql_version": "5.7.40",
+    "table_rows": "30000000",
+    "replication": "source-replica"
+  },
+  "violated_rule": "algorithm capability must come from the version matrix, not from memory",
+  "expected_feedback": "The SQL is correct and the review note is wrong. The official 5.7 matrix lists 'Dropping a column' as In Place = Yes, Permits Concurrent DML = Yes, and the manual's own example is ALTER TABLE t DROP COLUMN c, ALGORITHM=INPLACE, LOCK=NONE. On 8.0 before 8.0.29 the default is INPLACE as well; 8.0.29+ makes it INSTANT. DROP COLUMN is not a COPY operation on any supported version, so routing it to gh-ost adds a ghost table, a cut-over, and hours of runtime for nothing. Note the operation does rebuild the table under INPLACE, so budget the I/O and replica lag — but LOCK=NONE holds and writes continue. The irreversibility of DROP COLUMN is the real risk here, and the retained dump addresses it.",
+  "coverage_rules": [
+    "DROP COLUMN",
+    "INPLACE",
+    "Permits Concurrent DML"
+  ],
+  "reference": "references/ddl-algorithm-matrix.md",
+  "lint": {
+    "mysql_version": "5.7.40",
+    "must_report": [],
+    "must_not_report": [
+      "MM001",
+      "MM008",
+      "MM014",
+      "MM015",
+      "MM025"
+    ]
+  }
+}

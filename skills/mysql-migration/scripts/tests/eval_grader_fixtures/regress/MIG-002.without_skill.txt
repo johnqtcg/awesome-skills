@@ -1,0 +1,14 @@
+### 9.1 Context Gate
+MySQL Version 5.7.40.
+
+### 9.3 Risk Assessment
+UNSAFE - 5.7 has no INSTANT algorithm.
+
+```sql
+SET SESSION lock_wait_timeout = 3;
+ALTER TABLE events ADD COLUMN source VARCHAR(100) DEFAULT NULL, ALGORITHM=INPLACE, LOCK=NONE;
+```
+
+Rollback: compensating DDL drops the column.
+Uncovered risks: peak QPS unknown, assumed high.
+Scorecard: 10/12 PASS

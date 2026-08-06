@@ -1,0 +1,28 @@
+{
+  "id": "MIG-015",
+  "title": "ADD FOREIGN KEY with ALGORITHM=INPLACE while foreign_key_checks is enabled",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V7__add_order_fk.sql\nSET SESSION lock_wait_timeout = 3;\nALTER TABLE order_items\n  ADD CONSTRAINT fk_order FOREIGN KEY (order_id) REFERENCES orders(id),\n  ALGORITHM=INPLACE, LOCK=NONE;",
+  "context": {
+    "mysql_version": "8.0.32",
+    "table_rows": "12000000",
+    "replication": "source-2-replica"
+  },
+  "violated_rule": "ADD FOREIGN KEY supports INPLACE only when foreign_key_checks is disabled",
+  "expected_feedback": "CRITICAL: the manual states 'The INPLACE algorithm is supported when foreign_key_checks is disabled. Otherwise, only the COPY algorithm is supported.' With checks enabled (the default) this statement fails. There is no online-and-validated path for ADD FOREIGN KEY: either accept COPY — a full rebuild with writes blocked, unacceptable at 12M rows — or verify orphans yourself, set foreign_key_checks=0, take the INPLACE path, and accept a constraint the server never validated. State which one you chose. For a table this size the practical answer is the verified-then-INPLACE path, or pt-osc if other tables reference order_items.",
+  "coverage_rules": [
+    "foreign_key_checks",
+    "FOREIGN KEY",
+    "COPY",
+    "INPLACE"
+  ],
+  "reference": "references/migration-anti-examples.md",
+  "lint": {
+    "mysql_version": "8.0.32",
+    "must_report": [
+      "MM009"
+    ],
+    "must_not_report": []
+  }
+}

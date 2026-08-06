@@ -1,15 +1,31 @@
 {
   "id": "MIG-008",
-  "title": "Good gh-ost invocation — correct tool usage for large table type change",
+  "title": "Good gh-ost invocation — correct operation mode for large-table type change",
   "type": "good_practice",
   "severity": "none",
-  "migration_snippet": "# Migration plan for changing user_id INT → BIGINT on events table (80M rows)\n# Step 1: dry-run\ngh-ost --host=replica-host --allow-on-master \\\n  --database=app --table=events \\\n  --alter='MODIFY COLUMN user_id BIGINT NOT NULL' \\\n  --chunk-size=1000 --max-lag-millis=1500 \\\n  --throttle-control-replicas='replica1:3306,replica2:3306' \\\n  --exact-rowcount --concurrent-rowcount \\\n  --initially-drop-ghost-table --initially-drop-old-table\n\n# Step 2: execute (add --execute)\n# Step 3: verify\n# SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_NAME='events' AND COLUMN_NAME='user_id';",
+  "migration_snippet": "# Migration plan: user_id INT -> BIGINT on events (80M rows)\n# Mode (a): --host is a REPLICA, so --allow-on-master is NOT used.\n# Step 1: dry-run (omit --execute)\ngh-ost --host=replica1.db.internal --port=3306 \\\n  --database=app --table=events \\\n  --alter='MODIFY COLUMN user_id BIGINT NOT NULL' \\\n  --chunk-size=1000 --max-lag-millis=1500 \\\n  --max-load=Threads_running=25 --critical-load=Threads_running=1000 \\\n  --throttle-control-replicas='replica1.db.internal:3306,replica2.db.internal:3306' \\\n  --exact-rowcount --concurrent-rowcount \\\n  --postpone-cut-over-flag-file=/tmp/ghost.postpone.flag \\\n  --panic-flag-file=/tmp/ghost.panic.flag\n\n# Step 2: re-run with --execute; copy runs, then waits at the postpone flag\n# Step 3: verify, then delete the postpone flag to cut over\n# Step 4: keep _events_old until the rollback window closes (no --ok-to-drop-table)\n# SELECT COLUMN_TYPE FROM information_schema.COLUMNS\n#  WHERE TABLE_NAME='events' AND COLUMN_NAME='user_id';",
   "context": {
     "mysql_version": "5.7.40",
     "table_rows": "80000000",
     "replication": "source-2-replica"
   },
-  "expected_feedback": "No violations. Correct use of gh-ost for a COPY-requiring operation (INT→BIGINT) on a large table. Dry-run first, replica-based binlog reading, throttle controls, exact row count for ETA. Type change requires COPY which is unsafe at 80M rows — gh-ost is the right tool choice.",
-  "coverage_rules": ["gh-ost", "COPY", "large table", "replica", "throttle", "dry-run"],
-  "reference": "references/large-table-migration.md"
+  "expected_feedback": "No violations. INT->BIGINT is a data-type change, which the manual supports only with ALGORITHM=COPY — unsafe at 80M rows, so gh-ost is the right tool. The invocation uses gh-ost's default mode (--host is a replica) and correctly omits --allow-on-master, which is the opt-in for pointing gh-ost at the master. Dry-run precedes --execute; load and lag throttles are set; cut-over is postponed behind a flag file; no destructive cleanup flag is present, so the _old table survives as the rollback path.",
+  "coverage_rules": [
+    "gh-ost",
+    "COPY",
+    "--allow-on-master",
+    "replica",
+    "throttle",
+    "dry-run",
+    "postpone-cut-over-flag-file"
+  ],
+  "reference": "references/large-table-migration.md",
+  "lint": {
+    "mysql_version": "5.7.40",
+    "must_report": [],
+    "must_not_report": [
+      "MM017",
+      "MM018"
+    ]
+  }
 }

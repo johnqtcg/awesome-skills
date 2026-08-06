@@ -11,6 +11,20 @@
   },
   "expected_feedback": "Critical: Adding NOT NULL column without DEFAULT on a populated table. If any existing row has no value for this column, MySQL will either fail the ALTER or assign an implicit default depending on sql_mode. Use phased approach: (1) ADD COLUMN nullable, (2) backfill in PK-range batches, (3) MODIFY to NOT NULL with explicit DEFAULT.",
   "violated_rule": "Rollback SQL provided",
-  "coverage_rules": ["NOT NULL", "phased approach", "backfill", "PK-range"],
-  "reference": "SKILL.md"
+  "coverage_rules": [
+    "NOT NULL",
+    "phased approach",
+    "backfill",
+    "PK-range"
+  ],
+  "reference": "SKILL.md",
+  "lint": {
+    "mysql_version": "5.7.40",
+    "must_report": [
+      "MM014"
+    ],
+    "must_not_report": [
+      "MM001"
+    ]
+  }
 }

@@ -1,0 +1,27 @@
+{
+  "id": "MIG-013",
+  "title": "ALGORITHM=INPLACE on a 5.7 partition clause — server rejects the statement",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V12__add_monthly_partition.sql\nSET SESSION lock_wait_timeout = 3;\nALTER TABLE events\n  ADD PARTITION (PARTITION p2026_09 VALUES LESS THAN (20260901)),\n  ALGORITHM=INPLACE, LOCK=NONE;",
+  "context": {
+    "mysql_version": "5.7.40",
+    "table_rows": "40000000",
+    "replication": "source-replica"
+  },
+  "violated_rule": "partition clauses accept only ALGORITHM=DEFAULT, LOCK=DEFAULT on 5.7",
+  "expected_feedback": "CRITICAL: on MySQL 5.7, ADD PARTITION accepts only ALGORITHM=DEFAULT, LOCK=DEFAULT. Naming INPLACE makes the statement fail outright. This is the documented exception to the 'always state the algorithm' rule — omit both clauses on 5.7. On 8.0+ ALGORITHM=INPLACE is supported, and LOCK=NONE additionally works for RANGE/LIST partitions (but not HASH/KEY, and not for REORGANIZE/COALESCE/REBUILD PARTITION).",
+  "coverage_rules": [
+    "ADD PARTITION",
+    "ALGORITHM=DEFAULT",
+    "partition"
+  ],
+  "reference": "references/ddl-algorithm-matrix.md",
+  "lint": {
+    "mysql_version": "5.7.40",
+    "must_report": [
+      "MM007"
+    ],
+    "must_not_report": []
+  }
+}

@@ -10,6 +10,23 @@
     "replication": "source-replica"
   },
   "expected_feedback": "No violations. Correctly implements the 5-phase zero-downtime pattern: (1) additive nullable column with INSTANT, (2) PK-range backfill, (3) app dual-write deploy, (4) constraint enforcement with INPLACE, (5) cleanup in separate release. Session guards present on all DDL statements.",
-  "coverage_rules": ["phased", "ALGORITHM=INSTANT", "ALGORITHM=INPLACE", "session guards", "lock_wait_timeout", "backfill", "zero-downtime"],
-  "reference": "SKILL.md"
+  "coverage_rules": [
+    "phased",
+    "ALGORITHM=INSTANT",
+    "ALGORITHM=INPLACE",
+    "session guards",
+    "lock_wait_timeout",
+    "backfill",
+    "zero-downtime"
+  ],
+  "reference": "SKILL.md",
+  "lint": {
+    "mysql_version": "8.0.32",
+    "must_report": [],
+    "must_not_report": [
+      "MM001",
+      "MM014",
+      "MM015"
+    ]
+  }
 }

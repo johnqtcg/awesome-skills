@@ -26,6 +26,7 @@ description: >
 | Avoid common migration mistakes        | §7 Anti-Examples                        |
 | Score the review result                | §8 Scorecard                            |
 | Format review output                   | §9 Output Contract                      |
+| Run the deterministic checker          | §11 + `scripts/lint_migration.py`       |
 | Look up DDL algorithm by operation     | `references/ddl-algorithm-matrix.md`    |
 | Plan a large-table (>10M rows) change  | `references/large-table-migration.md`   |
 
@@ -33,12 +34,19 @@ description: >
 
 ## §1 Scope
 
-**In scope** — schema migration safety for MySQL 5.7 and 8.0+ (InnoDB):
+**Verified — 5.7, 8.0, 8.4** (transcribed from each manual, 2026-08-06). **Assumed — 8.1–8.3, 9.x**:
+8.4's rules applied but never confirmed there; 9.x shares 8.4's online-DDL matrix byte for byte, yet
+9.1.0 raised the INSTANT row-version ceiling 64→255 without touching it, so matrix identity is not
+rule identity — re-check numeric thresholds against the target's manual. **Unverified — 5.6 and
+older, past 9.x**: say so in §9.9 rather than answering as if covered. MM028 reports both;
+`--fail-on warning` makes either a hard stop.
 
-- ALTER TABLE (add/drop/modify column, add/drop index, rename, convert charset)
-- CREATE / DROP INDEX, data backfill and transformation migrations
+**In scope** — schema migration safety for InnoDB:
+
+- ALTER TABLE (add/drop/modify column, add/drop index, rename, convert charset); CREATE / DROP INDEX
+- Data backfill and transformation migrations
 - Table restructuring (partitioning, splitting, merging), foreign key changes
-- Migration file review (Flyway, Liquibase, golang-migrate, raw SQL)
+- Migration files **as SQL**: raw `.sql`/`.ddl`, Flyway, golang-migrate. Liquibase only via its SQL changelogs or `liquibase updateSQL` output — XML/YAML/JSON changelogs and programmatic (Go/Java/Python) migrations are not parsed; review the generated SQL and say that is what you did
 - Rollback planning, verification, and replication impact assessment
 
 **Out of scope** — delegate to dedicated skills:
@@ -59,7 +67,7 @@ Collect before giving migration advice:
 
 | Item | Why it matters | If unknown |
 |------|----------------|------------|
-| **MySQL version** (5.7.x / 8.0.x / 8.4.x) | DDL algorithm support differs dramatically | Assume 5.7 (most restrictive) |
+| **Exact MySQL version** (`8.0.28`, not "8.x") | INSTANT gates land at 8.0.12 / 8.0.28 / 8.0.29; replication statements change at 8.0.22 and 8.4. A major version is not enough, and versions outside 5.7 / 8.0 / 8.4 / 9.x are unverified (§1) | Assume 5.7 (most restrictive) |
 | **Storage engine** | Only InnoDB supports online DDL | Assume InnoDB; WARN if MyISAM |
 | **Table row count** | Determines safe DDL vs tool-based threshold | Ask, or estimate via `SHOW TABLE STATUS` |
 | **Table data + index size** | Large tables need gh-ost / pt-osc | Ask, or estimate |
@@ -67,6 +75,7 @@ Collect before giving migration advice:
 | **Replication topology** | DDL on source replicates; COPY causes lag | Assume source-replica with GTID |
 | **Maintenance window** | Some operations need low-traffic periods | Assume none (zero-downtime required) |
 | **Migration framework** | Flyway/Liquibase/golang-migrate affect rollback | Detect from project files |
+| **gh-ost / pt-osc version** (only when recommending one) | `--include-triggers` needs gh-ost ≥1.1.8; `--resume`/`--revert` ≥1.1.9; `--attempt-instant-ddl` ≥1.1.6 | Assume no trigger support; recommend pt-osc if the table has triggers |
 
 **If database access is available**, run:
 
@@ -96,17 +105,32 @@ Classify the request mode:
 
 ### Gate 3: Risk Classification
 
-For each DDL statement, classify risk:
+Risk is **blast radius × duration × reversibility**, not row count alone: a 1M-row table at 20k QPS
+is more dangerous than a 50M-row archive nobody writes to. Score each DDL statement across five
+axes and take the **highest** band any axis reaches.
 
-| Risk | Definition | Required action |
-|------|------------|-----------------|
-| **SAFE** | INSTANT or INPLACE+LOCK=NONE, small table, additive | Session guards sufficient |
-| **WARN** | INPLACE with restrictions, or table 1M–10M rows | Off-peak window + monitoring |
-| **UNSAFE** | COPY algorithm, >10M rows, or destructive DDL | gh-ost/pt-osc + staged rollout + rollback rehearsal |
+| Axis | SAFE | WARN | UNSAFE |
+|------|------|------|--------|
+| **A. Concurrency** — does the server permit concurrent DML? | INSTANT, or INPLACE + `LOCK=NONE` | INPLACE + `LOCK=SHARED` (writes block) | COPY / `LOCK=EXCLUSIVE`, or the algorithm is unknown |
+| **B. Work volume** — does it rewrite the table? | Metadata only, no rebuild | Rebuild under ~1M rows / ~1GB | Rebuild above ~10M rows or ~10GB |
+| **C. Write pressure** — QPS on the table during the window | Low traffic, or a maintenance window exists | Moderate, off-peak reachable | High-traffic with no window; MDL queue would cascade |
+| **D. Replication** — cost on the replica | Metadata event only | Rebuild the replicas can absorb inside the lag SLA | Rebuild exceeding the lag SLA, or 5.7 single-threaded applier on a large table |
+| **E. Reversibility** — see §5.3 | Reversible by a cheap compensating DDL | Reversible with a rebuild, or with bounded data loss | Irreversible without restore (`DROP COLUMN/TABLE`, narrowing type, destructive backfill) |
+
+Row count enters via axis B only, as a proxy for rebuild duration — prefer table size in bytes or a
+timed run on a replica. **Any axis UNSAFE → UNSAFE** (no averaging); **two axes WARN → UNSAFE**
+unless you name the one you mitigated; axis C or D **unknown** counts as WARN, not SAFE — an
+unmeasured hot table is not a cold one.
+
+| Band | Required action |
+|------|-----------------|
+| **SAFE** | Session guards sufficient |
+| **WARN** | Off-peak window + live monitoring + a stated abort trigger |
+| **UNSAFE** | gh-ost/pt-osc or a phased plan + staged rollout + reversal path rehearsed on a replica |
 
 **STOP**: Any UNSAFE item has no mitigation plan. Must provide tool-based alternative or phased approach before proceeding.
 
-**PROCEED**: Every DDL statement has a risk level and corresponding mitigation.
+**PROCEED**: Every DDL statement has a per-axis score, an overall band, and a corresponding mitigation.
 
 ### Gate 4: Output Completeness
 
@@ -148,14 +172,34 @@ Execute every item for each DDL statement. Mark **SAFE** / **WARN** / **UNSAFE**
 
 ### 5.1 Algorithm & Lock Assessment
 
-1. **Algorithm selection** — determine `ALGORITHM=INSTANT` / `ALGORITHM=INPLACE` / `ALGORITHM=COPY` for each ALTER TABLE.
-   Always specify explicitly; never rely on server default. When uncertain → load `references/ddl-algorithm-matrix.md`.
+1. **Algorithm selection** — determine `ALGORITHM=INSTANT`, `ALGORITHM=INPLACE`, or `ALGORITHM=COPY`
+   for each ALTER TABLE **against the exact server version**, then state it explicitly. Never rely
+   on server default. Load `references/ddl-algorithm-matrix.md` whenever the operation is not a
+   plain `ADD COLUMN` or `ADD INDEX`.
 
-2. **Lock level** — specify `LOCK=NONE` when possible. If server rejects it → operation is not online → escalate to gh-ost/pt-osc.
+   Gates that are wrong more often than not — **the `ALGORITHM=INSTANT` clause itself does not
+   exist before 8.0.12**, so 5.7 and 8.0.0–8.0.11 reject it for *every* operation, `SET DEFAULT`
+   included; within 8.0.12+, positional `ADD COLUMN` needs 8.0.29+, `RENAME COLUMN` 8.0.28+,
+   `DROP COLUMN` 8.0.29+; `DROP COLUMN`
+   is INPLACE+`LOCK=NONE` on 5.7 and pre-8.0.29, **never COPY**; extending `VARCHAR` is **never
+   INSTANT** and is COPY across the 255/256-**byte** boundary; `ADD FOREIGN KEY` is INPLACE **only
+   while `foreign_key_checks=0`**, else COPY. **Exception — partition clauses**:
+   `ADD/DROP/REORGANIZE/COALESCE/REBUILD PARTITION` accept only `ALGORITHM=DEFAULT, LOCK=DEFAULT`
+   on 5.7, where naming `INPLACE` makes the statement fail. Use matrix §4 for those.
 
-3. **MDL contention** — even INSTANT acquires brief metadata lock. Long-running transactions block MDL → DDL queues → all subsequent queries queue. Mitigation: `SET SESSION lock_wait_timeout = 3;` pre-check: `SELECT * FROM information_schema.innodb_trx WHERE trx_started < NOW() - INTERVAL 30 SECOND;`
+2. **Lock level — the rule below applies to INPLACE and COPY only.** With `ALGORITHM=INSTANT`, **omit the `LOCK` clause or write `LOCK=DEFAULT`; `NONE`, `SHARED` and `EXCLUSIVE` are rejected** — *"Only `LOCK = DEFAULT` is permitted for operations that use `ALGORITHM=INSTANT`."* `ALGORITHM=INSTANT, LOCK=NONE` is a failed statement, not a stronger guarantee.
 
-4. **Replication impact** — MySQL 5.7 replicas apply DDL single-threaded; COPY causes severe lag. Assess: will DDL duration exceed replica lag SLA?
+   For INPLACE/COPY: specify `LOCK=NONE` when the matrix says concurrent DML is permitted. Where it
+   is not (`ADD FULLTEXT`/`SPATIAL INDEX`, `CONVERT TO CHARACTER SET`, `DROP PRIMARY KEY` alone,
+   adding an `AUTO_INCREMENT` column, and 8.0 `REORGANIZE/COALESCE/REBUILD PARTITION`), the best
+   available is `LOCK=SHARED` — **state it explicitly and budget the write outage**, or escalate to
+   gh-ost/pt-osc. Omitting the clause turns a planned decision into an unplanned one. Note that
+   `INPLACE, LOCK=NONE` still rebuilds the table for `ADD PRIMARY KEY`, `MODIFY … NULL/NOT NULL`,
+   and `ROW_FORMAT` changes: online is not free — budget the I/O, ~2× disk, and axis-D lag.
+
+3. **MDL contention — including INSTANT** — all three algorithms can take an exclusive metadata lock. ALTER TABLE reference: *"INSTANT: … An exclusive metadata lock on the table **may be taken briefly during the execution phase** of the operation."* A long-running transaction holds it, the DDL queues, every later query queues behind the DDL — the usual cause of a "safe" change taking a site down, and INSTANT is **not** exempt. Guard every DDL, INSTANT included, with `SET SESSION lock_wait_timeout = 3;` **before** the statement, and pre-check `SELECT * FROM information_schema.innodb_trx WHERE trx_started < NOW() - INTERVAL 30 SECOND;`. (The *What Is New* page's "no metadata locks are taken" is a looser summary than the reference; not licence to skip the guard.)
+
+4. **Replication impact** — MySQL 5.7 replicas apply DDL single-threaded; COPY causes severe lag. Will DDL duration exceed the replica lag SLA?
 
 ### 5.2 Data Integrity
 
@@ -163,7 +207,7 @@ Execute every item for each DDL statement. Mark **SAFE** / **WARN** / **UNSAFE**
 
 6. **Type change truncation** — narrowing VARCHAR, reducing DECIMAL precision → silent data loss. Widening may change algorithm.
 
-7. **FK cascade risk** — ON DELETE CASCADE on large parent → uncontrolled write amplification. Adding FK triggers full-table validation.
+7. **FK cascade and algorithm risk** — `ON DELETE CASCADE` on a large parent → uncontrolled write amplification. And `ADD FOREIGN KEY` is **COPY unless `foreign_key_checks=0`**: with checks on the server validates every child row and rebuilds the table; with checks off you get INPLACE but an **unvalidated** constraint. There is no online-and-validated option — see `references/migration-anti-examples.md` AE-13.
 
 8. **Index write amplification** — each new index costs every INSERT/UPDATE. Check for redundant indexes (prefix of existing composite).
 
@@ -171,7 +215,24 @@ Execute every item for each DDL statement. Mark **SAFE** / **WARN** / **UNSAFE**
 
 9. **Deployment ordering** — column add → schema first, then app; column remove → app first, then schema; column rename → two-phase with dual-write.
 
-10. **Rollback feasibility** — classify: **reversible** / **reversible-with-data-loss** / **irreversible**. DROP COLUMN = irreversible → require backup.
+10. **Reversal path** — MySQL DDL **cannot be rolled back**. Every DDL issues an implicit `COMMIT`
+    before and after itself, so `ROLLBACK` after a completed `ALTER` does nothing. 8.0's *atomic
+    DDL* is crash-safety for the dictionary + storage change, **not** user-visible undo.
+
+    "Rollback" therefore means one of five concrete things. Name which one applies per phase:
+
+    | Path | Applies to |
+    |------|-----------|
+    | **Abort before cut-over** | gh-ost/pt-osc runs and phased plans not yet at the switch — free |
+    | **Compensating DDL** | Additive changes: drop the column or index you added |
+    | **Application revert** | Anything behind dual-write or a feature flag; schema stays |
+    | **Roll forward** | Bad backfill or wrong default — fix with another migration |
+    | **Restore / PITR** | Irreversible loss: `DROP COLUMN`/`TABLE`, narrowed type, destructive `UPDATE` |
+
+    Classify each phase **reversible** (compensating DDL or app revert), **reversible-with-loss**
+    (roll forward; rows written to the dropped structure are gone), or **irreversible** (restore
+    only). Never emit a `rollback:` block that cannot restore state — an `ADD COLUMN` offered as the
+    rollback for a `DROP COLUMN` recreates an empty column and reads as if recovery happened.
 
 ### 5.4 Operational Safety
 
@@ -179,9 +240,9 @@ Execute every item for each DDL statement. Mark **SAFE** / **WARN** / **UNSAFE**
 
 12. **Disk space** — COPY needs ~2× table size. gh-ost needs ghost table + binlog backlog.
 
-13. **Idempotency** — can migration re-run after partial failure? Use `IF NOT EXISTS` / `IF EXISTS`.
+13. **Idempotency** — can the migration re-run after partial failure? **MySQL `ALTER TABLE` has no `IF NOT EXISTS` / `IF EXISTS`** for columns or indexes (that is MariaDB); writing it is a parse error. Only `CREATE TABLE`/`DROP TABLE`/`CREATE DATABASE`/`DROP DATABASE` accept it. Achieve idempotency by: the framework's history table (Flyway `flyway_schema_history`, golang-migrate `schema_migrations`); a pre-flight `information_schema.COLUMNS`/`STATISTICS` probe that decides whether to emit the DDL; one DDL per file so a partial failure has an unambiguous resume point; and a recorded checkpoint for batched backfills.
 
-14. **Statement granularity** — prefer one DDL per migration file for atomic rollback. Exception: multiple independent ADD COLUMN can group.
+14. **Statement granularity** — one DDL per migration file, so a failure leaves an unambiguous state and the compensating DDL is obvious (there is no transactional rollback — see item 10). Exception: independent `ADD COLUMN`s should be grouped, which also costs one INSTANT row version instead of several.
 
 ---
 
@@ -207,9 +268,12 @@ For tables >10M rows requiring COPY, use gh-ost (default) or pt-osc (if inbound 
 ```sql
 -- WRONG: server may silently choose COPY → outage on large table
 ALTER TABLE users ADD COLUMN age INT;
--- RIGHT: explicit algorithm
+-- RIGHT on 8.0.12+:
 ALTER TABLE users ADD COLUMN age INT DEFAULT NULL, ALGORITHM=INSTANT;
+-- RIGHT on 5.7 (INSTANT does not exist there; the line above would error out):
+ALTER TABLE users ADD COLUMN age INT DEFAULT NULL, ALGORITHM=INPLACE, LOCK=NONE;
 ```
+Explicit only helps when it is also correct for the version.
 
 ### AE-2: NOT NULL on populated column without phased approach
 ```sql
@@ -247,7 +311,7 @@ ALTER TABLE events MODIFY COLUMN payload MEDIUMTEXT;
 -- RIGHT: only flag naming if it causes functional problems
 ```
 
-Extended anti-examples (AE-7 through AE-13) in `references/migration-anti-examples.md`.
+AE-7 through AE-17 in `references/migration-anti-examples.md`: partition-clause algorithm rejection (AE-14), VARCHAR/INSTANT (AE-15), gh-ost mode confusion (AE-16), INSTANT row-version exhaustion (AE-17).
 
 ---
 
@@ -255,13 +319,17 @@ Extended anti-examples (AE-7 through AE-13) in `references/migration-anti-exampl
 
 ### Critical — any FAIL means overall FAIL
 
-- [ ] Algorithm explicitly specified for every ALTER TABLE (`ALGORITHM=INSTANT|INPLACE|COPY`)
+- [ ] Algorithm explicitly specified for every ALTER TABLE (`ALGORITHM=INSTANT|INPLACE|COPY`), **or**
+      the statement is a partition clause where the matrix says only `DEFAULT` is accepted
 - [ ] Session guards set before every DDL (`lock_wait_timeout`, `innodb_lock_wait_timeout`)
-- [ ] Rollback SQL provided for every phase (or irreversibility documented with backup plan)
+- [ ] Every phase names its reversal path from the §5.3-10 table (abort / compensating DDL / app
+      revert / roll forward / restore), with SQL where SQL can actually restore state and an
+      explicit backup + retention plan where it cannot
 
 ### Standard — 4 of 5 must pass
 
-- [ ] DDL algorithm matches MySQL version capability (no INSTANT on 5.7 where unsupported)
+- [ ] DDL algorithm and lock verified against the **exact server version**, not the major version
+      (INSTANT gates at 8.0.12/8.0.28/8.0.29; no INSTANT on 5.7; partition clauses per matrix §4)
 - [ ] Replication impact assessed for each COPY/INPLACE operation
 - [ ] Backward-compatible deployment order (additive before app, removal after app)
 - [ ] Backfill uses PK-range batching, not LIMIT/OFFSET
@@ -270,7 +338,8 @@ Extended anti-examples (AE-7 through AE-13) in `references/migration-anti-exampl
 ### Hygiene — 3 of 4 must pass
 
 - [ ] Disk space impact estimated for COPY/gh-ost operations
-- [ ] Idempotency guards present (`IF NOT EXISTS` / `IF EXISTS`)
+- [ ] Re-runnable after partial failure — via the framework's history table or an
+      `information_schema` pre-check, **not** `IF [NOT] EXISTS`, which `ALTER TABLE` rejects
 - [ ] Post-deploy monitoring checks specified (replication lag, error rate)
 - [ ] One DDL per migration file (or grouped ADD COLUMN justified)
 
@@ -330,3 +399,22 @@ Data basis: [full context | degraded | minimal | planning]
 | Standard or Deep depth | `references/ddl-algorithm-matrix.md` |
 | Deep depth, or table >10M rows | `references/large-table-migration.md` |
 | Extended anti-example matching | `references/migration-anti-examples.md` |
+
+---
+
+## §11 Deterministic Checker
+
+`scripts/lint_migration.py` decides version-gated algorithm/lock questions mechanically. Run it on the migration under review, then reason about what it cannot see.
+
+```bash
+python3 scripts/lint_migration.py --mysql-version 8.0.29 path/to/migration.sql   # or a dir
+python3 scripts/lint_migration.py --list-checks   # add --format json for machine output
+```
+
+29 checks: INSTANT version gates and its **LOCK=DEFAULT-only** rule (MM029), never-INSTANT operations, partition-clause algorithm support, `LOCK=NONE` on write-blocking operations, `ADD FOREIGN KEY` + `foreign_key_checks`, VARCHAR byte-boundary crossing, `IF [NOT] EXISTS` on ALTER, stored-program-only loops, `sql_log_bin`, gh-ost/pt-osc flag misuse, version-correct replication and lock-inspection statements, an unverified target version (MM028), and unread migration carriers (MM030).
+
+Directory mode reads `.sql`, `.ddl`, `.mysql`, `.md`, `.sh`, `.bash`. A file named explicitly is scanned as SQL only if its extension is **unknown**; a known-unparseable carrier (Liquibase XML/YAML/JSON, Go/Java/Python) becomes an **MM030 finding whether named explicitly or found in a directory** — naming it does not make it parseable, and scanning it as SQL reports "clean" about DDL masked inside string values. `--fail-on warning` therefore refuses any input whose DDL nobody read.
+
+**Use it as evidence, not as the review.** It reads statements, not your database, so it cannot decide whether a `MODIFY` changes the type or only nullability (compare `SHOW CREATE TABLE`), the VARCHAR band without both widths, or risk axes B–D. A clean run means "nothing here is rejected outright" — not that the migration is safe.
+
+Three companions, all opt-in: `verify_against_server.sh` runs representative ALTERs against a real (disposable) server and reports any matrix claim it contradicts; `mutation_sweep.py` reintroduces each historical defect and requires the suite to catch it; `run_model_eval.py` grades with-skill vs without-skill responses on a deterministic rubric.

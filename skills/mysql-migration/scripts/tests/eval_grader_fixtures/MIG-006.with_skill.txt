@@ -1,0 +1,32 @@
+### 9.1 Context Gate
+| Item | Value | Source |
+| MySQL Version | 8.0.28 | stated in request |
+| Table rows | 80,000,000 | stated in request |
+
+### 9.2 Depth & Mode
+Standard x review - a single additive DDL on a large, replicated table.
+
+### 9.3 Risk Assessment Table
+| # | DDL | Algorithm | Lock | Risk | Notes |
+| 1 | ADD COLUMN source | INSTANT | n/a | SAFE | 8.0.28 >= 8.0.12, so INSTANT applies |
+
+Concurrency SAFE, work volume SAFE (metadata only), replication SAFE.
+
+### 9.5 Migration SQL
+```sql
+SET SESSION lock_wait_timeout = 3;
+SET SESSION innodb_lock_wait_timeout = 3;
+ALTER TABLE events ADD COLUMN source VARCHAR(100) DEFAULT NULL, ALGORITHM=INSTANT;
+```
+
+### 9.7 Rollback Plan
+Reversible by compensating DDL: `ALTER TABLE events DROP COLUMN source, ALGORITHM=INSTANT;`
+No data is lost because the column is new and nullable.
+
+### 9.9 Uncovered Risks
+| Area | Reason | Impact | Follow-up |
+| Row-version budget | TOTAL_ROW_VERSIONS not supplied | INSTANT fails at 64 | check INNODB_TABLES |
+| Peak QPS | not supplied; assumed high | MDL queueing | confirm before the window |
+
+Scorecard: 11/12 - Critical 3/3, Standard 5/5, Hygiene 3/4 - PASS
+Data basis: degraded
