@@ -1,0 +1,38 @@
+{
+  "id": "ORA-030",
+  "title": "TRUNCATE preceded by a keyed snapshot — recovery artefact exists",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V20__reset_staging.sql\nCREATE TABLE mig_bak_staging_20260807 AS SELECT * FROM orders_staging;\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nTRUNCATE TABLE orders_staging;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "4000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Standard, not critical: the script takes a full copy of the table before the statement runs, so the recovery artefact this check asks for does exist. The residual risk is what the snapshot does not cover — confirm it is the right table, that the CTAS actually completed, and that someone owns dropping it once the migration is signed off. The statement itself remains irreversible: it auto-commits, resets the high-water mark, and Flashback Table cannot cross it, so recovery means reinserting from the snapshot rather than undoing anything. On Standard Edition 2 that snapshot would be the only recovery mechanism available, since Flashback Table TO SCN/TIMESTAMP is Enterprise Edition only.",
+  "violated_rule": "Irreversible statements need a pre-DDL artefact",
+  "coverage_rules": [
+    "irreversible",
+    "high-water mark"
+  ],
+  "reference": "SKILL.md",
+  "expect_findings": [
+    "ORA017"
+  ],
+  "forbid_findings": [
+    "ORA001",
+    "ORA007"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 4000000
+  },
+  "lint_detail_must_contain": {
+    "ORA017": "downgraded from"
+  },
+  "expect_severity": {
+    "ORA017": "warning"
+  }
+}

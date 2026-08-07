@@ -1,0 +1,39 @@
+{
+  "id": "ORA-043",
+  "title": "CTAS with a JOIN counted as a full copy",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V33__reset.sql\nCREATE TABLE orders_bak AS\nSELECT orders.* FROM orders JOIN vip_users ON vip_users.id = orders.user_id;\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nTRUNCATE TABLE orders;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "6000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: the copy uses `SELECT orders.*`, so it looks like a full backup, but the inner join to VIP_USERS silently drops every order whose user is not in that table. How many rows that is cannot be read off the script — it could be all of them or almost none. After the destructive statement the missing rows are unrecoverable, and the shape of the SQL is exactly the shape that gets waved through in review. Either copy the table plainly (SELECT * FROM orders with no join or predicate), or state in the rollback plan which subset is recoverable and who accepted losing the rest. The same caution applies to UNION, DISTINCT, GROUP BY and any expression in the select list: if the statement is not a plain single-table copy, what it preserves is not verifiable from the text.",
+  "violated_rule": "Irreversible statements need a pre-DDL artefact",
+  "coverage_rules": [
+    "irreversible",
+    "high-water mark"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [
+    "ORA017",
+    "ORA031"
+  ],
+  "forbid_findings": [
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 6000000
+  },
+  "expect_severity": {
+    "ORA017": "critical",
+    "ORA031": "warning"
+  },
+  "lint_detail_must_contain": {
+    "ORA031": "not a plain single-table copy"
+  }
+}

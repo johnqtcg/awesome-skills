@@ -1,0 +1,37 @@
+{
+  "id": "ORA-022",
+  "title": "RENAME COLUMN in place on a live table",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V13__fix_naming.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders RENAME COLUMN usr_id TO user_id;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "18000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Standard: the database side is trivial — RENAME COLUMN has been supported since Oracle 9i Release 2 and is metadata-only with a brief lock, independent of the 18M row count. Do not report it as unsupported or as needing a rewrite. The risk is on the application side and it is the inverse of the usual migration hazard: the statement completes in milliseconds, auto-commits, and every deployed query referencing usr_id begins failing with ORA-00904 at that moment. There is no dual-name grace period and no transaction to roll back. Use expand/contract — add user_id, dual-write, backfill, cut reads over, then SET UNUSED the old column — or put a view in front of the table exposing both spellings during the transition.",
+  "violated_rule": "Backward-compatible deployment order",
+  "coverage_rules": [
+    "9i Release 2",
+    "ORA-00904",
+    "expand/contract"
+  ],
+  "reference": "references/migration-anti-examples.md",
+  "expect_findings": [
+    "ORA018"
+  ],
+  "forbid_findings": [
+    "ORA001",
+    "ORA015"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 18000000
+  },
+  "expected_feedback_must_not_contain": [
+    "not supported",
+    "23ai"
+  ]
+}

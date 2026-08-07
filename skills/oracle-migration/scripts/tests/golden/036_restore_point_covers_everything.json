@@ -1,0 +1,42 @@
+{
+  "id": "ORA-036",
+  "title": "GUARANTEED restore point is database-wide and covers any target",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V26__cleanup.sql\nCREATE RESTORE POINT before_v26 GUARANTEE FLASHBACK DATABASE;\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders DROP COLUMN legacy_ref;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "6000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Standard, not critical: a guaranteed restore point is a database-level artefact, so unlike a per-table CTAS copy it covers ORDERS without naming it. The drop is still irreversible in itself and the phase is still restore/PITR — recovery means FLASHBACK DATABASE TO RESTORE POINT before_v26, which rewinds the entire database and discards every other transaction since, so it requires the application to be down. Two operational conditions to confirm: the database must be in ARCHIVELOG with a Fast Recovery Area, and the restore point holds flashback logs until dropped, so it can fill the FRA — schedule the DROP RESTORE POINT for sign-off. On Standard Edition 2 this option does not exist and a table copy is the only choice.",
+  "violated_rule": "Irreversible statements need a pre-DDL artefact",
+  "coverage_rules": [
+    "restore point",
+    "ARCHIVELOG",
+    "Fast Recovery Area",
+    "GUARANTEE"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [
+    "ORA007"
+  ],
+  "forbid_findings": [
+    "ORA001",
+    "ORA017",
+    "ORA030",
+    "ORA032"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 6000000
+  },
+  "expect_severity": {
+    "ORA007": "warning"
+  },
+  "lint_detail_must_contain": {
+    "ORA007": "downgraded from critical"
+  }
+}

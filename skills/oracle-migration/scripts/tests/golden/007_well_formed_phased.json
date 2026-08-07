@@ -1,11 +1,39 @@
 {
   "id": "ORA-007",
-  "title": "Well-formed phased migration — correct NOVALIDATE + ONLINE + batching pattern",
+  "title": "Well-formed phased migration — NOVALIDATE + batching + per-release session setup",
   "type": "good_practice",
   "severity": "none",
-  "migration_snippet": "-- Phase 1: V10__add_total_usd.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders ADD (total_usd NUMBER(12,2));\n\n-- Phase 2: backfill (PL/SQL PK-range batched with COMMIT per batch)\n-- Phase 3: app deploy with dual-write\n\n-- Phase 4: V11__enforce_constraint.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders MODIFY (total_usd CONSTRAINT nn_total_usd NOT NULL ENABLE NOVALIDATE);\nALTER TABLE orders MODIFY CONSTRAINT nn_total_usd VALIDATE;\n\n-- Phase 5 (next release): V12__cleanup.sql\nALTER TABLE orders SET UNUSED COLUMN old_total;",
-  "context": {"oracle_version": "19c", "edition": "EE", "table_rows": "5000000", "rac": "no"},
-  "expected_feedback": "No violations. Correctly implements phased migration: (1) add nullable column with DDL_LOCK_TIMEOUT, (2) PK-range batched backfill, (3) app dual-write, (4) ENABLE NOVALIDATE then VALIDATE (non-blocking), (5) SET UNUSED for cleanup. DDL_LOCK_TIMEOUT set for all DDL sessions.",
-  "coverage_rules": ["DDL_LOCK_TIMEOUT", "ENABLE NOVALIDATE", "VALIDATE", "SET UNUSED", "phased", "batch"],
-  "reference": "SKILL.md"
+  "migration_snippet": "-- Phase 1: V10__add_total_usd.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders ADD (total_usd NUMBER(12,2));\n\n-- Phase 2: backfill (PL/SQL PK-range batched with COMMIT per batch)\n-- Phase 3: app deploy with dual-write\n\n-- Phase 4: V11__enforce_constraint.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders MODIFY (total_usd CONSTRAINT nn_total_usd NOT NULL ENABLE NOVALIDATE);\nALTER TABLE orders MODIFY CONSTRAINT nn_total_usd VALIDATE;\n\n-- Phase 5 (next release): V12__cleanup.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders SET UNUSED COLUMN old_total;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "5000000",
+    "rac": "no"
+  },
+  "expected_feedback": "No violations. Correctly implements phased migration: (1) add nullable column with DDL_LOCK_TIMEOUT, (2) PK-range batched backfill, (3) app dual-write, (4) NOT NULL ENABLE NOVALIDATE followed by VALIDATE, which validates under a Row Exclusive lock rather than blocking DML, (5) SET UNUSED for cleanup. Note that DDL_LOCK_TIMEOUT is re-set in phase 5: it is a session setting and phase 5 ships as a separate release, so the value from phase 1 does not carry over. Phase 5 remains irreversible — SET UNUSED cannot be undone — so it still needs a restore/PITR classification.",
+  "coverage_rules": [
+    "DDL_LOCK_TIMEOUT",
+    "ENABLE NOVALIDATE",
+    "VALIDATE",
+    "SET UNUSED",
+    "phased",
+    "batch"
+  ],
+  "reference": "SKILL.md",
+  "expect_findings": [],
+  "forbid_findings": [
+    "ORA001",
+    "ORA002",
+    "ORA003",
+    "ORA005",
+    "ORA007"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 5000000
+  },
+  "lint_ignore": [
+    "ORA025"
+  ]
 }

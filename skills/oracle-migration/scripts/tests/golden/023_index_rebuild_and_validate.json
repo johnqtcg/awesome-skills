@@ -1,0 +1,37 @@
+{
+  "id": "ORA-023",
+  "title": "Offline index rebuild plus VALIDATE on a constraint never created NOVALIDATE",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V14__maintenance.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 5;\nALTER INDEX idx_orders_user REBUILD;\nALTER TABLE orders MODIFY CONSTRAINT fk_orders_user VALIDATE;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "22000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Standard, two issues. (1) ALTER INDEX REBUILD without ONLINE holds an exclusive lock for the whole rebuild and blocks DML on ORDERS; on 19c Enterprise Edition append ONLINE. (2) fk_orders_user is validated without ever having been created ENABLE NOVALIDATE in this script. The two-step pattern only avoids the blocking scan when step one actually was NOVALIDATE — if the constraint is currently DISABLED or was added validating, this statement takes the full-scan path under an exclusive lock, which is the cost the pattern exists to avoid. Check its current STATUS and VALIDATED in USER_CONSTRAINTS before running it.",
+  "violated_rule": "Constraints use ENABLE NOVALIDATE + VALIDATE two-step",
+  "coverage_rules": [
+    "REBUILD ONLINE",
+    "USER_CONSTRAINTS",
+    "NOVALIDATE"
+  ],
+  "reference": "references/oracle-ddl-lock-matrix.md",
+  "expect_findings": [
+    "ORA019",
+    "ORA020"
+  ],
+  "forbid_findings": [
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 22000000
+  },
+  "lint_detail_must_contain": {
+    "ORA019": "Use REBUILD ONLINE (available on Enterprise Edition).",
+    "ORA020": "USER_CONSTRAINTS"
+  }
+}

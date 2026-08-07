@@ -1,0 +1,39 @@
+{
+  "id": "ORA-038",
+  "title": "Row-restricted CTAS mistaken for a full backup",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V28__reset_orders.sql\n-- \"backup\" before the destructive step:\nCREATE TABLE orders_bak AS SELECT * FROM orders WHERE ROWNUM <= 1000;\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nTRUNCATE TABLE orders;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "6000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: the CTAS copies 1000 rows out of 6,000,000, so it is a sample, not a backup. After the statement runs the other 5,999,000 rows are gone with no way back — it auto-commits, resets the high-water mark, and Flashback Table cannot cross it. A reviewer scanning for the word 'backup' sees one and approves, which is exactly why a partial copy is more dangerous here than no copy at all. Take the full table (SELECT * with no predicate), or if only a subset genuinely matters, say so explicitly in the rollback plan: which rows are recoverable, which are not, and who signed off on losing the rest.",
+  "violated_rule": "Irreversible statements need a pre-DDL artefact",
+  "coverage_rules": [
+    "irreversible",
+    "high-water mark"
+  ],
+  "reference": "SKILL.md",
+  "expect_findings": [
+    "ORA017",
+    "ORA031"
+  ],
+  "forbid_findings": [
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 6000000
+  },
+  "expect_severity": {
+    "ORA017": "critical",
+    "ORA031": "warning"
+  },
+  "lint_detail_must_contain": {
+    "ORA031": "not a plain single-table copy"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "id": "ORA-019",
+  "title": "ONLINE index build proposed on Standard Edition 2",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V3__add_index.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 5;\nCREATE INDEX idx_orders_created ON orders (created_at);",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "SE2",
+    "table_rows": "12000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Standard: a non-online CREATE INDEX takes a Share lock that blocks every INSERT/UPDATE/DELETE on ORDERS for the whole build — minutes on 12M rows. The usual fix, appending ONLINE, is not available here: online index builds require Enterprise Edition and this database is SE2, so recommending it would produce a plan that cannot run. On SE2 the options are a maintenance window with DDL_LOCK_TIMEOUT set (already done), or building into an interim table and cutting over. State the edition dependency explicitly in Uncovered Risks — a reviewer who assumes EE will approve an impossible plan.",
+  "violated_rule": "Edition-gated mitigations must be checked against the actual edition",
+  "coverage_rules": [
+    "Enterprise Edition",
+    "Standard Edition",
+    "maintenance window"
+  ],
+  "reference": "references/oracle-version-licensing-matrix.md",
+  "expect_findings": [
+    "ORA006"
+  ],
+  "forbid_findings": [
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "SE2",
+    "version": "19c",
+    "rows": 12000000
+  },
+  "lint_detail_must_contain": {
+    "ORA006": "Enterprise Edition and this database is SE2"
+  }
+}

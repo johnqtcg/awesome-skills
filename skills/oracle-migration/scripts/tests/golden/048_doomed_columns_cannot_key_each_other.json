@@ -1,0 +1,39 @@
+{
+  "id": "ORA-048",
+  "title": "Copy of only the doomed columns — they cannot serve as each other's key",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V38__cleanup.sql\nCREATE TABLE mig_bak_legacy AS SELECT legacy_a, legacy_b FROM orders;\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders DROP (legacy_a, legacy_b);",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "6000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: the copy contains both doomed columns and nothing else. Judged one column at a time this looks fine — when checking legacy_a, legacy_b is present as \"another column\", and vice versa — but both disappear in the same statement, so after it runs the copy is two anonymous value lists with nothing to match them back to their rows. The recovery key has to be a column that *survives* the drop. Add the primary key: CREATE TABLE mig_bak_orders_... AS SELECT id, legacy_a, legacy_b FROM orders, and confirm id is genuinely unique. Until then the phase is restore/PITR with no usable artefact.",
+  "violated_rule": "Irreversible statements need a pre-DDL artefact",
+  "coverage_rules": [
+    "restore / PITR",
+    "MERGE"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [
+    "ORA007",
+    "ORA031"
+  ],
+  "forbid_findings": [
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 6000000
+  },
+  "expect_severity": {
+    "ORA007": "critical",
+    "ORA031": "warning"
+  },
+  "lint_detail_must_contain": {
+    "ORA031": "doomed columns cannot vouch for each other"
+  }
+}

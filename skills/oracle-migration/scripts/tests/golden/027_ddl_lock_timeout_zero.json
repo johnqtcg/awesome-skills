@@ -1,0 +1,40 @@
+{
+  "id": "ORA-027",
+  "title": "DDL_LOCK_TIMEOUT = 0 satisfies the letter of the gate and none of its intent",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V17__add_note.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 0;\nALTER TABLE orders ADD (note VARCHAR2(20));",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "9000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: the session does set DDL_LOCK_TIMEOUT, so a checklist scanned for the statement's presence would pass this — but 0 is Oracle's own default and means NOWAIT. The ALTER fails immediately with ORA-00054 if any session holds even a transient row lock on ORDERS, which on a 9M-row OLTP table is likely during business hours. Setting the parameter to 0 explicitly is indistinguishable from not setting it at all, so this must not score as compliant against the Critical scorecard item. Use a small positive value; 3–10 seconds is typical for OLTP, long enough to ride out an in-flight transaction and short enough that a failure is still fast feedback.",
+  "violated_rule": "DDL_LOCK_TIMEOUT set before every DDL session",
+  "coverage_rules": [
+    "NOWAIT",
+    "ORA-00054",
+    "DDL_LOCK_TIMEOUT"
+  ],
+  "reference": "SKILL.md",
+  "expect_findings": [
+    "ORA026",
+    "ORA001"
+  ],
+  "forbid_findings": [
+    "ORA027"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 9000000
+  },
+  "lint_detail_must_contain": {
+    "ORA026": "NOWAIT"
+  },
+  "expect_severity": {
+    "ORA026": "critical",
+    "ORA001": "critical"
+  }
+}

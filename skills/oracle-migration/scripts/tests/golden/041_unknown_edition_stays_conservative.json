@@ -1,0 +1,40 @@
+{
+  "id": "ORA-041",
+  "title": "Guaranteed restore point with the edition unestablished",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V31__cleanup.sql\nCREATE RESTORE POINT before_v31 GUARANTEE FLASHBACK DATABASE;\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders DROP COLUMN legacy_ref;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "unknown",
+    "table_rows": "6000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: the restore point would be a valid recovery artefact on Enterprise Edition, but the edition has not been established and Flashback Database — the only reason a guaranteed restore point is worth anything — is EE-only. Gate 1 is explicit that an unknown version or edition is assumed to be the most restrictive case, so this does not count and the column drop stays unmitigated. Treating an unverified edition as EE would be a safety false negative: the destructive statement quietly drops a severity level on the strength of something nobody checked. Establish the edition, or take a keyed copy of the column instead, which works everywhere.",
+  "violated_rule": "Edition-gated mitigations must be checked against the actual edition",
+  "coverage_rules": [
+    "Enterprise Edition",
+    "restore / PITR"
+  ],
+  "reference": "references/oracle-version-licensing-matrix.md",
+  "expect_findings": [
+    "ORA032",
+    "ORA007"
+  ],
+  "forbid_findings": [
+    "ORA001",
+    "ORA030"
+  ],
+  "lint_context": {
+    "edition": "unknown",
+    "version": "19c",
+    "rows": 6000000
+  },
+  "expect_severity": {
+    "ORA032": "warning",
+    "ORA007": "critical"
+  },
+  "lint_detail_must_contain": {
+    "ORA032": "assume SE2 when unknown"
+  }
+}

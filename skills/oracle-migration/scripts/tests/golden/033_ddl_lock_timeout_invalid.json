@@ -1,0 +1,41 @@
+{
+  "id": "ORA-033",
+  "title": "DDL_LOCK_TIMEOUT set to a value Oracle rejects — session left unprotected",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V23__add_note.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = -1;\nALTER TABLE orders ADD (note VARCHAR2(20));",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "9000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: DDL_LOCK_TIMEOUT takes an integer in [0, 1000000], so -1 makes the ALTER SESSION itself fail. In a deploy log that error is one line among many and is easy to miss, and the session then carries on with the parameter at its default of 0 — NOWAIT. The result is worse than omitting the line: the script reads as protected while every DDL after it is unguarded, and the ALTER TABLE fails with ORA-00054 the moment any session holds a transient lock on this 9M-row table. Use a small positive integer, and make the deploy tooling fail the run on any error rather than continuing past one.",
+  "violated_rule": "DDL_LOCK_TIMEOUT set before every DDL session",
+  "coverage_rules": [
+    "ORA-00054",
+    "DDL_LOCK_TIMEOUT"
+  ],
+  "reference": "SKILL.md",
+  "expect_findings": [
+    "ORA028",
+    "ORA001"
+  ],
+  "forbid_findings": [
+    "ORA026",
+    "ORA027",
+    "ORA029"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 9000000
+  },
+  "expect_severity": {
+    "ORA028": "critical",
+    "ORA001": "critical"
+  },
+  "lint_detail_must_contain": {
+    "ORA028": "not a value Oracle accepts"
+  }
+}

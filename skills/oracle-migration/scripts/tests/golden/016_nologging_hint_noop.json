@@ -1,0 +1,36 @@
+{
+  "id": "ORA-016",
+  "title": "NOLOGGING written inside a hint — silently ignored, redo unchanged",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- load_archive.sql\nINSERT /*+ APPEND NOLOGGING */ INTO orders_archive\nSELECT * FROM orders WHERE created_at < DATE '2024-01-01';\nCOMMIT;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "80000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Standard: NOLOGGING is a segment attribute, not a hint. Oracle silently discards unrecognised text inside /*+ ... */ — no error, no warning — so this statement generates redo exactly as it would without the comment, and whoever sized the maintenance window on 'NOLOGGING speed' has the wrong estimate. Redo behaviour is decided by the target table's LOGGING attribute together with FORCE LOGGING at database and tablespace level; check all three before making any claim about it. Had the intent worked it would carry its own risk: a genuinely NOLOGGING direct-path load is not recoverable from archive logs and sends unusable blocks to any physical standby. Decide explicitly — keep the table LOGGING and accept the redo, or set NOLOGGING on the segment, confirm no standby is attached, and back up the tablespace immediately after. Generalise: Oracle never errors on an invented hint, so verify a hint took effect from the execution plan, never from the absence of an error. Also note the INSERT is unbounded on an 80M-row source and needs batching.",
+  "violated_rule": "Hints must be verified from the plan, not assumed",
+  "coverage_rules": [
+    "FORCE LOGGING",
+    "segment attribute",
+    "standby"
+  ],
+  "reference": "references/migration-anti-examples.md",
+  "expect_findings": [
+    "ORA013",
+    "ORA004"
+  ],
+  "forbid_findings": [
+    "ORA023"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 80000000
+  },
+  "lint_ignore": [
+    "ORA021"
+  ]
+}

@@ -1,0 +1,35 @@
+{
+  "id": "ORA-020",
+  "title": "MOVE ONLINE recommended on 12.1, where it does not exist",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V7__reorg.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 5;\nALTER TABLE events MOVE TABLESPACE new_ts;",
+  "context": {
+    "oracle_version": "12.1",
+    "edition": "EE",
+    "table_rows": "30000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: ALTER TABLE MOVE rewrites all 30M rows under an exclusive lock, blocking DML for the duration and leaving every index UNUSABLE (ORA-01502) afterwards. The standard mitigation, MOVE ONLINE, was introduced in 12.2 — this database is 12.1, so it does not exist here even though the edition is Enterprise. This is exactly why Gate 1 records the release rather than the family: 'Oracle 12c' would have hidden the distinction and produced a plan that fails at parse time. On 12.1 EE use DBMS_REDEFINITION, or CTAS plus a quiesced two-step cutover. Whichever is chosen, schedule the index rebuilds explicitly — a non-online MOVE does not maintain them.",
+  "violated_rule": "Version-gated mitigations must be checked against the exact release",
+  "coverage_rules": [
+    "12.2",
+    "MOVE ONLINE",
+    "UNUSABLE"
+  ],
+  "reference": "references/oracle-version-licensing-matrix.md",
+  "expect_findings": [
+    "ORA005"
+  ],
+  "forbid_findings": [
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "12.1",
+    "rows": 30000000
+  },
+  "lint_detail_must_contain": {
+    "ORA005": "MOVE ONLINE is 12.2+"
+  }
+}

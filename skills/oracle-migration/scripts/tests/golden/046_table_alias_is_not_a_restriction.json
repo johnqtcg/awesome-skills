@@ -1,0 +1,35 @@
+{
+  "id": "ORA-046",
+  "title": "Plain table alias must not disqualify a targeted snapshot",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V36__drop_legacy.sql\nCREATE TABLE mig_bak_orders AS SELECT o.id, o.legacy_ref FROM orders o;\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders DROP COLUMN legacy_ref;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "6000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Standard: this is a valid targeted snapshot. The alias `o` is ordinary SQL and restricts nothing — every row of ORDERS is copied, carrying the primary key and the column about to be dropped, which is exactly what a MERGE back needs. Rejecting it because the statement is not spelled without an alias would be a false positive on the most common way people write this. The drop itself is still irreversible and auto-commits, so the phase is restore/PITR: confirm the CTAS completed, confirm `id` is genuinely unique, and give someone the job of dropping the backup table at sign-off.",
+  "violated_rule": "Irreversible statements need a pre-DDL artefact",
+  "coverage_rules": [
+    "restore / PITR",
+    "MERGE"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [
+    "ORA007"
+  ],
+  "forbid_findings": [
+    "ORA001",
+    "ORA031"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 6000000
+  },
+  "expect_severity": {
+    "ORA007": "warning"
+  }
+}

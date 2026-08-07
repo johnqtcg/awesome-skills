@@ -1,0 +1,40 @@
+{
+  "id": "ORA-026",
+  "title": "Correctly planned two-step cutover — reverse rename prepared, atomicity denied",
+  "type": "good_practice",
+  "severity": "none",
+  "migration_snippet": "-- V16__cutover.sql\n-- 0. Quiesce: the application is in maintenance mode for this window.\nALTER SESSION SET DDL_LOCK_TIMEOUT = 5;\n\n-- Step 1: rename away. This is NOT atomic — two separate DDL, each auto-commits,\n--         and ORDERS does not exist between them.\nALTER TABLE orders RENAME TO orders_old;\n\n-- Step 2: rename in. If this fails, recover immediately with the line below,\n--         which is staged ready to paste before step 1 is run:\n--         ALTER TABLE orders_old RENAME TO orders;\nALTER TABLE orders_new RENAME TO orders;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "SE2",
+    "table_rows": "30000000",
+    "rac": "no"
+  },
+  "expected_feedback": "No violations, with one residual risk to state rather than fix. The cutover is correctly presented as two statements rather than an atomic swap, the application is quiesced for the window, and the reverse rename is staged before step 1 so the gap between the statements has a prepared recovery. That is the best available shape on SE2, where DBMS_REDEFINITION is unavailable and no genuinely atomic cutover exists. The residual risk is inherent: ORDERS does not exist between the two statements, so this needs the maintenance window and cannot be run live. Confirm separately that inbound foreign keys, synonyms, grants and triggers have been recreated against ORDERS_NEW — RENAME carries the name only.",
+  "coverage_rules": [
+    "two-step cutover",
+    "synonyms",
+    "implicit COMMIT"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [],
+  "forbid_findings": [
+    "ORA022",
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "SE2",
+    "version": "19c",
+    "rows": 30000000
+  },
+  "lint_ignore": [
+    "ORA009"
+  ],
+  "expected_feedback_must_not_contain": [
+    "is an atomic swap",
+    "atomically swaps"
+  ],
+  "expect_severity": {
+    "ORA009": "warning"
+  }
+}

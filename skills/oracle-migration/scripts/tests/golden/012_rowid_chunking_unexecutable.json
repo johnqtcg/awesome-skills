@@ -1,0 +1,32 @@
+{
+  "id": "ORA-012",
+  "title": "ROWID chunking selects DBA_EXTENTS.data_object_id — column does not exist",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- backfill_chunks.sql\nDECLARE\n  CURSOR c_chunks IS\n    SELECT DBMS_ROWID.ROWID_CREATE(1, data_object_id, relative_fno, block_id, 0)\n             AS start_rowid,\n           DBMS_ROWID.ROWID_CREATE(1, data_object_id, relative_fno,\n                                   block_id + blocks - 1, 32767) AS end_rowid\n    FROM dba_extents\n    WHERE segment_name = 'TARGET_TABLE' AND owner = 'SCHEMA'\n    ORDER BY block_id;\nBEGIN\n  FOR chunk IN c_chunks LOOP\n    UPDATE target_table SET new_col = compute_value(old_col)\n    WHERE ROWID BETWEEN chunk.start_rowid AND chunk.end_rowid;\n    COMMIT;\n    DBMS_LOCK.SLEEP(0.1);\n  END LOOP;\nEND;\n/",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "40000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: this script cannot run. DBA_EXTENTS has no DATA_OBJECT_ID column — its columns are OWNER, SEGMENT_NAME, PARTITION_NAME, SEGMENT_TYPE, TABLESPACE_NAME, EXTENT_ID, FILE_ID, BLOCK_ID, BYTES, BLOCKS and RELATIVE_FNO — so the cursor fails at parse time with ORA-00904: invalid identifier. DATA_OBJECT_ID must come from DBA_OBJECTS, joined per partition because each partition carries its own value. Prefer DBMS_PARALLEL_EXECUTE.CREATE_CHUNKS_BY_ROWID (11.2+), which computes the chunks correctly for partitioned and non-partitioned tables and persists chunk state so an interrupted run resumes instead of restarting. Two further blockers: reading DBA_EXTENTS/DBA_OBJECTS needs DBA-level select privileges the migration account often lacks, and DBMS_LOCK.SLEEP requires an explicit GRANT EXECUTE ON DBMS_LOCK — use DBMS_SESSION.SLEEP (18c+) instead.",
+  "violated_rule": "Migration scripts must be executable as written",
+  "coverage_rules": [
+    "ORA-00904",
+    "DBMS_PARALLEL_EXECUTE",
+    "DBMS_SESSION.SLEEP",
+    "RELATIVE_FNO"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [
+    "ORA008",
+    "ORA014"
+  ],
+  "forbid_findings": [],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 40000000
+  }
+}

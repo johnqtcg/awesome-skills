@@ -1,0 +1,35 @@
+{
+  "id": "ORA-021",
+  "title": "TRUNCATE staging table with no pre-DDL backup",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V12__reset_staging.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nTRUNCATE TABLE orders_staging;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "4000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: TRUNCATE is DDL, not DML. It auto-commits, cannot be rolled back, and resets the high-water mark, so the 4M rows are gone the instant it succeeds. It is also on the list of structural operations that FLASHBACK TABLE ... TO SCN/TIMESTAMP cannot cross, so the usual undo is unavailable — the recovery path is a pre-TRUNCATE copy, a guaranteed restore point, or RMAN PITR, and it must exist before the statement runs. If the intent is merely to empty a staging table between loads that is defensible, but the review must still record the phase as irreversible and confirm the source data can be re-derived.",
+  "violated_rule": "Irreversible statements need a pre-DDL artefact",
+  "coverage_rules": [
+    "TRUNCATE",
+    "irreversible",
+    "restore point"
+  ],
+  "reference": "SKILL.md",
+  "expect_findings": [
+    "ORA017"
+  ],
+  "forbid_findings": [
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 4000000
+  },
+  "expect_severity": {
+    "ORA017": "critical"
+  }
+}

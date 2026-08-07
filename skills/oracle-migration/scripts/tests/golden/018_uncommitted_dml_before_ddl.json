@@ -1,0 +1,32 @@
+{
+  "id": "ORA-018",
+  "title": "Uncommitted DML before DDL — silently committed by the implicit COMMIT",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V5__fix_and_extend.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nUPDATE orders SET status = 'pending' WHERE id = 12345;\n-- reviewer intends to verify the row before committing\nALTER TABLE orders ADD (priority NUMBER);",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "5000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: the UPDATE is still uncommitted when the ALTER TABLE runs, and Oracle issues an implicit COMMIT before every DDL. The row change is therefore committed silently — the intended verify-then-decide step never happens and ROLLBACK afterwards does nothing. This catches developers coming from PostgreSQL, where DDL is transactional. Split the DML and the DDL into separate scripts, or make the decision explicit with a COMMIT or ROLLBACK before the ALTER. Note the DDL also commits on the way out, so both statements are permanent the moment the ALTER succeeds; the phase needs a rollback classification covering the data change as well as the schema change.",
+  "violated_rule": "DDL auto-commit documented: no uncommitted DML in session before DDL",
+  "coverage_rules": [
+    "implicit COMMIT",
+    "auto-commit",
+    "rollback"
+  ],
+  "reference": "references/migration-anti-examples.md",
+  "expect_findings": [
+    "ORA016"
+  ],
+  "forbid_findings": [
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 5000000
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "id": "ORA-037",
+  "title": "Normal restore point mistaken for a rollback guarantee",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V27__cleanup.sql\n-- Safety net before the destructive step:\nCREATE RESTORE POINT before_v27;\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders DROP COLUMN legacy_ref;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "6000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: the restore point is not the safety net the comment claims. Without GUARANTEE FLASHBACK DATABASE this is a *normal* restore point — an alias for an SCN, not a promise that you can get back to it. Whether the flashback succeeds depends on the required flashback logs still existing, which is bounded by DB_FLASHBACK_RETENTION_TARGET, and Oracle documents that as a target rather than a guarantee; the restore point itself also ages out of the control file without anyone dropping it. So the column drop, which auto-commits and cannot be crossed by FLASHBACK TABLE, still has no recovery path. Either add GUARANTEE FLASHBACK DATABASE — which does enforce log retention, needs ARCHIVELOG plus FRA space, and must be dropped explicitly at sign-off or it fills the FRA — or take a keyed copy of the column before the drop. Classify the phase restore/PITR either way.",
+  "violated_rule": "Irreversible statements need a pre-DDL artefact",
+  "coverage_rules": [
+    "GUARANTEE",
+    "DB_FLASHBACK_RETENTION_TARGET",
+    "restore / PITR"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [
+    "ORA030",
+    "ORA007"
+  ],
+  "forbid_findings": [
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 6000000
+  },
+  "expect_severity": {
+    "ORA030": "warning",
+    "ORA007": "critical"
+  },
+  "lint_detail_must_contain": {
+    "ORA030": "not a retention promise"
+  }
+}

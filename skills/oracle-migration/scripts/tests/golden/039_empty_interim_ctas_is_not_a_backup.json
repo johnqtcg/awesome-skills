@@ -1,0 +1,40 @@
+{
+  "id": "ORA-039",
+  "title": "WHERE 1=0 interim-table skeleton counted as a backup",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V29__rebuild.sql\nCREATE TABLE orders_new AS SELECT * FROM orders WHERE 1=0;\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders DROP COLUMN legacy_ref;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "6000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: `WHERE 1=0` copies the column definitions and none of the rows. This is the standard way to create an *interim* table for a CTAS or DBMS_REDEFINITION rebuild — it is the opposite of a backup, and reading it as one is a pure false-positive risk in the reviewer's head as much as in a checker's. The column drop that follows still destroys the data, still auto-commits, and still cannot be reached by Flashback Table. Take a keyed copy of the column before dropping it (CREATE TABLE mig_bak_orders_... AS SELECT id, legacy_ref FROM orders) and classify the phase restore/PITR.",
+  "violated_rule": "Irreversible statements need a pre-DDL artefact",
+  "coverage_rules": [
+    "interim table",
+    "restore / PITR"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [
+    "ORA007",
+    "ORA031"
+  ],
+  "forbid_findings": [
+    "ORA001",
+    "ORA002",
+    "ORA006"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 6000000
+  },
+  "expect_severity": {
+    "ORA007": "critical"
+  },
+  "lint_detail_must_contain": {
+    "ORA031": "interim-table skeleton, not a backup"
+  }
+}

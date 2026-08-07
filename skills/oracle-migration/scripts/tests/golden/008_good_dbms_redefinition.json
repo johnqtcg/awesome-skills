@@ -1,11 +1,32 @@
 {
   "id": "ORA-008",
-  "title": "Good DBMS_REDEFINITION usage — online table restructuring for column type change",
+  "title": "Good DBMS_REDEFINITION usage — datatype change Oracle would otherwise reject",
   "type": "good_practice",
   "severity": "none",
-  "migration_snippet": "-- Online column type change using DBMS_REDEFINITION\nBEGIN DBMS_REDEFINITION.CAN_REDEF_TABLE('APP', 'ORDERS'); END;\n/\nCREATE TABLE orders_interim AS SELECT id, user_id, CAST(amount AS NUMBER(12,4)) AS amount FROM orders WHERE 1=0;\nBEGIN\n  DBMS_REDEFINITION.START_REDEF_TABLE('APP','ORDERS','ORDERS_INTERIM',\n    'id id, user_id user_id, CAST(amount AS NUMBER(12,4)) amount');\nEND;\n/\n-- COPY_TABLE_DEPENDENTS, SYNC, FINISH, cleanup",
-  "context": {"oracle_version": "19c", "edition": "EE", "table_rows": "50000000", "rac": "no"},
-  "expected_feedback": "No violations. Correct use of DBMS_REDEFINITION for online column type change on 50M-row table. Avoids extended exclusive lock by using materialized view log-based sync. Brief exclusive lock only at FINISH step. Requires Enterprise Edition.",
-  "coverage_rules": ["DBMS_REDEFINITION", "online", "Enterprise Edition", "exclusive lock"],
-  "reference": "references/large-table-migration.md"
+  "migration_snippet": "-- Online DATE -> TIMESTAMP WITH TIME ZONE. A direct ALTER TABLE ... MODIFY is\n-- rejected with ORA-01439 (column must be empty to change datatype) regardless of\n-- table size, so redefinition is required rather than merely faster.\nBEGIN DBMS_REDEFINITION.CAN_REDEF_TABLE('APP', 'ORDERS',\n        DBMS_REDEFINITION.CONS_USE_PK); END;\n/\nCREATE TABLE orders_interim (\n  id NUMBER, user_id NUMBER, amount NUMBER(12,2),\n  created_at TIMESTAMP WITH TIME ZONE);\nBEGIN\n  DBMS_REDEFINITION.START_REDEF_TABLE('APP','ORDERS','ORDERS_INTERIM',\n    'id id, user_id user_id, amount amount, CAST(created_at AS TIMESTAMP WITH TIME ZONE) created_at',\n    options_flag => DBMS_REDEFINITION.CONS_USE_PK);\nEND;\n/\nDECLARE\n  num_errors PLS_INTEGER;\nBEGIN\n  DBMS_REDEFINITION.COPY_TABLE_DEPENDENTS('APP','ORDERS','ORDERS_INTERIM',\n    ignore_errors => FALSE, num_errors => num_errors);\n  IF num_errors > 0 THEN\n    RAISE_APPLICATION_ERROR(-20001,\n      'COPY_TABLE_DEPENDENTS reported errors; see DBA_REDEFINITION_ERRORS');\n  END IF;\nEND;\n/\nBEGIN DBMS_REDEFINITION.SYNC_INTERIM_TABLE('APP','ORDERS','ORDERS_INTERIM'); END;\n/\nBEGIN\n  DBMS_REDEFINITION.FINISH_REDEF_TABLE('APP','ORDERS','ORDERS_INTERIM',\n    dml_lock_timeout => 30);\nEND;\n/",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "50000000",
+    "rac": "no"
+  },
+  "expected_feedback": "No violations. Correct use of DBMS_REDEFINITION on a 50M-row table for a change Oracle rejects outright as a direct ALTER (ORA-01439 — a datatype class change needs an empty column), which is the case redefinition is actually for. num_errors is checked and raises rather than being printed and ignored, so a failed dependent-object copy cannot reach the cutover; DBA_REDEFINITION_ERRORS is named for triage. FINISH_REDEF_TABLE passes dml_lock_timeout explicitly, so the final swap neither aborts on the first concurrent DML nor waits indefinitely. Requires Enterprise Edition — state that dependency if the edition has not been confirmed.",
+  "coverage_rules": [
+    "DBMS_REDEFINITION",
+    "online",
+    "Enterprise Edition",
+    "num_errors"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [],
+  "forbid_findings": [
+    "ORA001",
+    "ORA011",
+    "ORA012"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 50000000
+  }
 }

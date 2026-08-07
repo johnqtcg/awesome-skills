@@ -1,12 +1,36 @@
 {
   "id": "ORA-003",
-  "title": "Missing rollback plan — DDL auto-commits, making every change permanent immediately",
+  "title": "Missing rollback plan — DDL auto-commits and Flashback cannot undo a column drop",
   "type": "defect",
   "severity": "critical",
   "migration_snippet": "-- V8__cleanup.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE users DROP COLUMN legacy_email;\nALTER TABLE users DROP COLUMN temp_flag;",
-  "context": {"oracle_version": "19c", "edition": "EE", "table_rows": "1500000", "rac": "no"},
-  "expected_feedback": "Critical: Two DROP COLUMN statements with no rollback plan. Oracle DDL issues an implicit COMMIT before and after each statement, so once either DROP executes, the data is permanently lost — there is no ROLLBACK. Both columns must be classified as 'irreversible'. Recommended approach: (1) Back up column data via CTAS before dropping: CREATE TABLE _backup_users_legacy AS SELECT id, legacy_email, temp_flag FROM users; (2) Use SET UNUSED COLUMN instead of DROP for immediate functional removal without physical I/O cost. (3) Schedule DROP UNUSED COLUMNS during maintenance window. (4) Consider enabling Flashback Table as a safety net for catastrophic errors.",
-  "violated_rule": "Rollback SQL provided",
-  "coverage_rules": ["rollback", "DDL auto-commit", "SET UNUSED", "irreversible"],
-  "reference": "SKILL.md"
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "1500000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: two DROP COLUMN statements with no recovery path. Oracle DDL issues an implicit COMMIT before and after each statement, so once either DROP executes the data is gone and there is no ROLLBACK. Classify both phases as restore/PITR — NOT as compensating-DDL: re-running ALTER TABLE users ADD (legacy_email VARCHAR2(255)) recreates an empty column and restores no data, so it is not a rollback. FLASHBACK TABLE ... TO SCN/TIMESTAMP is also unavailable here: Oracle cannot flash a table back across a DDL that changed its structure, and dropping a column is explicitly on that list. The safety net has to exist before the DDL runs — take a keyed snapshot (CREATE TABLE mig_bak_users_20260806 AS SELECT id, legacy_email, temp_flag FROM users) or a guaranteed restore point, and verify a backup exists. Prefer SET UNUSED COLUMN for the immediate functional removal, then DROP UNUSED COLUMNS in a maintenance window — but note SET UNUSED buys a cheaper lock, not reversibility.",
+  "violated_rule": "Rollback classification provided for every phase",
+  "coverage_rules": [
+    "rollback",
+    "DDL auto-commit",
+    "SET UNUSED",
+    "restore / PITR"
+  ],
+  "reference": "SKILL.md",
+  "expect_findings": [
+    "ORA007"
+  ],
+  "forbid_findings": [
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 1500000
+  },
+  "expected_feedback_must_not_contain": [
+    "flashback table target_table to timestamp"
+  ]
 }

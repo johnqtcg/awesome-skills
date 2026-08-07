@@ -1,12 +1,38 @@
 {
   "id": "ORA-011",
-  "title": "Column type change via direct ALTER on large table — full rewrite with exclusive lock",
+  "title": "Widening NUMBER precision misreported as a full table rewrite",
   "type": "defect",
   "severity": "standard",
-  "migration_snippet": "-- V6__change_amount_type.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 5;\nALTER TABLE orders MODIFY (amount NUMBER(12,4));",
-  "context": {"oracle_version": "19c", "edition": "EE", "table_rows": "25000000", "rac": "no"},
-  "expected_feedback": "Standard: ALTER TABLE MODIFY column type from NUMBER(10,2) to NUMBER(12,4) on 25M rows requires a full table rewrite with exclusive lock. This blocks all DML for the duration. On Enterprise Edition, use DBMS_REDEFINITION for online restructuring instead.",
-  "violated_rule": "Large table restructuring uses DBMS_REDEFINITION or CTAS",
-  "coverage_rules": ["DBMS_REDEFINITION", "CTAS", "rewrite", "exclusive lock", "MODIFY"],
-  "reference": "SKILL.md"
+  "migration_snippet": "-- V6__widen_amount.sql\n-- orders.amount is currently NUMBER(10,2)\nALTER SESSION SET DDL_LOCK_TIMEOUT = 5;\nALTER TABLE orders MODIFY (amount NUMBER(12,4));",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "25000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Standard: the statement itself is safe, but it must be classified before a risk level is assigned — and the common review error is to call it a rewrite. Going from NUMBER(10,2) to NUMBER(12,4) increases precision and scale together, which Oracle permits on a populated table; it updates the data dictionary and leaves the stored row bytes untouched, so the exclusive lock is brief and DBMS_REDEFINITION would be over-engineering. Do NOT report this as a 25M-row rewrite holding an exclusive lock for hours. The classification does depend on the current type, which the script only states in a comment: confirm it in USER_TAB_COLUMNS first, because the neighbouring cases behave completely differently — decreasing precision or scale, or raising scale without raising precision, fails instantly with ORA-01440, and a datatype class change fails with ORA-01439. Those are rejections, not slow operations, and no window size makes them succeed.",
+  "violated_rule": "Every column change classified against the MODIFY outcome table",
+  "coverage_rules": [
+    "ORA-01440",
+    "ORA-01439",
+    "USER_TAB_COLUMNS",
+    "precision"
+  ],
+  "reference": "SKILL.md",
+  "expect_findings": [
+    "ORA015"
+  ],
+  "forbid_findings": [
+    "ORA001",
+    "ORA005"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 25000000
+  },
+  "expected_feedback_must_not_contain": [
+    "full table rewrite",
+    "requires dbms_redefinition"
+  ]
 }

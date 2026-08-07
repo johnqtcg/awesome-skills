@@ -123,24 +123,56 @@ ALTER TABLE logs EXCHANGE PARTITION p_2024_q1 WITH TABLE staging
 
 ---
 
-## AE-12: Direct path INSERT without switching to LOGGING
+## AE-12: Assuming a `NOLOGGING` hint controls redo
 
 ```sql
--- WRONG: NOLOGGING insert is not recoverable from archive logs
+-- WRONG on two counts
 INSERT /*+ APPEND NOLOGGING */ INTO target_table
 SELECT * FROM source_table;
 COMMIT;
--- If database crashes before next backup, this data is unrecoverable
 ```
 
-**Right approach:**
+**Why this is wrong:**
+
+1. **`NOLOGGING` is not a hint.** It is a segment attribute set with
+   `ALTER TABLE … NOLOGGING`. Oracle silently discards unrecognised text inside a hint
+   comment — there is no error, no warning, and no effect. Whoever wrote this believes
+   they turned redo off; they did not. Redo behaviour here is decided entirely by the
+   *table's* attribute and the database/tablespace `FORCE LOGGING` setting.
+2. **The intent, had it worked, is itself dangerous.** A genuinely NOLOGGING direct-path
+   load is not recoverable from archive logs, and on a Data Guard primary the standby
+   receives blocks it cannot use.
+
+**Right approach — state the intent explicitly and verify it:**
 ```sql
--- Use APPEND for speed but ensure table is in LOGGING mode for recoverability
+-- Is NOLOGGING even possible here? FORCE LOGGING overrides it everywhere.
+SELECT force_logging FROM v$database;
+SELECT tablespace_name, force_logging FROM dba_tablespaces
+WHERE  tablespace_name = (SELECT tablespace_name FROM user_tables
+                          WHERE table_name = 'TARGET_TABLE');
+SELECT logging FROM user_tables WHERE table_name = 'TARGET_TABLE';
+
+-- Default: keep it recoverable. APPEND still gives the direct-path speed-up.
 ALTER TABLE target_table LOGGING;
 INSERT /*+ APPEND */ INTO target_table SELECT * FROM source_table;
 COMMIT;
--- Or: if NOLOGGING is intentional for speed, take a backup immediately after
 ```
+
+If NOLOGGING is a deliberate, signed-off trade for load speed, set it on the segment
+(not in a comment), confirm no physical standby is attached, and take a backup of the
+affected tablespace **immediately** after the load:
+```sql
+ALTER TABLE target_table NOLOGGING;
+INSERT /*+ APPEND */ INTO target_table SELECT * FROM source_table;
+COMMIT;
+ALTER TABLE target_table LOGGING;
+-- then: RMAN> BACKUP TABLESPACE <ts>;
+```
+
+**Generalise the lesson:** Oracle never errors on a malformed or invented hint. Neither
+`/*+ NOLOGGING */` nor `/*+ APEND */` nor `/*+ PARALEL(8) */` will tell you anything is
+wrong — the statement just runs without the behaviour you expected. Verify a hint took
+effect from the execution plan, never from the absence of an error.
 
 ---
 
@@ -172,3 +204,37 @@ BEGIN
 END;
 /
 ```
+
+---
+
+## AE-14: `RENAME COLUMN` on a live table
+
+```sql
+-- WRONG on a system with running application code
+ALTER TABLE orders RENAME COLUMN usr_id TO user_id;
+```
+
+**Why this is dangerous:**
+The database side is trivial — `RENAME COLUMN` has existed since 9i Release 2 and is
+metadata-only with a brief lock. The damage is on the application side: the rename
+commits instantly and irreversibly, and every deployed statement referencing `usr_id`
+starts failing with `ORA-00904` at that moment. There is no dual-name grace period and no
+transaction to roll back.
+
+Note this is the *opposite* of the usual failure mode. Most migration mistakes are
+"harmless-looking DDL that locks the table for an hour"; this one is "harmless-looking
+DDL that completes in 5ms and takes production down".
+
+**Right approach — expand/contract:**
+```sql
+-- 1. Add the new name alongside the old
+ALTER SESSION SET DDL_LOCK_TIMEOUT = 3;
+ALTER TABLE orders ADD (user_id NUMBER);
+
+-- 2. Deploy app writing BOTH columns; backfill in batches; then cut reads over
+-- 3. Once no code references the old name:
+ALTER TABLE orders SET UNUSED COLUMN usr_id;
+```
+
+For a read-mostly table a view can shorten this: rename the table, then create a view
+under the original name exposing both spellings, and drop the alias once callers migrate.

@@ -1,0 +1,35 @@
+{
+  "id": "ORA-047",
+  "title": "Multi-column DROP (a, b) — the column-list form of a column drop",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V37__cleanup.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders DROP (legacy_a, legacy_b);",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "6000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: `ALTER TABLE … DROP (col, col)` is Oracle's column-list form and does exactly what `DROP COLUMN` does, twice — it destroys both columns' data, auto-commits, and cannot be crossed by FLASHBACK TABLE. It carries no smaller risk for being written more compactly, and a review that only recognises the `DROP COLUMN` spelling will wave it straight through. No copy of ORDERS is taken here, so both columns are unrecoverable the moment this runs. Snapshot them first, keyed: CREATE TABLE mig_bak_orders_... AS SELECT id, legacy_a, legacy_b FROM orders. Classify the phase restore/PITR.",
+  "violated_rule": "Irreversible statements need a pre-DDL artefact",
+  "coverage_rules": [
+    "restore / PITR",
+    "irreversible"
+  ],
+  "reference": "SKILL.md",
+  "expect_findings": [
+    "ORA007"
+  ],
+  "forbid_findings": [
+    "ORA001",
+    "ORA031"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 6000000
+  },
+  "expect_severity": {
+    "ORA007": "critical"
+  }
+}

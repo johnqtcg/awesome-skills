@@ -1,0 +1,31 @@
+{
+  "id": "ORA-015",
+  "title": "COPY_TABLE_DEPENDENTS errors printed then ignored; FINISH without dml_lock_timeout",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "DECLARE\n  num_errors PLS_INTEGER;\nBEGIN\n  DBMS_REDEFINITION.COPY_TABLE_DEPENDENTS('APP','ORDERS','ORDERS_INTERIM',\n    num_errors => num_errors);\n  DBMS_OUTPUT.PUT_LINE('Errors: ' || num_errors);\nEND;\n/\nBEGIN DBMS_REDEFINITION.SYNC_INTERIM_TABLE('APP','ORDERS','ORDERS_INTERIM'); END;\n/\nBEGIN DBMS_REDEFINITION.FINISH_REDEF_TABLE('APP','ORDERS','ORDERS_INTERIM'); END;\n/",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "60000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: num_errors is an OUT parameter Oracle requires the caller to check before continuing, and printing it is not checking it — the block proceeds to SYNC and FINISH whatever the value. A non-zero count means some dependent object failed to clone, so the cutover can complete with indexes, constraints, triggers or grants silently missing on a 60M-row production table; the first symptom is usually a full scan or a constraint that stopped being enforced. Raise on num_errors > 0 and query DBA_REDEFINITION_ERRORS to see which objects failed and why. Separately, FINISH_REDEF_TABLE is called without dml_lock_timeout (12.1+), leaving the final swap on the release default rather than a value chosen for the window — pass an explicit value such as 30 so the cutover neither aborts on the first concurrent DML after hours of copying nor waits forever behind a long transaction. Finally, take the dependent-object inventory before starting and diff it after FINISH: num_errors = 0 alone does not prove the interim table gained everything the original had.",
+  "violated_rule": "DBMS_REDEFINITION error gates must halt the workflow",
+  "coverage_rules": [
+    "DBA_REDEFINITION_ERRORS",
+    "num_errors",
+    "dml_lock_timeout"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [
+    "ORA011",
+    "ORA012"
+  ],
+  "forbid_findings": [],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 60000000
+  }
+}

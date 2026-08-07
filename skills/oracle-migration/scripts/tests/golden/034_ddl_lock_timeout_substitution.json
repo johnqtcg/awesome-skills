@@ -1,0 +1,36 @@
+{
+  "id": "ORA-034",
+  "title": "DDL_LOCK_TIMEOUT from a substitution variable — gate not verifiable statically",
+  "type": "defect",
+  "severity": "hygiene",
+  "migration_snippet": "-- V24__add_flag.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = &deploy_lock_timeout;\nALTER TABLE orders ADD (is_flagged NUMBER(1));",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "9000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Hygiene: the parameter is set from a SQL*Plus substitution variable, so its value cannot be read from the script. This is recorded as satisfying the gate because it cannot be proven wrong — not because it was verified, and the distinction belongs in Uncovered Risks rather than being silently rounded up to compliant. Confirm what &deploy_lock_timeout resolves to in the deploy pipeline: 0 would mean NOWAIT and no protection at all, and a value near the 1000000 ceiling would outlive the maintenance window. A literal is preferable in a migration script precisely because it is reviewable.",
+  "violated_rule": "DDL_LOCK_TIMEOUT set before every DDL session",
+  "coverage_rules": [
+    "DDL_LOCK_TIMEOUT",
+    "Uncovered Risk"
+  ],
+  "reference": "SKILL.md",
+  "expect_findings": [
+    "ORA029"
+  ],
+  "forbid_findings": [
+    "ORA001",
+    "ORA026",
+    "ORA028"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 9000000
+  },
+  "expect_severity": {
+    "ORA029": "warning"
+  }
+}

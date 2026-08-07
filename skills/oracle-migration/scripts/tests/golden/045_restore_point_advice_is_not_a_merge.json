@@ -1,0 +1,42 @@
+{
+  "id": "ORA-045",
+  "title": "Restore-point coverage must not be described as a table copy",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V35__drop_legacy.sql\nCREATE RESTORE POINT before_v35 GUARANTEE FLASHBACK DATABASE;\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders DROP COLUMN legacy_ref;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "6000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Standard: the guaranteed restore point does cover this on Enterprise Edition, so the drop is mitigated — but the recovery procedure is FLASHBACK DATABASE TO RESTORE POINT, not a MERGE. No table copy exists here. That distinction decides what the runbook says: flashing the database back rewinds every schema and every other transaction since the restore point, so it needs the application down and a decision from whoever owns the other changes in that window. If a targeted, low-blast-radius recovery is wanted instead, take a keyed copy of the column as well — the two artefacts are not interchangeable.",
+  "violated_rule": "Irreversible statements need a pre-DDL artefact",
+  "coverage_rules": [
+    "restore point",
+    "restore / PITR"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [
+    "ORA007"
+  ],
+  "forbid_findings": [
+    "ORA001",
+    "ORA031",
+    "ORA032"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 6000000
+  },
+  "expect_severity": {
+    "ORA007": "warning"
+  },
+  "lint_detail_must_contain": {
+    "ORA007": "no per-table copy here to MERGE back from"
+  },
+  "expected_feedback_must_not_contain": [
+    "merge back from that copy"
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "id": "ORA-040",
+  "title": "Guaranteed restore point proposed on Standard Edition 2",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V30__cleanup.sql\nCREATE RESTORE POINT before_v30 GUARANTEE FLASHBACK DATABASE;\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders DROP COLUMN legacy_ref;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "SE2",
+    "table_rows": "6000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: a guaranteed restore point is only worth anything because FLASHBACK DATABASE can return to it, and Flashback Database is Enterprise Edition only — this database is SE2. The statement buys this migration no rollback whatsoever, so the column drop is unmitigated. On SE2 the recovery artefact has to be a full table copy taken before the change, or an RMAN backup for point-in-time recovery. Two further preconditions worth confirming even on EE, since they are the usual reasons this step fails in practice: the database must be in ARCHIVELOG with a Fast Recovery Area, and creating a restore point needs an administrative privilege that a migration account normally does not hold.",
+  "violated_rule": "Edition-gated mitigations must be checked against the actual edition",
+  "coverage_rules": [
+    "Enterprise Edition",
+    "ARCHIVELOG",
+    "restore / PITR"
+  ],
+  "reference": "references/oracle-version-licensing-matrix.md",
+  "expect_findings": [
+    "ORA032",
+    "ORA007"
+  ],
+  "forbid_findings": [
+    "ORA001",
+    "ORA030"
+  ],
+  "lint_context": {
+    "edition": "SE2",
+    "version": "19c",
+    "rows": 6000000
+  },
+  "expect_severity": {
+    "ORA032": "critical",
+    "ORA007": "critical"
+  },
+  "lint_detail_must_contain": {
+    "ORA032": "Enterprise Edition only"
+  }
+}

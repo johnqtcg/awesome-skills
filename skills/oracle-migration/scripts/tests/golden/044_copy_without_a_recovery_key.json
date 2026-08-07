@@ -1,0 +1,39 @@
+{
+  "id": "ORA-044",
+  "title": "Copy of the dropped column alone — nothing to match rows back on",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V34__drop_legacy.sql\nCREATE TABLE mig_bak_legacy AS SELECT legacy_ref FROM orders;\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders DROP COLUMN legacy_ref;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "6000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: the copy contains the column being dropped and nothing else, so it is a bag of 6,000,000 values in unspecified order. There is no way to say which row each belonged to, which means it cannot be merged back — it looks like a backup and cannot function as one. A targeted snapshot needs the doomed column **and** a key: CREATE TABLE mig_bak_orders_... AS SELECT id, legacy_ref FROM orders. Confirm the key column really is unique, because a MERGE keyed on a non-unique column cannot restore the rows either. Classify the phase restore/PITR until a usable copy exists.",
+  "violated_rule": "Irreversible statements need a pre-DDL artefact",
+  "coverage_rules": [
+    "restore / PITR",
+    "MERGE"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [
+    "ORA007",
+    "ORA031"
+  ],
+  "forbid_findings": [
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 6000000
+  },
+  "expect_severity": {
+    "ORA007": "critical",
+    "ORA031": "warning"
+  },
+  "lint_detail_must_contain": {
+    "ORA031": "nothing in it survives to key a MERGE on"
+  }
+}

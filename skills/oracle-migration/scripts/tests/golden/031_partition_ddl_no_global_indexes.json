@@ -1,0 +1,32 @@
+{
+  "id": "ORA-031",
+  "title": "Partition drop on a table with no global indexes — UPDATE INDEXES not required",
+  "type": "good_practice",
+  "severity": "none",
+  "migration_snippet": "-- V21__drop_old_partition.sql\n-- Verified: dba_indexes shows only LOCAL indexes on this table.\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE logs DROP PARTITION logs_2023_q1;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "100000000",
+    "rac": "no",
+    "global_indexes": "no"
+  },
+  "expected_feedback": "No violations. DROP PARTITION invalidates *global* indexes, and this table has none — every index on it is LOCAL, which partition maintenance maintains automatically. UPDATE INDEXES would be a no-op here. The verification is the load-bearing part of that sentence: the SQL cannot tell you whether global indexes exist, so the claim has to come from dba_indexes (partitioned = 'NO' for the table's indexes) and should be recorded in the review rather than assumed. Where that check has not been run, the conservative verdict applies — append UPDATE INDEXES, since it costs nothing when unnecessary and prevents ORA-01502 when it is.",
+  "coverage_rules": [
+    "UPDATE INDEXES",
+    "global index",
+    "ORA-01502"
+  ],
+  "reference": "references/oracle-ddl-lock-matrix.md",
+  "expect_findings": [],
+  "forbid_findings": [
+    "ORA003",
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 100000000,
+    "global_indexes": "no"
+  }
+}

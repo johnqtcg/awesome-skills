@@ -1,0 +1,38 @@
+{
+  "id": "ORA-029",
+  "title": "Constraint added inline on a small table — below the scorecard's two-step threshold",
+  "type": "good_practice",
+  "severity": "none",
+  "migration_snippet": "-- V19__add_check.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE currency_codes ADD CONSTRAINT ck_iso CHECK (LENGTH(code) = 3);",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "180",
+    "rac": "no"
+  },
+  "expected_feedback": "No violations. Adding the constraint validating does hold an exclusive lock while it scans, but the table is 180 rows: the scan is instantaneous and the lock is measured in milliseconds. SKILL.md §8 requires the ENABLE NOVALIDATE + VALIDATE two-step on tables above 100,000 rows, and applying it here would be ceremony. Reporting this as a critical defect is the kind of finding that trains reviewers to override the checker. The one thing worth noting is growth: if this reference table is expected to cross the threshold before the migration ships, use the two-step now rather than rewriting the script later.",
+  "coverage_rules": [
+    "100K rows",
+    "ENABLE NOVALIDATE"
+  ],
+  "reference": "SKILL.md",
+  "expect_findings": [],
+  "forbid_findings": [
+    "ORA001",
+    "ORA026"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 180
+  },
+  "lint_ignore": [
+    "ORA002"
+  ],
+  "lint_detail_must_contain": {
+    "ORA002": "below the"
+  },
+  "expect_severity": {
+    "ORA002": "info"
+  }
+}

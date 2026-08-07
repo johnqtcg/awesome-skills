@@ -27,18 +27,30 @@ never blocked by DDL. But DML (INSERT/UPDATE/DELETE) IS blocked when DDL holds a
 | DROP COLUMN | Exclusive | Yes | **Yes** | No | Physical removal; expensive on wide tables |
 | SET UNUSED COLUMN | Exclusive | Brief | No | — | Metadata-only; preferred over DROP |
 | DROP UNUSED COLUMNS | Exclusive | Yes | **Yes** | No | Physical removal of unused columns |
-| MODIFY column (widen) | Exclusive | Brief | No | — | e.g., VARCHAR2(50) → VARCHAR2(100) |
-| MODIFY column (narrow/change type) | Exclusive | Yes | **Yes** | No | Requires DBMS_REDEFINITION for large tables |
-| RENAME COLUMN (12c+) | Exclusive | Brief | No | — | Metadata-only |
+| MODIFY column (widen char/raw length) | Exclusive | Brief | No | — | e.g. VARCHAR2(50) → VARCHAR2(100). Dictionary update; stored rows untouched |
+| MODIFY column (widen NUMBER precision **and** scale) | Exclusive | Brief | No | — | e.g. NUMBER(10,2) → NUMBER(12,4). Legal on a populated table; **not** a rewrite |
+| MODIFY column (narrow char length) | Exclusive | Brief | No | — | Succeeds only if every value fits, else **ORA-01441**. Pre-check `MAX(LENGTH(col))` |
+| MODIFY column (decrease NUMBER precision/scale, or raise scale alone) | — | — | — | — | **ORA-01440** — rejected unless the column is empty. Not slow: impossible |
+| MODIFY column (change datatype class) | — | — | — | — | **ORA-01439** — rejected unless the column is empty. Needs DBMS_REDEFINITION / CTAS |
+| RENAME COLUMN | Exclusive | Brief | No | — | Metadata-only. Supported since **9i Release 2** — the risk is deployed app SQL, not the database |
 | ALTER COLUMN DEFAULT | Exclusive | Brief | No | — | Metadata-only |
-| MODIFY column NOT NULL (with data) | Exclusive | Brief–Long | Validates | No | Scans all rows to verify; longer on large tables |
+| MODIFY column NOT NULL (with data) | Exclusive | Brief–Long | Validates | No | Scans all rows to verify; longer on large tables. **ORA-02296** if any NULL exists |
 
 ### Critical version gates:
 
-- **12c+**: ADD COLUMN with DEFAULT is metadata-only (no rewrite)
-- **12c+**: RENAME COLUMN supported natively
-- **12.2+**: ALTER TABLE MOVE ONLINE (non-blocking table reorganization)
-- **<12c**: ADD COLUMN with DEFAULT always rewrites the table
+- **9.2+**: `RENAME COLUMN` supported natively. Any claim that it needs 12c or 23ai is wrong
+- **11.1+**: ADD COLUMN with a `NOT NULL` DEFAULT is metadata-only
+- **12.1+**: ADD COLUMN with a *nullable* DEFAULT is also metadata-only
+- **12.1+**: `DROP INDEX … ONLINE`, `ALTER INDEX … UNUSABLE ONLINE`
+- **12.2+**: `ALTER TABLE … MOVE ONLINE`, `MOVE PARTITION … ONLINE`
+- **<11.1**: ADD COLUMN with DEFAULT always rewrites the table
+
+> **Reading "rewrite" correctly.** Three of the rows above are not slow operations — they
+> are *rejections*. `ORA-01439` and `ORA-01440` fire in milliseconds on a 500M-row table
+> and on an empty one alike. If a review says "this MODIFY will rewrite 25M rows and hold
+> an exclusive lock for hours", check first whether Oracle would even accept the
+> statement. Conflating "rejected" with "slow" produces a plausible, confidently-worded,
+> completely wrong risk assessment.
 
 ## Index Operations
 
@@ -46,7 +58,7 @@ never blocked by DDL. But DML (INSERT/UPDATE/DELETE) IS blocked when DDL holds a
 |-----------|------|:-----------:|:--------------:|-------|
 | CREATE INDEX | Share | **Yes** (writes) | `CREATE INDEX ... ONLINE` (EE) | Online allows concurrent DML |
 | CREATE INDEX ONLINE | Brief Exclusive | Brief only | Yes (EE) | Brief lock at start and end; DML allowed during build |
-| DROP INDEX | Exclusive | Brief | `DROP INDEX ... ONLINE` (21c+) | Very fast |
+| DROP INDEX | Exclusive | Brief | `DROP INDEX ... ONLINE` (12.1+) | Very fast |
 | ALTER INDEX REBUILD | Exclusive | **Yes** | `ALTER INDEX ... REBUILD ONLINE` (EE) | Online rebuild allows DML |
 | ALTER INDEX UNUSABLE | Exclusive | Brief | — | Metadata-only; makes index ignored by optimizer |
 | ALTER INDEX VISIBLE/INVISIBLE | Exclusive | Brief | — | Metadata-only; 12c+ |
@@ -65,7 +77,7 @@ never blocked by DDL. But DML (INSERT/UPDATE/DELETE) IS blocked when DDL holds a
 | ADD CONSTRAINT (FK/CHECK) | Exclusive | **Yes** | **Yes** | Full validation scan + lock |
 | ADD CONSTRAINT ... ENABLE NOVALIDATE | Exclusive | Brief | **No** | Enforces for new DML only; skips existing rows |
 | MODIFY CONSTRAINT ... VALIDATE | Row Exclusive | No | **Yes** | Non-blocking validation of existing data |
-| ADD CONSTRAINT ... DISABLE NOVALIDATE | None | No | No | Metadata-only; constraint not enforced |
+| ADD CONSTRAINT ... DISABLE NOVALIDATE | Brief Exclusive | Brief | No | Metadata-only, but still an ALTER TABLE — it takes the exclusive DDL lock like any other. "No lock" is wrong |
 | DROP CONSTRAINT | Exclusive | Brief | No | Metadata-only |
 | ADD CONSTRAINT (UNIQUE) | Share | Write-blocks | Yes | Builds unique index internally |
 
@@ -78,7 +90,16 @@ ALTER TABLE orders ADD CONSTRAINT fk_user
 
 -- Step 2: non-blocking validation (Row Exclusive lock only)
 ALTER TABLE orders MODIFY CONSTRAINT fk_user VALIDATE;
+-- equivalent, and the form you will see more often in Oracle's own docs:
+-- ALTER TABLE orders ENABLE VALIDATE CONSTRAINT fk_user;
 ```
+
+Both spellings hit the same `constraint_state` grammar. Use whichever your migration
+tooling already uses — do not mix them within one repository.
+
+The two-step only pays off if step 1 really is `NOVALIDATE`. Going straight to
+`ENABLE VALIDATE` on a constraint that was never created takes the full-scan path under
+an exclusive lock, which is the thing you were avoiding.
 
 ## Partition Operations
 
@@ -107,7 +128,7 @@ Without `UPDATE INDEXES`, global indexes become UNUSABLE → queries fail with O
 
 | Operation | Lock | Blocks DML? | Online? | Notes |
 |-----------|------|:-----------:|:-------:|-------|
-| TRUNCATE TABLE | Exclusive | Yes | No | Instant data removal; DDL auto-commits |
+| TRUNCATE TABLE | Exclusive | Yes | No | Instant data removal; auto-commits, resets the high-water mark, and is on the list of DDL that `FLASHBACK TABLE … TO SCN/TIMESTAMP` cannot cross. Recovery means reinserting from a pre-DDL copy, not undoing |
 | ALTER TABLE MOVE | Exclusive | Yes | `MOVE ONLINE` (12.2+ EE) | Reorganizes table; rebuilds indexes needed |
 | ALTER TABLE SHRINK SPACE | Row Exclusive | No | Yes | Online; compacts table in-place |
 | DBMS_REDEFINITION | Brief Exclusive | Brief | **Yes** | Online table redefinition (EE); brief lock at start/finish |
@@ -115,23 +136,32 @@ Without `UPDATE INDEXES`, global indexes become UNUSABLE → queries fail with O
 ## Decision Flowchart
 
 ```
-Is this an index operation?
-  ├─ YES → Use ONLINE keyword (requires EE)
-  │        If SE: schedule during low-traffic with DDL_LOCK_TIMEOUT
+Would Oracle REJECT this statement outright?
+  (change of datatype class → ORA-01439; decrease of NUMBER precision/scale
+   or scale-only increase → ORA-01440; NOT NULL over existing NULLs → ORA-02296)
+  ├─ YES → table size is irrelevant. DBMS_REDEFINITION (EE) or CTAS+swap.
+  │        For ORA-02296 specifically: backfill first, then NOT NULL NOVALIDATE.
   └─ NO
       │
-      Is this a constraint addition (FK/CHECK)?
-        ├─ YES → Use ENABLE NOVALIDATE + VALIDATE two-step
+      Is this an index operation?
+        ├─ YES → Use ONLINE keyword (requires EE)
+        │        If SE2: schedule during low-traffic with DDL_LOCK_TIMEOUT
         └─ NO
             │
-            Does this operation rewrite the table?
-              ├─ YES (MODIFY column type, DROP COLUMN, MOVE)
-              │   │
-              │   Is the table small (<1M rows)?
-              │     ├─ YES → Direct DDL with DDL_LOCK_TIMEOUT during off-peak
-              │     └─ NO → DBMS_REDEFINITION (EE) or CTAS+swap
-              └─ NO → Proceed with DDL_LOCK_TIMEOUT
-                      (exclusive lock is brief for metadata-only ops)
+            Is this a constraint addition (FK/CHECK)?
+              ├─ YES → Use ENABLE NOVALIDATE + VALIDATE two-step
+              └─ NO
+                  │
+                  Does this operation physically rewrite rows?
+                  (DROP COLUMN, DROP UNUSED COLUMNS, MOVE — note that
+                   *widening* a column does NOT belong in this branch)
+                    ├─ YES
+                    │   │
+                    │   Is the table small (<1M rows)?
+                    │     ├─ YES → Direct DDL with DDL_LOCK_TIMEOUT during off-peak
+                    │     └─ NO → DBMS_REDEFINITION (EE) or CTAS+swap
+                    └─ NO → Proceed with DDL_LOCK_TIMEOUT
+                            (exclusive lock is brief for metadata-only ops)
 ```
 
 ## Monitoring Locks During Migration

@@ -1,0 +1,40 @@
+{
+  "id": "ORA-035",
+  "title": "Backup exists, but of a different table — no mitigation for the damaged one",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V25__cleanup.sql\nCREATE TABLE customers_bak AS SELECT * FROM customers;\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nTRUNCATE TABLE orders;\nALTER TABLE orders DROP COLUMN legacy_ref;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "6000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: the script does take a backup, but of CUSTOMERS — and the destructive statements target ORDERS. A reviewer skimming for 'is there a backup?' sees one and approves; the ORDERS data has no recovery path at all. Both statements auto-commit and neither can be undone: Flashback Table cannot cross either of them. Snapshot ORDERS itself before the window (CREATE TABLE mig_bak_orders_... AS SELECT ... FROM orders), or create a guaranteed restore point, which is database-wide and therefore does cover both. Classify both phases restore/PITR. The presence of *a* backup is not the question; the question is whether it covers the table being damaged.",
+  "violated_rule": "Irreversible statements need a pre-DDL artefact",
+  "coverage_rules": [
+    "restore point",
+    "irreversible",
+    "restore / PITR"
+  ],
+  "reference": "SKILL.md",
+  "expect_findings": [
+    "ORA017",
+    "ORA007"
+  ],
+  "forbid_findings": [
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 6000000
+  },
+  "expect_severity": {
+    "ORA017": "critical",
+    "ORA007": "critical"
+  },
+  "lint_detail_must_contain": {
+    "ORA017": "some *other* table does not count"
+  }
+}

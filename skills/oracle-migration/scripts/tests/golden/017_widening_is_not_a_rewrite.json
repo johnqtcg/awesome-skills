@@ -1,0 +1,39 @@
+{
+  "id": "ORA-017",
+  "title": "False-positive guard — widening VARCHAR2 must not be reported as a rewrite",
+  "type": "good_practice",
+  "severity": "none",
+  "migration_snippet": "-- V4__widen_email.sql\n-- customers.email is currently VARCHAR2(100)\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE customers MODIFY (email VARCHAR2(320));",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "45000000",
+    "rac": "no"
+  },
+  "expected_feedback": "No violations. Increasing a VARCHAR2 length is a data-dictionary update: existing stored rows are untouched, the exclusive lock is brief, and the operation is independent of the 45M row count. DDL_LOCK_TIMEOUT is set. Neither DBMS_REDEFINITION nor a maintenance window is warranted, and proposing either here would be over-engineering that costs the team a release cycle for nothing. The reason to still classify rather than wave it through is that the neighbouring operations are genuinely different: narrowing the column succeeds only if every existing value fits (ORA-01441 otherwise), and changing its datatype class is rejected outright until the column is empty (ORA-01439).",
+  "coverage_rules": [
+    "ORA-01441",
+    "dictionary update",
+    "brief"
+  ],
+  "reference": "references/oracle-ddl-lock-matrix.md",
+  "expect_findings": [],
+  "forbid_findings": [
+    "ORA001",
+    "ORA005",
+    "ORA007"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 45000000
+  },
+  "lint_ignore": [
+    "ORA015"
+  ],
+  "expected_feedback_must_not_contain": [
+    "rewrite",
+    "use dbms_redefinition",
+    "ora-01440"
+  ]
+}

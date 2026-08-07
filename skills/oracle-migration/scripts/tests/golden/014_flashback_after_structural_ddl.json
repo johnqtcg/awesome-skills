@@ -1,0 +1,32 @@
+{
+  "id": "ORA-014",
+  "title": "Flashback Table offered as the rollback for a dropped column",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V11__drop_legacy.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE customers DROP COLUMN legacy_ref;\n\n-- Rollback plan if anything goes wrong:\nALTER TABLE customers ENABLE ROW MOVEMENT;\nFLASHBACK TABLE customers TO TIMESTAMP (SYSTIMESTAMP - INTERVAL '1' HOUR);",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "9000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: the stated rollback does not work, which is more dangerous than having no rollback at all — it will be approved on the strength of a recovery step that fails when invoked. Oracle cannot flash a table back across a DDL that changed its structure, and 'modifying or dropping a column' is explicitly on the blocking list alongside MOVE, TRUNCATE, adding a constraint and most partition maintenance. The FLASHBACK TABLE statement here will error, not restore. Match the tool to the damage: Flashback Table TO TIMESTAMP is for bad DML with no structural change since; Flashback Table TO BEFORE DROP is for an un-purged DROP TABLE and is unaffected by this rule; structural DDL needs a pre-DDL artefact — a keyed CTAS snapshot of the dropped column, a guaranteed restore point, or verified RMAN backup for PITR. Take it before the DROP and record which one in the rollback plan; classify the phase restore/PITR.",
+  "violated_rule": "Recovery paths must be ones Oracle actually supports",
+  "coverage_rules": [
+    "structural DDL",
+    "TO BEFORE DROP",
+    "restore point",
+    "PITR"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [
+    "ORA010",
+    "ORA007"
+  ],
+  "forbid_findings": [],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 9000000
+  }
+}

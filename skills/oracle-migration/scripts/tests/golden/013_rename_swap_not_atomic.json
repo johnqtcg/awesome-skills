@@ -1,0 +1,38 @@
+{
+  "id": "ORA-013",
+  "title": "CTAS cutover — two RENAME statements described as an atomic swap",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V9__swap_orders.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 5;\n-- Atomic swap of the rebuilt table\nALTER TABLE orders RENAME TO orders_old;\nALTER TABLE orders_new RENAME TO orders;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "SE2",
+    "table_rows": "30000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Critical: these are two independent DDL statements, each with its own implicit COMMIT before and after. There is no transaction around the pair and Oracle offers no way to create one, so calling it an atomic swap is wrong in a way that changes the plan: between the two statements no table named ORDERS exists and every application query fails with ORA-00942. If the second rename fails — a lock held on ORDERS_NEW, DDL_LOCK_TIMEOUT expiring, the session dying — the schema stays in that state until a human intervenes. Re-plan as a two-step cutover inside a maintenance window: quiesce the application, confirm no sessions hold either table, run the renames with the reverse statement (ALTER TABLE orders_old RENAME TO orders) already prepared for immediate paste, then smoke-test before releasing traffic. Also note RENAME carries the name only: inbound foreign keys, synonyms, grants and triggers do not follow, and dependent views and PL/SQL go INVALID. If a genuinely atomic cutover is required, DBMS_REDEFINITION's FINISH_REDEF_TABLE is the only one Oracle provides — but this is SE2, where it is unavailable, so the maintenance window is unavoidable.",
+  "violated_rule": "Cutover atomicity claims must match Oracle's actual guarantees",
+  "coverage_rules": [
+    "ORA-00942",
+    "two-step cutover",
+    "synonyms",
+    "implicit COMMIT"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [
+    "ORA009",
+    "ORA022"
+  ],
+  "forbid_findings": [
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "SE2",
+    "version": "19c",
+    "rows": 30000000
+  },
+  "expect_severity": {
+    "ORA009": "critical",
+    "ORA022": "critical"
+  }
+}

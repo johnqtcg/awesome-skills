@@ -1,0 +1,34 @@
+{
+  "id": "ORA-024",
+  "title": "NOLOGGING CTAS never switched back to LOGGING, and interim table purged",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V15__rebuild_orders.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 5;\nCREATE TABLE orders_new NOLOGGING AS SELECT * FROM orders;\nDROP TABLE orders_old PURGE;",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "35000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Standard, two issues. (1) The CTAS is NOLOGGING and the script never restores LOGGING or takes a backup, so those 35M rows are unrecoverable from archive logs and any physical standby receives blocks it cannot use. Check V$DATABASE.FORCE_LOGGING first — if it is YES the NOLOGGING clause is silently ignored and the runtime estimate built on it is wrong. Then either ALTER TABLE orders_new LOGGING, or back up the tablespace immediately after the load. (2) DROP TABLE ... PURGE bypasses the recycle bin, so FLASHBACK TABLE ... TO BEFORE DROP is unavailable for orders_old — purge the previous generation only after the migration has been signed off, not in the same script that creates its replacement.",
+  "violated_rule": "Bulk loads must state their recoverability plan",
+  "coverage_rules": [
+    "FORCE LOGGING",
+    "recycle bin",
+    "PURGE"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [
+    "ORA023",
+    "ORA024"
+  ],
+  "forbid_findings": [
+    "ORA001",
+    "ORA013"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 35000000
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "id": "ORA-028",
+  "title": "DDL_LOCK_TIMEOUT set to the maximum outlives any maintenance window",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V18__reorg_index.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 1000000;\nALTER TABLE orders ADD (region VARCHAR2(8));",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "9000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Standard: 1000000 seconds is Oracle's ceiling — about 11.5 days. The DDL will not fail; it will sit in the lock queue long past the end of any maintenance window, and every DML that arrives behind it queues too, so a migration that looks stalled is actually taking the application down by degrees. The value should be sized to the window, not to the maximum the parameter accepts. Pick something a human would wait for (3–10s for OLTP, up to a minute or two inside an exclusive window) so that failure is fast, visible, and retryable.",
+  "violated_rule": "DDL_LOCK_TIMEOUT set before every DDL session",
+  "coverage_rules": [
+    "maintenance window",
+    "DDL_LOCK_TIMEOUT"
+  ],
+  "reference": "SKILL.md",
+  "expect_findings": [
+    "ORA027"
+  ],
+  "forbid_findings": [
+    "ORA026",
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 9000000
+  },
+  "expect_severity": {
+    "ORA027": "warning"
+  }
+}

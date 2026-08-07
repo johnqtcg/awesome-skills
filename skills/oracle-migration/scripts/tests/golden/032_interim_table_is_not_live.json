@@ -1,0 +1,34 @@
+{
+  "id": "ORA-032",
+  "title": "Constraints and indexes on a table this script created are not production risk",
+  "type": "good_practice",
+  "severity": "none",
+  "migration_snippet": "-- V22__build_interim.sql\nALTER SESSION SET DDL_LOCK_TIMEOUT = 5;\nCREATE TABLE orders_new NOLOGGING AS SELECT * FROM orders WHERE 1=0;\nALTER TABLE orders_new LOGGING;\nCREATE INDEX idx_orders_new_user ON orders_new (user_id);\nALTER TABLE orders_new ADD CONSTRAINT pk_orders_new PRIMARY KEY (id);",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "30000000",
+    "rac": "no"
+  },
+  "expected_feedback": "No violations. Every object here is built on ORDERS_NEW, which this same script creates: nothing reads or writes it until cutover, so the index build blocks no DML and the primary key validates an empty or freshly-loaded segment. Applying the ONLINE keyword or the ENABLE NOVALIDATE two-step to an interim table would be ceremony — those exist to protect concurrent traffic, and there is none. Flagging this would make the standard CTAS and DBMS_REDEFINITION patterns unusable, since both necessarily build a second table. The judgement changes the moment ORDERS_NEW is renamed into place; from then on it is live and the normal rules apply.",
+  "coverage_rules": [
+    "interim table",
+    "CTAS",
+    "ENABLE NOVALIDATE"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [],
+  "forbid_findings": [
+    "ORA002",
+    "ORA006",
+    "ORA001"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 30000000
+  },
+  "lint_ignore": [
+    "ORA023"
+  ]
+}

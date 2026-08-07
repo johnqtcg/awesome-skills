@@ -1,0 +1,35 @@
+{
+  "id": "ORA-049",
+  "title": "Multi-column drop with a properly keyed copy",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V39__cleanup.sql\nCREATE TABLE mig_bak_orders AS SELECT id, legacy_a, legacy_b FROM orders;\nALTER SESSION SET DDL_LOCK_TIMEOUT = 3;\nALTER TABLE orders DROP (legacy_a, legacy_b);",
+  "context": {
+    "oracle_version": "19c",
+    "edition": "EE",
+    "table_rows": "6000000",
+    "rac": "no"
+  },
+  "expected_feedback": "Standard, not critical: the copy carries both columns being dropped plus `id`, which survives the statement and can key a MERGE back. That is the targeted snapshot pattern applied correctly to a multi-column drop. Still to confirm, because the script cannot show it: that `id` is genuinely unique, and that the CTAS completed before the ALTER ran. The drop itself remains irreversible and auto-commits, so the phase is restore/PITR — and someone should own dropping mig_bak_orders once the migration is signed off.",
+  "violated_rule": "Irreversible statements need a pre-DDL artefact",
+  "coverage_rules": [
+    "restore / PITR",
+    "MERGE"
+  ],
+  "reference": "references/large-table-migration.md",
+  "expect_findings": [
+    "ORA007"
+  ],
+  "forbid_findings": [
+    "ORA001",
+    "ORA031"
+  ],
+  "lint_context": {
+    "edition": "EE",
+    "version": "19c",
+    "rows": 6000000
+  },
+  "expect_severity": {
+    "ORA007": "warning"
+  }
+}
