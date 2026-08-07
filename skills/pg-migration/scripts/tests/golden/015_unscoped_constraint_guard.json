@@ -1,0 +1,25 @@
+{
+  "id": "PG-015",
+  "title": "Unqualified conname guard silently skips the migration",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V16__add_fk_idempotent.sql\nBEGIN;\nSET LOCAL lock_timeout = '3s';\nDO $$ BEGIN\n  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'fk_user') THEN\n    ALTER TABLE orders ADD CONSTRAINT fk_user\n      FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID;\n  END IF;\nEND $$;\nCOMMIT;\n",
+  "context": {
+    "pg_version": "15.4",
+    "table_rows": "8000000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "Standard: constraint names are unique per table, not per database. If any other table already carries a constraint named fk_user, this guard reports 'already exists', the ALTER TABLE never runs, and the DO block completes successfully -- the migration reports success having applied nothing. Add AND conrelid = 'public.orders'::regclass to scope the lookup. Scoping by conrelid is necessary but not sufficient: the guard still decides on the constraint NAME. Compare pg_get_constraintdef() as well and RAISE EXCEPTION on a mismatch, or a same-named constraint with a different definition on this very table makes the migration skip and report success.",
+  "violated_rule": "constraint existence guard scoped by conrelid",
+  "coverage_rules": [
+    "conrelid",
+    "pg_constraint",
+    "conname"
+  ],
+  "expected_lint_codes": [
+    "PG008",
+    "PG022"
+  ],
+  "reference": "references/migration-anti-examples.md",
+  "primary_lint_code": "PG008"
+}

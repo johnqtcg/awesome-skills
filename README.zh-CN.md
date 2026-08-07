@@ -314,7 +314,7 @@ CI 触发
 
 | Skill 名称 | 功能用途 | 主要亮点 / 优势 |
 |---|---|---|
-| `pg-migration` | 审查或生成 PostgreSQL 迁移脚本 | 强制锁级别分析（AccessExclusiveLock vs CONCURRENTLY）、NOT VALID 两步约束模式、大表 pg_repack 重写，以及事务性 DDL 回滚规划 |
+| `pg-migration` | 审查或生成 PostgreSQL 迁移脚本 | 强制锁级别分析（AccessExclusiveLock vs CONCURRENTLY）、NOT VALID 两步约束模式、大表改写用 expand-contract（pg_repack 无法变更 schema），以及事务性 DDL 回滚规划 |
 | `mysql-migration` | 审查或生成 MySQL 迁移脚本 | 覆盖 ALGORITHM={INSTANT,INPLACE,COPY} 选择、gh-ost 大表操作、online DDL 版本门控（5.7 vs 8.0+）和 utf8mb4 边界陷阱 |
 | `mongo-migration` | 审查或生成 MongoDB 迁移脚本 | 强制 `_id`-range 分批更新、write concern 显式设置、validator `moderate→strict` 渐进，以及字段类型迁移新字段模式 |
 | `oracle-migration` | 审查或生成 Oracle DDL 迁移脚本 | 覆盖 DDL_LOCK_TIMEOUT、NOVALIDATE 约束模式、DBMS_REDEFINITION 在线表重定义和分区 DDL 安全规范 |

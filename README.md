@@ -307,7 +307,7 @@ These skills cover production-safe schema migrations across multiple databases, 
 
 | Skill Name | Purpose | Main strengths / advantages |
 |---|---|---|
-| `pg-migration` | Review or generate PostgreSQL schema migrations | Enforces lock-level analysis (AccessExclusiveLock vs CONCURRENTLY), NOT VALID two-step constraint pattern, pg_repack for large-table rewrites, and transactional DDL rollback planning |
+| `pg-migration` | Review or generate PostgreSQL schema migrations | Enforces lock-level analysis (AccessExclusiveLock vs CONCURRENTLY), NOT VALID two-step constraint pattern, expand-contract for large-table rewrites (pg_repack cannot change a schema), and transactional DDL rollback planning |
 | `mysql-migration` | Review or generate MySQL schema migrations | Covers ALGORITHM={INSTANT,INPLACE,COPY} selection, gh-ost integration for large tables, online DDL version gating (5.7 vs 8.0+), and utf8mb4 boundary traps |
 | `mongo-migration` | Review or generate MongoDB schema migrations | Enforces `_id`-range batched updates, write concern, validator `moderate→strict` progression, and the new-field pattern for type migrations |
 | `oracle-migration` | Review or generate Oracle DDL migrations | Covers DDL_LOCK_TIMEOUT, NOVALIDATE constraint pattern, DBMS_REDEFINITION for online table rewrites, and partition DDL safety |

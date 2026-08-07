@@ -2,6 +2,27 @@
 
 > **Evaluation date**: 2026-04-18 | **Method**: A/B blind comparison | **Total assertions**: 23 | **Scenarios**: 3
 
+> **Correction notice (2026-08-07).** The measured results below are left exactly as
+> recorded — they are the historical record of the April run. Three *descriptive*
+> statements in this report have since been shown wrong and must not be carried forward:
+>
+> 1. **`pg_repack` cannot change a schema.** This report describes it as the remedy for
+>    `ALTER COLUMN TYPE` on a large table (§ scope table, assertion A1-2). It has no
+>    column-type option at all; its scope is reorganising a table under its existing
+>    definition. The correct remedies are expand-contract, create-swap-rename, or a
+>    logical-replication cutover. pg_repack's legitimate roles are replacing
+>    `VACUUM FULL` / `CLUSTER` and reclaiming the bloat left by a *batched backfill* —
+>    not by the rewrite, which writes a fresh compact heap and leaves none.
+> 2. **`references/lock-matrix.md` does not exist**; the file is
+>    `references/pg-ddl-lock-matrix.md`.
+> 3. **The FK / CHECK lock levels are not the same.** `ADD FOREIGN KEY` is
+>    ShareRowExclusive on both the altered and the referenced table; `ADD CHECK` is
+>    AccessExclusive. `NOT VALID` shortens the hold and never changes the class.
+>
+> All three are now verified against live PostgreSQL 14–18 by
+> `skills/pg-migration/scripts/tests/test_pg_server_matrix.py`. The skill's scores were
+> not re-measured after these corrections, so the percentages below predate them.
+
 ---
 
 The pg-migration skill reveals an interesting pattern: the baseline Claude already performs well at **87.0%** (compared to 52% for mysql-migration), because PostgreSQL migration safety rules like `CONCURRENTLY`, `NOT VALID`, and `lock_timeout` are widely documented and thoroughly trained into the base model. The skill's core value, then, is not knowledge injection — it is **structural enforcement**: requiring all §9 sections on every review, enforcing the `Data basis` traceability label, and applying strict original-SQL scoring. It also cuts token consumption by **46.1%** by eliminating exploratory reasoning and external tool calls.

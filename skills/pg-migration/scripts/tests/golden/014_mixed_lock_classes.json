@@ -1,0 +1,24 @@
+{
+  "id": "PG-014",
+  "title": "Batched subcommands escalate ALTER TABLE to the strictest lock",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V15__orders_changes.sql\nBEGIN;\nSET LOCAL lock_timeout = '3s';\nALTER TABLE orders\n  ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID,\n  ADD COLUMN note text;\nCOMMIT;\n",
+  "context": {
+    "pg_version": "16.2",
+    "table_rows": "20000000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "Standard: ADD FOREIGN KEY alone takes only ShareRowExclusive, which leaves reads running. But when multiple subcommands are given, ALTER TABLE acquires the strictest lock required by any of them -- ADD COLUMN is AccessExclusive, so this statement blocks reads too and the NOT VALID optimisation buys nothing. Split into one statement per lock class.",
+  "violated_rule": "never batch subcommands of different lock classes",
+  "coverage_rules": [
+    "strictest",
+    "ShareRowExclusive",
+    "AccessExclusive"
+  ],
+  "expected_lint_codes": [
+    "PG006"
+  ],
+  "reference": "references/pg-ddl-lock-matrix.md",
+  "primary_lint_code": "PG006"
+}

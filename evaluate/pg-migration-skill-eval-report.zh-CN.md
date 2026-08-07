@@ -2,6 +2,23 @@
 
 > **评估日期**：2026-04-18 | **评估方法**：A/B 实测对比 | **断言总数**：23 | **场景数**：3
 
+> **订正说明（2026-08-07）**。下文的实测结果原样保留 —— 那是 4 月那次评测的历史记录。
+> 但本报告中有三处**描述性**说法后来被证明是错的，不应再被沿用：
+>
+> 1. **`pg_repack` 无法变更 schema。** 本报告把它当作大表 `ALTER COLUMN TYPE` 的解决
+>    方案（见适用范围表与断言 A1-2）。它根本没有修改列类型的选项，作用范围仅限于在
+>    *现有定义* 下重组表。正确做法是 expand-contract、create-swap-rename，或逻辑复制
+>    切换。pg_repack 的正当用途是替代 `VACUUM FULL` / `CLUSTER`，以及回收*分批 UPDATE*
+>    留下的膨胀 —— 而不是回收改写留下的：全表改写会写出一个全新的紧凑 heap，本就不留膨胀。
+> 2. **`references/lock-matrix.md` 并不存在**，实际文件名是
+>    `references/pg-ddl-lock-matrix.md`。
+> 3. **FK 与 CHECK 的锁级别不同。** `ADD FOREIGN KEY` 在被修改表和被引用表上都是
+>    ShareRowExclusive；`ADD CHECK` 是 AccessExclusive。`NOT VALID` 只缩短持锁时长，
+>    从不改变锁级别。
+>
+> 这三点现已由 `skills/pg-migration/scripts/tests/test_pg_server_matrix.py` 在真实的
+> PostgreSQL 14–18 上验证。订正后未重新跑分，因此下文百分比早于这些修正。
+
 ---
 
 ## 汇总指标

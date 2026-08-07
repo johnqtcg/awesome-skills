@@ -3,13 +3,21 @@
   "title": "Good CONCURRENTLY index build — correct non-blocking pattern outside transaction",
   "type": "good_practice",
   "severity": "none",
-  "migration_snippet": "-- V7__add_search_index.sql\n-- flyway:executeInTransaction=false\nSET statement_timeout = '0';  -- CONCURRENTLY can take time, don't timeout\nSET lock_timeout = '10s';     -- but don't wait forever for initial lock\nCREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_search ON orders USING gin (search_vector);",
+  "migration_snippet": "-- V7__add_search_index.sql\n-- flyway:executeInTransaction=false\nSET statement_timeout = '0';  -- CONCURRENTLY can take time, don't timeout\nSET lock_timeout = '10s';     -- but don't wait forever for initial lock\nCREATE INDEX CONCURRENTLY IF NOT EXISTS idx_orders_search ON orders USING gin (search_vector);\n\n-- IF NOT EXISTS matches on NAME only: a pre-existing idx_orders_search on different\n-- columns would survive untouched. Verify what actually exists AND fail on a mismatch --\n-- a bare SELECT reads the definition but cannot act on it.\nDO $$ BEGIN\n  IF NOT EXISTS (\n    SELECT 1 FROM pg_indexes\n     WHERE schemaname = 'public' AND indexname = 'idx_orders_search'\n       AND indexdef LIKE '%gin (search_vector)%'\n  ) THEN\n    RAISE EXCEPTION 'idx_orders_search exists but is not the intended index: %',\n      (SELECT indexdef FROM pg_indexes WHERE indexname = 'idx_orders_search');\n  END IF;\nEND $$;\n",
   "context": {
     "pg_version": "15.4",
     "table_rows": "20000000",
     "replication": "streaming"
   },
-  "expected_feedback": "No violations. Correct CONCURRENTLY usage: (1) flyway directive to run outside transaction, (2) statement_timeout disabled for long-running build, (3) lock_timeout set for initial lock acquisition, (4) IF NOT EXISTS for idempotency, (5) appropriate GIN index type for tsvector.",
-  "coverage_rules": ["CONCURRENTLY", "lock_timeout", "statement_timeout", "transaction", "IF NOT EXISTS"],
-  "reference": "SKILL.md"
+  "expected_feedback": "No violations. Correct CONCURRENTLY usage: (1) flyway directive to run outside transaction, (2) statement_timeout disabled for long-running build, (3) lock_timeout set for initial lock acquisition, (4) IF NOT EXISTS for idempotency, (5) appropriate GIN index type for tsvector. The pg_indexes.indexdef check after the build is what closes the IF NOT EXISTS name-only hole, and it has to be able to FAIL: a bare SELECT of indexdef proves the definition was read, never that it was verified. Without a RAISE EXCEPTION on mismatch, an existing index on other columns silently survives and the intended index is never created.",
+  "coverage_rules": [
+    "CONCURRENTLY",
+    "lock_timeout",
+    "statement_timeout",
+    "transaction",
+    "IF NOT EXISTS"
+  ],
+  "reference": "SKILL.md",
+  "expected_lint_codes": [],
+  "primary_lint_code": null
 }

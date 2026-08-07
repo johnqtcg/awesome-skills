@@ -1,0 +1,24 @@
+{
+  "id": "PG-013",
+  "title": "Finite statement_timeout aborts a concurrent index build",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V14__add_gin_index.sql\nSET lock_timeout = '3s';\nSET statement_timeout = '30s';\nCREATE INDEX CONCURRENTLY idx_events_payload ON events USING gin (payload);\n",
+  "context": {
+    "pg_version": "16.2",
+    "table_rows": "80000000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "Critical: statement_timeout aborts any statement that exceeds it. A GIN CONCURRENTLY build on 80M rows runs far longer than 30s, so the build is killed and leaves an INVALID index that serves no queries and must be dropped and rebuilt. Guard the lock wait with lock_timeout and set statement_timeout = 0 for the build. Verify afterwards with SELECT indexrelid::regclass FROM pg_index WHERE NOT indisvalid.",
+  "violated_rule": "no finite statement_timeout around a CONCURRENTLY build",
+  "coverage_rules": [
+    "statement_timeout",
+    "INVALID",
+    "indisvalid"
+  ],
+  "expected_lint_codes": [
+    "PG005"
+  ],
+  "reference": "references/pg-ddl-lock-matrix.md",
+  "primary_lint_code": "PG005"
+}

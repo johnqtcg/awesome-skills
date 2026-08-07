@@ -9,8 +9,16 @@
     "table_rows": "5000000",
     "replication": "streaming"
   },
-  "expected_feedback": "Critical: DDL missing lock_timeout. Even CONCURRENTLY operations can stall if they cannot acquire ShareUpdateExclusiveLock. Add SET LOCAL lock_timeout = '3s'; before DDL. Note: CONCURRENTLY cannot run inside a transaction, so use SET statement_timeout instead for this specific case.",
+  "expected_feedback": "Critical: DDL missing lock_timeout. Even CONCURRENTLY operations can stall waiting for ShareUpdateExclusiveLock. Because CREATE INDEX CONCURRENTLY cannot run inside a transaction block, SET LOCAL would only emit a warning and have no effect here -- use session-level SET lock_timeout = '3s' before the statement and RESET lock_timeout afterwards. Keep statement_timeout at 0 for the build itself.",
   "violated_rule": "lock_timeout set before every DDL",
-  "coverage_rules": ["lock_timeout", "statement_timeout", "SET LOCAL"],
-  "reference": "SKILL.md"
+  "coverage_rules": [
+    "lock_timeout",
+    "statement_timeout",
+    "RESET"
+  ],
+  "reference": "SKILL.md",
+  "expected_lint_codes": [
+    "PG004"
+  ],
+  "primary_lint_code": "PG004"
 }

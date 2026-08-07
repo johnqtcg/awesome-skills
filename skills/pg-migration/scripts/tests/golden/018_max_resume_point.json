@@ -1,0 +1,26 @@
+{
+  "id": "PG-018",
+  "title": "max()-based resume point skips unprocessed rows",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- backfill resume helper\nSELECT MAX(id) FROM orders WHERE total_usd IS NOT NULL;\n-- then: UPDATE orders SET total_usd = ... WHERE id > :resume LIMIT 5000 OFFSET 0;\nUPDATE orders SET total_usd = amount * rate\nWHERE total_usd IS NULL LIMIT 5000 OFFSET 10000;\n",
+  "context": {
+    "pg_version": "16.2",
+    "table_rows": "50000000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "Standard: two backfill defects. (1) max(id) WHERE total_usd IS NOT NULL as a resume point skips every unprocessed row below the maximum -- which happens with parallel workers, a retried batch, or rows where the computation legitimately yields NULL. Use min(id) WHERE total_usd IS NULL, or persist the cursor in the batch's own transaction. (2) OFFSET rescans skipped rows, making the backfill O(n^2); advance a keyset cursor instead. Run ANALYZE afterwards.",
+  "violated_rule": "keyset batching and a resume point that cannot skip rows",
+  "coverage_rules": [
+    "keyset",
+    "OFFSET",
+    "resume"
+  ],
+  "expected_lint_codes": [
+    "PG012",
+    "PG014",
+    "PG017"
+  ],
+  "reference": "references/large-table-migration.md",
+  "primary_lint_code": "PG014"
+}

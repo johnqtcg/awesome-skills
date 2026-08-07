@@ -2,15 +2,25 @@
   "id": "PG-003",
   "title": "ADD CONSTRAINT without NOT VALID — holds AccessExclusiveLock during full validation",
   "type": "defect",
-  "severity": "critical",
+  "severity": "standard",
   "migration_snippet": "-- V4__add_fk.sql\nSET LOCAL lock_timeout = '3s';\nALTER TABLE orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id);",
   "context": {
     "pg_version": "15.4",
     "table_rows": "8000000",
     "replication": "streaming"
   },
-  "expected_feedback": "Critical: Adding FK constraint without NOT VALID holds AccessExclusiveLock while scanning all 8M rows for validation. Use the two-step pattern: ADD CONSTRAINT ... NOT VALID (brief lock) then VALIDATE CONSTRAINT (non-blocking ShareUpdateExclusiveLock).",
+  "expected_feedback": "Critical: Adding an FK without NOT VALID scans all 8M rows while holding ShareRowExclusive on orders AND on the referenced users table -- writes block on both tables for the whole scan (reads are unaffected; ADD FOREIGN KEY is not AccessExclusive). Use the two-step pattern: ADD CONSTRAINT ... NOT VALID (brief lock), then VALIDATE CONSTRAINT (ShareUpdateExclusive on orders plus RowShare on users). Note FK constraints on a partitioned table may not be declared NOT VALID. Also: SET LOCAL outside a transaction block has no effect.",
   "violated_rule": "Rollback path provided",
-  "coverage_rules": ["NOT VALID", "VALIDATE CONSTRAINT", "AccessExclusiveLock", "two-step"],
-  "reference": "SKILL.md"
+  "coverage_rules": [
+    "NOT VALID",
+    "VALIDATE CONSTRAINT",
+    "ShareRowExclusive"
+  ],
+  "reference": "SKILL.md",
+  "expected_lint_codes": [
+    "PG001",
+    "PG004",
+    "PG009"
+  ],
+  "primary_lint_code": "PG009"
 }

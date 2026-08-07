@@ -3,13 +3,20 @@
   "title": "Well-formed phased migration — correct NOT VALID + CONCURRENTLY + backfill pattern",
   "type": "good_practice",
   "severity": "none",
-  "migration_snippet": "-- Phase 1: V10__add_total_usd.sql\nSET LOCAL lock_timeout = '3s';\nALTER TABLE orders ADD COLUMN total_usd numeric(12,2);\n\n-- Phase 2: backfill (app-driven, cursor-based batches)\n-- Phase 3: V11__add_constraint.sql\nDO $$ BEGIN\n  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orders_total_usd_not_null') THEN\n    ALTER TABLE orders ADD CONSTRAINT orders_total_usd_not_null CHECK (total_usd IS NOT NULL) NOT VALID;\n  END IF;\nEND $$;\nALTER TABLE orders VALIDATE CONSTRAINT orders_total_usd_not_null;\n\n-- Phase 4: V12__set_not_null.sql (PG 12+)\nSET LOCAL lock_timeout = '3s';\nALTER TABLE orders ALTER COLUMN total_usd SET NOT NULL;\nALTER TABLE orders DROP CONSTRAINT orders_total_usd_not_null;",
+  "migration_snippet": "-- Phase 1: V10__add_total_usd.sql\nBEGIN;\nSET LOCAL lock_timeout = '3s';\nALTER TABLE orders ADD COLUMN total_usd numeric(12,2);\nCOMMIT;\n\n-- Phase 2: backfill (app-driven, keyset batches, then ANALYZE)\n-- Phase 3: V11__add_constraint.sql\nBEGIN;\nSET LOCAL lock_timeout = '3s';\nDO $$\nDECLARE existing text;\nBEGIN\n  SELECT pg_get_constraintdef(oid) INTO existing\n    FROM pg_constraint\n   WHERE conname = 'orders_total_usd_not_null'\n     AND conrelid = 'public.orders'::regclass;\n  IF existing IS NULL THEN\n    ALTER TABLE orders ADD CONSTRAINT orders_total_usd_not_null\n      CHECK (total_usd IS NOT NULL) NOT VALID;\n  ELSIF existing NOT LIKE '%total_usd IS NOT NULL%' THEN\n    RAISE EXCEPTION 'constraint exists with a different definition: %', existing;\n  END IF;\nEND $$;\nCOMMIT;\n\nBEGIN;\nSET LOCAL lock_timeout = '3s';\nALTER TABLE orders VALIDATE CONSTRAINT orders_total_usd_not_null;\nCOMMIT;\n\n-- Phase 4: V12__set_not_null.sql (PG 12+ skips the scan via the CHECK)\nBEGIN;\nSET LOCAL lock_timeout = '3s';\nALTER TABLE orders ALTER COLUMN total_usd SET NOT NULL;\nALTER TABLE orders DROP CONSTRAINT orders_total_usd_not_null;\nCOMMIT;\n",
   "context": {
     "pg_version": "15.4",
     "table_rows": "5000000",
     "replication": "streaming"
   },
-  "expected_feedback": "No violations. Correctly implements phased migration: (1) add nullable column with lock_timeout, (2) cursor-based backfill, (3) idempotent CHECK constraint with NOT VALID + VALIDATE (non-blocking), (4) SET NOT NULL leveraging PG 12+ CHECK shortcut. All DDL has lock_timeout set.",
-  "coverage_rules": ["NOT VALID", "VALIDATE CONSTRAINT", "lock_timeout", "DO block", "idempotent", "phased", "SET NOT NULL"],
-  "reference": "SKILL.md"
+  "expected_feedback": "No violations. Correctly implements phased migration: (1) add nullable column inside a transaction with SET LOCAL lock_timeout, (2) keyset backfill, (3) idempotent CHECK with NOT VALID guarded by a conrelid-scoped pg_constraint lookup, then VALIDATE CONSTRAINT (non-blocking), (4) SET NOT NULL which PG 12+ satisfies from the CHECK without a full scan, then drop the now-redundant CHECK. Every guard is in the form that matches its execution context. The idempotency guard reads pg_get_constraintdef() rather than deciding on the constraint name alone, so a same-named constraint with a different definition raises instead of silently skipping the migration.",
+  "coverage_rules": [
+    "NOT VALID",
+    "VALIDATE CONSTRAINT",
+    "conrelid",
+    "SET LOCAL"
+  ],
+  "reference": "SKILL.md",
+  "expected_lint_codes": [],
+  "primary_lint_code": null
 }

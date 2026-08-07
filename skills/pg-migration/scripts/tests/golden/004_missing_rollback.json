@@ -11,6 +11,15 @@
   },
   "expected_feedback": "Critical: DROP COLUMN is irreversible after COMMIT — even though PostgreSQL supports transactional DDL, once committed the data cannot be recovered. No rollback plan provided. Back up column data before dropping. Classify both as 'irreversible' and check for dependent views/functions.",
   "violated_rule": "Rollback path provided",
-  "coverage_rules": ["rollback", "irreversible", "DROP COLUMN", "transactional DDL"],
-  "reference": "SKILL.md"
+  "coverage_rules": [
+    "rollback",
+    "irreversible",
+    "DROP COLUMN",
+    "transactional DDL"
+  ],
+  "reference": "SKILL.md",
+  "expected_lint_codes": [
+    "PG004"
+  ],
+  "primary_lint_code": "PG004"
 }

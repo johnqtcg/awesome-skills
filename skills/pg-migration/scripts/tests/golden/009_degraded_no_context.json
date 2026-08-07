@@ -9,7 +9,16 @@
     "table_rows": "unknown",
     "replication": "unknown"
   },
-  "expected_feedback": "Degraded mode: no PostgreSQL version or table size provided. Assume PG 12 (conservative). Flag: CREATE INDEX without CONCURRENTLY (Critical), missing lock_timeout (Critical). All recommendations marked with assumptions. Uncovered Risks must list all unknowns. Must NOT claim definitive safety without evidence.",
-  "coverage_rules": ["Degraded", "conservative", "never claim", "Uncovered Risk", "assumptions"],
-  "reference": "SKILL.md"
+  "expected_feedback": "Degraded mode: no PostgreSQL version or table size provided. Assume PG 14 -- the oldest community-supported major, therefore the least capable. Flag: CREATE INDEX without CONCURRENTLY (Critical), missing lock_timeout (Critical). All recommendations must be marked as assumptions and verified against production before execution; do not claim SAFE without evidence.",
+  "coverage_rules": [
+    "Degraded",
+    "CONCURRENTLY",
+    "lock_timeout"
+  ],
+  "reference": "SKILL.md",
+  "expected_lint_codes": [
+    "PG003",
+    "PG004"
+  ],
+  "primary_lint_code": null
 }

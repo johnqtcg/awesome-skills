@@ -9,8 +9,18 @@
     "table_rows": "12000000",
     "replication": "streaming"
   },
-  "expected_feedback": "Critical: Plain CREATE INDEX acquires ShareLock, blocking all writes for the entire index build on a 12M-row table. Use CREATE INDEX CONCURRENTLY which takes ShareUpdateExclusiveLock and allows concurrent DML. Remember: CONCURRENTLY cannot run inside a transaction block.",
+  "expected_feedback": "Critical: Plain CREATE INDEX acquires ShareLock, blocking all writes for the entire index build on a 12M-row table. Use CREATE INDEX CONCURRENTLY, which takes ShareUpdateExclusiveLock and allows concurrent DML. Second critical issue: SET LOCAL outside a transaction block emits a warning and has no effect, so this migration currently has no lock_timeout at all -- either wrap the plain DDL in BEGIN/COMMIT, or use session-level SET for the CONCURRENTLY form.",
   "violated_rule": "Indexes use CONCURRENTLY",
-  "coverage_rules": ["CONCURRENTLY", "ShareLock", "CREATE INDEX"],
-  "reference": "SKILL.md"
+  "coverage_rules": [
+    "CONCURRENTLY",
+    "ShareLock",
+    "SET LOCAL"
+  ],
+  "reference": "SKILL.md",
+  "expected_lint_codes": [
+    "PG001",
+    "PG003",
+    "PG004"
+  ],
+  "primary_lint_code": "PG003"
 }

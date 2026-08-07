@@ -1,0 +1,25 @@
+{
+  "id": "PG-012",
+  "title": "SET LOCAL guard in front of CONCURRENTLY is silently a no-op",
+  "type": "defect",
+  "severity": "critical",
+  "migration_snippet": "-- V13__add_index.sql\nSET LOCAL lock_timeout = '3s';\nCREATE INDEX CONCURRENTLY idx_events_created ON events (created_at);\n",
+  "context": {
+    "pg_version": "16.2",
+    "table_rows": "40000000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "Critical: CREATE INDEX CONCURRENTLY cannot run inside a transaction block, so there is no transaction for SET LOCAL to scope to. PostgreSQL emits a warning and the timeout is never applied -- this migration has no lock_timeout. Use session-level SET lock_timeout = '3s', keep statement_timeout at 0 so the build is not aborted, and RESET both afterwards.",
+  "violated_rule": "lock_timeout set in the form matching the execution context",
+  "coverage_rules": [
+    "SET LOCAL",
+    "outside a transaction",
+    "RESET"
+  ],
+  "expected_lint_codes": [
+    "PG001",
+    "PG004"
+  ],
+  "reference": "SKILL.md",
+  "primary_lint_code": "PG001"
+}

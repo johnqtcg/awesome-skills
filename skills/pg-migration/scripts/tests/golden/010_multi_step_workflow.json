@@ -10,6 +10,15 @@
     "replication": "streaming"
   },
   "expected_feedback": "Workflow: column rename requires multi-step plan. (1) ADD COLUMN total_amount with lock_timeout. (2) Backfill total_amount = total_price in cursor-based batches. (3) Deploy app writing to both columns. (4) Deploy app reading from total_amount. (5) SET NOT NULL via CHECK shortcut on PG 12+. (6) Separate release: DROP COLUMN total_price. Each phase has rollback plan. Optionally create a view for backward compatibility during transition.",
-  "coverage_rules": ["rename", "phased", "deployment order", "backfill", "cleanup", "lock_timeout"],
-  "reference": "SKILL.md"
+  "coverage_rules": [
+    "rename",
+    "phased",
+    "deployment order",
+    "backfill",
+    "cleanup",
+    "lock_timeout"
+  ],
+  "reference": "SKILL.md",
+  "expected_lint_codes": [],
+  "primary_lint_code": null
 }

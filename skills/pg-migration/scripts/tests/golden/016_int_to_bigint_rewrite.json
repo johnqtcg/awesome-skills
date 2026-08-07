@@ -1,0 +1,24 @@
+{
+  "id": "PG-016",
+  "title": "int to bigint widening rewrites the table",
+  "type": "defect",
+  "severity": "standard",
+  "migration_snippet": "-- V17__widen_id.sql\nBEGIN;\nSET LOCAL lock_timeout = '3s';\nALTER TABLE events ALTER COLUMN id TYPE bigint;\nCOMMIT;\n",
+  "context": {
+    "pg_version": "16.2",
+    "table_rows": "120000000",
+    "replication": "streaming"
+  },
+  "expected_feedback": "Standard: int4 is not binary coercible to int8, so the documented no-rewrite exemption does not apply -- this rewrites the entire heap and every index under AccessExclusiveLock and temporarily needs up to double the disk space. Integer widening is not a metadata change. On 120M rows use expand-contract: add id_new bigint, backfill in keyset batches, build the unique index CONCURRENTLY, cut reads over, drop the old column in a later release.",
+  "violated_rule": "rewriting type change needs expand-contract on a large table",
+  "coverage_rules": [
+    "binary coercible",
+    "REWRITES",
+    "expand-contract"
+  ],
+  "expected_lint_codes": [
+    "PG010"
+  ],
+  "reference": "references/migration-anti-examples.md",
+  "primary_lint_code": "PG010"
+}

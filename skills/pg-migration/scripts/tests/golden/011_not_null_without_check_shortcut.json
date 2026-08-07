@@ -9,8 +9,18 @@
     "table_rows": "10000000",
     "replication": "streaming"
   },
-  "expected_feedback": "Standard: On PG 12+, SET NOT NULL performs a full-table scan while holding AccessExclusiveLock unless a CHECK constraint already proves non-null values. On 10M rows this scan could take significant time. Use the three-step pattern: ADD CHECK (status IS NOT NULL) NOT VALID → VALIDATE CONSTRAINT → SET NOT NULL (scan skipped).",
+  "expected_feedback": "Standard: SET NOT NULL scans the whole table while holding AccessExclusiveLock. On PG 12+ that scan is skipped when a valid CHECK already proves the column non-null, so the cheap path is: ADD CONSTRAINT ... CHECK (status IS NOT NULL) NOT VALID, VALIDATE CONSTRAINT (non-blocking), SET NOT NULL (no scan), then DROP the redundant CHECK. On 10M rows the direct form blocks all queries for the scan duration. Also: SET LOCAL outside a transaction block has no effect.",
   "violated_rule": "FK/CHECK constraints use NOT VALID",
-  "coverage_rules": ["NOT NULL", "NOT VALID", "VALIDATE CONSTRAINT", "CHECK", "AccessExclusiveLock"],
-  "reference": "references/migration-anti-examples.md"
+  "coverage_rules": [
+    "SET NOT NULL",
+    "NOT VALID",
+    "CHECK"
+  ],
+  "reference": "references/migration-anti-examples.md",
+  "expected_lint_codes": [
+    "PG001",
+    "PG004",
+    "PG018"
+  ],
+  "primary_lint_code": "PG018"
 }

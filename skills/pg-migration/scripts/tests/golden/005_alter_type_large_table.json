@@ -9,8 +9,18 @@
     "table_rows": "50000000",
     "replication": "streaming"
   },
-  "expected_feedback": "Standard: ALTER COLUMN TYPE from text to jsonb requires a full table rewrite with AccessExclusiveLock. On a 50M-row table this will take minutes to hours and block all queries. Use pg_repack or the create-swap-rename pattern instead.",
+  "expected_feedback": "Standard: ALTER COLUMN TYPE from text to jsonb requires a full table rewrite with AccessExclusiveLock -- the USING clause changes the column contents, so the documented no-rewrite exemption does not apply. On a 50M-row table this blocks all queries for minutes to hours and needs up to double the disk space. pg_repack cannot change a column type; use expand-contract (add a new jsonb column, backfill in keyset batches, dual-write, then drop the old column). Also: SET LOCAL outside a transaction block has no effect.",
   "violated_rule": "lock_timeout set before every DDL",
-  "coverage_rules": ["ALTER COLUMN TYPE", "rewrite", "pg_repack", "AccessExclusiveLock"],
-  "reference": "references/pg-ddl-lock-matrix.md"
+  "coverage_rules": [
+    "rewrite",
+    "expand-contract",
+    "binary coercible"
+  ],
+  "reference": "references/pg-ddl-lock-matrix.md",
+  "expected_lint_codes": [
+    "PG001",
+    "PG004",
+    "PG010"
+  ],
+  "primary_lint_code": "PG010"
 }

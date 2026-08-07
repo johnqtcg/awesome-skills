@@ -1,135 +1,279 @@
-# PostgreSQL DDL Lock Level Matrix
+# PostgreSQL DDL Lock Matrix
 
 This reference maps each DDL operation to the lock level it acquires. Use this to
 determine whether a migration can run online or needs mitigation.
+
+**Verified against**: PostgreSQL 17 documentation source (`doc/src/sgml`), 2026-08.
+Every row carries a `Source` pointing at the reference page that states the behaviour.
+When a row and the live server disagree, the server wins — re-verify and update this file.
+
+## The Default Rule (read this first)
+
+> "There are several subforms described below. Note that the lock level required may
+> differ for each subform. An **ACCESS EXCLUSIVE lock is acquired unless explicitly
+> noted**. When multiple subcommands are given, **the lock acquired will be the
+> strictest one required by any subcommand**."
+> — `ALTER TABLE`, Description
+
+Two consequences that dominate migration design:
+
+1. **Assume ACCESS EXCLUSIVE for any ALTER TABLE subform not listed as an exception below.**
+2. **Never batch a low-lock subcommand with a high-lock one.** Combining them escalates
+   the whole statement to the strictest lock, silently destroying the benefit of the
+   low-lock form:
+
+```sql
+-- WRONG: ADD FOREIGN KEY alone needs only SHARE ROW EXCLUSIVE, but ADD COLUMN
+-- forces ACCESS EXCLUSIVE, so the combined statement blocks reads too.
+ALTER TABLE orders
+  ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID,
+  ADD COLUMN note text;
+
+-- RIGHT: separate statements keep each at its own lock level.
+ALTER TABLE orders ADD COLUMN note text;
+ALTER TABLE orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID;
+```
 
 ## Lock Level Hierarchy (least → most restrictive)
 
 | Level | Conflicts with | Typical DDL |
 |-------|---------------|-------------|
-| **AccessShareLock** | AccessExclusiveLock | SELECT |
+| **AccessShareLock** | AccessExclusive | SELECT |
 | **RowShareLock** | Exclusive, AccessExclusive | SELECT FOR UPDATE/SHARE |
 | **RowExclusiveLock** | Share, ShareRowExclusive, Exclusive, AccessExclusive | INSERT, UPDATE, DELETE |
-| **ShareUpdateExclusiveLock** | ShareUpdateExclusive, Share, ShareRowExclusive, Exclusive, AccessExclusive | VACUUM, CREATE INDEX CONCURRENTLY, VALIDATE CONSTRAINT, certain ALTER TABLE |
+| **ShareUpdateExclusiveLock** | ShareUpdateExclusive, Share, ShareRowExclusive, Exclusive, AccessExclusive | VACUUM, CREATE INDEX CONCURRENTLY, VALIDATE CONSTRAINT |
 | **ShareLock** | RowExclusive, ShareUpdateExclusive, ShareRowExclusive, Exclusive, AccessExclusive | CREATE INDEX (non-concurrent) |
-| **ShareRowExclusiveLock** | RowExclusive, ShareUpdateExclusive, Share, ShareRowExclusive, Exclusive, AccessExclusive | CREATE TRIGGER, some ALTER TABLE |
+| **ShareRowExclusiveLock** | RowExclusive, ShareUpdateExclusive, Share, ShareRowExclusive, Exclusive, AccessExclusive | CREATE TRIGGER, **ADD FOREIGN KEY** |
 | **ExclusiveLock** | RowShare, RowExclusive, ShareUpdateExclusive, Share, ShareRowExclusive, Exclusive, AccessExclusive | — |
-| **AccessExclusiveLock** | ALL other locks | Most ALTER TABLE, DROP TABLE, TRUNCATE, REINDEX |
+| **AccessExclusiveLock** | ALL other locks | Most ALTER TABLE, DROP TABLE, TRUNCATE |
 
-**Key insight**: AccessExclusiveLock blocks even SELECT. On a hot table, acquiring this lock
-stalls ALL queries until the DDL completes.
+**Key insight**: AccessExclusiveLock blocks even SELECT. On a hot table, acquiring this
+lock stalls ALL queries until the DDL completes. ShareRowExclusiveLock blocks writes but
+**not** reads — that difference is why `ADD FOREIGN KEY` is far cheaper than it looks.
 
 ---
 
 ## Column Operations
 
-| Operation | Lock Level | Blocks Reads? | Blocks Writes? | Rewrites Table? | Notes |
-|-----------|-----------|:---:|:---:|:---:|-------|
-| ADD COLUMN (nullable, no default) | AccessExclusiveLock | Brief | Brief | No | Metadata-only; lock is very brief |
-| ADD COLUMN (with DEFAULT, PG 11+) | AccessExclusiveLock | Brief | Brief | No | PG 11+ stores default in pg_attribute; no rewrite |
-| ADD COLUMN (with DEFAULT, PG <11) | AccessExclusiveLock | Yes | Yes | **Yes** | Full table rewrite |
-| DROP COLUMN | AccessExclusiveLock | Brief | Brief | No | Marks column as dropped; physical removal on next VACUUM FULL |
-| ALTER COLUMN SET DEFAULT | AccessExclusiveLock | Brief | Brief | No | Metadata-only |
-| ALTER COLUMN DROP DEFAULT | AccessExclusiveLock | Brief | Brief | No | Metadata-only |
-| ALTER COLUMN SET NOT NULL | AccessExclusiveLock | Brief | Brief | No (PG 12+) | PG 12+ skips scan if CHECK constraint already proves non-null |
-| ALTER COLUMN DROP NOT NULL | AccessExclusiveLock | Brief | Brief | No | Metadata-only |
-| ALTER COLUMN TYPE (same binary) | AccessExclusiveLock | Brief | Brief | No | e.g., varchar(50) → varchar(100), int → bigint on some versions |
-| ALTER COLUMN TYPE (different) | AccessExclusiveLock | Yes | Yes | **Yes** | Full table rewrite; use pg_repack for large tables |
-| RENAME COLUMN | AccessExclusiveLock | Brief | Brief | No | Metadata-only |
+| Operation | Lock Level | Blocks Reads? | Blocks Writes? | Rewrites Table? | Source |
+|-----------|-----------|:---:|:---:|:---:|--------|
+| ADD COLUMN (nullable, no default) | AccessExclusive | Brief | Brief | No | alter_table · Notes |
+| ADD COLUMN, **non-volatile** DEFAULT (PG 11+) | AccessExclusive | Brief | Brief | No | alter_table · Notes |
+| ADD COLUMN, **volatile** DEFAULT | AccessExclusive | Yes | Yes | **Yes** | alter_table · Notes |
+| DROP COLUMN | AccessExclusive | Brief | Brief | No | alter_table · DROP COLUMN |
+| ALTER COLUMN SET/DROP DEFAULT | AccessExclusive | Brief | Brief | No | alter_table · default rule |
+| ALTER COLUMN SET NOT NULL | AccessExclusive | Yes (scan) | Yes (scan) | No | alter_table · SET NOT NULL |
+| ALTER COLUMN SET NOT NULL, valid CHECK present (PG 12+) | AccessExclusive | Brief | Brief | No | alter_table · SET NOT NULL |
+| ALTER COLUMN DROP NOT NULL | AccessExclusive | Brief | Brief | No | alter_table · default rule |
+| ALTER COLUMN TYPE, binary-coercible + USING unchanged | AccessExclusive | Brief | Brief | No | alter_table · Notes |
+| ALTER COLUMN TYPE, anything else | AccessExclusive | Yes | Yes | **Yes** | alter_table · Notes |
+| RENAME COLUMN | AccessExclusive | Brief | Brief | No | alter_table · RENAME |
+| ALTER COLUMN SET STATISTICS | **ShareUpdateExclusive** | No | No | No | alter_table · SET STATISTICS |
+| ALTER COLUMN SET (attribute options) | **ShareUpdateExclusive** | No | No | No | alter_table · SET ( … ) |
 
-### Critical version gates:
+### The rewrite rule, stated exactly
 
-- **PG 11+**: ADD COLUMN with non-volatile DEFAULT is metadata-only (no rewrite)
-- **PG 12+**: SET NOT NULL can skip full-table scan if a valid CHECK constraint exists
-- **PG <11**: ADD COLUMN with DEFAULT always rewrites the entire table
+> "Adding a column with a volatile DEFAULT or changing the type of an existing column
+> will require the entire table and its indexes to be rewritten. **As an exception**, when
+> changing the type of an existing column, if the `USING` clause does not change the
+> column contents **and** the old type is either binary coercible to the new type or an
+> unconstrained domain over the new type, a table rewrite is not needed. However, indexes
+> must always be rebuilt unless the system can verify that the new index would be
+> logically equivalent to the existing one."
+> — `ALTER TABLE`, Notes
+
+Practical readings:
+
+- `varchar(50)` → `varchar(100)` (widening), `text` ↔ `varchar` with **no collation change**:
+  no rewrite, no index rebuild.
+- **`int` → `bigint`: REWRITES.** `int4` is not binary coercible to `int8`. Do not treat
+  integer widening as cheap — this is the single most common false assumption in PostgreSQL
+  migration planning.
+- `numeric(10,2)` → `numeric(12,4)`: rewrites (typmod change is not binary coercible).
+- Any collation change: index rebuild is mandatory even when the heap is untouched.
+
+### Version gates
+
+- **PG 11+**: ADD COLUMN with a non-volatile DEFAULT is metadata-only.
+- **PG 12+**: SET NOT NULL skips the full-table scan if a valid CHECK constraint already
+  proves the column non-null.
+
+---
 
 ## Index Operations
 
-| Operation | Lock Level | Blocks Reads? | Blocks Writes? | Notes |
-|-----------|-----------|:---:|:---:|-------|
-| CREATE INDEX | ShareLock | No | **Yes** | Blocks INSERT/UPDATE/DELETE for entire build |
-| CREATE INDEX CONCURRENTLY | ShareUpdateExclusiveLock | No | No | Allows concurrent DML; takes 2-3× longer |
-| DROP INDEX | AccessExclusiveLock | Brief | Brief | Very fast (metadata-only) |
-| DROP INDEX CONCURRENTLY | ShareUpdateExclusiveLock | No | No | Non-blocking drop |
-| REINDEX | AccessExclusiveLock | Yes | Yes | Locks table for entire rebuild |
-| REINDEX CONCURRENTLY (PG 12+) | ShareUpdateExclusiveLock | No | No | Non-blocking reindex |
+| Operation | Lock Level | Blocks Reads? | Blocks Writes? | In transaction? | Source |
+|-----------|-----------|:---:|:---:|:---:|--------|
+| CREATE INDEX | ShareLock | No | **Yes** | Yes | create_index · Notes |
+| CREATE INDEX CONCURRENTLY | ShareUpdateExclusive | No | No | **No** | create_index · Building Indexes Concurrently |
+| DROP INDEX | AccessExclusive (parent) | Brief | Brief | Yes | reindex · Notes |
+| DROP INDEX CONCURRENTLY | ShareUpdateExclusive | No | No | **No** | drop_index · CONCURRENTLY |
+| REINDEX INDEX / TABLE | **ShareLock on table** + AccessExclusive **on the index** | Effectively yes — see below | **Yes** | Yes | reindex · Notes |
+| REINDEX CONCURRENTLY (PG 12+) | ShareUpdateExclusive | No | No | **No** | reindex · CONCURRENTLY |
 
-### CONCURRENTLY caveats:
+### REINDEX: why the lock level understates the impact
 
-- Cannot run inside a transaction block (`BEGIN ... COMMIT`)
-- If interrupted, leaves an INVALID index that must be dropped and recreated
-- Takes 2-3× longer than regular index build
-- Requires two table scans (first builds, second validates)
+> "REINDEX locks out writes but not reads of the index's parent table. It also takes an
+> ACCESS EXCLUSIVE lock on the specific index being processed, which will block reads that
+> attempt to use that index. In particular, **the query planner tries to take an ACCESS
+> SHARE lock on every index of the table, regardless of the query, and so REINDEX blocks
+> virtually any queries** except for some prepared queries whose plan has been cached and
+> which don't use this very index."
+> — `REINDEX`, Notes
+
+So: the lock **on the table** is ShareLock (reads permitted at the lock level), but the
+ACCESS EXCLUSIVE lock **on the index** stalls nearly every real query anyway, because the
+planner locks all indexes. Treat non-concurrent REINDEX as read-blocking in practice, and
+use `REINDEX CONCURRENTLY` (PG 12+) on production. Do not "simplify" this row in either
+direction — both halves are load-bearing.
+
+### CONCURRENTLY caveats (apply to CREATE / DROP / REINDEX)
+
+- **Cannot run inside a transaction block.** Regular forms can; CONCURRENTLY forms cannot.
+  This is a hard constraint that drives the session-guard rule in `SKILL.md` §5.1.
+- **Do not wrap in a short `statement_timeout`.** `statement_timeout` aborts *any* statement
+  exceeding it, and a concurrent build on a large table can run for hours. A 30s
+  `statement_timeout` will kill the build and leave an INVALID index. Guard the *lock wait*
+  with `lock_timeout`; leave `statement_timeout` at 0 for the build itself.
+- If interrupted, leaves an INVALID index that must be dropped and recreated.
+- Requires two table scans; takes longer than a regular build.
+- `DROP INDEX CONCURRENTLY` does not work on indexes of partitioned tables.
+- Concurrent builds on partitioned tables are not supported — build per-partition instead.
 - Check for invalid indexes: `SELECT indexrelid::regclass FROM pg_index WHERE NOT indisvalid;`
+
+---
 
 ## Constraint Operations
 
-| Operation | Lock Level | Blocks Reads? | Blocks Writes? | Validates? | Notes |
-|-----------|-----------|:---:|:---:|:---:|-------|
-| ADD CONSTRAINT (FK/CHECK) | AccessExclusiveLock | Yes | Yes | **Yes** | Full scan + lock held during validation |
-| ADD CONSTRAINT ... NOT VALID | AccessExclusiveLock | Brief | Brief | **No** | Brief lock; skips row validation |
-| VALIDATE CONSTRAINT | ShareUpdateExclusiveLock | No | No | **Yes** | Non-blocking validation pass |
-| DROP CONSTRAINT | AccessExclusiveLock | Brief | Brief | No | Metadata-only |
-| ADD CONSTRAINT (UNIQUE) | ShareLock | No | Yes | Yes | Builds unique index internally |
-| ADD CONSTRAINT (UNIQUE) using existing index | AccessExclusiveLock | Brief | Brief | No | `ALTER TABLE ADD CONSTRAINT ... USING INDEX idx;` |
+| Operation | Lock Level (altered table) | Also locks | Blocks Reads? | Blocks Writes? | Validates? | Source |
+|-----------|---------------------------|------------|:---:|:---:|:---:|--------|
+| ADD FOREIGN KEY | **ShareRowExclusive** | **ShareRowExclusive on referenced table** | **No** | Yes | Yes | alter_table · ADD table_constraint |
+| ADD FOREIGN KEY … NOT VALID | **ShareRowExclusive** | ShareRowExclusive on referenced table | **No** | Brief | No | alter_table · ADD table_constraint |
+| ADD CHECK | AccessExclusive | — | Yes (scan) | Yes (scan) | Yes | alter_table · default rule |
+| ADD CHECK … NOT VALID | AccessExclusive | — | Brief | Brief | No | alter_table · NOT VALID |
+| VALIDATE CONSTRAINT (CHECK) | **ShareUpdateExclusive** | — | No | No | Yes | alter_table · VALIDATE CONSTRAINT |
+| VALIDATE CONSTRAINT (FK) | **ShareUpdateExclusive** | **RowShare on referenced table** | No | No | Yes | alter_table · Notes |
+| DROP CONSTRAINT | AccessExclusive | — | Brief | Brief | No | alter_table · default rule |
+| ADD UNIQUE / PRIMARY KEY | AccessExclusive | — | Yes | Yes | Yes | alter_table · default rule |
+| ADD CONSTRAINT … USING INDEX | AccessExclusive | — | Brief | Brief | No | alter_table · ADD … USING INDEX |
 
-### NOT VALID + VALIDATE two-step:
+### The FK exception, stated exactly
 
-This is the **standard pattern** for adding FK/CHECK to production tables:
+> "Although most forms of `ADD table_constraint` require an ACCESS EXCLUSIVE lock,
+> **`ADD FOREIGN KEY` requires only a SHARE ROW EXCLUSIVE lock**. Note that `ADD FOREIGN KEY`
+> also acquires a SHARE ROW EXCLUSIVE lock on the **referenced** table, in addition to the
+> lock on the table on which the constraint is declared."
+> — `ALTER TABLE`, ADD table_constraint
+
+Why this matters for planning:
+
+- **FK addition never blocks reads**, even without `NOT VALID`. `NOT VALID` is still worth
+  using on large tables because it skips the validation *scan* (duration), not because it
+  changes the lock class.
+- **The referenced table is also locked for writes.** Adding an FK to a small child table
+  can stall writes on a hot parent table. Always name both tables in the risk assessment.
+- **`ADD CHECK` is genuinely ACCESS EXCLUSIVE** and does block reads. FK and CHECK must
+  never be described by a single combined rule.
+
+### VALIDATE CONSTRAINT, stated exactly
+
+> "The validation step does not need to lock out concurrent updates … Hence, validation
+> acquires only a SHARE UPDATE EXCLUSIVE lock on the table being altered. **(If the
+> constraint is a foreign key then a ROW SHARE lock is also required on the table
+> referenced by the constraint.)**"
+> — `ALTER TABLE`, Notes
+
+### NOT VALID + VALIDATE two-step
+
+The standard pattern for adding FK/CHECK to large production tables:
 
 ```sql
--- Step 1: brief AccessExclusiveLock (milliseconds)
+-- Step 1: brief lock, no validation scan
 ALTER TABLE orders ADD CONSTRAINT fk_user
   FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID;
 
--- Step 2: ShareUpdateExclusiveLock (concurrent DML allowed)
+-- Step 2: ShareUpdateExclusive on orders + RowShare on users; concurrent DML allowed
 ALTER TABLE orders VALIDATE CONSTRAINT fk_user;
 ```
 
-**Why this matters**: A bare `ADD CONSTRAINT FK` on a 10M-row table holds AccessExclusiveLock
-for the entire validation scan — potentially minutes. NOT VALID splits the lock into a brief
-metadata change + a non-blocking validation.
+**Limitation — partitioned tables, PG 14–17 only**: on those versions a foreign key on
+a partitioned table **may not be declared `NOT VALID`**. The server rejects it outright
+with `cannot add NOT VALID foreign key on partitioned table`, so the two-step pattern is
+unavailable; plan for the single-step FK addition (ShareRowExclusive, writes blocked for
+the scan duration) or attach pre-validated partitions.
 
-## Table-Level Operations
+**PG 18 lifts this** — the NOT VALID form is accepted on partitioned tables. Measured on
+live 14.23 / 15 / 16 / 17 / 18.4; the boundary is pinned by
+`lint_migration.PARTITIONED_FK_NOT_VALID_MIN_PG` and re-checked by
+`scripts/tests/test_pg_server_matrix.py::TestPartitionedForeignKey`.
 
-| Operation | Lock Level | Blocks Reads? | Blocks Writes? | Notes |
-|-----------|-----------|:---:|:---:|-------|
-| TRUNCATE | AccessExclusiveLock | Yes | Yes | Instant data removal but blocks everything |
-| VACUUM | ShareUpdateExclusiveLock | No | No | Reclaims dead tuples; doesn't block DML |
-| VACUUM FULL | AccessExclusiveLock | Yes | Yes | Rewrites table; use pg_repack instead |
-| ANALYZE | ShareUpdateExclusiveLock | No | No | Updates statistics; non-blocking |
-| ALTER TABLE SET (fillfactor=...) | AccessExclusiveLock | Brief | Brief | Metadata-only |
-| ALTER TABLE ADD PARTITION | AccessExclusiveLock | Brief | Brief | Attaching partition to partitioned table |
-| ALTER TABLE DETACH PARTITION | AccessExclusiveLock | Brief | Brief | PG 14+: DETACH CONCURRENTLY available |
-| ALTER TABLE DETACH PARTITION CONCURRENTLY (PG 14+) | ShareUpdateExclusiveLock | No | No | Non-blocking partition detach |
+---
+
+## Table & Partition Operations
+
+| Operation | Lock Level | Blocks Reads? | Blocks Writes? | Source |
+|-----------|-----------|:---:|:---:|--------|
+| TRUNCATE | AccessExclusive | Yes | Yes | truncate |
+| VACUUM | ShareUpdateExclusive | No | No | vacuum |
+| VACUUM FULL | AccessExclusive | Yes | Yes | vacuum |
+| ANALYZE | ShareUpdateExclusive | No | No | analyze |
+| ALTER TABLE SET (fillfactor / toast / autovacuum / parallel_workers) | **ShareUpdateExclusive** | No | No | alter_table · SET ( … ) |
+| ALTER TABLE CLUSTER ON / SET WITHOUT CLUSTER | **ShareUpdateExclusive** | No | No | alter_table · CLUSTER ON |
+| ATTACH PARTITION | **ShareUpdateExclusive on parent** + AccessExclusive on attached table and on default partition | Parent: no | Parent: no | alter_table · ATTACH PARTITION |
+| DETACH PARTITION | AccessExclusive on parent + partition, ShareLock on FK-referencing tables | Yes | Yes | alter_table · DETACH PARTITION |
+| DETACH PARTITION CONCURRENTLY (PG 14+) | ShareUpdateExclusive on parent + partition | No | No | alter_table · DETACH PARTITION |
+
+### ATTACH PARTITION, stated exactly
+
+> "Attaching a partition acquires a SHARE UPDATE EXCLUSIVE lock on the **parent** table,
+> in addition to the ACCESS EXCLUSIVE locks on the table being attached and on the default
+> partition (if any)."
+> — `ALTER TABLE`, ATTACH PARTITION
+
+The parent stays fully available. The cost lands on the table being attached — which is
+normally a fresh, empty, traffic-free table — and on the **default partition**, which may
+well be hot. If a default partition exists, treat ATTACH as a read-blocking operation
+against that default partition, and supply a matching CHECK constraint on the incoming
+table to skip the validation scan.
+
+`DETACH PARTITION CONCURRENTLY` uses two internal transactions, so like the other
+CONCURRENTLY forms it **cannot run inside a transaction block**.
+
+---
 
 ## Decision Flowchart
 
 ```
 Is this an index operation?
-  ├─ YES → Use CONCURRENTLY variant (CREATE/DROP/REINDEX CONCURRENTLY)
-  │        Remember: cannot run inside transaction
+  ├─ YES → Use the CONCURRENTLY variant.
+  │        Run OUTSIDE any transaction block.
+  │        Guard with session-level lock_timeout; do NOT set a short statement_timeout.
   └─ NO
       │
-      Is this a constraint addition (FK/CHECK)?
-        ├─ YES → Use NOT VALID + VALIDATE CONSTRAINT two-step
+      Is this ADD FOREIGN KEY?
+        ├─ YES → ShareRowExclusive on BOTH tables; reads unaffected.
+        │        Use NOT VALID to shorten the scan (partitioned tables: PG 18+ only).
         └─ NO
             │
-            Does this operation require table rewrite?
-              ├─ YES (ALTER COLUMN TYPE, ADD COLUMN with DEFAULT on PG <11)
-              │   │
-              │   Is the table small (<1M rows)?
-              │     ├─ YES → Run during low-traffic with lock_timeout
-              │     └─ NO → Use pg_repack or create-swap-rename
-              └─ NO → Proceed with lock_timeout set
-                      (AccessExclusiveLock is brief for metadata-only ops)
+            Is this ADD CHECK / UNIQUE / PRIMARY KEY?
+              ├─ YES → AccessExclusive. NOT VALID (CHECK only) to shorten the lock.
+              └─ NO
+                  │
+                  Does it rewrite? (volatile DEFAULT, non-binary-coercible TYPE change)
+                    ├─ YES → table >1M rows? expand-contract / create-swap-rename.
+                    │        NOT pg_repack — it cannot change a schema; use it only
+                    │        afterwards to reclaim the bloat the rewrite produced.
+                    │        Otherwise low-traffic window + lock_timeout.
+                    └─ NO → AccessExclusive but brief. Set lock_timeout and retry on timeout.
+
+At every branch: never combine subcommands of different lock classes in one ALTER TABLE.
 ```
 
 ## Monitoring Locks During Migration
 
 ```sql
--- Check current lock waiters
-SELECT blocked_locks.pid AS blocked_pid,
+-- Who is blocking whom
+SELECT blocked_locks.pid  AS blocked_pid,
        blocked_activity.usename AS blocked_user,
        blocking_locks.pid AS blocking_pid,
        blocking_activity.usename AS blocking_user,
@@ -141,4 +285,12 @@ JOIN pg_catalog.pg_locks blocking_locks ON blocking_locks.locktype = blocked_loc
   AND blocking_locks.pid != blocked_locks.pid
 JOIN pg_catalog.pg_stat_activity blocking_activity ON blocking_locks.pid = blocking_activity.pid
 WHERE NOT blocked_locks.granted;
+
+-- Confirm the lock a statement actually took. Run in ANOTHER session while the DDL is
+-- still running; replace 12345 with its pid from the query above or pg_stat_activity.
+SELECT relation::regclass, mode, granted
+FROM pg_locks WHERE pid = 12345 AND relation IS NOT NULL;
 ```
+
+The second query is the ground truth. When this matrix and `pg_locks` disagree, believe
+`pg_locks` and correct this file.

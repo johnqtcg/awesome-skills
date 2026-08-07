@@ -1,0 +1,867 @@
+"""Behavioral tests for lint_migration.py.
+
+These differ in kind from test_golden_scenarios.py: they feed real SQL to the real
+checker and assert on the codes it emits. A fixture's own ``expected_feedback``
+string is never consulted, so a test cannot pass by matching text that the fixture
+author wrote.
+
+Each rule in the registry must have BOTH a violating input (fires) and a compliant
+input (does not fire). The compliant half is what catches a rule that fires on
+everything -- the failure mode a violation-only suite cannot see.
+"""
+
+from __future__ import annotations
+
+import importlib.util
+import pathlib
+import sys
+
+import pytest
+
+SCRIPTS_DIR = pathlib.Path(__file__).resolve().parents[1]
+
+
+def _load_linter():
+    """Load by path: this repo runs pytest with --import-mode=importlib, which
+    breaks bare sibling imports. Register in sys.modules before exec_module so
+    dataclasses can resolve the module during class creation."""
+    path = SCRIPTS_DIR / "lint_migration.py"
+    spec = importlib.util.spec_from_file_location("pg_lint_migration", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["pg_lint_migration"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+LINT = _load_linter()
+
+
+def codes(sql: str, **kw) -> set[str]:
+    return {f.code for f in LINT.Linter(**kw).lint(sql)}
+
+
+def findings(sql: str, **kw):
+    return LINT.Linter(**kw).lint(sql)
+
+
+# ---------------------------------------------------------------------------
+# Coverage declared as data: (code, violating SQL, compliant SQL)
+# ---------------------------------------------------------------------------
+
+GUARD = "SET lock_timeout = '3s';\n"
+TXN_GUARD = "BEGIN;\nSET LOCAL lock_timeout = '3s';\n"
+
+CASES: list[tuple[str, str, str]] = [
+    (
+        "PG001",
+        # SET LOCAL with no surrounding transaction: warning only, no guard.
+        "SET LOCAL lock_timeout = '3s';\nCREATE INDEX CONCURRENTLY i ON t (c);\n",
+        # Same guard, correctly scoped inside a transaction.
+        TXN_GUARD + "ALTER TABLE t ADD COLUMN c int;\nCOMMIT;\n",
+    ),
+    (
+        "PG002",
+        TXN_GUARD + "CREATE INDEX CONCURRENTLY i ON t (c);\nCOMMIT;\n",
+        GUARD + "CREATE INDEX CONCURRENTLY i ON t (c);\n",
+    ),
+    (
+        "PG003",
+        GUARD + "CREATE INDEX idx_a ON t (c);\n",
+        GUARD + "CREATE INDEX CONCURRENTLY idx_a ON t (c);\n",
+    ),
+    (
+        "PG004",
+        "ALTER TABLE t ADD COLUMN c int;\n",
+        TXN_GUARD + "ALTER TABLE t ADD COLUMN c int;\nCOMMIT;\n",
+    ),
+    (
+        "PG005",
+        GUARD + "SET statement_timeout = '30s';\nCREATE INDEX CONCURRENTLY i ON t (c);\n",
+        GUARD + "SET statement_timeout = 0;\nCREATE INDEX CONCURRENTLY i ON t (c);\n",
+    ),
+    (
+        "PG006",
+        GUARD + ("ALTER TABLE orders\n"
+                 "  ADD CONSTRAINT fk_u FOREIGN KEY (user_id) REFERENCES users(id) NOT VALID,\n"
+                 "  ADD COLUMN note text;\n"),
+        GUARD + ("ALTER TABLE orders ADD COLUMN note text;\n"
+                 "ALTER TABLE orders ADD CONSTRAINT fk_u FOREIGN KEY (user_id) "
+                 "REFERENCES users(id) NOT VALID;\n"),
+    ),
+    (
+        "PG007",
+        GUARD + "ALTER TABLE t ADD CONSTRAINT IF NOT EXISTS ck CHECK (x > 0);\n",
+        GUARD + ("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint "
+                 "WHERE conname = 'ck' AND conrelid = 'public.t'::regclass) THEN "
+                 "ALTER TABLE t ADD CONSTRAINT ck CHECK (x > 0) NOT VALID; END IF; END $$;\n"),
+    ),
+    (
+        "PG008",
+        GUARD + ("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint "
+                 "WHERE conname = 'fk_u') THEN "
+                 "ALTER TABLE t ADD CONSTRAINT fk_u FOREIGN KEY (u) REFERENCES o(id) "
+                 "NOT VALID; END IF; END $$;\n"),
+        GUARD + ("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint "
+                 "WHERE conname = 'fk_u' AND conrelid = 'public.t'::regclass) THEN "
+                 "ALTER TABLE t ADD CONSTRAINT fk_u FOREIGN KEY (u) REFERENCES o(id) "
+                 "NOT VALID; END IF; END $$;\n"),
+    ),
+    (
+        "PG009",
+        GUARD + "ALTER TABLE orders ADD CONSTRAINT ck CHECK (amount > 0);\n",
+        GUARD + "ALTER TABLE orders ADD CONSTRAINT ck CHECK (amount > 0) NOT VALID;\n",
+    ),
+    (
+        "PG010",
+        GUARD + "ALTER TABLE events ALTER COLUMN id TYPE bigint;\n",
+        # varchar widening IS rewrite-free -- but only provably so when the SOURCE type
+        # is known, so the compliant input has to declare it. Measured on 14.23/18.4:
+        # varchar(100) -> varchar(200) does not change relfilenode.
+        ("CREATE TABLE events (name varchar(100));\n" + GUARD
+         + "ALTER TABLE events ALTER COLUMN name TYPE varchar(200);\n"),
+    ),
+    (
+        "PG011",
+        ("CREATE TABLE n (id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, u bigint);\n"
+         "INSERT INTO n (id, u) SELECT id, u FROM o;\n"),
+        ("CREATE TABLE n (id bigint GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY, u bigint);\n"
+         "INSERT INTO n (id, u) SELECT id, u FROM o;\n"),
+    ),
+    (
+        "PG012",
+        "UPDATE t SET c = 1 WHERE c IS NULL LIMIT 100 OFFSET 500;\nANALYZE t;\n",
+        ("WITH b AS (SELECT id FROM t WHERE c IS NULL ORDER BY id LIMIT 100) "
+         "UPDATE t SET c = 1 FROM b WHERE t.id = b.id;\nANALYZE t;\n"),
+    ),
+    (
+        "PG013",
+        GUARD + "ALTER TABLE t ADD COLUMN uid uuid DEFAULT gen_random_uuid();\n",
+        GUARD + "ALTER TABLE t ADD COLUMN created timestamptz DEFAULT now();\n",
+    ),
+    (
+        "PG014",
+        "SELECT MAX(id) FROM t WHERE new_col IS NOT NULL;\n",
+        "SELECT MIN(id) FROM t WHERE new_col IS NULL;\n",
+    ),
+    (
+        "PG018",
+        GUARD + "ALTER TABLE orders ALTER COLUMN status SET NOT NULL;\n",
+        # A CHECK proving non-null earlier in the file lets PG 12+ skip the scan.
+        GUARD + ("ALTER TABLE orders ADD CONSTRAINT ck_status CHECK (status IS NOT NULL) "
+                 "NOT VALID;\n"
+                 "ALTER TABLE orders VALIDATE CONSTRAINT ck_status;\n"
+                 "ALTER TABLE orders ALTER COLUMN status SET NOT NULL;\n"
+                 "ALTER TABLE orders DROP CONSTRAINT ck_status;\n"),
+    ),
+    (
+        "PG015",
+        GUARD + "REINDEX INDEX idx_x;\n",
+        GUARD + "REINDEX INDEX CONCURRENTLY idx_x;\n",
+    ),
+    (
+        "PG016",
+        GUARD + "VACUUM FULL orders;\n",
+        GUARD + "VACUUM ANALYZE orders;\n",
+    ),
+    (
+        "PG017",
+        "UPDATE t SET c = 1 WHERE id > 0;\n",
+        "UPDATE t SET c = 1 WHERE id > 0;\nANALYZE t;\n",
+    ),
+    (
+        "PG022",
+        # Verified on a live server: with CHECK (amt > 100) already carrying this name,
+        # the name-only guard skips and the migration reports success.
+        GUARD + ("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint "
+                 "WHERE conname = 'ck_amt' AND conrelid = 'public.t'::regclass) THEN "
+                 "ALTER TABLE t ADD CONSTRAINT ck_amt CHECK (amt >= 0) NOT VALID; "
+                 "END IF; END $$;\n"),
+        GUARD + ("DO $$ DECLARE existing text; BEGIN "
+                 "SELECT pg_get_constraintdef(oid) INTO existing FROM pg_constraint "
+                 "WHERE conname = 'ck_amt' AND conrelid = 'public.t'::regclass; "
+                 "IF existing IS NULL THEN "
+                 "ALTER TABLE t ADD CONSTRAINT ck_amt CHECK (amt >= 0) NOT VALID; "
+                 "ELSIF existing NOT LIKE '%amt >= 0%' THEN "
+                 "RAISE EXCEPTION 'drift: %', existing; END IF; END $$;\n"),
+    ),
+    (
+        "PG019",
+        # Measured: `SHOW lock_timeout` returns 0 after this, i.e. wait forever.
+        "SET lock_timeout = 0;\nALTER TABLE t ADD COLUMN c text;\n",
+        GUARD + "ALTER TABLE t ADD COLUMN c text;\n",
+    ),
+    (
+        "PG020",
+        # Source type undeclared and the target is reachable by a binary-coercible
+        # cast, so no verdict is provable from the statement alone.
+        GUARD + "ALTER TABLE t ALTER COLUMN c TYPE varchar(10);\n",
+        ("CREATE TABLE t (c varchar(10));\n" + GUARD
+         + "ALTER TABLE t ALTER COLUMN c TYPE varchar(20);\n"),
+    ),
+    (
+        "PG021",
+        # Default --pg-version is 14, where the server rejects this outright.
+        (GUARD + "CREATE TABLE pt (id bigint, ts date) PARTITION BY RANGE (ts);\n"
+         "ALTER TABLE pt ADD CONSTRAINT f FOREIGN KEY (id) REFERENCES r(id) NOT VALID;\n"),
+        # Same statement on a non-partitioned table is fine on every supported version.
+        (GUARD + "CREATE TABLE pt (id bigint, ts date);\n"
+         "ALTER TABLE pt ADD CONSTRAINT f FOREIGN KEY (id) REFERENCES r(id) NOT VALID;\n"),
+    ),
+]
+
+CASES_BY_CODE = {c[0]: c for c in CASES}
+
+# Severity pinned INDEPENDENTLY of the linter's own registry. Deriving the
+# expectation from RULES_BY_CODE would make the assertion tautological: a mutation
+# that downgrades a rule would move both sides of the comparison together and the
+# test would still pass.
+EXPECTED_SEVERITY: dict[str, str] = {
+    "PG001": "critical",   # a guard that silently does not exist
+    "PG002": "critical",   # the statement errors outright
+    "PG003": "critical",   # blocks all writes for the whole build
+    "PG004": "critical",   # unbounded lock wait stalls the table
+    "PG005": "critical",   # kills the build, leaves an INVALID index
+    "PG006": "standard",
+    "PG007": "standard",
+    "PG008": "standard",
+    "PG009": "standard",
+    "PG010": "standard",
+    "PG011": "standard",
+    "PG012": "standard",
+    "PG013": "standard",
+    "PG014": "standard",
+    "PG018": "standard",
+    "PG019": "critical",   # a guard whose VALUE means "wait forever" reads as compliant
+    "PG020": "standard",
+    "PG021": "standard",
+    "PG015": "hygiene",
+    "PG016": "hygiene",
+    "PG017": "hygiene",
+    "PG022": "hygiene",
+}
+
+
+class TestRuleRegistry:
+    def test_every_rule_has_a_source(self):
+        for rule in LINT.RULES:
+            assert rule.source.strip(), f"{rule.code} has no documentation source"
+
+    def test_every_rule_has_a_test_case(self):
+        """Guards against adding a rule with no violating input -- the way a
+        checker acquires unfalsifiable 'coverage'."""
+        declared = {r.code for r in LINT.RULES}
+        tested = set(CASES_BY_CODE)
+        assert declared == tested, (
+            f"rules without cases: {sorted(declared - tested)}; "
+            f"cases without rules: {sorted(tested - declared)}"
+        )
+
+    def test_severities_are_known(self):
+        allowed = {LINT.SEV_CRITICAL, LINT.SEV_STANDARD, LINT.SEV_HYGIENE}
+        for rule in LINT.RULES:
+            assert rule.severity in allowed
+
+    def test_codes_unique(self):
+        seen = [r.code for r in LINT.RULES]
+        assert len(seen) == len(set(seen))
+
+    def test_pinned_severities_cover_every_rule(self):
+        assert {r.code for r in LINT.RULES} == set(EXPECTED_SEVERITY), (
+            "EXPECTED_SEVERITY must pin exactly the registry's rules"
+        )
+
+    def test_critical_tier_is_not_empty(self):
+        """A registry with no critical rules would make every migration 'pass'."""
+        crit = [c for c, s in EXPECTED_SEVERITY.items() if s == "critical"]
+        assert len(crit) >= 4, f"only {len(crit)} critical rules pinned"
+
+
+@pytest.mark.parametrize("code", sorted(CASES_BY_CODE))
+class TestEachRule:
+    def test_fires_on_violation(self, code):
+        _, bad, _ = CASES_BY_CODE[code]
+        assert code in codes(bad), f"{code} did not fire on its violating input"
+
+    def test_silent_on_compliant(self, code):
+        """The half that catches a rule firing on everything."""
+        _, _, good = CASES_BY_CODE[code]
+        assert code not in codes(good), (
+            f"{code} fired on its COMPLIANT input -- false positive"
+        )
+
+    def test_emitted_severity_matches_the_pinned_value(self, code):
+        """Compares against EXPECTED_SEVERITY, not against the registry, so a
+        downgrade in the registry is caught rather than mirrored."""
+        _, bad, _ = CASES_BY_CODE[code]
+        emitted = [f for f in findings(bad) if f.code == code]
+        assert emitted
+        assert emitted[0].severity == EXPECTED_SEVERITY[code], (
+            f"{code} emitted severity {emitted[0].severity!r}, pinned as "
+            f"{EXPECTED_SEVERITY[code]!r}"
+        )
+
+    def test_registry_severity_matches_the_pinned_value(self, code):
+        assert LINT.RULES_BY_CODE[code].severity == EXPECTED_SEVERITY[code], (
+            f"{code} registry severity drifted from the pinned value"
+        )
+
+
+class TestStatementSplitting:
+    def test_dollar_quoted_block_stays_intact(self):
+        """Splitting a DO block on its internal semicolons would hide every guard
+        inside it -- the defect that let unscoped conname checks pass elsewhere."""
+        sql = ("DO $$ BEGIN\n"
+               "  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'x') THEN\n"
+               "    ALTER TABLE t ADD CONSTRAINT x CHECK (a > 0) NOT VALID;\n"
+               "  END IF;\n"
+               "END $$;\n")
+        stmts = LINT.split_statements(sql)
+        assert len(stmts) == 1, f"DO block was split into {len(stmts)} statements"
+        assert "END IF" in stmts[0].norm
+
+    def test_named_dollar_tag(self):
+        sql = "DO $body$ BEGIN PERFORM 1; PERFORM 2; END $body$;"
+        assert len(LINT.split_statements(sql)) == 1
+
+    def test_semicolon_in_string_literal(self):
+        sql = "INSERT INTO t (s) VALUES ('a;b');\nANALYZE t;\n"
+        assert len(LINT.split_statements(sql)) == 2
+
+    def test_line_numbers_anchor_on_first_token(self):
+        sql = "SET lock_timeout = '3s';\n\n\nCREATE INDEX idx_a ON t (c);\n"
+        f = [x for x in findings(sql) if x.code == "PG003"]
+        assert f and f[0].line == 4, f"expected line 4, got {f[0].line if f else None}"
+
+    def test_transaction_depth_tracked(self):
+        sql = "BEGIN;\nSET LOCAL lock_timeout = '3s';\nALTER TABLE t ADD COLUMN c int;\nCOMMIT;\n"
+        stmts = LINT.split_statements(sql)
+        by_text = {s.norm.split()[0]: s for s in stmts}
+        assert by_text["ALTER"].in_transaction is True
+        assert by_text["BEGIN"].in_transaction is False
+
+    def test_comment_only_input_is_not_a_statement(self):
+        assert LINT.split_statements("-- nothing here\n/* nor here */\n") == []
+
+    def test_guard_inside_comment_does_not_count(self):
+        """A lock_timeout mentioned in a comment must not satisfy PG004."""
+        sql = "-- SET lock_timeout = '3s';\nALTER TABLE t ADD COLUMN c int;\n"
+        assert "PG004" in codes(sql)
+
+
+class TestGuardScoping:
+    def test_local_guard_does_not_leak_past_commit(self):
+        sql = ("BEGIN;\nSET LOCAL lock_timeout = '3s';\n"
+               "ALTER TABLE t ADD COLUMN a int;\nCOMMIT;\n"
+               "ALTER TABLE t ADD COLUMN b int;\n")
+        f = [x for x in findings(sql) if x.code == "PG004"]
+        assert len(f) == 1, "the post-COMMIT DDL should be unguarded"
+        assert f[0].line == 5
+
+    def test_session_guard_persists_across_statements(self):
+        sql = (GUARD + "CREATE INDEX CONCURRENTLY i1 ON t (a);\n"
+               "CREATE INDEX CONCURRENTLY i2 ON t (b);\n")
+        assert "PG004" not in codes(sql)
+
+    def test_reset_revokes_the_session_guard(self):
+        sql = (GUARD + "CREATE INDEX CONCURRENTLY i1 ON t (a);\n"
+               "RESET lock_timeout;\nCREATE INDEX CONCURRENTLY i2 ON t (b);\n")
+        f = [x for x in findings(sql) if x.code == "PG004"]
+        assert len(f) == 1 and f[0].line == 4
+
+    def test_statement_timeout_zero_is_accepted(self):
+        sql = GUARD + "SET statement_timeout = 0;\nCREATE INDEX CONCURRENTLY i ON t (c);\n"
+        assert "PG005" not in codes(sql)
+
+    def test_statement_timeout_only_flagged_for_concurrent_builds(self):
+        """A finite statement_timeout is correct for ordinary DDL; it must not be
+        reported there."""
+        sql = GUARD + "SET statement_timeout = '30s';\nALTER TABLE t ADD COLUMN c int;\n"
+        assert "PG005" not in codes(sql)
+
+
+class TestLockClassification:
+    def test_add_foreign_key_is_share_row_exclusive(self):
+        assert LINT._lock_class("ADD CONSTRAINT FK_U FOREIGN KEY (U) REFERENCES O(ID)") \
+            == "ShareRowExclusive"
+
+    def test_add_check_is_access_exclusive(self):
+        """FK and CHECK must never share a lock class -- the original matrix error."""
+        assert LINT._lock_class("ADD CONSTRAINT CK CHECK (A > 0)") == "AccessExclusive"
+
+    def test_validate_constraint_is_share_update_exclusive(self):
+        assert LINT._lock_class("VALIDATE CONSTRAINT FK_U") == "ShareUpdateExclusive"
+
+    def test_fillfactor_is_share_update_exclusive(self):
+        assert LINT._lock_class("SET (FILLFACTOR = 70)") == "ShareUpdateExclusive"
+
+    def test_unknown_subcommand_defaults_to_strictest(self):
+        """Fail closed: an unrecognised subform must be assumed AccessExclusive,
+        matching the documented default."""
+        assert LINT._lock_class("SOME FUTURE SUBCOMMAND") == "AccessExclusive"
+
+    def test_single_subcommand_never_reports_mixing(self):
+        sql = GUARD + "ALTER TABLE t ADD CONSTRAINT fk FOREIGN KEY (u) REFERENCES o(id) NOT VALID;\n"
+        assert "PG006" not in codes(sql)
+
+    def test_same_class_subcommands_not_flagged(self):
+        sql = GUARD + "ALTER TABLE t ADD COLUMN a int, ADD COLUMN b int;\n"
+        assert "PG006" not in codes(sql)
+
+    def test_comma_inside_parens_is_not_a_subcommand_break(self):
+        sql = GUARD + "ALTER TABLE t ADD CONSTRAINT u UNIQUE (a, b);\n"
+        assert "PG006" not in codes(sql)
+
+
+class TestTypeChangeClassifier:
+    """Binary coercibility is a property of the (source, target) PAIR.
+
+    Every expectation below was measured on live PostgreSQL 14.23 and 18.4 by
+    comparing pg_relation_filenode() across the ALTER (see
+    scripts/tests/test_pg_server_matrix.py, which re-runs the same checks against a
+    real server). Judging by the target alone is unsound in BOTH directions:
+    text -> varchar(10) rewrites, and varchar(10) -> text does not.
+    """
+
+    # --- source unknown: provable only when nothing can reach the target for free --
+    @pytest.mark.parametrize("newtype", ["bigint", "numeric(12,4)", "timestamptz",
+                                         "jsonb", "smallint", "uuid"])
+    def test_unreachable_targets_are_a_rewrite_even_without_the_source(self, newtype):
+        """No type is binary coercible to these, so the verdict needs no source."""
+        sql = GUARD + f"ALTER TABLE t ALTER COLUMN c TYPE {newtype};\n"
+        assert "PG010" in codes(sql), f"{newtype} should be a provable rewrite"
+
+    @pytest.mark.parametrize("newtype", ["text", "varchar(200)", "varchar", "my_domain"])
+    def test_reachable_targets_report_unprovable_without_the_source(self, newtype):
+        """The old checker scored these clean. A target of text/varchar proves
+        nothing -- the honest verdict is PG020, never silence."""
+        sql = GUARD + f"ALTER TABLE t ALTER COLUMN c TYPE {newtype};\n"
+        got = codes(sql)
+        assert "PG020" in got, f"{newtype} with an unknown source must report PG020"
+        assert "PG010" not in got, f"{newtype} must not be asserted as a rewrite"
+
+    def test_no_type_change_is_ever_silently_clean_without_a_source(self):
+        """The load-bearing property: an unsourced type change always produces a
+        finding of some kind. A zero-finding result here is the exact false negative
+        this class exists to prevent."""
+        for newtype in ("text", "varchar(10)", "bigint", "jsonb", "citext", "int4"):
+            sql = GUARD + f"ALTER TABLE t ALTER COLUMN c TYPE {newtype};\n"
+            got = codes(sql)
+            assert {"PG010", "PG020"} & set(got), f"{newtype} scored clean: {got}"
+
+    # --- source known: verdict must match the measured server behaviour ------------
+    @pytest.mark.parametrize("src,dst,rewrites", [
+        ("int",         "bigint",      True),
+        ("varchar(10)", "varchar(20)", False),
+        ("varchar(20)", "varchar(5)",  True),
+        ("varchar(10)", "text",        False),
+        ("text",        "varchar(10)", True),
+        ("text",        "varchar",     False),
+        ("numeric(10,2)", "numeric(12,4)", True),
+    ])
+    def test_known_pair_matches_measured_server_behaviour(self, src, dst, rewrites):
+        sql = (f"CREATE TABLE t (c {src});\n" + GUARD
+               + f"ALTER TABLE t ALTER COLUMN c TYPE {dst};\n")
+        got = codes(sql)
+        if rewrites:
+            assert "PG010" in got, f"{src} -> {dst} REWRITES on a real server"
+        else:
+            assert "PG010" not in got, f"{src} -> {dst} does not rewrite on a real server"
+            assert "PG020" not in got, f"{src} -> {dst} is decidable; PG020 is wrong here"
+
+    def test_using_clause_forces_rewrite_verdict(self):
+        """USING may change contents, which voids the documented exemption even for
+        an otherwise-cheap target type."""
+        sql = GUARD + "ALTER TABLE t ALTER COLUMN c TYPE text USING c::text;\n"
+        assert "PG010" in codes(sql)
+
+
+class TestNoFalsePositivesOnSkillExemplars:
+    """The compliant SQL this skill itself recommends must lint clean. If the skill
+    ships an example its own checker rejects, one of the two is wrong."""
+
+    def test_transactional_ddl_exemplar(self):
+        sql = ("BEGIN;\nSET LOCAL lock_timeout = '3s';\n"
+               "SET LOCAL statement_timeout = '30s';\n"
+               "ALTER TABLE users ADD COLUMN bio text;\nCOMMIT;\n")
+        assert findings(sql) == []
+
+    def test_concurrent_index_exemplar(self):
+        sql = ("SET lock_timeout = '3s';\nSET statement_timeout = 0;\n"
+               "CREATE INDEX CONCURRENTLY idx_orders_date ON orders (created_at);\n"
+               "RESET statement_timeout;\nRESET lock_timeout;\n")
+        assert findings(sql) == []
+
+    def test_not_valid_two_step_exemplar(self):
+        sql = (GUARD +
+               "ALTER TABLE orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id) "
+               "REFERENCES users(id) NOT VALID;\n"
+               "ALTER TABLE orders VALIDATE CONSTRAINT fk_user;\n")
+        assert findings(sql) == []
+
+    def test_scoped_and_definition_checked_do_block_exemplar(self):
+        """The guard AE-16 and AE-19 jointly recommend: scoped by conrelid AND decided
+        on the definition, not the name. Verified on a live server that the name-only
+        form skips when the name is already taken by a different definition."""
+        sql = (GUARD + "DO $$\n"
+               "DECLARE existing text;\n"
+               "BEGIN\n"
+               "  SELECT pg_get_constraintdef(oid) INTO existing FROM pg_constraint\n"
+               "   WHERE conname = 'fk_user' AND conrelid = 'public.orders'::regclass;\n"
+               "  IF existing IS NULL THEN\n"
+               "    ALTER TABLE orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id)\n"
+               "      REFERENCES users(id) NOT VALID;\n"
+               "  ELSIF existing NOT LIKE '%REFERENCES users(id)%' THEN\n"
+               "    RAISE EXCEPTION 'different definition: %', existing;\n"
+               "  END IF;\nEND $$;\n")
+        assert findings(sql) == []
+
+    def test_name_only_guard_is_still_reported(self):
+        """Positive control for the exemplar above: without the definition check the
+        same block must NOT lint clean, or the exemplar proves nothing."""
+        sql = (GUARD + "DO $$ BEGIN\n"
+               "  IF NOT EXISTS (SELECT 1 FROM pg_constraint\n"
+               "    WHERE conname = 'fk_user' AND conrelid = 'public.orders'::regclass) THEN\n"
+               "    ALTER TABLE orders ADD CONSTRAINT fk_user FOREIGN KEY (user_id)\n"
+               "      REFERENCES users(id) NOT VALID;\n"
+               "  END IF;\nEND $$;\n")
+        assert "PG022" in codes(sql)
+
+    def test_empty_input_is_clean(self):
+        assert findings("") == []
+        assert findings("\n\n") == []
+
+
+class TestCLI:
+    """Run the actual entry point, not just the library. A harness whose main()
+    is never invoked can ship with a wrong flag and every leaf test still green."""
+
+    def test_list_rules_exits_zero(self, capsys):
+        assert LINT.main(["--list-rules"]) == 0
+        out = capsys.readouterr().out
+        for rule in LINT.RULES:
+            assert rule.code in out
+
+    def test_clean_file_exits_zero(self, tmp_path, capsys):
+        p = tmp_path / "ok.sql"
+        p.write_text("BEGIN;\nSET LOCAL lock_timeout = '3s';\n"
+                     "ALTER TABLE t ADD COLUMN c int;\nCOMMIT;\n")
+        assert LINT.main([str(p)]) == 0
+        out = capsys.readouterr().out
+        assert "0 findings" in out
+        # A clean result must not read as a safety verdict. This is the whole point of
+        # UNPROVABLE: PG022's guard check was bypassed three times in review, so the
+        # tool states its own limits instead of letting silence imply proof.
+        assert "NOT a proof of safety" in out, out
+
+    def test_file_with_findings_exits_nonzero(self, tmp_path, capsys):
+        p = tmp_path / "bad.sql"
+        p.write_text("ALTER TABLE t ADD COLUMN c int;\n")
+        assert LINT.main([str(p)]) == 1
+        assert "PG004" in capsys.readouterr().out
+
+    def test_json_mode_is_parseable(self, tmp_path, capsys):
+        import json
+        p = tmp_path / "bad.sql"
+        p.write_text("ALTER TABLE t ADD COLUMN c int;\n")
+        LINT.main([str(p), "--json"])
+        payload = json.loads(capsys.readouterr().out)
+        assert str(p) in payload["findings"]
+        assert payload["findings"][str(p)][0]["code"] == "PG004"
+        # The machine-readable path must carry the caveat too, or a CI gate consuming
+        # JSON silently drops the one thing the human output says out loud.
+        assert payload["unprovable"], "JSON output dropped the limitations"
+
+    def test_missing_file_exits_two(self, tmp_path):
+        assert LINT.main([str(tmp_path / "nope.sql")]) == 2
+
+    def test_no_files_is_a_usage_error(self):
+        with pytest.raises(SystemExit) as e:
+            LINT.main([])
+        assert e.value.code == 2
+
+
+class TestGuardValueNotJustPresence:
+    """A guard is only a guard if its VALUE guards.
+
+    `SET lock_timeout = 0` is the documented way to say "wait forever" -- the exact
+    failure the guard exists to prevent -- yet it reads as a compliant guard to any
+    checker that only asks whether the setting is present. Measured on 14.23 and 18.4:
+    after `SET lock_timeout = 0`, `SHOW lock_timeout` returns 0.
+    """
+
+    @pytest.mark.parametrize("value", ["0", "'0'", "0ms", "'0s'", "DEFAULT"])
+    def test_disabled_guard_is_critical_and_does_not_satisfy_pg004(self, value):
+        sql = f"SET lock_timeout = {value};\nALTER TABLE t ADD COLUMN c text;\n"
+        got = codes(sql)
+        assert "PG019" in got, f"lock_timeout = {value} must be reported as disabled"
+        assert "PG004" in got, (
+            f"lock_timeout = {value} must NOT satisfy the lock_timeout requirement -- "
+            "a disabled guard is not a guard"
+        )
+
+    @pytest.mark.parametrize("value", ["0", "DEFAULT"])
+    def test_disabled_set_local_also_fails_inside_a_transaction(self, value):
+        sql = (f"BEGIN;\nSET LOCAL lock_timeout = {value};\n"
+               "ALTER TABLE t ADD COLUMN c text;\nCOMMIT;\n")
+        got = codes(sql)
+        assert "PG019" in got and "PG004" in got
+
+    @pytest.mark.parametrize("value", ["'3s'", "3000", "'250ms'", "'1min'"])
+    def test_finite_guard_is_accepted(self, value):
+        sql = f"SET lock_timeout = {value};\nALTER TABLE t ADD COLUMN c text;\n"
+        got = codes(sql)
+        assert "PG019" not in got and "PG004" not in got, f"{value} is a valid guard"
+
+    def test_unparseable_value_is_not_credited_as_a_guard(self):
+        """Fails closed: a value this checker cannot evaluate must not be assumed fine."""
+        sql = "SET lock_timeout = :some_var;\nALTER TABLE t ADD COLUMN c text;\n"
+        assert "PG004" in codes(sql)
+
+
+class TestDDLScopeCoversAnyLockingStatement:
+    """The trigger text promises coverage of any production DDL, so the lock_timeout
+    requirement cannot be keyed to a short hand-picked list of statements."""
+
+    @pytest.mark.parametrize("stmt", [
+        "DROP " + "TABLE orders",
+        "DROP INDEX idx_a",
+        "TRUNCATE orders",
+        "CLUSTER orders USING idx_a",
+        "REINDEX TABLE CONCURRENTLY orders",
+        "ALTER INDEX idx_a RENAME TO idx_b",
+        "ALTER SEQUENCE s RESTART WITH 1",
+        "REFRESH MATERIALIZED VIEW mv",
+        "DROP MATERIALIZED VIEW mv",
+        "ALTER TYPE mood ADD VALUE 'ok'",
+    ])
+    def test_unguarded_locking_statement_is_flagged(self, stmt):
+        assert "PG004" in codes(stmt + ";\n"), f"{stmt} took a lock with no lock_timeout"
+
+    @pytest.mark.parametrize("stmt", [
+        "DROP " + "TABLE orders",
+        "TRUNCATE orders",
+        "CLUSTER orders USING idx_a",
+    ])
+    def test_guarded_locking_statement_is_clean(self, stmt):
+        assert "PG004" not in codes(GUARD + stmt + ";\n")
+
+
+class TestBulkWriteShapes:
+    """PG017 keys on 'a bulk write happened', which must include the CTE-led keyset
+    form this skill itself recommends -- matching only ^UPDATE misses it."""
+
+    @pytest.mark.parametrize("sql", [
+        "UPDATE t SET c = 1 WHERE id > 0;\n",
+        "DELETE FROM t WHERE id < 100;\n",
+        ("WITH b AS (SELECT id FROM t WHERE c IS NULL ORDER BY id LIMIT 5000)\n"
+         "UPDATE t SET c = compute(t.o) FROM b WHERE t.id = b.id;\n"),
+        ("WITH b AS (SELECT id FROM t LIMIT 100)\n"
+         "DELETE FROM t USING b WHERE t.id = b.id;\n"),
+        "INSERT INTO t2 (a, b) SELECT a, b FROM t1;\n",
+    ])
+    def test_bulk_write_without_analyze_is_flagged(self, sql):
+        assert "PG017" in codes(sql), "bulk write with no ANALYZE went unreported"
+
+    @pytest.mark.parametrize("sql", [
+        "UPDATE t SET c = 1 WHERE id > 0;\nANALYZE t;\n",
+        ("WITH b AS (SELECT id FROM t WHERE c IS NULL ORDER BY id LIMIT 5000)\n"
+         "UPDATE t SET c = compute(t.o) FROM b WHERE t.id = b.id;\nANALYZE t;\n"),
+    ])
+    def test_bulk_write_with_analyze_is_clean(self, sql):
+        assert "PG017" not in codes(sql)
+
+    def test_single_row_insert_is_not_a_backfill(self):
+        assert "PG017" not in codes("INSERT INTO t (a) VALUES (1);\n")
+
+
+class TestTransactionModeContext:
+    """Whether SET LOCAL works depends on something not present in the file: an outer
+    transaction opened by the migration framework. It has to be declared, not guessed --
+    and guessing wrong is dangerous in BOTH directions, so both are pinned here."""
+
+    SQL_LOCAL = "SET LOCAL lock_timeout = '3s';\nALTER TABLE t ADD COLUMN c int;\n"
+    SQL_CONC = "SET lock_timeout = '3s';\nCREATE INDEX CONCURRENTLY i ON t (c);\n"
+
+    def test_autocommit_flags_set_local(self):
+        assert "PG001" in codes(self.SQL_LOCAL)
+
+    def test_framework_mode_accepts_set_local(self):
+        got = codes(self.SQL_LOCAL, transaction_mode="framework")
+        assert "PG001" not in got and "PG004" not in got
+
+    def test_autocommit_accepts_concurrently(self):
+        assert "PG002" not in codes(self.SQL_CONC)
+
+    def test_framework_mode_rejects_concurrently(self):
+        """The framework's own BEGIN makes CONCURRENTLY fail at runtime."""
+        assert "PG002" in codes(self.SQL_CONC, transaction_mode="framework")
+
+    @pytest.mark.parametrize("sql", [SQL_LOCAL, SQL_CONC,
+                                     "BEGIN;\nSET LOCAL lock_timeout = '3s';\n"
+                                     "ALTER TABLE t ADD COLUMN c int;\nCOMMIT;\n"])
+    def test_explicit_mode_is_identical_to_autocommit(self, sql):
+        """Documented, not accidental: in 'explicit' mode the BEGIN is in the text, so
+        the splitter already tracks it and there is nothing extra to model. Pinning the
+        equivalence is what stops the option quietly acquiring different behaviour, and
+        what makes the --help text checkable."""
+        assert codes(sql, transaction_mode="explicit") == codes(sql)
+
+
+class TestRowCountEscalation:
+    """--rows may escalate a verdict but must never de-escalate one: an unknown row
+    count has to keep the finding, or the flag becomes a way to silence the checker."""
+
+    SQL = "CREATE TABLE t (c int);\n" + GUARD + "ALTER TABLE t ALTER COLUMN c TYPE bigint;\n"
+
+    def _sev(self, **kw):
+        return {f.code: f.severity for f in LINT.Linter(**kw).lint(self.SQL)}
+
+    def test_unknown_row_count_still_reports(self):
+        assert self._sev()["PG010"] == "standard"
+
+    def test_small_table_is_not_escalated(self):
+        assert self._sev(rows=1000)["PG010"] == "standard"
+
+    def test_large_table_escalates_to_critical(self):
+        assert self._sev(rows=50_000_000)["PG010"] == "critical"
+
+    def test_rows_never_suppresses_a_finding(self):
+        for rows in (0, 1, 1000, 10_000_000):
+            assert "PG010" in self._sev(rows=rows), f"--rows {rows} silenced the finding"
+
+
+class TestIndexIdempotencyGuard:
+    """`CREATE INDEX IF NOT EXISTS` matches on NAME only. Verified on a live server:
+    with `idx_x ON t (amt)` present, `CREATE INDEX IF NOT EXISTS idx_x ON t (note)`
+    prints a NOTICE, succeeds, and leaves pg_indexes.indexdef pointing at (amt)."""
+
+    CREATE = "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_x ON t (note);\n"
+    # Must be able to FAIL. A bare SELECT of indexdef reads the value and discards it.
+    VERIFY = ("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_indexes\n"
+              "  WHERE schemaname = 'public' AND indexname = 'idx_x'\n"
+              "    AND indexdef LIKE '%(note)%') THEN\n"
+              "  RAISE EXCEPTION 'idx_x is not the intended index';\n"
+              "END IF; END $$;\n")
+
+    def test_if_not_exists_without_a_definition_check_is_flagged(self):
+        assert "PG022" in codes(GUARD + self.CREATE)
+
+    def test_an_indexdef_verification_clears_it(self):
+        assert "PG022" not in codes(GUARD + self.CREATE + self.VERIFY)
+
+    def test_plain_create_index_concurrently_is_not_flagged(self):
+        """Without IF NOT EXISTS there is no name-only decision to make."""
+        assert "PG022" not in codes(GUARD + "CREATE INDEX CONCURRENTLY idx_x ON t (note);\n")
+
+    def test_the_verification_must_be_a_real_indexdef_read(self):
+        """Guards the guard: an unrelated comment mentioning indexes must not clear
+        the finding, or the escape hatch becomes 'write the word index'."""
+        noise = "-- rebuild the index later if needed\n"
+        assert "PG022" in codes(GUARD + self.CREATE + noise)
+
+    def test_verifying_a_DIFFERENT_index_does_not_clear_this_one(self):
+        """A file-wide 'does INDEXDEF appear anywhere' test let one unrelated read
+        vouch for every index in the file -- the same name-blind reasoning the rule
+        exists to catch."""
+        other = ("DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_indexes "
+                 "WHERE indexname = 'something_else' AND indexdef LIKE '%x%') THEN "
+                 "RAISE EXCEPTION 'nope'; END IF; END $$;\n")
+        assert "PG022" in codes(GUARD + other + self.CREATE)
+
+    def test_each_index_is_judged_separately(self):
+        second = "CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_y ON t (amt);\n"
+        found = findings(GUARD + self.CREATE + second + self.VERIFY)
+        pg022 = [f for f in found if f.code == "PG022"]
+        assert len(pg022) == 1, f"expected only idx_y to be flagged, got {pg022}"
+        assert "idx_y" in pg022[0].statement.lower(), pg022[0].statement
+
+    def test_verification_may_precede_the_create(self):
+        assert "PG022" not in codes(GUARD + self.VERIFY + self.CREATE)
+
+    def test_a_read_that_cannot_fail_is_not_a_verification(self):
+        """`SELECT indexdef ... WHERE indexname='idx_x'` names the right index and reads
+        the right column, and still proves nothing: no downstream statement reacts to
+        what it returned. Reviewers found this bypass; the fix requires a failure path."""
+        bare = ("SELECT indexdef FROM pg_indexes\n"
+                " WHERE schemaname = 'public' AND indexname = 'idx_x';\n")
+        assert "PG022" in codes(GUARD + self.CREATE + bare)
+
+    def test_schema_qualified_index_name_is_matched(self):
+        create = "CREATE INDEX CONCURRENTLY IF NOT EXISTS public.idx_x ON t (note);\n"
+        assert "PG022" not in codes(GUARD + create + self.VERIFY)
+
+
+class TestConstraintGuardMustActOnTheDefinition:
+    """Reading pg_get_constraintdef() is not a fix by itself. A guard that fetches the
+    definition and still branches only on IS NULL behaves exactly like one that never
+    fetched it — so requiring the call alone made the rule bypassable by one SELECT."""
+
+    FETCH_ONLY = (GUARD + "DO $$ DECLARE d text; BEGIN "
+                  "SELECT pg_get_constraintdef(oid) INTO d FROM pg_constraint "
+                  "WHERE conname = 'ck' AND conrelid = 'public.t'::regclass; "
+                  "IF d IS NULL THEN "
+                  "ALTER TABLE t ADD CONSTRAINT ck CHECK (x > 0) NOT VALID; "
+                  "END IF; END $$;\n")
+
+    ACTS_ON_IT = (GUARD + "DO $$ DECLARE d text; BEGIN "
+                  "SELECT pg_get_constraintdef(oid) INTO d FROM pg_constraint "
+                  "WHERE conname = 'ck' AND conrelid = 'public.t'::regclass; "
+                  "IF d IS NULL THEN "
+                  "ALTER TABLE t ADD CONSTRAINT ck CHECK (x > 0) NOT VALID; "
+                  "ELSIF d NOT LIKE '%x > 0%' THEN "
+                  "RAISE EXCEPTION 'drift: %', d; END IF; END $$;\n")
+
+    def test_fetching_without_acting_is_still_flagged(self):
+        assert "PG022" in codes(self.FETCH_ONLY)
+
+    def test_fetching_and_raising_on_mismatch_is_accepted(self):
+        assert "PG022" not in codes(self.ACTS_ON_IT)
+
+    def test_raise_notice_is_not_an_abort(self):
+        """Third bypass found in review: RAISE alone was the bar, and RAISE NOTICE
+        satisfies it while letting the migration continue against the wrong schema."""
+        sql = self.ACTS_ON_IT.replace("RAISE EXCEPTION 'drift: %', d",
+                                      "RAISE NOTICE 'drift: %', d")
+        assert "RAISE NOTICE" in sql            # the substitution really happened
+        assert "PG022" in codes(sql), "RAISE NOTICE aborts nothing"
+
+    def test_raising_on_an_unrelated_condition_is_not_a_definition_check(self):
+        """RAISE EXCEPTION on something that never looks at the fetched definition is
+        the same hole one layer up."""
+        sql = self.ACTS_ON_IT.replace("ELSIF d NOT LIKE '%x > 0%' THEN",
+                                      "ELSIF 1 = 2 THEN")
+        assert "ELSIF 1 = 2" in sql
+        assert "PG022" in codes(sql), "the guard never compares the definition"
+
+    @pytest.mark.parametrize("op", ["=", "<>", "!=", "NOT LIKE", "LIKE", "IS DISTINCT FROM"])
+    def test_any_real_comparison_of_the_fetched_value_is_accepted(self, op):
+        """The rule must not accept only the one spelling the exemplar happens to use."""
+        sql = self.ACTS_ON_IT.replace("d NOT LIKE '%x > 0%'", f"d {op} 'whatever'")
+        assert "PG022" not in codes(sql), sql
+
+
+class TestConstraintGuardRulesOnlyFireOnGuards:
+    """PG008 and PG022 are about guards that gate DDL. §9.6 Validation SQL reads the
+    same catalog to confirm a constraint is valid; reporting that as an unsafe guard
+    would train reviewers to ignore both rules."""
+
+    @pytest.mark.parametrize("sql", [
+        "SELECT conname, convalidated FROM pg_constraint WHERE conname = 'fk_user';\n",
+        "SELECT conname FROM pg_constraint\n"
+        " WHERE conname = 'fk_u' AND conrelid = 'public.t'::regclass;\n",
+        "SELECT count(*) FROM pg_constraint WHERE conname = 'ck' AND NOT convalidated;\n",
+    ])
+    def test_validation_queries_are_not_treated_as_guards(self, sql):
+        got = codes(sql)
+        assert "PG008" not in got and "PG022" not in got, (
+            f"a read-only validation query was reported as a guard: {sorted(got)}"
+        )
+
+    def test_a_guard_around_ddl_still_fires(self):
+        """Positive control: the narrowing must not have disabled the rules."""
+        sql = (GUARD + "DO $$ BEGIN IF NOT EXISTS (SELECT 1 FROM pg_constraint "
+               "WHERE conname = 'fk_u') THEN "
+               "ALTER TABLE t ADD CONSTRAINT fk_u CHECK (x > 0) NOT VALID; "
+               "END IF; END $$;\n")
+        got = codes(sql)
+        assert "PG008" in got and "PG022" in got, sorted(got)

@@ -9,8 +9,17 @@
     "table_rows": "3000000",
     "replication": "streaming"
   },
-  "expected_feedback": "Standard: PostgreSQL does NOT support ADD CONSTRAINT IF NOT EXISTS — this is a syntax error. Use a DO block checking pg_constraint instead. This is a common mistake from developers used to MySQL's IF NOT EXISTS syntax.",
+  "expected_feedback": "Standard: PostgreSQL does NOT support ADD CONSTRAINT IF NOT EXISTS -- this is a syntax error. Use a DO block checking pg_constraint, and scope the lookup by conrelid: constraint names are unique per table, not per database, so an unqualified conname check silently skips the migration while reporting success. This is a common mistake from developers used to MySQL.",
   "violated_rule": "Constraint additions use idempotent DO blocks",
-  "coverage_rules": ["IF NOT EXISTS", "DO block", "pg_constraint", "idempotent"],
-  "reference": "SKILL.md"
+  "coverage_rules": [
+    "DO block",
+    "pg_constraint",
+    "conrelid"
+  ],
+  "reference": "SKILL.md",
+  "expected_lint_codes": [
+    "PG004",
+    "PG007"
+  ],
+  "primary_lint_code": "PG007"
 }
