@@ -1,0 +1,15 @@
+{
+  "id": "CACHE-015",
+  "title": "Redis outage masked as a cache miss — degradation policy silently bypassed",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "func GetProduct(ctx context.Context, id string) (*Product, error) {\n    key := \"product:\" + id\n    cached, err := rdb.Get(ctx, key).Bytes()\n    if err != nil {\n        // Any error -- miss OR outage -- falls through to the DB.\n        p, derr := db.QueryProduct(ctx, id)\n        if derr != nil {\n            return nil, derr\n        }\n        rdb.Set(ctx, key, marshal(p), 0)\n        return p, nil\n    }\n    var p Product\n    json.Unmarshal(cached, &p)\n    return &p, nil\n}",
+  "context": {"redis_version": "7.0", "deployment": "cluster", "eviction": "allkeys-lru", "consistency": "eventual", "peak_qps": 40000},
+  "expected_feedback": "Critical: `err != nil` collapses two states that require opposite responses. A miss (redis.Nil) should populate the cache; an outage (dial timeout, CLUSTERDOWN, connection-pool exhaustion) must trip the degradation path. Because they are merged, a Redis outage converts the full 40k QPS into direct DB traffic with no rate limit, no singleflight, and no circuit breaker — the cache layer's own degradation policy is bypassed at exactly the moment it is needed, and the DB fails second. Two further defects compound it: the repopulating SET is issued against the Redis that is already down and its error is discarded, and expiration 0 means any entry written during a partial outage never expires. Fix: branch on errors.Is(err, redis.Nil) for the populate path; treat every other error as ErrCacheUnavailable and route it through the documented degradation path (rate-limited DB fallback or degraded response); give the populate a bounded, jittered TTL.",
+  "violated_rule": "Cache-down degradation path exists and is distinguishable from a miss",
+  "detectors": ["RC004", "RC012"],
+  "primary_defect_gated_by": null,
+  "detector_note": "The headline defect (outage conflated with miss) is a control-flow judgement no regex reliably gates; the two compounding defects are gated. Listed so the gap is data, not silence.",
+  "coverage_rules": ["degradation", "redis.Nil", "errors.Is", "TTL", "stampede"],
+  "reference": "references/cache-failure-modes.md"
+}

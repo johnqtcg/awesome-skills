@@ -1,0 +1,15 @@
+{
+  "id": "CACHE-016",
+  "title": "Read-populate races write-invalidate — cache-aside restores a stale value permanently",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "// Reader\nfunc GetBalance(ctx context.Context, acct string) (int64, error) {\n    key := \"bal:\" + acct\n    v, err := rdb.Get(ctx, key).Int64()\n    if err == nil {\n        return v, nil\n    }\n    bal, err := db.ReadBalance(ctx, acct)   // T1: reads old balance\n    if err != nil {\n        return 0, err\n    }\n    rdb.Set(ctx, key, bal, 0)               // T4: writes the OLD value back\n    return bal, nil\n}\n\n// Writer\nfunc SetBalance(ctx context.Context, acct string, bal int64) error {\n    if err := db.WriteBalance(ctx, acct, bal); err != nil {   // T2\n        return err\n    }\n    rdb.Del(ctx, \"bal:\"+acct)                                 // T3\n    return nil\n}",
+  "context": {"redis_version": "7.0", "deployment": "sentinel", "eviction": "allkeys-lru", "consistency": "read-your-writes"},
+  "expected_feedback": "Critical: classic cache-aside populate/invalidate interleaving. Order T1 (reader reads old from DB) → T2 (writer commits new to DB) → T3 (writer DELs the key) → T4 (reader SETs the value it read at T1). The DEL lands before the SET, so the reader resurrects the pre-write value. Because the SET uses expiration 0 the stale entry has no TTL, so it never self-heals — the cache serves a wrong balance until the next write to that account, which may never come. This is not fixed by reordering the writer (DB-then-DEL is already correct) because the reader's read-then-write window is what is unguarded. Fixes, in order of strength: (1) delayed double-delete — writer DELs, then DELs again after a delay exceeding the read window; (2) single-writer invalidation driven off the DB change log (CDC/binlog/outbox) so invalidation is not racing the application's own reads; (3) a per-key version/generation embedded in the cache key so a stale populate writes to a key nobody reads; (4) at minimum, a bounded jittered TTL so the staleness window is finite. Also discard-checked: both the SET and the DEL drop their errors, so a failed invalidation is invisible.",
+  "violated_rule": "Cache-DB consistency strategy explicitly defined",
+  "detectors": ["RC004", "RC012"],
+  "primary_defect_gated_by": null,
+  "detector_note": "The race is an ordering property across two functions — outside what a single-snippet regex can see. Gated compounding defects: unbounded TTL and discarded invalidation errors.",
+  "coverage_rules": ["consistency", "invalidation", "double-delete", "TTL", "staleness"],
+  "reference": "references/cache-patterns.md"
+}

@@ -116,11 +116,26 @@ may take 10-100ms.
 **Right approach:**
 Use structured key design so invalidation targets exact keys:
 ```go
-// Instead of scanning for user:123:*, maintain an explicit list
-rdb.Del(ctx, "user:123:profile", "user:123:settings", "user:123:prefs")
-// Or: use Redis Hash — one HDEL covers all fields
-rdb.Del(ctx, "user:123")  // if user data is a single Hash
+// Instead of scanning for user:123:*, delete the exact known keys.
+// A failed invalidation leaves stale data with no record — it must be returned,
+// not discarded, so the caller can retry or fall back to the durable path.
+func invalidateUser(ctx context.Context, id string) error {
+    keys := []string{
+        "user:" + id + ":profile",
+        "user:" + id + ":settings",
+        "user:" + id + ":prefs",
+    }
+    if err := rdb.Del(ctx, keys...).Err(); err != nil {
+        return fmt.Errorf("invalidate user %s: %w", id, err)
+    }
+    return nil
+}
 ```
+
+If the entity is stored as a single Hash, one `DEL` of that key covers every
+field — but see §5.2 item 6 in `SKILL.md` before reshaping data into a Hash for
+this reason alone: it is the right move only when readers actually fetch fields
+individually.
 
 ---
 

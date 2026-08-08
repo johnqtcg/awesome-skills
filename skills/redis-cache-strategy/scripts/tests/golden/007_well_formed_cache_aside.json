@@ -3,9 +3,26 @@
   "title": "Well-formed cache-aside with singleflight + TTL jitter + null caching",
   "type": "good_practice",
   "severity": "none",
-  "code_snippet": "var sfGroup singleflight.Group\n\nfunc GetUser(ctx context.Context, id string) (*User, error) {\n    cached, err := rdb.Get(ctx, \"user:\"+id).Bytes()\n    if err == nil {\n        if string(cached) == \"__NULL__\" { return nil, ErrNotFound }\n        var u User\n        json.Unmarshal(cached, &u)\n        return &u, nil\n    }\n    if err != redis.Nil {\n        // Redis error: degrade to DB\n        return db.QueryUser(ctx, id)\n    }\n    val, err, _ := sfGroup.Do(\"user:\"+id, func() (interface{}, error) {\n        u, err := db.QueryUser(ctx, id)\n        if err == sql.ErrNoRows {\n            rdb.Set(ctx, \"user:\"+id, \"__NULL__\", 60*time.Second)\n            return nil, ErrNotFound\n        }\n        ttl := 30*time.Minute + time.Duration(rand.Intn(300))*time.Second\n        rdb.Set(ctx, \"user:\"+id, marshal(u), ttl)\n        return u, nil\n    })\n    return val.(*User), err\n}",
-  "context": {"redis_version": "7.0", "deployment": "cluster", "eviction": "allkeys-lru", "consistency": "eventual"},
-  "expected_feedback": "No violations. Correctly implements production-grade cache-aside: (1) singleflight prevents stampede on hot key miss, (2) TTL with jitter prevents avalanche, (3) null-value caching prevents penetration from non-existent IDs, (4) Redis error falls through to DB (degradation path), (5) key naming follows namespace convention.",
-  "coverage_rules": ["singleflight", "TTL", "jitter", "null", "penetration", "degradation", "cache-aside"],
-  "reference": "SKILL.md"
+  "code_snippet": "const nullMarker = \"\\x00null\"\n\nvar sfGroup singleflight.Group\n\nfunc GetUser(ctx context.Context, id string) (*User, error) {\n    key := \"user:\" + id\n    cached, err := rdb.Get(ctx, key).Bytes()\n    switch {\n    case err == nil:\n        if string(cached) == nullMarker {\n            return nil, ErrNotFound\n        }\n        var u User\n        if err := json.Unmarshal(cached, &u); err != nil {\n            return nil, fmt.Errorf(\"decode %s: %w\", key, err)\n        }\n        return &u, nil\n    case !errors.Is(err, redis.Nil):\n        cacheOutages.Inc()\n        return nil, fmt.Errorf(\"%w: %v\", ErrCacheUnavailable, err)\n    }\n\n    val, err, _ := sfGroup.Do(key, func() (interface{}, error) {\n        u, err := db.QueryUser(ctx, id)\n        if errors.Is(err, sql.ErrNoRows) {\n            if serr := rdb.Set(ctx, key, nullMarker, jitteredTTL(60*time.Second)).Err(); serr != nil {\n                slog.WarnContext(ctx, \"null-cache write failed\", \"key\", key, \"err\", serr)\n            }\n            return nil, ErrNotFound\n        }\n        if err != nil {\n            return nil, fmt.Errorf(\"query user %s: %w\", id, err)\n        }\n        if serr := rdb.Set(ctx, key, marshal(u), jitteredTTL(30*time.Minute)).Err(); serr != nil {\n            slog.WarnContext(ctx, \"cache populate failed\", \"key\", key, \"err\", serr)\n        }\n        return u, nil\n    })\n    if err != nil {\n        return nil, err\n    }\n    u, ok := val.(*User)\n    if !ok {\n        return nil, fmt.Errorf(\"cache %s: unexpected type %T\", key, val)\n    }\n    return u, nil\n}",
+  "context": {
+    "redis_version": "7.0",
+    "deployment": "cluster",
+    "eviction": "allkeys-lru",
+    "consistency": "eventual"
+  },
+  "expected_feedback": "No violations. Correctly implements production-grade cache-aside: (1) singleflight prevents stampede on hot key miss, (2) TTL with jitter prevents avalanche, (3) null-value caching uses a sentinel the JSON encoder cannot emit, so it cannot collide with a real value, (4) a Redis error is distinguished from a miss and surfaced as ErrCacheUnavailable rather than silently entering the populate path, (5) errors.Is is used for both redis.Nil and sql.ErrNoRows so a wrapped error cannot defeat the branch, (6) the singleflight result is type-asserted in two-value form, (7) key naming follows namespace convention.",
+  "violated_rule": null,
+  "detectors": [],
+  "detector_note": "Exemplar: must produce zero findings from every code rule. This is the false-positive gate — a rule that fires here is over-broad, and an exemplar that fires here is not an exemplar.",
+  "coverage_rules": [
+    "singleflight",
+    "TTL",
+    "jitter",
+    "null",
+    "penetration",
+    "degradation",
+    "cache-aside"
+  ],
+  "reference": "SKILL.md",
+  "primary_defect_gated_by": null
 }

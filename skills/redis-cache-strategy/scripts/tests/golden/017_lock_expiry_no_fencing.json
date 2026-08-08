@@ -1,0 +1,15 @@
+{
+  "id": "CACHE-017",
+  "title": "Lock TTL expires mid-work — well-formed lock, no fencing, duplicated external effect",
+  "type": "defect",
+  "severity": "critical",
+  "code_snippet": "func SettlePayout(ctx context.Context, payoutID string) error {\n    key := \"lock:payout:\" + payoutID\n    token := uuid.NewString()\n\n    ok, err := rdb.SetNX(ctx, key, token, 30*time.Second).Result()\n    if err != nil {\n        return fmt.Errorf(\"acquire %s: %w\", key, err)\n    }\n    if !ok {\n        return ErrLockHeld\n    }\n    defer rdb.Eval(ctx, releaseCAS, []string{key}, token)\n\n    // p99 of this call is 45s -- longer than the 30s lock TTL.\n    return psp.Transfer(ctx, payoutID)\n}",
+  "context": {"redis_version": "7.0", "deployment": "sentinel", "consistency": "strong", "notes": "releaseCAS is a correct Lua compare-and-delete script"},
+  "expected_feedback": "Critical: the lock is well-formed but not safe, and the scorecard must not pass it on the TTL + unique token + Lua CAS baseline alone. The TTL (30s) is shorter than the p99 of the work it guards (45s), so in the tail the lock expires while the holder is still running; a second worker acquires it legitimately and psp.Transfer executes twice for one payout. The Lua CAS release is working correctly here and does not help — it only prevents deleting someone else's lock, it cannot retract an effect already sent to the payment provider. Renewal alone is also insufficient: a holder paused by GC or descheduled cannot renew, and unbounded renewal would convert a hung holder into a permanent lock. Because the protected effect is external to Redis, this design requires a fencing token — acquisition returns a monotonically increasing number that the payment provider (or the payouts row, via a conditional UPDATE ... WHERE fence < ?) stores and checks, rejecting anything older than the last accepted token. Additionally: sentinel failover is asynchronous, so the lock can be granted twice across a promotion regardless of TTL. Mark this design UNSAFE at Gate 3 until mutual exclusion is enforced where the data lives; treat the Redis lock as duplicate-work suppression, not as a correctness guarantee.",
+  "violated_rule": "Distributed locks have TTL and safe CAS release, plus bounded renewal and fencing for external effects",
+  "detectors": [],
+  "primary_defect_gated_by": null,
+  "detector_note": "Deliberate adversarial case: this snippet passes every code rule, because the defect is that TTL < work duration and no fencing exists — properties of the design, not of the syntax. It exists to prove the fixture suite tests more than the linter can, and to keep the scorecard from certifying a well-formed-but-unsafe lock.",
+  "coverage_rules": ["fencing", "renew", "failover", "distributed lock", "TTL"],
+  "reference": "references/distributed-locks.md"
+}

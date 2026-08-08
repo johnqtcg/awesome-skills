@@ -27,6 +27,7 @@ description: >
 | Format review output                   | §9 Output Contract                       |
 | Deep-dive cache patterns               | `references/cache-patterns.md`           |
 | Understand failure mode defenses       | `references/cache-failure-modes.md`      |
+| Design or review a distributed lock    | `references/distributed-locks.md`        |
 
 ---
 
@@ -63,15 +64,28 @@ Execute gates sequentially. Each gate has a **STOP** condition.
 | **Redis version** (6.x / 7.x) | Feature availability (e.g., client-side caching in 6.0+) | Assume 6.0 |
 | **Deployment mode** (standalone / sentinel / cluster) | Affects key distribution, Lua atomicity scope, lock patterns | Assume standalone |
 | **maxmemory + eviction policy** | Determines what happens when cache is full | Ask; critical for correctness |
-| **Cache role in architecture** | Primary cache? L1/L2? Read-through proxy? | Must clarify before design |
-| **Data source type** | SQL DB / NoSQL / external API — affects consistency patterns | Must clarify |
+| **Cache role in architecture** | Primary cache? L1/L2? Read-through proxy? | **Blocking — cannot be assumed** |
+| **Data source type** | SQL DB / NoSQL / external API — affects consistency patterns | **Blocking — cannot be assumed** |
 | **Read:write ratio** | Drives pattern selection (read-heavy → cache-aside; write-heavy → write-behind) | Assume read-heavy |
-| **Consistency requirement** | Eventual (seconds)? Strong? Best-effort? | Must clarify |
+| **Consistency requirement** | Eventual (seconds)? Strong? Best-effort? | **Blocking — cannot be assumed** |
 | **Peak QPS on cached entities** | Determines stampede/hot-key risk | Assume high if unknown |
 
-**STOP**: Cannot determine what the cache is caching (no data source, no access pattern). Clarify before proceeding.
+The three **blocking** items are blocking precisely because a wrong guess is
+invisible: a strategy built on an assumed consistency requirement looks complete
+and reviews clean, and the assumption only surfaces as a production incident.
+The other five have defaults whose wrongness shows up as a tuning problem, not a
+correctness one.
 
-**PROCEED**: At least data source, cache role, and consistency requirement are known or assumed.
+**STOP** — emit a question list and stop — when **any** of cache role, data
+source, or consistency requirement is unknown. In this state you may output:
+a numbered list of what you need and why; and, if code was supplied, a
+Minimal-mode static review of that code as written (§4). You may **not** output
+a strategy design, a pattern recommendation, or a scorecard.
+
+**PROCEED**: all three blocking items are stated by the user or derivable from
+supplied code/config. The remaining five may use their "If unknown" defaults —
+and every default you used must appear in §9.1 with `Source = assumed`, and in
+§9.9 with the impact if the assumption is wrong.
 
 ### Gate 2: Scope Classification
 
@@ -109,7 +123,10 @@ Before delivering output, verify all §9 Output Contract sections present. §9.9
 |-------|-------------|-------|-------------------|
 | **Lite** | Single key TTL/pattern review, ≤3 cached entities | 1–4 | None |
 | **Standard** | Full cache layer design (pattern + consistency + failure modes) | 1–4 | `cache-patterns.md` |
-| **Deep** | Multi-service cache architecture, hot key analysis, consistency SLA | 1–4 | Both reference files |
+| **Deep** | Multi-service cache architecture, hot key analysis, consistency SLA | 1–4 | `cache-patterns.md` + `cache-failure-modes.md` |
+
+`distributed-locks.md` loads on the presence of a lock, independent of depth —
+a lock in a Lite-scope review is still a lock.
 
 **Force Standard or higher** when any signal appears:
 write-behind or write-through pattern, distributed lock, multi-service shared cache, consistency SLA < 5s, cache as authoritative store for any data, hot key with >10K QPS.
@@ -149,7 +166,12 @@ Execute every item. Mark **PASS** / **WARN** / **FAIL** with evidence.
 
 5. **TTL is set with jitter** — every cached key must have a TTL. Add random jitter (±10-20%) to prevent synchronized expiration (cache avalanche). No immortal keys unless explicitly justified.
 
-6. **Key and value size bounded** — keys < 1KB, values < 10KB as default guidance. Large values should use Hash fields or compression. Check with `redis-cli --bigkeys`.
+6. **Key and value size bounded** — keys < 1KB, values < 10KB as default guidance. Check with `redis-cli --bigkeys`. For values over the bound, pick the structure by **access granularity**, then measure — do not reach for a Hash reflexively:
+   - **Readers fetch the whole object every time** → keep a single String and compress it. A Hash is strictly worse here: `HGETALL` costs more than `GET` and you lose the ability to compress across fields.
+   - **Readers fetch individual fields** (`HGET`/`HMGET`) → a Hash avoids transferring the rest, which is the real win.
+   - **Memory**: a Hash is only more compact while it stays under **both** `hash-max-listpack-entries` (default 512) and `hash-max-listpack-value` (default 64 bytes) — that is the listpack encoding. Cross either threshold and it converts to a hashtable, where per-field overhead makes it *larger* than the equivalent String. A "large blob" is by definition past the 64-byte value threshold, so the memory argument does not apply to it at all.
+   - **TTL**: per-field expiry needs `HEXPIRE`, which is **Redis 7.4+**. Below that a Hash has one TTL for the whole key, so splitting an object into fields forces every field to share one expiry — often the reason a Hash is the wrong choice.
+   - Verify with `MEMORY USAGE <key>` and `OBJECT ENCODING <key>` on real data before committing to a shape.
 
 7. **Eviction policy matches access pattern** — `allkeys-lru` for general caching, `volatile-lru` for mixed TTL/permanent keys, `allkeys-lfu` for frequency-based (Redis 4.0+). Mismatched policy causes unpredictable evictions.
 
@@ -161,13 +183,24 @@ Execute every item. Mark **PASS** / **WARN** / **FAIL** with evidence.
 
 10. **Avalanche protection** — mass key expiration at same time overwhelms DB. Defense: TTL jitter (item 5), multi-level cache (L1 local + L2 Redis), circuit breaker on DB calls.
 
-11. **Hot key mitigation** — single key receiving disproportionate traffic. Defense: local in-process cache (L1), key sharding (`key:{hash%N}`), or read replicas. Detect with `redis-cli --hotkeys` (Redis 4.0+ LFU mode).
+11. **Hot key mitigation** — single key receiving disproportionate traffic. Defense: local in-process cache (L1), replica fan-out, or read replicas. Detect with `redis-cli --hotkeys` (Redis 4.0+ LFU mode).
+
+    Replica fan-out means N physical copies of one logical key, and **the replica index must be chosen by the caller** — round-robin or random, per request. Deriving it from the key (`key:{hash%N}`) is the classic non-fix: the hash is deterministic, so every reader of that key computes the same replica and 100% of the traffic still lands on one key on one node. Fan-out also obliges you to write and invalidate *all* N replicas and to state its consistency cost — see `references/cache-failure-modes.md`.
 
 ### 5.4 Consistency & Operations
 
 12. **Staleness window quantified** — define in seconds/minutes how stale cached data can be. This is a business decision, not a technical default. Document it and monitor actual staleness.
 
-13. **Distributed lock bounded** — if using Redis locks (SETNX + EX), ensure: (a) lock has TTL to prevent deadlock, (b) lock value is unique token for safe release, (c) release uses Lua CAS to prevent releasing someone else's lock. Consider whether the lock actually needs to be distributed.
+13. **Distributed lock bounded** — baseline for any Redis lock: (a) lock has a TTL so a crashed holder cannot deadlock it, (b) the value is a unique per-acquisition token, (c) release is a Lua CAS so you cannot delete someone else's lock.
+
+    Those three only make the lock *well-formed*. They do not make it **safe**, because a TTL-based lock has no way to stop a holder that is merely slow. Escalate to the four checks below — and load `references/distributed-locks.md` — whenever the lock guards work that is long-running or touches anything outside Redis:
+
+    - **Expiry vs work duration.** The TTL is a bet that the work finishes first. Lose the bet and two holders run concurrently while both believe they hold the lock. Either bound the critical section well under the TTL, or renew.
+    - **Renewal with a hard cap.** Renew only while the holder is alive and still owns the token (Lua CAS on `PEXPIRE`), and cap total hold time. Unbounded renewal converts a hung holder into a permanent lock — strictly worse than the deadlock the TTL was added to prevent.
+    - **Failover.** Redis replication is asynchronous, so a lock acquired on a master can be absent on the replica promoted after that master fails, and the same lock is then granted twice. Redlock reduces this exposure but does not remove it; it also assumes bounded clock drift across nodes.
+    - **Fencing token (required for external effects).** If the lock protects a database row, a file, a payment, or any third-party call, acquisition must return a monotonically increasing token that the protected resource stores and checks, rejecting anything older than the last token it accepted. Without fencing, a holder paused by GC or scheduling past its TTL will resume and write **after** the next holder has already written — no Redis-side lock design prevents this, Redlock included.
+
+    **If correctness depends on mutual exclusion, do not rely on a Redis lock alone.** Enforce it where the data lives: a unique constraint, a conditional `UPDATE ... WHERE version = ?`, or `SELECT ... FOR UPDATE`. Treat the Redis lock as an efficiency optimization that suppresses duplicate work — not as a correctness guarantee. Mark any design that uses a Redis lock as its only mutual-exclusion mechanism **UNSAFE** in Gate 3.
 
 14. **Cache-down degradation path** — what happens when Redis is unreachable? Options: serve stale from local cache, bypass to DB directly (with rate limiting), return degraded response. "Service crashes" is not an acceptable answer.
 
@@ -198,9 +231,11 @@ Quick decision guide — for full patterns load `references/cache-patterns.md`.
 ```go
 // WRONG: key lives forever; stale data never expires
 rdb.Set(ctx, "user:123", userData, 0)  // 0 = no expiration
-// RIGHT: always set TTL with jitter
+// RIGHT: always set TTL with jitter, and check that the write landed
 ttl := 30*time.Minute + time.Duration(rand.Intn(300))*time.Second
-rdb.Set(ctx, "user:123", userData, ttl)
+if err := rdb.Set(ctx, "user:123", userData, ttl).Err(); err != nil {
+    slog.WarnContext(ctx, "cache populate failed", "key", "user:123", "err", err)
+}
 ```
 
 ### AE-2: Write-behind without durable queue
@@ -214,15 +249,16 @@ go func() { db.Save(value) }()  // fire-and-forget = data loss risk
 ### AE-3: Cache-aside without stampede protection
 ```go
 // WRONG: 1000 concurrent requests all miss cache, all query DB simultaneously
-val, err := rdb.Get(ctx, key).Result()
-if err == redis.Nil {
-    val = db.Query(id)        // 1000 goroutines hit DB at once
-    rdb.Set(ctx, key, val, ttl)
+val, err := rdb.Get(ctx, key).Bytes()
+if errors.Is(err, redis.Nil) {
+    val = db.Query(id)           // 1000 goroutines hit the DB at once...
+    rdb.Set(ctx, key, val, ttl)  // ...and 1000 of them write the same value back
 }
-// RIGHT: use singleflight to deduplicate concurrent cache fills
-val, err, _ = sfGroup.Do(key, func() (interface{}, error) {
-    return db.Query(id)
+// RIGHT: singleflight collapses them into one DB query per key
+v, err, _ := sfGroup.Do(key, func() (any, error) {
+    return db.Query(id), nil
 })
+val, _ = v.([]byte)
 ```
 
 ### AE-4: KEYS command for batch invalidation
@@ -239,11 +275,20 @@ rdb.Del(ctx, keys...)
 rdb.SetNX(ctx, "lock:order:123", "1", 0)
 // Also WRONG: releasing without checking ownership
 rdb.Del(ctx, "lock:order:123")  // may delete someone else's lock
-// RIGHT: TTL + unique token + Lua CAS release
+// Also WRONG: discarding SetNX's bool — that value IS the lock. Ignoring it
+// means you run the critical section whether or not you acquired anything.
+// RIGHT: TTL + unique token + check acquisition + Lua CAS release
 token := uuid.New().String()
-rdb.SetNX(ctx, "lock:order:123", token, 10*time.Second)
+ok, err := rdb.SetNX(ctx, "lock:order:123", token, 10*time.Second).Result()
+if err != nil || !ok {
+    return // not acquired: do NOT enter the critical section
+}
 // Release with Lua: if redis.call('get',KEYS[1])==ARGV[1] then return redis.call('del',KEYS[1]) end
 ```
+
+TTL + token + CAS makes the lock *well-formed*, not *safe*. If the lock guards
+anything outside Redis, see `references/distributed-locks.md` — you also need a
+fencing token, bounded renewal, and a documented failover position.
 
 ### AE-6: Cache issue reported as business logic bug
 ```
@@ -263,6 +308,8 @@ Extended anti-examples (AE-7 through AE-13) in `references/cache-anti-examples.m
 - [ ] Cache-DB consistency strategy explicitly defined (not "write both and hope")
 - [ ] TTL set on all cached keys with jitter (no immortal keys without justification)
 - [ ] Cache-down degradation path exists (Redis unavailable ≠ service down)
+- [ ] **Cache-write failure semantics stated** — what the system guarantees when the `SET`/`DEL` itself fails: best-effort+TTL, bounded retry, transactional outbox, or CDC. "We DEL on failure" is not an answer, because the DEL is the operation that failed. If the staleness SLA is shorter than the TTL, best-effort is a FAIL.
+- [ ] **Redis outage is distinguished from cache miss in code** — an operational error must not fall through to the data source as if it were a miss; that converts an outage into a full-rate stampede
 
 ### Standard — 4 of 5 must pass
 
@@ -270,7 +317,7 @@ Extended anti-examples (AE-7 through AE-13) in `references/cache-anti-examples.m
 - [ ] Stampede protection for hot keys (singleflight / mutex / stale-while-revalidate)
 - [ ] Penetration protection (null-value caching or bloom filter)
 - [ ] Key naming follows `{namespace}:{entity}:{id}` convention
-- [ ] Distributed locks have TTL and safe CAS release
+- [ ] Distributed locks: TTL + unique token + Lua CAS release, plus a bounded-renewal policy; **fencing token enforced at the protected resource** whenever the lock guards an effect outside Redis (see `references/distributed-locks.md`)
 
 ### Hygiene — 3 of 4 must pass
 
@@ -279,8 +326,8 @@ Extended anti-examples (AE-7 through AE-13) in `references/cache-anti-examples.m
 - [ ] Key and value sizes within bounds (<1KB key, <10KB value)
 - [ ] Warmup strategy defined for cold start / deployment
 
-**Verdict**: `X/12`; Critical: `Y/3`; Standard: `Z/5`; Hygiene: `W/4`.
-PASS requires: Critical 3/3 AND Standard ≥4/5 AND Hygiene ≥3/4.
+**Verdict**: `X/14`; Critical: `Y/5`; Standard: `Z/5`; Hygiene: `W/4`.
+PASS requires: Critical 5/5 AND Standard ≥4/5 AND Hygiene ≥3/4.
 
 ---
 
@@ -327,7 +374,7 @@ Every cache strategy review MUST produce these sections. Write "N/A — [reason]
 
 **Scorecard summary** (append after §9.9):
 ```
-Scorecard: X/12 — Critical Y/3, Standard Z/5, Hygiene W/4 — PASS/FAIL
+Scorecard: X/14 — Critical Y/5, Standard Z/5, Hygiene W/4 — PASS/FAIL
 Data basis: [full context | degraded | minimal | planning]
 ```
 
@@ -339,4 +386,5 @@ Data basis: [full context | degraded | minimal | planning]
 |-----------|------|
 | Standard or Deep depth | `references/cache-patterns.md` |
 | Deep depth, or stampede/penetration/avalanche signals | `references/cache-failure-modes.md` |
+| Any Redis lock in scope (always, not only at Deep) | `references/distributed-locks.md` |
 | Extended anti-example matching | `references/cache-anti-examples.md` |

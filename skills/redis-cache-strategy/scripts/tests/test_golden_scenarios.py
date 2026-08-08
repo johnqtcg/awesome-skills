@@ -1,7 +1,33 @@
-"""Golden scenario tests for redis-cache-strategy skill."""
+"""Golden scenario tests for redis-cache-strategy.
 
+What changed and why
+--------------------
+The previous version of this file asserted things like
+
+    assert "jitter" in fixture["expected_feedback"]
+
+which reads a string out of the fixture and asserts something about that same
+string. It tests whoever wrote the fixture, not the skill, and it cannot fail
+for any defect in the documentation. That is how a hot-key example that spread
+no load at all sat at "100% passing" for months.
+
+These tests instead run the skill's own code rules over each fixture's snippet
+and compare against a hand-written declaration on the fixture:
+
+  * `detectors`                 -- the exact set of rules that must fire.
+  * `primary_defect_gated_by`   -- the rule that catches the HEADLINE defect,
+                                   or null when only a model review can.
+
+Both directions are enforced. A declared rule that stops firing fails; a rule
+that starts firing where nothing was declared also fails, which is what makes
+an over-broad rule visible instead of merely quiet.
+"""
+
+import importlib.util
 import json
 import pathlib
+import sys
+
 import pytest
 
 SKILL_DIR = pathlib.Path(__file__).resolve().parents[2]
@@ -10,10 +36,31 @@ REFS_DIR = SKILL_DIR / "references"
 GOLDEN_DIR = pathlib.Path(__file__).resolve().parent / "golden"
 
 
+def _load_linter():
+    """Load lint_cache_docs.py by path.
+
+    Registered in sys.modules *before* exec_module: the module combines
+    `from __future__ import annotations` with @dataclass, and without the
+    registration the dataclass decorator resolves its own module to None and
+    raises "'NoneType' object has no attribute '__dict__'". The repo also runs
+    pytest with --import-mode=importlib, so a bare sibling import is not an
+    option here.
+    """
+    path = SKILL_DIR / "scripts" / "lint_cache_docs.py"
+    spec = importlib.util.spec_from_file_location("rcs_lint", path)
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["rcs_lint"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+LINT = _load_linter()
+CODE_RULES = [r for r in LINT.RULES if r.scope == "code"]
+KNOWN_RULE_IDS = {r.id for r in LINT.RULES}
+
+
 def _all_docs_lower() -> str:
-    parts = [SKILL_MD]
-    for f in sorted(REFS_DIR.glob("*.md")):
-        parts.append(f.read_text(encoding="utf-8"))
+    parts = [SKILL_MD] + [f.read_text(encoding="utf-8") for f in sorted(REFS_DIR.glob("*.md"))]
     return "\n".join(parts).lower()
 
 
@@ -24,250 +71,187 @@ def _load_fixtures() -> list[dict]:
 
 ALL_DOCS_LOWER = _all_docs_lower()
 FIXTURES = _load_fixtures()
+BY_ID = {f["id"]: f for f in FIXTURES}
 
 VALID_TYPES = {"defect", "good_practice", "degradation_scenario", "workflow"}
 VALID_SEVERITIES = {"critical", "standard", "hygiene", "none"}
 REQUIRED_FIELDS = {
-    "id", "title", "type", "severity", "code_snippet",
-    "expected_feedback", "coverage_rules", "reference",
+    "id", "title", "type", "severity", "code_snippet", "expected_feedback",
+    "coverage_rules", "reference", "detectors", "primary_defect_gated_by",
+    "detector_note",
+}
+
+# Declared coverage. Fixtures whose HEADLINE defect no code rule can gate --
+# these are the cases that rely on the model actually reading SKILL.md. The
+# number is asserted below so that "we added a rule" and "we added an ungated
+# fixture" both have to be a deliberate edit here, not a silent drift.
+# Only `defect` fixtures appear here; a non-defect fixture has no primary
+# defect to gate and is checked separately.
+UNGATED_PRIMARY_DEFECTS = {
+    "CACHE-001", "CACHE-003", "CACHE-004", "CACHE-011", "CACHE-012",
+    "CACHE-013", "CACHE-014", "CACHE-015", "CACHE-016", "CACHE-017",
 }
 
 
+def fired_rules(snippet: str) -> set[str]:
+    """Rule IDs that fire on a snippet, comment tails masked as in the linter."""
+    body = LINT.strip_comments(snippet)
+    return {r.id for r in CODE_RULES for _ in r._fn(body)}
+
+
+def ids(fixtures) -> list[str]:
+    return [f["id"] for f in fixtures]
+
+
+# ---------------------------------------------------------------------------
+# fixture integrity
+# ---------------------------------------------------------------------------
+
 class TestFixtureIntegrity:
     def test_minimum_fixture_count(self):
-        assert len(FIXTURES) >= 9
+        assert len(FIXTURES) >= 17
 
-    def test_required_fields(self):
-        for fix in FIXTURES:
-            missing = REQUIRED_FIELDS - set(fix.keys())
-            assert not missing, f"{fix['id']}: missing {missing}"
+    @pytest.mark.parametrize("fix", FIXTURES, ids=ids(FIXTURES))
+    def test_required_fields(self, fix):
+        assert not REQUIRED_FIELDS - set(fix.keys()), \
+            f"{fix['id']}: missing {REQUIRED_FIELDS - set(fix.keys())}"
 
-    def test_valid_types(self):
-        for fix in FIXTURES:
-            assert fix["type"] in VALID_TYPES
+    @pytest.mark.parametrize("fix", FIXTURES, ids=ids(FIXTURES))
+    def test_valid_type_and_severity(self, fix):
+        assert fix["type"] in VALID_TYPES
+        assert fix["severity"] in VALID_SEVERITIES
 
-    def test_valid_severities(self):
-        for fix in FIXTURES:
-            assert fix["severity"] in VALID_SEVERITIES
-
-    def test_defect_severity_not_none(self):
-        for fix in FIXTURES:
-            if fix["type"] == "defect":
-                assert fix["severity"] != "none"
-
-    def test_non_defect_severity_none(self):
-        for fix in FIXTURES:
-            if fix["type"] in ("good_practice", "degradation_scenario", "workflow"):
-                assert fix["severity"] == "none"
+    @pytest.mark.parametrize("fix", FIXTURES, ids=ids(FIXTURES))
+    def test_severity_matches_type(self, fix):
+        if fix["type"] == "defect":
+            assert fix["severity"] != "none"
+        else:
+            assert fix["severity"] == "none"
 
     def test_unique_ids(self):
-        ids = [f["id"] for f in FIXTURES]
-        assert len(ids) == len(set(ids))
-
-    def test_coverage_rules_findable(self):
-        for fix in FIXTURES:
-            for rule in fix["coverage_rules"]:
-                assert rule.lower() in ALL_DOCS_LOWER, \
-                    f"{fix['id']}: '{rule}' not in docs"
-
-
-# Critical Defects
-
-class TestCACHE001:
-    fix = next(f for f in FIXTURES if f["id"] == "CACHE-001")
-
-    def test_type_severity(self):
-        assert self.fix["type"] == "defect" and self.fix["severity"] == "critical"
-
-    def test_violated_rule(self):
-        assert "consistency" in self.fix["violated_rule"].lower()
-
-    def test_expected_mentions_source_of_truth(self):
-        assert "source of truth" in self.fix["expected_feedback"].lower()
-
-
-class TestCACHE002:
-    fix = next(f for f in FIXTURES if f["id"] == "CACHE-002")
-
-    def test_type_severity(self):
-        assert self.fix["type"] == "defect" and self.fix["severity"] == "critical"
-
-    def test_violated_rule(self):
-        assert "ttl" in self.fix["violated_rule"].lower()
-
-    def test_expected_mentions_jitter(self):
-        assert "jitter" in self.fix["expected_feedback"].lower()
-
-
-class TestCACHE003:
-    fix = next(f for f in FIXTURES if f["id"] == "CACHE-003")
-
-    def test_type_severity(self):
-        assert self.fix["type"] == "defect" and self.fix["severity"] == "critical"
-
-    def test_violated_rule(self):
-        assert "degradation" in self.fix["violated_rule"].lower()
-
-    def test_expected_mentions_fallback(self):
-        fb = self.fix["expected_feedback"].lower()
-        assert "database" in fb or "db" in fb or "fall" in fb
-
-
-# Standard Defects
-
-class TestCACHE004:
-    fix = next(f for f in FIXTURES if f["id"] == "CACHE-004")
-
-    def test_type_severity(self):
-        assert self.fix["type"] == "defect" and self.fix["severity"] == "standard"
-
-    def test_violated_rule(self):
-        assert "stampede" in self.fix["violated_rule"].lower()
-
-    def test_expected_mentions_singleflight(self):
-        assert "singleflight" in self.fix["expected_feedback"].lower()
-
-
-class TestCACHE005:
-    fix = next(f for f in FIXTURES if f["id"] == "CACHE-005")
-
-    def test_type_severity(self):
-        assert self.fix["type"] == "defect" and self.fix["severity"] == "standard"
-
-    def test_violated_rule(self):
-        vr = self.fix["violated_rule"].lower()
-        assert "lock" in vr or "ttl" in vr
-
-    def test_expected_mentions_deadlock(self):
-        fb = self.fix["expected_feedback"].lower()
-        assert "deadlock" in fb or "forever" in fb
-
-
-class TestCACHE006:
-    fix = next(f for f in FIXTURES if f["id"] == "CACHE-006")
-
-    def test_type_severity(self):
-        assert self.fix["type"] == "defect" and self.fix["severity"] == "standard"
-
-    def test_violated_rule(self):
-        assert "invalidation" in self.fix["violated_rule"].lower()
-
-    def test_expected_mentions_keys(self):
-        fb = self.fix["expected_feedback"].lower()
-        assert "keys" in fb and ("blocking" in fb or "scan" in fb)
-
-
-class TestCACHE011:
-    fix = next(f for f in FIXTURES if f["id"] == "CACHE-011")
-
-    def test_type_severity(self):
-        assert self.fix["type"] == "defect" and self.fix["severity"] == "standard"
-
-    def test_violated_rule(self):
-        assert "penetration" in self.fix["violated_rule"].lower()
-
-    def test_expected_mentions_null_caching(self):
-        fb = self.fix["expected_feedback"].lower()
-        assert "null" in fb or "not-found" in fb
-
-
-class TestCACHE012:
-    fix = next(f for f in FIXTURES if f["id"] == "CACHE-012")
-
-    def test_type_severity(self):
-        assert self.fix["type"] == "defect" and self.fix["severity"] == "critical"
-
-    def test_violated_rule(self):
-        assert "pattern" in self.fix["violated_rule"].lower()
-
-    def test_expected_mentions_write_behind(self):
-        fb = self.fix["expected_feedback"].lower()
-        assert "write-behind" in fb and ("financial" in fb or "data loss" in fb)
-
-
-class TestCACHE013:
-    fix = next(f for f in FIXTURES if f["id"] == "CACHE-013")
-
-    def test_type_severity(self):
-        assert self.fix["type"] == "defect" and self.fix["severity"] == "standard"
-
-    def test_violated_rule(self):
-        assert "avalanche" in self.fix["violated_rule"].lower()
-
-    def test_expected_mentions_l1(self):
-        fb = self.fix["expected_feedback"].lower()
-        assert "l1" in fb or "in-process" in fb or "local cache" in fb
-
-
-class TestCACHE014:
-    fix = next(f for f in FIXTURES if f["id"] == "CACHE-014")
-
-    def test_type_severity(self):
-        assert self.fix["type"] == "defect" and self.fix["severity"] == "critical"
-
-    def test_violated_rule(self):
-        vr = self.fix["violated_rule"].lower()
-        assert "key naming" in vr or "namespace" in vr
-
-    def test_expected_mentions_tenant(self):
-        fb = self.fix["expected_feedback"].lower()
-        assert "tenant" in fb and ("segmentation" in fb or "namespace" in fb or "prefix" in fb)
-
-
-# Good Practices
-
-class TestCACHE007:
-    fix = next(f for f in FIXTURES if f["id"] == "CACHE-007")
-
-    def test_type_severity(self):
-        assert self.fix["type"] == "good_practice" and self.fix["severity"] == "none"
-
-    def test_expected_positive(self):
-        assert "no violation" in self.fix["expected_feedback"].lower()
-
-    def test_expected_mentions_singleflight(self):
-        assert "singleflight" in self.fix["expected_feedback"].lower()
-
-
-class TestCACHE008:
-    fix = next(f for f in FIXTURES if f["id"] == "CACHE-008")
-
-    def test_type_severity(self):
-        assert self.fix["type"] == "good_practice" and self.fix["severity"] == "none"
-
-    def test_expected_positive(self):
-        assert "no violation" in self.fix["expected_feedback"].lower()
-
-    def test_expected_mentions_write_through(self):
-        assert "write-through" in self.fix["expected_feedback"].lower()
-
-
-# Degradation & Workflow
-
-class TestCACHE009:
-    fix = next(f for f in FIXTURES if f["id"] == "CACHE-009")
-
-    def test_type_severity(self):
-        assert self.fix["type"] == "degradation_scenario" and self.fix["severity"] == "none"
-
-    def test_expected_forbids_claims(self):
-        fb = self.fix["expected_feedback"].lower()
-        assert "must not" in fb or "not claim" in fb
-
-    def test_expected_mentions_degraded(self):
-        assert "degraded" in self.fix["expected_feedback"].lower()
-
-
-class TestCACHE010:
-    fix = next(f for f in FIXTURES if f["id"] == "CACHE-010")
-
-    def test_type_severity(self):
-        assert self.fix["type"] == "workflow" and self.fix["severity"] == "none"
-
-    def test_expected_mentions_pattern(self):
-        fb = self.fix["expected_feedback"].lower()
-        assert "cache-aside" in fb
-
-    def test_expected_mentions_warmup(self):
-        fb = self.fix["expected_feedback"].lower()
-        assert "warmup" in fb or "warm" in fb
+        assert len(ids(FIXTURES)) == len(set(ids(FIXTURES)))
+
+    @pytest.mark.parametrize("fix", FIXTURES, ids=ids(FIXTURES))
+    def test_coverage_rules_findable(self, fix):
+        for rule in fix["coverage_rules"]:
+            assert rule.lower() in ALL_DOCS_LOWER, f"{fix['id']}: '{rule}' not in docs"
+
+    @pytest.mark.parametrize("fix", FIXTURES, ids=ids(FIXTURES))
+    def test_reference_file_exists(self, fix):
+        assert (SKILL_DIR / fix["reference"]).exists(), \
+            f"{fix['id']}: reference {fix['reference']} does not exist"
+
+
+# ---------------------------------------------------------------------------
+# behaviour: the fixtures drive the real checker
+# ---------------------------------------------------------------------------
+
+class TestDetectorBehaviour:
+    @pytest.mark.parametrize("fix", FIXTURES, ids=ids(FIXTURES))
+    def test_declared_detectors_are_real_rules(self, fix):
+        unknown = set(fix["detectors"]) - KNOWN_RULE_IDS
+        assert not unknown, f"{fix['id']}: declares non-existent rule(s) {unknown}"
+
+    @pytest.mark.parametrize("fix", FIXTURES, ids=ids(FIXTURES))
+    def test_declared_detectors_all_fire(self, fix):
+        """Positive direction: every declared rule must actually fire."""
+        missing = set(fix["detectors"]) - fired_rules(fix["code_snippet"])
+        assert not missing, (
+            f"{fix['id']}: declared detector(s) {sorted(missing)} did not fire. "
+            "Either the rule is dead or the snippet no longer contains the defect."
+        )
+
+    @pytest.mark.parametrize("fix", FIXTURES, ids=ids(FIXTURES))
+    def test_no_undeclared_rule_fires(self, fix):
+        """Negative direction: an over-broad rule must not pass unnoticed."""
+        extra = fired_rules(fix["code_snippet"]) - set(fix["detectors"])
+        assert not extra, (
+            f"{fix['id']}: undeclared rule(s) {sorted(extra)} fired. "
+            "Either the rule is over-broad, or the fixture gained a defect "
+            "that must be declared."
+        )
+
+    @pytest.mark.parametrize(
+        "fix", [f for f in FIXTURES if f["type"] == "good_practice"],
+        ids=ids([f for f in FIXTURES if f["type"] == "good_practice"]))
+    def test_exemplars_are_clean(self, fix):
+        """The shipped models of correct code must pass the skill's own grader.
+
+        Both exemplars failed this when it was first written -- CACHE-007 had an
+        unchecked type assertion, `== sql.ErrNoRows`, and two discarded cache
+        writes while its expected_feedback said "No violations".
+        """
+        assert fired_rules(fix["code_snippet"]) == set(), \
+            f"{fix['id']} is shipped as an exemplar but trips its own linter"
+        assert fix["detectors"] == []
+
+    @pytest.mark.parametrize("fix", FIXTURES, ids=ids(FIXTURES))
+    def test_primary_defect_declaration_consistent(self, fix):
+        prim = fix["primary_defect_gated_by"]
+        if fix["type"] != "defect":
+            assert prim is None, f"{fix['id']}: non-defect fixture declares a primary detector"
+            assert fix["id"] not in UNGATED_PRIMARY_DEFECTS
+            return
+        if prim is None:
+            assert fix["id"] in UNGATED_PRIMARY_DEFECTS, \
+                f"{fix['id']}: primary defect ungated but not in the declared set"
+        else:
+            assert prim in fix["detectors"], \
+                f"{fix['id']}: primary detector {prim} is not in its own detectors list"
+            assert fix["id"] not in UNGATED_PRIMARY_DEFECTS
+
+    def test_ungated_set_has_no_stale_entries(self):
+        assert UNGATED_PRIMARY_DEFECTS <= set(BY_ID), \
+            f"stale ids in UNGATED_PRIMARY_DEFECTS: {UNGATED_PRIMARY_DEFECTS - set(BY_ID)}"
+        non_defect = {i for i in UNGATED_PRIMARY_DEFECTS if BY_ID[i]["type"] != "defect"}
+        assert not non_defect, f"non-defect ids in UNGATED_PRIMARY_DEFECTS: {non_defect}"
+
+    def test_gated_coverage_is_not_zero(self):
+        """At least the mechanically-checkable defects must be mechanically checked."""
+        gated = [f for f in FIXTURES if f["primary_defect_gated_by"]]
+        assert len(gated) >= 3, "no fixture's headline defect is gated by a rule"
+
+    @pytest.mark.parametrize("fix", FIXTURES, ids=ids(FIXTURES))
+    def test_detector_note_explains_gaps(self, fix):
+        if fix["primary_defect_gated_by"] is None:
+            assert len(fix["detector_note"].strip()) >= 40, \
+                f"{fix['id']}: ungated primary defect needs a stated reason"
+
+
+# ---------------------------------------------------------------------------
+# adversarial cases must stay adversarial
+# ---------------------------------------------------------------------------
+
+class TestAdversarialCases:
+    def test_outage_fixture_separates_outage_from_miss(self):
+        fb = BY_ID["CACHE-015"]["expected_feedback"].lower()
+        assert "redis.nil" in fb and "errors.is" in fb
+        assert "degradation" in fb
+        # The snippet must actually contain the conflation, or the case is moot.
+        assert "if err != nil {" in BY_ID["CACHE-015"]["code_snippet"]
+        assert "redis.Nil" not in BY_ID["CACHE-015"]["code_snippet"]
+
+    def test_race_fixture_has_both_sides_of_the_interleaving(self):
+        snippet = BY_ID["CACHE-016"]["code_snippet"]
+        # A race needs a reader AND a writer; one function cannot show it.
+        assert "rdb.Set(" in snippet and "rdb.Del(" in snippet
+        fb = BY_ID["CACHE-016"]["expected_feedback"].lower()
+        assert "double-delete" in fb or "double delete" in fb
+
+    def test_lock_fixture_is_well_formed_but_unsafe(self):
+        """This case exists precisely because no code rule can catch it."""
+        fix = BY_ID["CACHE-017"]
+        assert fired_rules(fix["code_snippet"]) == set(), \
+            "CACHE-017 must remain clean under the linter — that is its point"
+        snippet = fix["code_snippet"]
+        # It must show the WELL-FORMED baseline (TTL + token + CAS release)...
+        assert "SetNX" in snippet and "token" in snippet and "releaseCAS" in snippet
+        # ...while the feedback insists the baseline is not sufficient.
+        fb = fix["expected_feedback"].lower()
+        assert "fencing" in fb
+        assert "renewal" in fb or "renew" in fb
+        assert "failover" in fb
+
+    @pytest.mark.parametrize("fid", ["CACHE-015", "CACHE-016", "CACHE-017"])
+    def test_adversarial_cases_are_critical(self, fid):
+        assert BY_ID[fid]["severity"] == "critical"

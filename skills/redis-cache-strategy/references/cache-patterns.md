@@ -42,38 +42,77 @@ Write path:
 ### Code pattern (Go)
 
 ```go
+// ErrCacheUnavailable separates "Redis is down" from "key not cached".
+// Collapsing the two is the single most common bug in this pattern.
+var ErrCacheUnavailable = errors.New("cache unavailable")
+
 func GetUser(ctx context.Context, id string) (*User, error) {
-    // 1. Check cache
-    cached, err := rdb.Get(ctx, "user:"+id).Bytes()
-    if err == nil {
+    key := "user:" + id
+
+    // 1. Check cache — three outcomes, not two.
+    cached, err := rdb.Get(ctx, key).Bytes()
+    switch {
+    case err == nil:
         var u User
-        json.Unmarshal(cached, &u)
+        if err := json.Unmarshal(cached, &u); err != nil {
+            // Corrupt entry. Returning here would hand the caller a
+            // zero-value User that looks like a real record.
+            slog.WarnContext(ctx, "cache decode failed, dropping", "key", key, "err", err)
+            if delErr := rdb.Del(ctx, key).Err(); delErr != nil {
+                slog.WarnContext(ctx, "drop corrupt entry failed", "key", key, "err", delErr)
+            }
+            break // fall through to the DB
+        }
         return &u, nil
+
+    case errors.Is(err, redis.Nil):
+        // True miss — proceed to the DB.
+
+    default:
+        // Redis is unreachable. This is NOT a miss: treating it as one moves
+        // the entire read load onto the DB at once. Take the degradation path
+        // (circuit breaker / rate-limited bypass) instead.
+        return nil, fmt.Errorf("%w: %v", ErrCacheUnavailable, err)
     }
 
-    // 2. Singleflight: deduplicate concurrent DB queries for same key
-    val, err, _ := sfGroup.Do("user:"+id, func() (interface{}, error) {
+    // 2. Singleflight: deduplicate concurrent DB queries for the same key.
+    val, err, _ := sfGroup.Do(key, func() (any, error) {
         u, err := db.QueryUser(ctx, id)
         if err != nil {
-            return nil, err
+            return nil, fmt.Errorf("query user %s: %w", id, err)
         }
-        // 3. Populate cache with jittered TTL
-        data, _ := json.Marshal(u)
-        ttl := 30*time.Minute + time.Duration(rand.Intn(300))*time.Second
-        rdb.Set(ctx, "user:"+id, data, ttl)
+        // 3. Populate cache with jittered TTL.
+        data, err := json.Marshal(u)
+        if err != nil {
+            return nil, fmt.Errorf("encode user %s: %w", id, err)
+        }
+        if err := rdb.Set(ctx, key, data, jitteredTTL(30*time.Minute)).Err(); err != nil {
+            // Serve the value, but alert: until this succeeds every read is
+            // a miss and the DB carries full read traffic.
+            slog.WarnContext(ctx, "cache populate failed", "key", key, "err", err)
+        }
         return u, nil
     })
     if err != nil {
         return nil, err
     }
-    return val.(*User), nil
+    u, ok := val.(*User)
+    if !ok {
+        return nil, fmt.Errorf("singleflight returned %T, want *User", val)
+    }
+    return u, nil
 }
 
 func UpdateUser(ctx context.Context, u *User) error {
     if err := db.UpdateUser(ctx, u); err != nil {
         return err
     }
-    rdb.Del(ctx, "user:"+u.ID)  // Invalidate cache
+    // The DB is already committed. A dropped DEL leaves the cache stale until
+    // TTL with no record that it happened — it cannot be ignored. See
+    // "Cache-write failure semantics" below for the durable-retry options.
+    if err := rdb.Del(ctx, "user:"+u.ID).Err(); err != nil {
+        return fmt.Errorf("db committed but cache invalidation failed for %s: %w", u.ID, err)
+    }
     return nil
 }
 ```
@@ -107,9 +146,42 @@ Read path:
 - **Partial failure**: DB write succeeds but cache write fails → stale cache
 - **Unnecessary caching**: data written but never read wastes memory
 
+### Write-through does **not** give you strong consistency
+
+Two independent reasons, both of which survive a perfectly working `SET`:
+
+1. **It is a dual write.** DB commit and cache write are two operations against
+   two systems with no shared transaction. The DB can commit and the process
+   can then crash, be OOM-killed, or lose Redis — leaving a stale entry with
+   nothing left running to fix it. "Then DEL instead" does not close this: the
+   DEL is the same unreliable second operation.
+2. **Concurrent writers can invert.** W1 and W2 both commit to the DB (W2 last),
+   then W2's cache `SET` lands before W1's. The cache now holds W1's older
+   value, and it is not stale by TTL — it is *wrong* until the next write.
+   A version/timestamp guard (`SET` only if the payload version is newer,
+   via Lua CAS) is required to prevent this; TTL does not.
+
+So the honest claim is **read-your-writes on the write path**, with a staleness
+window bounded by whatever failure handling you actually implement — not zero.
+
+### Cache-write failure semantics (mandatory to state)
+
+Pick one and write it into §9.4. "We'll DEL on failure" is not one of these
+unless you also say what happens when the DEL fails.
+
+| Option | Guarantee | Cost |
+|--------|-----------|------|
+| **Best-effort + TTL** | Stale bounded by TTL; may serve wrong data for that long | Free. Only acceptable if TTL is inside the staleness SLA |
+| **Bounded retry, then DEL, then alert** | Shrinks the window; still fails if the process dies mid-retry | Adds latency to the write path |
+| **Transactional outbox** | Invalidation is committed in the same DB transaction as the data; a relay drains it | Needs an outbox table + relay; the only option that survives process death |
+| **Event-driven (CDC)** | Cache follows the DB's replication log; no dual write at all | Needs CDC infrastructure (Debezium, logical decoding) |
+
+Rule: if the staleness SLA is shorter than the TTL, best-effort is **not**
+sufficient — you need the outbox or CDC. Say which one, in writing.
+
 ### Guardrails
-- If cache write fails, invalidate (DEL) the key rather than leaving stale data
-- Set TTL even in write-through — defense against cache-DB drift from edge cases
+- Set TTL even in write-through — it is the backstop for every drift case above
+- Guard the cache write with a version check so out-of-order writers cannot invert
 - Keep writes idempotent — retry-safe
 - Consider write-through only for data that is read within seconds of writing
 
@@ -187,12 +259,17 @@ between step 2 and 3, the delayed DEL cleans it up.
 
 ## 5. Pattern Selection Matrix
 
-| Consistency need | Read:Write ratio | Recommended | Staleness |
-|-----------------|:----------------:|-------------|-----------|
-| Eventual (seconds OK) | Read-heavy (>80%) | **Cache-Aside** | TTL-bounded |
-| Strong (immediate) | Moderate writes | **Write-Through** | Near-zero |
-| Best-effort (async) | Write-heavy | **Write-Behind** | Unbounded until flush |
-| Eventual + hot keys | Mixed with contention | **Cache-Aside + Debounce** | Debounce window |
+| Consistency need | Read:Write ratio | Recommended | Staleness on the happy path | Staleness when the cache write fails |
+|-----------------|:----------------:|-------------|------------------|------------------|
+| Eventual (seconds OK) | Read-heavy (>80%) | **Cache-Aside** | TTL-bounded | TTL-bounded (DEL failure = stale until TTL) |
+| Read-your-writes | Moderate writes | **Write-Through** | Near-zero | **TTL-bounded, or unbounded if TTL is absent** — see "Cache-write failure semantics" |
+| Best-effort (async) | Write-heavy | **Write-Behind** | Unbounded until flush | Data loss, not just staleness |
+| Eventual + hot keys | Mixed with contention | **Cache-Aside + Debounce** | Debounce window | TTL-bounded |
+
+No row in this table offers strong consistency. Redis in front of a database is
+an eventually-consistent system in every pattern; the columns differ only in how
+short and how *provable* the window is. If a caller genuinely requires strong
+consistency, it must read the database, not the cache.
 
 ### Decision questions
 
