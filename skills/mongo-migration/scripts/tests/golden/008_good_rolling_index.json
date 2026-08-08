@@ -1,11 +1,26 @@
 {
   "id": "MONGO-008",
-  "title": "Good rolling index build — one secondary at a time with lag monitoring",
+  "title": "Good index build on a replica set — replicated build, the default",
   "type": "good_practice",
   "severity": "none",
-  "migration_snippet": "// Rolling index build for 50M-doc collection\n// Step 1: Build on each secondary individually\n// Connect to secondary: db.orders.createIndex({status: 1, created_at: -1})\n// Monitor: rs.printSecondaryReplicationInfo()\n// Step 2: Step down primary: rs.stepDown(60)\n// Step 3: Build on stepped-down member\n// Step 4: Verify all members have index: db.orders.getIndexes()",
-  "context": {"mongo_version": "6.0", "deployment": "replica_set", "doc_count": "50000000", "sharded": false},
-  "expected_feedback": "No violations. Correct rolling index build pattern for a 50M-document collection: build on each secondary individually to avoid cluster-wide performance impact, monitor replication lag between each build, step down primary for final build, verify all members have the index. This avoids any replication lag impact on the serving primary.",
-  "coverage_rules": ["rolling build", "replication lag", "createIndex", "secondary"],
-  "reference": "references/large-collection-migration.md"
+  "migration_snippet": "// 50M-document collection on a 3-member replica set.\n// Issue the build on the PRIMARY and stop there: since 4.2 the default build is\n// replicated -- every data-bearing member builds simultaneously and the primary does\n// not report the index ready until a majority have finished.\ndb.orders.createIndex(\n  {status: 1, created_at: -1},\n  {name: \"idx_status_created\"}\n);\n\n// Watch the build, and watch per-secondary LAG while it runs.\n// rs.printReplicationInfo() would show the oplog window of THIS member, not lag.\ndb.currentOp({\"command.createIndexes\": {$exists: true}});\nrs.printSecondaryReplicationInfo();\n\n// Confirm it landed.\ndb.orders.getIndexes();\n",
+  "context": {
+    "mongo_version": "8.0",
+    "deployment": "replica_set",
+    "doc_count": "50000000",
+    "sharded": false
+  },
+  "expected_feedback": "No violations. A replicated build is the correct default on a replica set, including at 50M documents: the members build concurrently and only a brief exclusive lock is taken at the start and end. Lag is measured with rs.printSecondaryReplicationInfo(), not rs.printReplicationInfo() -- the latter reports the connected member's oplog window. A ROLLING build is not what this is and is not the default: it removes each member from the set (shut down, restart standalone on a different port, build, restore, wait for catch-up), which costs a voting member for the whole window and takes longer. Reserve it for measured CPU or cache pressure. Note that the procedure previously recorded here -- 'connect directly to the secondary and run createIndex()' -- cannot execute at all: a secondary rejects the write with NotWritablePrimary.",
+  "coverage_rules": [
+    "replicated build",
+    "printSecondaryReplicationInfo",
+    "createIndex",
+    "NotWritablePrimary"
+  ],
+  "reference": "references/large-collection-migration.md",
+  "expected_lint_codes": [],
+  "lint_context": {
+    "mongo_version": 8,
+    "docs": 50000000
+  }
 }

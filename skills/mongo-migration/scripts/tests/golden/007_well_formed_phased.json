@@ -3,9 +3,26 @@
   "title": "Well-formed phased migration — additive + batched backfill + validator progression",
   "type": "good_practice",
   "severity": "none",
-  "migration_snippet": "// Phase 1: Add optional field (no validator)\ndb.orders.createIndex({customer_id: 1, _id: 1})\n\n// Phase 2: Batched backfill by _id range with w:majority\n// ... _id-range batched updateMany with sleep(100) ...\n\n// Phase 3: App deploy with dual-write\n\n// Phase 4: Enforce validator (moderate first)\ndb.runCommand({collMod: 'orders', validator: {$jsonSchema: {\n  required: ['customer_id', 'status']\n}}, validationLevel: 'moderate'})\n// Verify all docs comply, then:\ndb.runCommand({collMod: 'orders', validationLevel: 'strict'})\n\n// Phase 5: Cleanup old fields in batched $unset",
-  "context": {"mongo_version": "6.0", "deployment": "replica_set", "doc_count": "5000000", "sharded": false},
-  "expected_feedback": "No violations. Correctly implements the 5-phase MongoDB migration pattern: (1) additive index and field creation, (2) _id-range batched backfill with explicit write concern, (3) application dual-write, (4) validator progression from moderate to strict, (5) batched cleanup in separate release. Each phase is independently rollback-able.",
-  "coverage_rules": ["_id-range", "batch", "validationLevel", "moderate", "strict", "phased", "write concern"],
-  "reference": "SKILL.md"
+  "migration_snippet": "// Phase 1: additive index. The default build is REPLICATED (every member builds\n// concurrently) -- so watch per-secondary lag while it runs.\ndb.orders.createIndex({customer_id: 1, _id: 1}, {name: \"idx_customer_id\"});\ndb.currentOp({\"command.createIndexes\": {$exists: true}});\nrs.printSecondaryReplicationInfo();   // NOT printReplicationInfo(): that is the oplog window\n\n// Phase 2: batched backfill. No $gt cursor -- comparison operators type-bracket, so a\n// keyset over _id strands every _id whose BSON type differs from the cursor's. The\n// predicate selects each batch and is also the resume point.\nwhile (true) {\n  const batch = db.orders.find({status_v2: {$exists: false}}, {_id: 1})\n                  .sort({_id: 1}).limit(5000).toArray();\n  if (batch.length === 0) break;\n  const ids = batch.map(d => d._id);\n  db.orders.updateMany(\n    {_id: {$in: ids}, status_v2: {$exists: false}},\n    {$set: {status_v2: \"active\"}},\n    {writeConcern: {w: \"majority\"}}\n  );\n  sleep(100);\n}\n\n// Phase 3: app deploy with dual-write.\n\n// Phase 4: validator. moderate exempts ONLY updates to documents that already fail\n// validation; inserts and updates to compliant documents are validated either way.\ndb.runCommand({collMod: \"orders\",\n  validator: {$jsonSchema: {required: [\"customer_id\", \"status_v2\"]}},\n  validationLevel: \"moderate\"});\ndb.orders.countDocuments({status_v2: {$exists: false}});   // must be 0 before strict\ndb.runCommand({collMod: \"orders\", validationLevel: \"strict\"});\n\n// Phase 5: cleanup. $unset is NOT reversible -- the old value is gone unless it was\n// captured first, so this is a separate release after the new field is proven.\n",
+  "context": {
+    "mongo_version": "6.0",
+    "deployment": "replica_set",
+    "doc_count": "5000000",
+    "sharded": false
+  },
+  "expected_feedback": "No violations. Phased, and each phase carries the property that makes it safe: the index build is the replicated default with per-secondary lag monitoring; the backfill carries no cursor at all -- the predicate selects each batch, which is correct for any _id BSON type (a $gt keyset would type-bracket and strand every _id of a different type), states w:'majority', and throttles; the validator is staged moderate -> counted verification -> strict; and the $unset cleanup is deferred to a separate release because it cannot be reversed without the old value.",
+  "coverage_rules": [
+    "replicated build",
+    "printSecondaryReplicationInfo",
+    "batched backfill",
+    "w: \"majority\"",
+    "moderate",
+    "$unset"
+  ],
+  "reference": "SKILL.md",
+  "expected_lint_codes": [],
+  "lint_context": {
+    "mongo_version": 7,
+    "docs": 5000000
+  }
 }

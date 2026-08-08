@@ -24,7 +24,7 @@ and WiredTiger provides document-level concurrency for normal DML.
 | **< 4.0** | Foreground | Exclusive (X) on collection | **No** | Blocks all reads and writes |
 | **4.0–4.1** | `background: true` option | Intent locks only | Yes (slow build) | Background builds may miss documents |
 | **4.2+** | Optimized (hybrid) | Brief exclusive at start/end | **Yes** | Holds intent lock during build; brief X at start and finish |
-| **4.2+ replica set** | Rolling build | Same as above, per-member | **Yes** | Build one member at a time for zero-downtime |
+| **4.2+ replica set** | **Replicated** (not rolling) | Same as above, on every member concurrently | **Yes** | All data-bearing members build at once; the primary reports the index ready once a majority finish |
 
 ### 4.2+ Optimized Index Build Details
 
@@ -40,15 +40,26 @@ Commit: Acquire brief Exclusive lock → commit index to catalog
 - If interrupted (e.g., server restart), the build resumes automatically
 - `background: true` is ignored on 4.2+ (all builds use optimized method)
 
-### Rolling Index Build (Replica Set)
+### Replicated build is the default — and it is not a rolling build
 
-For zero-downtime index builds on large collections:
+On a replica set, `createIndex` on the primary builds on **every data-bearing member
+concurrently**. That is the recommendation, and nothing else is required.
 
-1. Build index on each secondary one at a time
-2. Step down primary, build on the stepped-down member
-3. Step up a secondary that already has the index
+```javascript
+db.orders.createIndex({status: 1}, {name: "idx_status"});   // on the PRIMARY
+rs.printSecondaryReplicationInfo();                          // watch per-secondary lag
+```
 
-This avoids any replication lag impact on the primary.
+**A rolling build is a different, manual procedure**, and the version of it that used to
+appear here could not run: its first step was "build the index on each secondary", and a
+replica-set secondary rejects writes with `NotWritablePrimary` (measured on a live
+3-member set). A real rolling build takes each member **out of the set** — shut it down,
+restart it as a standalone on a different port, build, restore its configuration, wait
+for it to catch up — which costs a voting member for the whole window and is slower than
+the default.
+
+Full procedure and the conditions that justify it:
+`large-collection-migration.md` §3.
 
 ---
 
@@ -108,12 +119,38 @@ hours for large collections. Monitor via `sh.status()` and `currentOp`.
 
 ### WiredTiger Ticket Exhaustion
 
-MongoDB limits concurrent operations via WiredTiger read/write tickets
-(default: 128 each). A long-running `updateMany()` on millions of documents
-holds a write ticket for the entire operation, reducing available tickets
-for other clients.
+MongoDB bounds concurrent storage-engine operations with read/write tickets. Two things
+about them are commonly stated wrong, and both were wrong here:
 
-**Mitigation**: batch by `_id` range with explicit pauses between batches.
+* **The pool is not a fixed 128.** From MongoDB 7.0 the server sizes it dynamically and
+  adjusts it under load. Measured on live containers: `totalTickets` came back as **10**
+  on both 7.0 and 8.0 for the same workload — a number that says more about the host than
+  about any documented default. Never plan against a constant.
+* **`available: 0` is not by itself an overload signal** on 7.0+. With a dynamically
+  sized pool the server deliberately runs the pool near saturation; what matters is
+  whether operations are *queueing* and for how long.
+
+**The metric moved.** Reading the wrong path yields `undefined`, which is easy to mistake
+for "no pressure":
+
+| Version | Path | Verified |
+|---------|------|----------|
+| 7.0 | `db.serverStatus().wiredTiger.concurrentTransactions` | present; `queues.execution` absent |
+| 8.0 | `db.serverStatus().queues.execution` | present; `wiredTiger.concurrentTransactions` **absent** |
+
+```javascript
+// Version-agnostic read, with the queueing signal that actually matters
+const ss = db.serverStatus();
+const q = (ss.queues && ss.queues.execution) || ss.wiredTiger.concurrentTransactions;
+printjson({
+  readTotal:  q.read.totalTickets,  readOut:  q.read.out,
+  writeTotal: q.write.totalTickets, writeOut: q.write.out,
+  readQueued:  q.read.queueLength,  writeQueued: q.write.queueLength
+});
+```
+
+**Mitigation**: batch, and pause between batches. A long unbounded `updateMany()` holds
+a write ticket for its whole duration; a batched one releases it between batches.
 
 ---
 
@@ -126,16 +163,18 @@ db.currentOp({$or: [
   {"msg": /Index Build/}
 ]})
 
-// Replication lag
-rs.printReplicationInfo()
+// Replication LAG -- per secondary. rs.printReplicationInfo() is NOT this: it reports
+// the oplog window of the member you are connected to, which says how much history is
+// retained, not how far behind anyone is.
 rs.printSecondaryReplicationInfo()
 
 // Lock contention
 db.serverStatus().locks
 db.currentOp({"waitingForLock": true})
 
-// WiredTiger ticket usage
-db.serverStatus().wiredTiger.concurrentTransactions
+// Ticket usage -- the path differs by version; see the table above
+db.serverStatus().queues.execution               // 8.0
+db.serverStatus().wiredTiger.concurrentTransactions   // 7.0
 
 // Collection stats for migration verification
 db.collection.stats()

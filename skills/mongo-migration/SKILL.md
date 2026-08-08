@@ -5,7 +5,7 @@ description: >
   when writing, reviewing, or planning MongoDB schema changes — field additions/removals,
   index builds, schema validator changes, document type migrations, shard key modifications,
   or any bulk update touching production collections. Covers index build lock behavior
-  (foreground vs rolling builds), additive schema evolution, _id-range batched updates,
+  (replicated default vs the rolling exception), additive schema evolution, batched backfills,
   write concern tuning during migration, reshardCollection (5.0+), collMod validator
   changes, and rollback planning. Use even for "just add a field" — MongoDB's
   schema-less nature makes silent type inconsistencies and missing-field bugs harder
@@ -34,16 +34,19 @@ description: >
 
 ## §1 Scope
 
-**In scope** — schema migration safety for MongoDB 4.4 / 5.0 / 6.0 / 7.0+:
+**In scope** — schema migration safety for MongoDB **7.0 and 8.0**, the releases still in
+support as of 2026-08. 4.4, 5.0 and 6.0 have reached end of life; if a user names one,
+say so before reviewing, because an EOL server receives no security fixes and the
+version-gated advice below assumes 7.0+:
 
 - Document schema evolution (add/remove/rename/retype fields)
-- Index operations (createIndex, dropIndex, rolling builds, TTL indexes)
+- Index operations (createIndex, dropIndex, replicated vs rolling builds, TTL indexes)
 - Schema validator changes (collMod with JSON Schema validation)
 - Data backfill and transformation (aggregation pipeline updates, bulkWrite)
 - Shard key changes (reshardCollection 5.0+, refineCollectionShardKey 4.4+)
 - Migration script review (mongosh scripts, application-driven migrations)
 - Write concern / read concern tuning during migration phases
-- Rollback planning (MongoDB has no transactional DDL)
+- Rollback planning (MongoDB's DDL is mostly non-transactional — but see §5.3 item 10: createCollection and createIndex do work inside a transaction)
 
 **Out of scope** — delegate to dedicated skills:
 
@@ -61,8 +64,9 @@ Execute gates sequentially. Each gate has a **STOP** condition.
 
 | Item | Why it matters | If unknown |
 |------|----------------|------------|
-| **MongoDB version** (4.4 / 5.0 / 6.0 / 7.0+) | Index build behavior, resharding features differ | Assume 4.4 (most restrictive) |
-| **Deployment type** (standalone / replica set / sharded cluster) | Affects rolling builds, chunk migration, write concern | Assume replica set |
+| **MongoDB version** (7.0 / 8.0) | Index build behaviour, resharding, and the ticket metric path all differ | Assume **7.0** — the oldest supported, so the least capable. Flag 6.0 and below as EOL before reviewing |
+| **Deployment type** (standalone / replica set / sharded cluster) | Affects index-build propagation, chunk migration, write concern | Assume replica set |
+| **`_id` BSON type uniformity** | A `$gt` keyset cursor over `_id` **type-brackets**: if the collection holds more than one `_id` type it silently strands whole type classes. Determines whether the cursorless backfill is mandatory | `db.c.aggregate([{$group: {_id: {$type: "$_id"}, n: {$sum: 1}}}])`. More than one row → cursorless only. **If unknown, assume mixed** |
 | **Collection document count** | Determines batch strategy and duration | Ask, or estimate via `db.collection.estimatedDocumentCount()` |
 | **Collection size (data + indexes)** | Large collections need careful batching and monitoring | Estimate via `db.collection.stats()` |
 | **Shard key** (if sharded) | Shard key changes require special procedures | Check `sh.status()` |
@@ -90,7 +94,7 @@ Execute gates sequentially. Each gate has a **STOP** condition.
 
 | Risk | Definition | Required action |
 |------|-----------|-----------------|
-| **SAFE** | Additive field, background/rolling index on small collection | Standard write concern |
+| **SAFE** | Additive field; an index build on a small collection (the replicated default — a rolling build is not what makes it safe) | Standard write concern |
 | **WARN** | Bulk update >1M docs, index on >10M docs, validator change | Off-peak + monitoring |
 | **UNSAFE** | Shard key change, field type migration, foreground index on large collection | Phased rollout + rollback drill |
 
@@ -138,13 +142,17 @@ Execute every item. Mark **SAFE** / **WARN** / **UNSAFE** with evidence.
 
 ### 5.1 Index Build Safety
 
-1. **Index build method** — MongoDB 4.2+ uses rolling/optimized builds by default (brief exclusive lock at start and end, allows concurrent reads and writes during build). Pre-4.2 `background: true` allows DML but is slower and may miss documents. When uncertain → load `references/mongo-ddl-lock-matrix.md`.
+1. **Index build method** — since 4.2 the default is a **replicated** build: every data-bearing member builds simultaneously, with a brief exclusive lock only at start and end. That is **not** a rolling build — a rolling build removes each member from the set in turn and is a deliberate exception (`references/large-collection-migration.md` §3). Default to the replicated build and say so explicitly in the plan. When uncertain → load `references/mongo-ddl-lock-matrix.md`.
 
-2. **Index build impact on replica set** — index builds replicate to secondaries. On large collections, secondaries may fall behind during build. Monitor `rs.printReplicationInfo()` for lag. Consider building on secondaries first (rolling build pattern) for zero-downtime.
+2. **Index build impact on replica set** — the build runs on every member, so secondaries can fall behind. Measure lag with `rs.printSecondaryReplicationInfo()` (or `rs.status()` members' `optimeDate`): `rs.printReplicationInfo()` reports the **oplog window on the member you are connected to**, not any member's lag. Do not reach for a rolling build to avoid this — see §5.1 item 1.
 
 3. **Unique index on existing data** — creating a unique index fails if duplicates exist. Pre-check: `db.collection.aggregate([{$group:{_id:"$field", count:{$sum:1}}}, {$match:{count:{$gt:1}}}])`. Fix duplicates before index creation.
 
-4. **TTL index changes** — TTL indexes have a background thread that deletes expired documents. Changing TTL value requires dropIndex + createIndex (no in-place modification). The delete thread runs every 60s; large backlogs during migration can cause I/O spikes.
+4. **TTL index changes** — **`collMod` changes `expireAfterSeconds` in place from MongoDB 5.1**; drop-and-recreate is only required below that, and every version this skill covers is above it. Verified on live 7.0 and 8.0:
+   ```javascript
+   db.runCommand({collMod: "events", index: {keyPattern: {createdAt: 1}, expireAfterSeconds: 7200}});
+   ```
+   Dropping and recreating a TTL index on a large collection is an avoidable full index build. The delete thread runs every 60s; shortening a TTL creates a backlog it works through in bursts, so widen first and watch I/O.
 
 ### 5.2 Schema Evolution
 
@@ -158,21 +166,21 @@ Execute every item. Mark **SAFE** / **WARN** / **UNSAFE** with evidence.
 
 ### 5.3 Backward Compatibility
 
-9. **Deployment ordering** — same as RDBMS: code handles both old and new schema → deploy migration → deploy code that uses only new schema → separate release: remove old-schema code paths.
+9. **Deployment ordering — compatible code first, always** — the application that can read *both* shapes and dual-writes must be fully rolled out **before** the backfill starts, not after. Backfilling first leaves a window in which old instances keep creating documents in the old shape, so "zero documents left" is a reading of one instant rather than a property of the collection. Order: compatible deploy → confirm every instance → backfill → verify zero → cut reads and validator → **separate** release to stop writing the old field and `$unset` it. See §6.
 
-10. **Rollback feasibility** — MongoDB has no transactional DDL. Index drops are instant but data changes are permanent. Classify each operation:
-    - **Instant-rollback**: dropIndex, additive field (just stop writing)
-    - **Script-rollback**: $set/$unset can be reversed with inverse operation
-    - **Irreversible**: field type conversion (old type data overwritten)
-    - For irreversible changes, take a backup or snapshot before proceeding.
+10. **Rollback feasibility** — MongoDB's DDL is **not** transactional the way PostgreSQL's is, but "no transactional DDL" is too strong: `createCollection` and `createIndex` *are* permitted inside a multi-document transaction (verified on 7.0 and 8.0), and roll back with it. What you cannot do is wrap an arbitrary migration in one — a transaction has a runtime limit and holds its writes until commit, so it is not a batched-backfill tool. Classify each operation:
+    - **Instant-rollback**: `dropIndex`, additive field (stop writing it)
+    - **Script-rollback**: only when the old value was **captured first**. `$unset` is not reversible by an "inverse operation" — the value is gone. Copy to a shadow field before unsetting, or accept it as irreversible.
+    - **Irreversible**: in-place field type conversion (old value overwritten)
+    - For anything irreversible, take a backup or snapshot **and verify it restores** before proceeding.
 
 ### 5.4 Operational Safety
 
-11. **Batched updates with _id-range** — bulk updates must be batched by `_id` range with periodic yield. Single unbounded `updateMany()` on millions of documents holds the WiredTiger ticket for extended periods, degrading all other operations.
+11. **Batched updates — use predicate batching** — bulk updates must be batched with a pause between batches. A single unbounded `updateMany()` holds a write ticket for its whole duration, degrading every other operation. **Batch by re-querying the migration's own predicate** (`{new_field: {$exists: false}}`), not by an `_id` range: comparison operators type-bracket, so a `$gt` cursor over `_id` skips every `_id` whose BSON type differs from the cursor's (measured: 30 of 60 documents stranded). The `_id` keyset is an optimisation available **only** after Gate 1 proves a single `_id` type — `references/large-collection-migration.md` §1.
 
 12. **Write concern during migration** — use `w: "majority"` for safety (data survives primary failure). Consider `w: 1` only for backfill phases where re-run is acceptable. Document the write concern choice and its trade-off.
 
-13. **Schema validator enforcement** — use `collMod` to add JSON Schema validator with `validationLevel: "moderate"` first (validates only inserts and updates, not existing docs), then switch to `"strict"` after backfill confirms all documents comply. `validationAction: "warn"` logs violations without rejecting — useful for migration monitoring.
+13. **Schema validator enforcement** — `moderate` does **not** mean "only new writes are validated". Measured on 8.0: a non-compliant **insert is rejected**; an update to an existing **compliant** document is **rejected** if it would break the rules; only an update to a document that **already failed** validation is exempt. That exemption is the whole point — it lets you deploy a validator over a collection with legacy documents without blocking writes to them. Sequence: `collMod` with `validationLevel: "moderate"` → backfill → verify zero non-compliant documents → `"strict"`. `validationAction: "warn"` logs instead of rejecting, which is the safer first step when you are unsure of the shape of your data.
 
 14. **currentOp monitoring** — track migration progress with `db.currentOp({$all: true})` for index builds and `db.collection.countDocuments({migrated: true})` for backfill progress.
 
@@ -182,11 +190,27 @@ Execute every item. Mark **SAFE** / **WARN** / **UNSAFE** with evidence.
 
 Standard phased pattern for MongoDB schema migration:
 
-1. **Phase 1 — Additive schema**: add new fields as optional (no validator), create indexes (rolling build)
-2. **Phase 2 — Backfill**: populate new fields via `_id`-range batched `updateMany()` with aggregation pipeline (see `references/large-collection-migration.md`)
-3. **Phase 3 — App deploy**: deploy code writing to both old and new fields (dual-write)
-4. **Phase 4 — Validator enforcement**: `collMod` with `validationLevel: "moderate"` → verify → `"strict"`
-5. **Phase 5 — Cleanup** (separate release): `$unset` old fields in batches, drop unused indexes
+**The application is deployed before the backfill, not after.** This ordering is the
+whole point of the plan, and getting it backwards is the most common way a migration
+that "completed" is not actually complete:
+
+1. **Phase 1 — Additive schema**: add new fields as optional (**no validator yet**), create indexes with the **replicated default** on the primary, watching per-secondary lag.
+2. **Phase 2 — Compatible deploy**: ship code that **reads either shape and dual-writes both**. It must tolerate documents that have not been backfilled yet, because for the whole of Phase 3 most of them have not.
+3. **Phase 3 — Rollout barrier**: confirm **every** instance is running that code before touching data. A single old instance still writing documents without the new field means the backfill has no stable finishing line — it drains while the old code refills it.
+4. **Phase 4 — Backfill**: predicate-batched `updateMany()` (no `_id` cursor unless Gate 1 proved a single `_id` type), throttled, `w: "majority"` — `references/large-collection-migration.md` §1.
+5. **Phase 5 — Verify**: `countDocuments({<field>: {$exists: false}})` must be **0**, and must *stay* 0 on a re-check. It can only stay 0 because Phase 3 guaranteed nothing writes the old shape any more.
+6. **Phase 6 — Cut over**: switch reads to the new field, then `collMod` `validationLevel: "moderate"` → re-verify → `"strict"`.
+7. **Phase 7 — Cleanup** (separate release): stop writing the old field, then `$unset` it in batches and drop unused indexes. `$unset` is irreversible — this release is deliberately last and deliberately separate.
+
+### Why the deploy comes first
+
+Backfilling before the compatible deploy leaves a window between "backfill finished" and
+"new code live" in which the old code is still creating documents in the old shape. The
+count you verified is stale the moment you read it, and the validator you enable in
+Phase 6 then rejects writes to documents the backfill never saw.
+
+The rollout barrier in Phase 3 is what makes Phase 5's zero meaningful. Without it, zero
+is a measurement of one instant, not a property of the collection.
 
 Each phase: **Pre-condition** → **Script** (with write concern) → **Validation** → **Rollback** → **Go/No-go**.
 
@@ -200,7 +224,8 @@ For collections >10M docs, details in `references/large-collection-migration.md`
 ```javascript
 // WRONG: blocks all read/write operations (MongoDB <4.2) or holds exclusive lock at start/end
 db.orders.createIndex({created_at: 1})  // on 50M-doc collection during peak hours
-// RIGHT: build during off-peak; on replica set, use rolling build pattern
+// RIGHT: build on the PRIMARY with the replicated default and watch per-secondary lag.
+// A rolling build is a different, manual procedure and is not the fix for lag.
 // MongoDB 4.2+ builds are already optimized, but still monitor replication lag
 ```
 
@@ -208,14 +233,19 @@ db.orders.createIndex({created_at: 1})  // on 50M-doc collection during peak hou
 ```javascript
 // WRONG: single operation on 20M documents — holds WiredTiger tickets, degrades all ops
 db.orders.updateMany({status: null}, {$set: {status: "pending"}})
-// RIGHT: batch by _id range (see §6 Phase 2)
+// RIGHT: batch by re-querying the migration's own predicate (see §6 Phase 4).
+// NOT an _id range: $gt type-brackets, so a cursor over _id strands every _id whose
+// BSON type differs from the cursor's. The keyset is allowed only after Gate 1
+// proves a single _id type.
 ```
 
 ### AE-3: Schema validator set to "strict" before backfill
 ```javascript
 // WRONG: existing documents fail validation → inserts/updates rejected
 db.runCommand({collMod: "orders", validator: {$jsonSchema: {...}}, validationLevel: "strict"})
-// RIGHT: use "moderate" first (only validates new writes), backfill, then switch to "strict"
+// RIGHT: "moderate" first, backfill, verify zero non-compliant, then "strict".
+// moderate does NOT exempt existing documents: it exempts only updates to documents
+// that ALREADY fail validation. Inserts and updates to compliant documents are checked.
 ```
 
 ### AE-4: Field type change without dual-read handling
@@ -247,27 +277,43 @@ Extended anti-examples (AE-7 through AE-13) in `references/migration-anti-exampl
 
 ### Critical — any FAIL means overall FAIL
 
-- [ ] Backfill uses `_id`-range batching with periodic yield (not unbounded `updateMany`)
-- [ ] Write concern explicitly set for migration operations (not relying on cluster default)
-- [ ] Rollback path documented for every phase (instant-rollback / script-rollback / irreversible with backup)
+- [ ] Backfill is batched **by re-querying its own predicate** (`{field: {$exists: false}}`), which needs no cursor and is correct for any `_id` BSON type. A `$gt` keyset over `_id` is permitted **only** where Gate 1 proved a single `_id` type — and then its cursor must come from the batch just processed, never from arithmetic on `_id` or `max(_id)` of the migrated set
+- [ ] Write concern explicitly set for migration operations (not relying on the cluster default)
+- [ ] Rollback path documented for every phase (instant-rollback / script-rollback / irreversible with a **restore-tested** backup)
 
-### Standard — 4 of 5 must pass
+### Standard
 
 - [ ] Schema changes are additive-first (new fields optional before validator enforcement)
-- [ ] Index builds monitored for replication lag (rolling build or off-peak)
-- [ ] Field type changes use new-field + dual-read pattern (not in-place overwrite)
-- [ ] Schema validator uses `"moderate"` → `"strict"` progression (not direct strict)
-- [ ] Validation script confirms all documents match expected schema after backfill
+- [ ] Index builds monitored for **per-secondary lag** (`rs.printSecondaryReplicationInfo()`), using the replicated default rather than a rolling build unless pressure was measured
+- [ ] Field type changes use new-field + dual-read (not in-place overwrite)
+- [ ] Schema validator staged `"moderate"` → counted verification → `"strict"`
+- [ ] A **counted** check confirms zero documents still match the backfill predicate
 
-### Hygiene — 3 of 4 must pass
+### Hygiene
 
-- [ ] Migration progress tracked (document count or `_id` checkpoint)
-- [ ] Unique index preceded by duplicate check
+- [ ] Migration progress tracked by **counting the remaining predicate**, not by a stored checkpoint
+- [ ] Unique index preceded by a duplicate check
 - [ ] Post-migration `collStats` / index usage verified
-- [ ] WiredTiger cache and replication lag monitored during bulk operations
+- [ ] Ticket pressure watched at the path that exists for the target version (§ lock matrix)
 
-**Verdict**: `X/12`; Critical: `Y/3`; Standard: `Z/5`; Hygiene: `W/4`.
-PASS requires: Critical 3/3 AND Standard ≥4/5 AND Hygiene ≥3/4.
+### Scoring — the denominator moves
+
+Each tier is scored **against the items that apply**, not against a fixed count. Write
+`N/A` for an item the migration cannot reach, and drop it from *both* sides:
+
+```
+Critical: Y/Na    Standard: Z/Nb    Hygiene: W/Nc    Total: (Y+Z+W)/(Na+Nb+Nc)
+```
+
+PASS requires **Critical = Na/Na** (every applicable critical item), **Standard ≥ 80% of
+Nb**, and **Hygiene ≥ 75% of Nc** — the same bars the fixed 3/3, 4/5 and 3/4 expressed,
+now stated as ratios so they survive an N/A.
+
+Two rules keep this honest:
+
+- **N/A is never a pass.** It leaves the numerator *and* the denominator. Record why in
+  §9.9 so a reader sees which check did not apply rather than which one succeeded.
+- **If a tier ends up entirely N/A, the review is out of scope, not passing.** Say so.
 
 ---
 
@@ -287,7 +333,7 @@ Every migration review MUST produce these sections. Write "N/A — [reason]" if 
 
 ### 9.4 Execution Plan (Standard/Deep; "N/A — Lite" for Lite)
 
-### 9.5 Migration Script (with write concern, batch size, _id-range)
+### 9.5 Migration Script (with write concern, batch size, and the batching strategy — predicate by default; `_id` keyset only with the Gate 1 single-type finding quoted)
 
 ### 9.6 Validation Script (document count, schema check, index verify)
 
@@ -307,7 +353,8 @@ Every migration review MUST produce these sections. Write "N/A — [reason]" if 
 
 **Scorecard summary** (append after §9.9):
 ```
-Scorecard: X/12 — Critical Y/3, Standard Z/5, Hygiene W/4 — PASS/FAIL
+Scorecard: (Y+Z+W)/(Na+Nb+Nc) — Critical Y/Na, Standard Z/Nb, Hygiene W/Nc — PASS/FAIL
+N/A items: <item> — <why it does not apply>
 Data basis: [full context | degraded | minimal | planning]
 ```
 

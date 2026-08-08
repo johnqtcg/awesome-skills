@@ -4,9 +4,27 @@
   "type": "defect",
   "severity": "critical",
   "migration_snippet": "// convert_amount_to_double.js\ndb.orders.updateMany({}, [{$set: {amount: {$toDouble: '$amount'}}}])",
-  "context": {"mongo_version": "6.0", "deployment": "replica_set", "doc_count": "8000000", "sharded": false},
-  "expected_feedback": "Critical: In-place field type conversion from string to double overwrites the original string values permanently. MongoDB has no transactional DDL — once updateMany completes, the original string amounts are gone. No rollback path is documented. This is an irreversible operation. Fix: use new-field pattern (amount_v2 as double), keep original field, dual-read in application, then cleanup in separate release. Or take a collection snapshot before proceeding.",
+  "context": {
+    "mongo_version": "6.0",
+    "deployment": "replica_set",
+    "doc_count": "8000000",
+    "sharded": false
+  },
+  "expected_feedback": "Critical: In-place field type conversion from string to double overwrites the original string values permanently. MongoDB's DDL is mostly non-transactional (createCollection and createIndex do commit inside a transaction) — once updateMany completes, the original string amounts are gone. No rollback path is documented. This is an irreversible operation. Fix: use new-field pattern (amount_v2 as double), keep original field, dual-read in application, then cleanup in separate release. Or take a collection snapshot before proceeding.",
   "violated_rule": "Rollback path documented for every phase",
-  "coverage_rules": ["rollback", "irreversible", "field type", "no transactional DDL"],
-  "reference": "SKILL.md"
+  "coverage_rules": [
+    "rollback",
+    "irreversible",
+    "field type",
+    "DDL is mostly non-transactional"
+  ],
+  "reference": "SKILL.md",
+  "expected_lint_codes": [
+    "MG001",
+    "MG005"
+  ],
+  "lint_context": {
+    "mongo_version": 7,
+    "docs": 8000000
+  }
 }

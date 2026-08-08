@@ -1,95 +1,130 @@
 # mongo-migration Skill — Test Coverage Matrix
 
-## 1. Contract Tests (`test_skill_contract.py`)
+**Counts here are asserted, not maintained by hand.**
+`test_golden_scenarios.py::TestCoverageDocMatchesReality` fails when any of them drifts
+from the code. Regenerate with:
 
-| Test Class | Count | Validates |
-|------------|:-----:|-----------|
-| `TestFrontmatter` | 2 | name=mongo-migration; trigger keywords (index, schema, bulk, shard key, collMod, write concern, _id-range) |
-| `TestMandatoryGates` | 6 | Gate 1–4 with STOP/PROCEED; context (version, deployment); risk levels |
-| `TestDepthSelection` | 3 | Lite/Standard/Deep; force-Standard signals; reference loading |
-| `TestDegradationModes` | 3 | Full/Degraded/Minimal/Planning; never-fabricate (fixed operator precedence); assumptions |
-| `TestChecklist` | 7 | 4 subsections; index/rolling build; write concern; validator moderate→strict; _id-range; backward compat; rollback irreversible |
-| `TestExecutionPlan` | 2 | 5-phase pattern; large-collection ref |
-| `TestAntiExamples` | 4 | ≥6 AE; WRONG/RIGHT pairs; unbounded updateMany; extended ref |
-| `TestScorecard` | 5 | Critical/Standard/Hygiene; thresholds; verdict |
-| `TestOutputContract` | 4 | 9 sections; uncovered risks; volume; scorecard in output |
-| `TestReferenceFiles` | 7 | 3 files with min lines; keywords; AE numbering; all refs in SKILL.md |
-| `TestLineCount` | 1 | SKILL.md ≤ 420 lines |
-| `TestCrossFileConsistency` | 6 | WiredTiger in matrix; reshardCollection in large-collection; _id-range; write concern; validator in AE; replication lag |
-| **Total** | **50** | |
+```bash
+cd skills/mongo-migration
+python3 scripts/tests/update_coverage_counts.py
+```
 
-## 2. Golden Fixtures (`test_golden_scenarios.py`)
+Last regenerated 2026-08-07: **347 offline tests**, 32 mutations, 13 golden fixtures,
+16 checker rules, 19 pinned facts.
 
-### 2.1 Fixture Inventory
+The live matrix is parametrised per major, so its collected count depends on how many
+servers are reachable: 108 across MongoDB 7.0 + 8.0.
 
-| ID | Title | Type | Severity | Violated Rule |
-|----|-------|------|----------|---------------|
-| MONGO-001 | Unbounded updateMany | defect | critical | _id-range batching |
-| MONGO-002 | No explicit write concern | defect | critical | Write concern set |
-| MONGO-003 | No rollback — in-place type overwrite | defect | critical | Rollback path documented |
-| MONGO-004 | Validator strict before backfill | defect | standard | Validator moderate→strict |
-| MONGO-005 | Unique index without dupe check | defect | standard | Unique index preceded by duplicate check |
-| MONGO-006 | In-place field type change | defect | standard | New-field + dual-read pattern |
-| MONGO-007 | Well-formed phased migration | good_practice | none | — |
-| MONGO-008 | Good rolling index build | good_practice | none | — |
-| MONGO-009 | Degraded — no context | degradation_scenario | none | — |
-| MONGO-010 | Field type migration workflow | workflow | none | — |
-| MONGO-011 | Index build without lag monitoring | defect | standard | Index builds monitored |
-| MONGO-012 | reshardCollection workflow | workflow | none | — |
-| MONGO-013 | Sharded bulk write without batching | defect | standard | _id-range batching |
+---
 
-### 2.2 Per-Fixture Test Classes
+## 1. What each suite can and cannot catch
 
-| Fixture | Test Class | Tests | Validates |
-|---------|-----------|:-----:|-----------|
-| MONGO-001 | `TestMONGO001` | 3 | type/severity; violated_rule (batch/_id); feedback mentions WiredTiger |
-| MONGO-002 | `TestMONGO002` | 3 | type/severity; violated_rule (write concern); feedback mentions majority |
-| MONGO-003 | `TestMONGO003` | 3 | type/severity; violated_rule (rollback); feedback mentions irreversible |
-| MONGO-004 | `TestMONGO004` | 3 | type/severity; violated_rule (validator/moderate); feedback mentions moderate |
-| MONGO-005 | `TestMONGO005` | 3 | type/severity; violated_rule (unique/duplicate); feedback mentions duplicate |
-| MONGO-006 | `TestMONGO006` | 3 | type/severity; violated_rule (type/dual); feedback mentions dual/new-field |
-| MONGO-007 | `TestMONGO007` | 2 | type/severity; no violations |
-| MONGO-008 | `TestMONGO008` | 3 | type/severity; no violations; mentions rolling |
-| MONGO-009 | `TestMONGO009` | 3 | type/severity; forbids claims; mentions degraded |
-| MONGO-010 | `TestMONGO010` | 3 | type/severity; mentions new-field/amount_v2; mentions phases/(1) |
-| MONGO-011 | `TestMONGO011` | 3 | type/severity; violated_rule (index/replication/monitor); feedback mentions lag |
-| MONGO-012 | `TestMONGO012` | 3 | type/severity; mentions reshard; mentions cutover/lock |
-| MONGO-013 | `TestMONGO013` | 4 | type/severity; violated_rule (batch/_id); mentions shard; mentions balancer |
+Before 2026-08 this skill had 97 passing tests split across two suites, and they proved
+only that the document, the fixture and the test shared a wording. What they preserved,
+green:
 
-### 2.3 Fixture Integrity Tests: 8 tests
+- a backfill loop that threw `TypeError` on its first line and could not run at all;
+- a rolling-index procedure the server rejects with `NotWritablePrimary`, recorded by a
+  fixture as *"No violations"*;
+- a `$gt` keyset cursor that silently strands every `_id` of a different BSON type.
 
-**Golden total: 8 integrity + 39 behavioral = 47 tests**
+| Suite | Tests | Asserts against | Can catch a wrong MongoDB fact? |
+|-------|:-----:|-----------------|:---:|
+| `test_skill_contract.py` | 57 | Document structure: required sections, frontmatter, thresholds | **No** — structure only |
+| `test_golden_scenarios.py` | 54 | Fixture shape and metadata consistency | **No** — shape only |
+| `test_lint_migration.py` | 115 | The real checker's output on real JavaScript, per rule, both directions — **and every fixture's snippet run through it** | **Yes**, for anything a rule covers |
+| `test_mongo_facts_drift.py` | 110 | Verified claims present, superseded phrasings absent, **and cross-file consistency** | **Yes**, by pinning |
+| `test_go_examples_compile.py` | 11 | **The Go blocks, gofmt-parsed and built** against a stubbed driver module | **Yes** — it is what would have caught the `wcColl` handle that could not compile |
+| `test_mongo_server_matrix.py` | 108 | **A live MongoDB 7.0 and 8.0, as real 3-member replica sets** | **Yes — the only suite that can catch a fact no rule covers** |
 
-## 3. Coverage Summary
+`scripts/mutation_sweep.py`: **32/32 mutations killed, 0 survivors**, run against a
+private copy of the skill directory so the real worktree is never written to.
 
-| Category | Covered | Total | Status |
-|----------|:-------:|:-----:|--------|
-| Mandatory Gates | 4/4 | 4 | 100% |
-| Depth Levels | 3/3 | 3 | 100% |
-| Degradation Modes | 4/4 | 4 | 100% |
-| Checklist Subsections | 4/4 | 4 | 100% |
-| Scorecard Tiers | 3/3 | 3 | 100% |
-| Output Contract Sections | 9/9 | 9 | 100% |
-| Anti-Examples (inline) | 6/6 | 6 | 100% |
-| Anti-Examples (extended) | 7/7 | 7 | 100% |
-| Reference Files | 3/3 | 3 | 100% |
-| Cross-File Terminology | 6/6 | 6 | 100% |
-| SKILL.md Line Budget | 321/420 | — | under budget |
-| Critical Defect Fixtures | 3/3 | 3 | 100% |
-| Standard Defect Fixtures | 5/5 | 5 | 100% |
-| Good Practice Fixtures | 2/2 | 2 | 100% |
-| Degradation/Workflow | 3/3 | 3 | 100% |
-| **Previously Medium gaps** | | | |
-| reshardCollection fixture | ✅ | — | MONGO-012 covers end-to-end |
-| Sharded chunk migration fixture | ✅ | — | MONGO-013 covers bulk write + balancer |
+### Why the last row is a different kind of test
 
-**Grand Total: 97 tests** (50 contract + 47 golden)
+A mutation sweep proves an assertion is load-bearing. It cannot prove the assertion is
+*true* — it only shows the suite and the document agree with each other. Everything in
+the table below was found the first time a server was actually asked:
 
-## 4. Known Coverage Gaps
+| Claim as documented | What a live server showed |
+|---------------------|---------------------------|
+| `lastId.valueOf().substring(0,24)` | `valueOf()` returns an **object**; the loop threw `TypeError` on iteration 1 |
+| that range would batch by `_id` | `ObjectId(hex).equals(id)` is true, so `{$gt: id, $lte: id}` is **always empty** |
+| "`$gt`/sort agree, so any `_id` type works" | `$gt` **type-brackets**: 30 ints + 30 ObjectIds, batch 25 → **30 documents stranded** |
+| index the backfill with a partial `_id` index | rejected 3 ways: `partialFilterExpression` invalid on `_id`, `$exists: false` unsupported in it *at all*, and `_id_` cannot be dropped |
+| "connect to the secondary and createIndex" | `NotWritablePrimary` — the procedure cannot execute |
+| TTL change requires dropIndex + createIndex | `collMod` changes `expireAfterSeconds` in place (5.1+, i.e. every supported major) |
+| `moderate` "only validates new writes" | insert **rejected**; update of a *compliant* doc **rejected**; only an already-invalid doc is exempt |
+| "MongoDB has no transactional DDL" | `createCollection` and `createIndex` both commit inside a transaction |
+| WiredTiger tickets default to 128 each | `totalTickets` was **10**; and the metric moved from `wiredTiger.concurrentTransactions` (7.0) to `queues.execution` (8.0) |
+| `rs.printReplicationInfo()` for lag | prints the connected member's **oplog window**, not anyone's lag |
 
-| Gap | Priority | Rationale |
-|-----|----------|-----------|
-| TTL index modification fixture | Low | Requires drop + recreate; minor coverage gap |
-| Multi-tenant field migration fixture | Low | Tenant prefix mentioned in source skill but not exercised |
-| Cross-database renameCollection fixture | Low | Rare operation; mentioned in DDL matrix |
-| compact operation fixture | Low | Dangerous but rare; mentioned in DDL matrix |
+**Three members, not one.** A single-node replica set answers `rs.*` and satisfies
+`w: "majority"`, which is enough for the ObjectId / TTL / validator / transaction facts.
+It has no secondary, so "a secondary rejects `createIndex`" *skipped* and "the default
+build replicates" only re-read the primary's own index list. The harness now starts three
+members per major and connects to a secondary with `directConnection=true`; those tests
+**fail** rather than skip when no secondary is reachable.
+
+**A skipped matrix is not a passed matrix, and a partial one is not a full one.**
+
+| Situation | `mongo_server_harness.sh` | `run_regression.sh` |
+|-----------|:---:|:---:|
+| Ran on both majors, passed | 0 | 0 |
+| A test failed | 1 | 1 |
+| No server reachable — nothing ran | 2 | 3 (`INCOMPLETE`) |
+| Ran, but not on every requested major | 3 (`INCOMPLETE VERIFICATION`) | 3 (`PARTIAL`) |
+
+## 2. Checker rules (`scripts/lint_migration.py`)
+
+Every rule has a source, a violating input and a compliant input;
+`test_lint_migration.py::TestRuleRegistry` fails if one is added without them.
+
+| Code | Sev | Rule | Grounding |
+|------|-----|------|-----------|
+| MG001 | critical | unbounded `updateMany`/`deleteMany` with no batching loop | one write holds a ticket for its whole duration |
+| MG002 | critical | ObjectId range rebuilt from its own hex — an empty range | measured: `ObjectId(hex).equals(id)` |
+| MG003 | critical | `ObjectId.valueOf()` treated as a string | measured: returns an object |
+| MG004 | critical | `createIndex` aimed at a replica-set secondary | measured: `NotWritablePrimary` |
+| MG016 | critical | `$gt` keyset over `_id` with no single-type guarantee | measured: type bracketing strands a whole type |
+| MG005 | standard | write concern not stated on a migration write | not the default for every deployment |
+| MG006 | standard | resume point taken from `max(_id)` of migrated docs | pre-migrated high keys hide unfinished work |
+| MG007 | standard | `validationLevel: strict` before a backfill | strict validates every write against legacy docs |
+| MG008 | standard | unique index with no duplicate pre-check | `createIndex` fails on existing duplicates |
+| MG009 | standard | TTL change by dropIndex + createIndex | `collMod` does it in place from 5.1 |
+| MG010 | standard | `$unset` described as reversible | the previous value is gone unless captured |
+| MG011 | standard | `validate()` as a routine migration step | takes an exclusive collection lock |
+| MG015 | standard | index build on a large collection with no lag monitoring | the build runs on every member |
+| MG012 | hygiene | `rs.printReplicationInfo()` used to read lag | measured: it reports the oplog window |
+| MG013 | hygiene | ticket metric read from the version-wrong path | measured: path differs on 7.0 vs 8.0 |
+| MG014 | hygiene | no throttle between backfill batches | an unthrottled loop is an unbounded write |
+
+MG010 has no automatable violating input — it is about prose, and the fact-drift guards
+cover it. `TestRuleRegistry::test_every_rule_has_a_test_case` asserts that exemption
+explicitly rather than letting it pass unnoticed.
+
+## 3. Golden fixtures
+
+Each fixture declares `expected_lint_codes`, and
+`TestGoldenFixturesDriveTheChecker::test_declared_codes_match_the_checker` runs the
+snippet through the real checker and compares. The previous suite asserted that a
+fixture's own `expected_feedback` contained the word *"no violation"* — a string the
+fixture author wrote, with nothing executed. That is how MONGO-008 shipped an
+unexecutable procedure labelled *good practice*.
+
+Two properties now hold by assertion, not by labelling:
+
+- every `good_practice` fixture emits **zero** findings;
+- every `defect` fixture trips at least one rule, so a defect no rule covers is a stated
+  coverage gap rather than a silent one.
+
+## 4. What none of this establishes
+
+- **Sharded clusters.** No `mongos`/config-server harness. Every sharding claim
+  (`reshardCollection`, `refineCollectionShardKey`, chunk migration) rests on the manual.
+- **Scale.** Probes run on hundreds of documents. Nothing here measures how a build or a
+  backfill behaves at 50M.
+- **Lag under load.** The matrix confirms replication *happens*; it does not measure lag
+  during a build, so every duration in this skill is a conditional estimate.
+- **The checker's semantics.** It reads JavaScript syntactically. `--limitations` lists
+  what it cannot decide, and a clean run prints `NOT a proof of safety` rather than `OK`.

@@ -83,7 +83,9 @@ db.runCommand({
 
 **Right approach:**
 ```javascript
-// Use "moderate" first: validates only inserts and updates, not existing doc shape
+// Use "moderate" first. It exempts ONLY updates to documents that ALREADY fail
+// validation -- inserts and updates that would break a compliant document are
+// still rejected. That exemption is what lets a validator land over legacy data.
 db.runCommand({
   collMod: "orders",
   validator: {$jsonSchema: {required: ["customer_id", "amount", "status"]}},
@@ -129,5 +131,7 @@ db.orders.createIndex({field: 1})
 ```javascript
 // Monitor lag during build
 rs.printSecondaryReplicationInfo()
-// If lag > threshold, consider rolling build pattern (one member at a time)
+// If lag stays high, throttle or reschedule the build. A rolling build is NOT the
+// remedy: it takes each member out of the set, costing a voting member for the whole
+// window, and it is slower. Reach for it only on measured CPU or cache pressure.
 ```

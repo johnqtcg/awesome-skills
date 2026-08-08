@@ -301,3 +301,139 @@ class TestMONGO012:
     def test_expected_mentions_cutover(self):
         fb = self.fix["expected_feedback"].lower()
         assert "cutover" in fb or "lock" in fb
+
+
+class TestCoverageDocMatchesReality:
+    """COVERAGE.md is prose about machine-checkable facts, which is exactly the shape
+    that drifts: it still claimed 97 tests, two suites, and a TTL rule that was false,
+    long after the checker, the fact guards, the live matrix and the mutation sweep
+    existed. Everything derivable is derived."""
+
+    import pathlib as _p
+    COVERAGE = _p.Path(__file__).resolve().parent / "COVERAGE.md"
+
+    def _text(self):
+        return self.COVERAGE.read_text(encoding="utf-8")
+
+    def _mod(self, name, rel):
+        import importlib.util, sys, pathlib
+        path = pathlib.Path(__file__).resolve().parents[1] / rel
+        spec = importlib.util.spec_from_file_location(name, path)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[name] = mod
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_every_stated_mutation_count_agrees_with_the_sweep(self):
+        """Checks EVERY count in the file, not that the right one appears somewhere: a
+        correct figure elsewhere in the document hides a contradictory one."""
+        import re
+        n = len(self._mod("mongo_sweep_probe", "mutation_sweep.py").MUTATIONS)
+        text = self._text()
+        stated = {int(m.group(1)) for m in re.finditer(r"\b(\d+)\s*mutations\b", text)}
+        for m in re.finditer(r"\b(\d+)\s*/\s*(\d+)\s+mutations\s+killed", text):
+            stated.update({int(m.group(1)), int(m.group(2))})
+        assert stated == {n}, f"sweep defines {n}; COVERAGE.md states {sorted(stated)}"
+
+    def test_rule_table_matches_the_checker_registry(self):
+        text = self._text()
+        documented = {}
+        for ln in text.splitlines():
+            if ln.startswith("| MG") and ln.count("|") >= 4:
+                parts = [c.strip() for c in ln.split("|")]
+                documented[parts[1]] = parts[2]
+        actual = {r.code: r.severity
+                  for r in self._mod("mongo_lint_probe", "lint_migration.py").RULES}
+        assert documented == actual, (
+            "COVERAGE.md's rule table has drifted from the registry.\n"
+            f"  only in doc:      {sorted(set(documented) - set(actual))}\n"
+            f"  only in registry: {sorted(set(actual) - set(documented))}"
+        )
+
+    def test_stated_per_suite_and_total_offline_counts_are_current(self):
+        """The gap a reviewer found: the table said 47 golden tests and 251 offline
+        while pytest collected 51 and 255, and nothing asserted either number, so the
+        wrong figures rode along with a fully green suite. The live matrix is excluded --
+        its count scales with how many servers happen to be reachable."""
+        import subprocess, sys, pathlib as _pl
+        tests_dir = _pl.Path(__file__).resolve().parent
+        text = self._text()
+        total = 0
+        for suite in sorted(tests_dir.glob("test_*.py")):
+            if suite.name == "test_mongo_server_matrix.py":
+                continue
+            out = subprocess.run(
+                [sys.executable, "-m", "pytest", str(suite), "--collect-only", "-q",
+                 "-p", "no:cacheprovider"],
+                capture_output=True, text=True, cwd=tests_dir.parents[1])
+            n = sum(1 for ln in out.stdout.splitlines() if "::" in ln)
+            total += n
+            row = next((ln for ln in text.splitlines()
+                        if ln.startswith(f"| `{suite.name}` |")), None)
+            assert row is not None, f"{suite.name} has no row in COVERAGE.md"
+            declared = int(row.split("|")[2].strip())
+            assert declared == n, (
+                f"{suite.name}: COVERAGE.md says {declared}, pytest collects {n}"
+            )
+        assert f"**{total} offline tests**" in text, (
+            f"COVERAGE.md must state '**{total} offline tests**'"
+        )
+
+    def test_stated_live_count_is_current_when_the_matrix_is_full(self):
+        """The live figure drifted twice (104 stated, 108 collected) because the updater
+        deliberately skipped it and nothing asserted it. Asserted now — but only when
+        every supported major is reachable, since the count is a function of that."""
+        import importlib.util, subprocess, sys, pathlib as _pl
+        tests_dir = _pl.Path(__file__).resolve().parent
+        spec = importlib.util.spec_from_file_location("ms_cov", tests_dir / "mongo_server.py")
+        ms = importlib.util.module_from_spec(spec)
+        sys.modules["ms_cov"] = ms
+        spec.loader.exec_module(ms)
+        found = ms.discover_all()
+        if len(found) != len(ms.SUPPORTED):
+            pytest.skip(f"{len(found)}/{len(ms.SUPPORTED)} majors reachable; the live "
+                        "count is environment-dependent")
+        out = subprocess.run(
+            [sys.executable, "-m", "pytest", str(tests_dir / "test_mongo_server_matrix.py"),
+             "--collect-only", "-q", "-p", "no:cacheprovider"],
+            capture_output=True, text=True, cwd=tests_dir.parents[1])
+        n = sum(1 for ln in out.stdout.splitlines() if "::" in ln)
+        text = self._text()
+        row = next((ln for ln in text.splitlines()
+                    if ln.startswith("| `test_mongo_server_matrix.py` |")), None)
+        assert row is not None
+        assert int(row.split("|")[2].strip()) == n, (
+            f"COVERAGE.md states {row.split('|')[2].strip()} live tests; "
+            f"pytest collects {n}. Run update_coverage_counts.py with the full matrix up."
+        )
+        assert f"{n} across MongoDB" in text, f"the prose must also state {n}"
+
+    def test_every_checker_rule_has_a_mutation(self):
+        """"22/22 killed" does not mean every rule was mutation-verified. MG016 was
+        added without one, so the sweep could not have detected its removal."""
+        import re
+        sweep = self._mod("mongo_sweep_probe2", "mutation_sweep.py")
+        blob = " ".join(m.anchor + " " + m.replacement + " " + m.breaks
+                        for m in sweep.MUTATIONS)
+        rules = {r.code for r in self._mod("mongo_lint_probe2", "lint_migration.py").RULES}
+        # MG010 is prose-only (see TestRuleRegistry); the drift guards cover it.
+        uncovered = sorted(r for r in rules - {"MG010"} if r not in blob)
+        assert not uncovered, (
+            f"checker rules with no mutation, so their removal would go unnoticed: "
+            f"{uncovered}"
+        )
+
+    def test_fixture_and_fact_counts_are_current(self):
+        import glob, pathlib as _pl
+        text = self._text()
+        n_fix = len(glob.glob(str(_pl.Path(__file__).resolve().parent / "golden" / "*.json")))
+        assert f"{n_fix} golden fixtures" in text, f"must state '{n_fix} golden fixtures'"
+        n_facts = len(self._mod("mongo_facts_probe", "tests/test_mongo_facts_drift.py").FACTS)
+        assert f"{n_facts} pinned facts" in text, f"must state '{n_facts} pinned facts'"
+
+    def test_it_no_longer_claims_the_superseded_shape(self):
+        """The stale version described two suites and 97 tests."""
+        text = self._text()
+        assert "97 tests" not in text or "Before 2026-08" in text
+        for gone in ["TTL modification requires drop", "rolling fixture is good practice"]:
+            assert gone not in text
