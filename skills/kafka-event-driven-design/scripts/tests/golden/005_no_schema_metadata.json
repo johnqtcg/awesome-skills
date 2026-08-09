@@ -4,9 +4,21 @@
   "type": "defect",
   "severity": "standard",
   "code_snippet": "// Event payload — just the business data, no metadata\nevent := map[string]interface{}{\n    \"order_id\": order.ID,\n    \"amount\":   order.Amount,\n    \"status\":   \"created\",\n}\ndata, _ := json.Marshal(event)\nproducer.SendMessage(&sarama.ProducerMessage{\n    Topic: \"order.events\",\n    Key:   sarama.StringEncoder(order.ID),\n    Value: sarama.ByteEncoder(data),\n})",
-  "context": {"kafka_version": "3.0", "schema": "JSON", "delivery": "at-least-once"},
-  "expected_feedback": "Standard: Event payload lacks mandatory metadata fields. Without event_id, consumer deduplication is impossible (no unique key to check 'already processed'). Without timestamp, event ordering and debugging across services requires Kafka's internal timestamp (which reflects produce-time, not business-event-time). Without source and correlation_id, distributed tracing is blind. Add: event_id (UUID), event_type, timestamp (ISO-8601), source (service name), correlation_id (trace ID), schema_version.",
+  "context": {
+    "kafka_version": "3.0",
+    "schema": "JSON",
+    "delivery": "at-least-once"
+  },
+  "expected_feedback": "Standard: the event carries no identity or type metadata. event_id is the load-bearing omission — without it consumers have no dedup key, and at-least-once delivery makes deduplication mandatory unless every consumer operation is provably idempotent. event_type matters on a multi-type topic for routing without deserialising. timestamp, source and correlation_id are strong defaults; prefer carrying trace context in Kafka record headers so it is readable without deserialisation. schema_version is redundant when Schema Registry is in use — the wire format already carries the schema ID — so add it only for raw-JSON topics.",
   "violated_rule": "Schema includes event metadata",
-  "coverage_rules": ["event_id", "event_type", "timestamp", "source"],
-  "reference": "SKILL.md"
+  "coverage_rules": [
+    "event_id",
+    "event_type",
+    "timestamp",
+    "source"
+  ],
+  "reference": "SKILL.md",
+  "snippet_lang": "go",
+  "detector_rules": [],
+  "checklist_anchor": "Event carries the metadata its consumers actually need"
 }

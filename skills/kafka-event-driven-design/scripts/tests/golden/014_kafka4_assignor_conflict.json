@@ -1,0 +1,29 @@
+{
+  "id": "KAFKA-014",
+  "title": "Kafka 4.x consumer protocol enabled alongside configs it disables",
+  "type": "defect",
+  "severity": "standard",
+  "snippet_lang": "properties",
+  "code_snippet": "group.protocol=consumer\npartition.assignment.strategy=org.apache.kafka.clients.consumer.CooperativeStickyAssignor\nsession.timeout.ms=45000\nheartbeat.interval.ms=3000\nmax.poll.interval.ms=600000",
+  "context": {
+    "kafka_version": "4.1",
+    "client": "kafka-clients 4.1.0",
+    "schema": "Protobuf",
+    "delivery": "at-least-once",
+    "throughput": "8000/s"
+  },
+  "expected_feedback": "Standard: three of these five lines are dead config. Under group.protocol=consumer (KIP-848, GA in 4.0) partition.assignment.strategy, session.timeout.ms and heartbeat.interval.ms are no longer usable, along with enforceRebalance(). The team believes it has configured cooperative rebalancing and tuned its failure detection; in reality the server decides both. Assignment is chosen by the broker's group.consumer.assignors (uniform by default — the equivalent of CooperativeStickyAssignor); a client selects a different one with group.remote.assignor. Heartbeat and session timeout are now the broker configs group.consumer.heartbeat.interval.ms and group.consumer.session.timeout.ms, so tuning them is no longer a change the application team can make alone. max.poll.interval.ms is still a client config and still applies. Also confirm no custom client-side assignor is in use — those are not supported under the new protocol (KAFKA-18327).",
+  "violated_rule": "group.protocol recorded and configuration matched to it",
+  "coverage_rules": [
+    "group.protocol",
+    "group.remote.assignor",
+    "KIP-848",
+    "uniform"
+  ],
+  "detector_rules": [
+    "KL018",
+    "KL022"
+  ],
+  "checklist_anchor": "the `classic` and `consumer` (KIP-848, 4.0+) protocols take **disjoint** config",
+  "reference": "references/version-client-matrix.md"
+}

@@ -1,0 +1,28 @@
+{
+  "id": "KAFKA-020",
+  "title": "Consumer lag alert copied as a raw message count with no freshness SLO behind it",
+  "type": "defect",
+  "severity": "standard",
+  "snippet_lang": "yaml",
+  "code_snippet": "# alerting rule inherited from another team's runbook\n- alert: ConsumerLagHigh\n  expr: kafka_consumergroup_lag > 10000\n  for: 5m\n  labels: {severity: page}\n  annotations:\n    summary: \"Consumer lag high\"",
+  "context": {
+    "kafka_version": "3.7",
+    "client": "kafka-clients 3.7.0",
+    "schema": "Avro",
+    "delivery": "at-least-once",
+    "throughput": "40/s per partition"
+  },
+  "expected_feedback": "Standard: the threshold is a copied constant, not a derived one, and at this throughput it is close to meaningless. 10 000 messages is four seconds of backlog for a 2 500/s consumer and over four minutes for this one at 40/s per partition — the same rule pages instantly on one service and never on another. Alert on time-to-drain instead: lag_seconds is roughly records_lag_max / records_consumed_rate, and the threshold comes from the freshness the downstream consumer has committed to. If no freshness SLO exists, that absence is the actual finding; a number invented mid-incident is not a substitute. Add a trend alert as well — steadily rising lag_seconds at any absolute value means consumption is structurally slower than production and will breach retention eventually, which a fixed ceiling only catches once it is nearly too late. Set the `for:` duration longer than one deploy/rebalance cycle so a rolling restart does not page anyone.",
+  "violated_rule": "Consumer lag monitoring with an alert threshold defined",
+  "coverage_rules": [
+    "lag_seconds",
+    "records_consumed_rate",
+    "SLO",
+    "trend"
+  ],
+  "detector_rules": [
+    "KL024"
+  ],
+  "checklist_anchor": "a copied message count is meaningless across workloads",
+  "reference": "references/consumer-failure-modes.md"
+}

@@ -4,8 +4,21 @@
   "type": "degradation_scenario",
   "severity": "none",
   "code_snippet": "// Someone shared this producer code without context\nproducer.SendMessage(&sarama.ProducerMessage{\n    Topic: \"events\",\n    Value: sarama.ByteEncoder(data),\n})",
-  "context": {"kafka_version": "unknown", "schema": "unknown", "delivery": "unknown", "ordering": "unknown"},
-  "expected_feedback": "Degraded mode: no Kafka version, schema format, delivery guarantee, or ordering requirement provided. Cannot evaluate design correctness without knowing the delivery guarantee (at-least-once requires idempotent consumers; exactly-once requires transactional setup). Flag: null partition key (Standard — no ordering), generic topic name 'events' (Hygiene), no schema metadata visible. All recommendations are conditional on unknown requirements. Must NOT claim the design is correct without knowing what 'correct' means for this use case. Uncovered Risks must list all unknowns.",
-  "coverage_rules": ["Degraded", "never claim", "Uncovered Risk"],
-  "reference": "SKILL.md"
+  "context": {
+    "kafka_version": "unknown",
+    "schema": "unknown",
+    "delivery": "unknown",
+    "ordering": "unknown"
+  },
+  "expected_feedback": "Degraded mode: no Kafka version, client library, schema format, delivery guarantee, or ordering requirement provided. Producer durability (item 5) is NOT SCOREABLE — its minimum context is the client library and its version, so report both branches (silence is safe on kafka-clients >=3.0 and a data-loss defect on sarama) rather than guessing. The block is per item, not global: the null partition key (Standard - no ordering requirement stated), the generic topic name 'events' (Hygiene), and the missing schema metadata are all still scoreable from domain context and must be reported. Cannot evaluate delivery correctness without knowing the guarantee (at-least-once requires idempotent consumers; exactly-once requires transactional setup). Must NOT claim the design is correct without knowing what 'correct' means for this use case. Uncovered Risks must list every unknown and the specific items it left NOT SCOREABLE.",
+  "coverage_rules": [
+    "Degraded",
+    "NOT SCOREABLE",
+    "Uncovered Risks",
+    "client library"
+  ],
+  "reference": "SKILL.md",
+  "snippet_lang": "go",
+  "detector_rules": [],
+  "checklist_anchor": "Minimum context per scored item"
 }

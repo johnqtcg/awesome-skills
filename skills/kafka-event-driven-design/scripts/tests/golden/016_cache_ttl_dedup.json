@@ -1,0 +1,15 @@
+{
+  "id": "KAFKA-016",
+  "title": "Cache-TTL deduplication presented as the consumer idempotency mechanism",
+  "type": "defect",
+  "severity": "critical",
+  "snippet_lang": "go",
+  "code_snippet": "func handleEvent(ctx context.Context, ev Event) error {\n    if seen, _ := cache.Exists(ctx, \"processed:\"+ev.EventID); seen {\n        return nil\n    }\n    if err := chargeCustomer(ctx, ev); err != nil {\n        return err\n    }\n    cache.Set(ctx, \"processed:\"+ev.EventID, true, 24*time.Hour)\n    return nil\n}",
+  "context": {"kafka_version": "3.5", "client": "sarama", "schema": "JSON", "delivery": "at-least-once", "throughput": "400/s"},
+  "expected_feedback": "Critical: this looks like idempotency and is not. Three independent holes, each of which double-charges a customer. (1) Race: Exists-then-Set is check-then-act — two consumers after a rebalance, or two goroutines, both pass Exists before either reaches Set, and both charge. Use an atomic SET NX and treat 'was not set' as permission to proceed. (2) Failure window: the process can die after chargeCustomer and before Set, so redelivery charges again. (3) TTL: any redelivery after 24h — replay, offset reset, DLQ reprocessing, a consumer down over a weekend — passes the check cleanly. Fix: commit the dedup marker in the SAME database transaction as the side effect (INSERT ... ON CONFLICT DO NOTHING plus the business write, commit together, commit the Kafka offset only after that), or make the operation naturally idempotent. Cache dedup is a legitimate optimisation to keep duplicate work cheap; it must not be scored as satisfying the idempotency requirement. Note the charge is an external API call, so no local transaction covers it — that needs an idempotency key the payment provider dedups on.",
+  "violated_rule": "Consumer survives duplicate delivery",
+  "coverage_rules": ["race", "TTL", "idempotency key", "share one transaction"],
+  "detector_rules": ["KL020"],
+  "checklist_anchor": "Cache-TTL dedup alone does not satisfy this",
+  "reference": "references/event-schema-patterns.md"
+}

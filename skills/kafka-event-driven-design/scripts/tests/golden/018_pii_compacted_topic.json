@@ -1,0 +1,15 @@
+{
+  "id": "KAFKA-018",
+  "title": "PII on a compacted, infinite-retention topic with no deletion path",
+  "type": "defect",
+  "severity": "standard",
+  "snippet_lang": "properties",
+  "code_snippet": "# topic: customer.profile.changed  (readable by any principal in the cluster)\ncleanup.policy=compact\nretention.ms=-1\n# payload: {customer_id, email, phone, national_id, home_address, updated_at}",
+  "context": {"kafka_version": "3.8", "client": "kafka-clients 3.8.0", "schema": "Avro", "delivery": "at-least-once", "throughput": "50/s", "data_sensitivity": "PII, GDPR in scope"},
+  "expected_feedback": "Standard, escalating to Critical if an erasure obligation already exists: the topic is a durable, replayable, cluster-readable copy of identity data with no mechanism behind a deletion request. Compaction retains the latest value per key forever, so a GDPR erasure has nothing to act on — this is a design problem, not an ops task. Fix, in order of preference: (1) publish the subject ID and let authorised consumers look up details, so the log carries references rather than identities; (2) if personal fields must travel, encrypt per-subject and destroy the key on erasure (crypto-shredding) — the only approach that actually works against an immutable log; (3) restrict readers with topic ACLs, since a topic every principal can read is not access-controlled; (4) if compaction stays, the deletion path is a tombstone keyed identically to the data, and delete.retention.ms must give consumers long enough to observe it before the tombstone is collected. Classify data sensitivity at Gate 1, before the topic is designed.",
+  "violated_rule": "Sensitive data in events is classified and controlled",
+  "coverage_rules": ["ACL", "tombstone", "retention", "crypto-shredding"],
+  "detector_rules": [],
+  "checklist_anchor": "Sensitive data in events is classified and controlled",
+  "reference": "references/consumer-anti-examples.md"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "KAFKA-015",
+  "title": "Database write placed inside a Kafka transaction — an atomicity boundary Kafka cannot cover",
+  "type": "defect",
+  "severity": "critical",
+  "snippet_lang": "text",
+  "code_snippet": "Design note from the RFC under review:\n\n  To make the order insert and the order.created event atomic we will use\n  Kafka transactions so the DB write and the outbox publish commit together:\n  initTransaction / beginTransaction around both, so either both land or\n  neither does.",
+  "context": {"kafka_version": "3.7", "client": "kafka-clients 3.7.0", "schema": "Avro", "delivery": "at-least-once", "throughput": "600/s"},
+  "expected_feedback": "Critical: this describes something Kafka cannot do. A Kafka transaction spans Kafka partitions and consumer offset commits only — it has no visibility into a PostgreSQL row and cannot roll one back. Wrapping a db.Exec in beginTransaction/commitTransaction compiles and runs while providing none of the claimed atomicity: a failure after the DB commit and before commitTransaction leaves the row written and the event absent. Use the outbox pattern instead: business rows and the outbox row commit in ONE database transaction, then a separate relay reads unpublished rows, produces to Kafka, waits for the broker ack, and only then marks them published. Order those two relay steps that way — marking first turns a crash into permanent event loss. The outbox is at-least-once by construction (publish and mark are two commits), so consumers still need idempotency; it removes the dual-write window, not the dedup requirement.",
+  "violated_rule": "Atomicity mechanism matches the boundary being crossed",
+  "coverage_rules": ["outbox", "database transaction", "at-least-once"],
+  "detector_rules": ["KL010"],
+  "checklist_anchor": "**A Kafka transaction cannot include a database write.**",
+  "reference": "references/event-schema-patterns.md"
+}

@@ -1,0 +1,15 @@
+{
+  "id": "KAFKA-013",
+  "title": "DLQ publish error discarded before the offset advances — poison message becomes a lost message",
+  "type": "defect",
+  "severity": "critical",
+  "snippet_lang": "go",
+  "code_snippet": "func consume(session sarama.ConsumerGroupSession, msg *sarama.ConsumerMessage) {\n    if err := process(msg); err != nil {\n        if getRetryCount(msg) >= maxRetries {\n            producer.SendMessage(dlqMsg)\n            session.MarkMessage(msg, \"\")\n            return\n        }\n    }\n    session.MarkMessage(msg, \"\")\n}",
+  "context": {"kafka_version": "3.6", "client": "sarama", "schema": "JSON", "delivery": "at-least-once", "throughput": "1500/s"},
+  "expected_feedback": "Critical: the DLQ publish result is discarded and the offset is committed regardless. If the DLQ produce fails — broker unavailable, DLQ topic under-replicated, message larger than max.message.bytes — the consumer advances past a message that now exists nowhere. This is silent data loss on the exact path built to prevent data loss, and the happy path is indistinguishable from the broken one. Fix: check the error and do not commit on failure (blocking the partition and alerting is the correct outcome — better a stalled consumer than a deleted event). Give the DLQ producer the same durability config as the main producer (acks=all, idempotent) and give the DLQ topic the same replication factor. Note that even when correct, the DLQ publish and the offset commit are two commits, so a crash between them re-publishes to the DLQ — the replayer must dedup on event_id or original topic/partition/offset.",
+  "violated_rule": "A defined, owned policy for unprocessable messages",
+  "coverage_rules": ["DLQ", "publish", "offset", "data loss"],
+  "detector_rules": ["KL021"],
+  "checklist_anchor": "an unchecked publish error before the offset advances is itself a FAIL",
+  "reference": "references/consumer-failure-modes.md"
+}

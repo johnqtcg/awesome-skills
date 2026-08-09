@@ -1,0 +1,28 @@
+{
+  "id": "KAFKA-021",
+  "title": "Static membership adopted as a blanket rebalance cure, with the default session timeout left in place",
+  "type": "defect",
+  "severity": "standard",
+  "snippet_lang": "properties",
+  "code_snippet": "# \"Static membership means consumer restarts don't trigger rebalance,\n#  so rolling deploys are now free.\"\ngroup.instance.id=${POD_IP}\n# session.timeout.ms left at the default",
+  "context": {
+    "kafka_version": "3.6",
+    "client": "kafka-clients 3.6.0",
+    "schema": "Protobuf",
+    "delivery": "at-least-once",
+    "throughput": "12000/s"
+  },
+  "expected_feedback": "Standard, with one part that silently disables the feature entirely. (1) The claim is too strong: a static member avoids a rebalance only for a restart that completes within `session.timeout.ms`. Kafka's own wording is that it is used 'in combination with a larger session timeout' to survive transient unavailability. Past that timeout the coordinator evicts the member and the group rebalances exactly as before, so leaving the timeout at its default while image pull plus JVM warm-up takes longer than that buys nothing. (2) Raising the timeout is a genuine trade, not a free win — real failures go undetected for that long and those partitions stall meanwhile. Size it from measured restart time and say what detection latency you accepted. (3) `group.instance.id=${POD_IP}` is the defect that produces no error: the ID must be stable across restarts, and a pod IP is reassigned on every restart, so each restart joins as a brand-new member and rebalances. Derive it from a stable ordinal (StatefulSet index, shard number). It must also be unique — two live consumers sharing one ID fence each other. (4) On Kafka 4.0+ with `group.protocol=consumer`, `session.timeout.ms` is a broker config and is no longer yours to set.",
+  "violated_rule": "Consumer rebalance behavior stated for the protocol in use",
+  "coverage_rules": [
+    "group.instance.id",
+    "session.timeout.ms",
+    "static member",
+    "stable"
+  ],
+  "detector_rules": [
+    "KL025"
+  ],
+  "checklist_anchor": "it buys a window, it does not abolish rebalancing",
+  "reference": "references/consumer-failure-modes.md"
+}

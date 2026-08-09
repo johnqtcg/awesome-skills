@@ -3,10 +3,22 @@
   "title": "Null partition key — events for same entity scattered across partitions",
   "type": "defect",
   "severity": "standard",
-  "code_snippet": "producer.SendMessage(&sarama.ProducerMessage{\n    Topic: \"order.events\",\n    Value: sarama.ByteEncoder(eventData),\n    // Key is nil → round-robin across partitions\n})",
-  "context": {"kafka_version": "3.0", "schema": "JSON", "delivery": "at-least-once", "ordering": "per-order"},
-  "expected_feedback": "Standard: Partition key is null — Kafka will round-robin messages across partitions. With per-order ordering requirement, events for the same order will land in different partitions, processed by different consumers at different speeds. Result: order.created may be processed AFTER order.shipped. Fix: set partition key to the entity ID (order_id) so all events for the same order go to the same partition and are consumed in order.",
+  "code_snippet": "producer.SendMessage(&sarama.ProducerMessage{\n    Topic: \"order.events\",\n    Value: sarama.ByteEncoder(eventData),\n    // Key is nil → no per-key ordering guarantee\n})",
+  "context": {
+    "kafka_version": "3.0",
+    "schema": "JSON",
+    "delivery": "at-least-once",
+    "ordering": "per-order"
+  },
+  "expected_feedback": "Standard: partition key is nil, so per-order ordering is lost — events for one order can land on different partitions and be processed by different consumers at different speeds, letting order.shipped be applied before order.created. Note the placement is client-specific and is NOT round-robin: the Java built-in partitioner sticks to one partition until batch.size is reached, librdkafka sticks for sticky.partitioning.linger.ms (default 10ms), and sarama's hash partitioner falls back to random. The defect is the lost ordering, not any particular distribution shape. Fix: set Key to the entity ID (order_id) so all events for one order share a partition.",
   "violated_rule": "Partition key matches ordering requirement",
-  "coverage_rules": ["partition key", "ordering", "round-robin"],
-  "reference": "SKILL.md"
+  "coverage_rules": [
+    "partition key",
+    "ordering",
+    "round-robin"
+  ],
+  "reference": "SKILL.md",
+  "snippet_lang": "go",
+  "detector_rules": [],
+  "checklist_anchor": "Null key ≠ round-robin."
 }

@@ -1,0 +1,15 @@
+{
+  "id": "KAFKA-019",
+  "title": "Event-sourced log compacted by aggregate ID — replay reconstructs the last event, not the state",
+  "type": "defect",
+  "severity": "critical",
+  "snippet_lang": "properties",
+  "code_snippet": "# topic: account.events — event sourcing, key = account_id\n# \"Event sourcing requires compacted topics, and compaction gives us\n#  unlimited retention for free.\"\ncleanup.policy=compact\nmin.cleanable.dirty.ratio=0.5\n# replay: read the topic from offset 0 to rebuild account balances",
+  "context": {"kafka_version": "3.8", "client": "kafka-clients 3.8.0", "schema": "Avro", "delivery": "at-least-once", "throughput": "200/s"},
+  "expected_feedback": "Critical, and silent: `compact` retains only the latest value per key. The key here is account_id — the same choice that gives per-aggregate ordering — so the cleaner deletes every earlier account.credited / account.debited for an account and keeps one. Replay then rebuilds the most recent event rather than the balance, and nothing errors: writes succeed, consumers run, and the history disappears the next time the cleaner passes a segment. The two requirements (order by aggregate, retain all history) are in direct conflict on one topic. Fix: split them. The event log is append-only with `cleanup.policy=delete` and retention long enough to replay from zero — or an empty `cleanup.policy` list, which disables cleanup entirely and is the precise way to say 'never delete'. Materialise state into a separate compacted snapshot topic keyed by the same aggregate ID, where collapsing to the latest value is the point. Pair unbounded retention with tiered storage rather than local disk. (Keying the log by a unique event ID technically defeats compaction, but it also forfeits per-aggregate ordering and reclaims nothing — it is not a compromise.)",
+  "violated_rule": "Retention policy matches use case",
+  "coverage_rules": ["cleanup.policy", "snapshot", "aggregate ID", "tiered storage"],
+  "detector_rules": ["KL023"],
+  "checklist_anchor": "For **event sourcing, use two topics**",
+  "reference": "references/event-schema-patterns.md"
+}

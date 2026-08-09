@@ -4,9 +4,21 @@
   "type": "defect",
   "severity": "standard",
   "code_snippet": "// v1 schema: {order_id, amount, currency}\n// v2 schema: {order_id, amount}  -- removed 'currency' field\n// No Schema Registry configured — producer just sends JSON\n// Existing consumers that read 'currency' field → null/crash",
-  "context": {"kafka_version": "3.0", "schema": "JSON", "delivery": "at-least-once", "schema_registry": "none"},
-  "expected_feedback": "Standard: Removed a field (currency) from the event schema without a Schema Registry compatibility check. This is a backward-incompatible change — existing consumers expecting the 'currency' field will receive null or fail to deserialize. Without Schema Registry, there's no automated compatibility gate. Fix: (1) configure Schema Registry with BACKWARD compatibility mode, (2) never remove required fields — add new optional fields instead, (3) for breaking changes, create a new topic (order.events.v2) and migrate consumers.",
+  "context": {
+    "kafka_version": "3.0",
+    "schema": "JSON",
+    "delivery": "at-least-once",
+    "schema_registry": "none"
+  },
+  "expected_feedback": "Standard: a field (currency) was removed from the event schema with no compatibility gate. Whether this is safe depends on the mode and on whether the field carried a default — BACKWARD does permit deleting an optional/defaulted field, so 'never delete anything' is the wrong rule. Here currency is required with no default, which is incompatible under every mode. Fix: (1) register the subject in Schema Registry with a deliberate compatibility mode and verify candidates against the registry's /compatibility endpoint before deploy; (2) remember the deployment order the mode implies — BACKWARD means a NEW reader reads OLD data, so consumers upgrade first; (3) for a genuinely breaking change, dual-publish to a new topic (order.events.v2) and migrate consumers.",
   "violated_rule": "Schema compatibility mode configured",
-  "coverage_rules": ["Schema Registry", "compatibility", "BACKWARD"],
-  "reference": "SKILL.md"
+  "coverage_rules": [
+    "Schema Registry",
+    "compatibility",
+    "BACKWARD"
+  ],
+  "reference": "SKILL.md",
+  "snippet_lang": "text",
+  "detector_rules": [],
+  "checklist_anchor": "Schema compatibility mode chosen deliberately, and stated in the right direction"
 }

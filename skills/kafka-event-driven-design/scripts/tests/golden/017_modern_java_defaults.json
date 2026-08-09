@@ -1,0 +1,15 @@
+{
+  "id": "KAFKA-017",
+  "title": "Modern Java client with no explicit acks — safe by default, must not be flagged",
+  "type": "good_practice",
+  "severity": "none",
+  "snippet_lang": "java",
+  "code_snippet": "// kafka-clients 3.9.0 against a 3.9 broker\nProperties p = new Properties();\np.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokers);\np.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class);\np.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, KafkaAvroSerializer.class);\n// acks and enable.idempotence intentionally left at their defaults\nProducer<String, Order> producer = new KafkaProducer<>(p);",
+  "context": {"kafka_version": "3.9", "client": "kafka-clients 3.9.0", "schema": "Avro", "delivery": "at-least-once", "throughput": "2000/s"},
+  "expected_feedback": "No violations on the durability item. Since Kafka 3.0 the Java producer defaults are acks=all and enable.idempotence=true, so an absent acks line is already the safe configuration and flagging it would be a false positive. This is exactly the case where a version-blind review produces noise: the same silence on kafka-clients 2.8 (acks=1, idempotence off) or on sarama (WaitForLocal, idempotence off) IS a data-loss defect. Record the client and version in Gate 1 and score accordingly. Worth stating explicitly in the review that the default is being relied upon, so a future downgrade to an older client is caught. Separately confirm the topic sets min.insync.replicas=2 — acks=all alone does not guarantee two replicas have the record.",
+  "violated_rule": null,
+  "coverage_rules": ["kafka-clients", "3.0", "defaults", "min.insync.replicas"],
+  "detector_rules": [],
+  "checklist_anchor": "PASS when kafka-clients ≥3.0 defaults already satisfy it",
+  "reference": "references/version-client-matrix.md"
+}

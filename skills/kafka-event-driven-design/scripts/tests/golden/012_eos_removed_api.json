@@ -1,0 +1,15 @@
+{
+  "id": "KAFKA-012",
+  "title": "Exactly-once pipeline using the sendOffsetsToTransaction overload removed in Kafka 4.x, with no consumer isolation level",
+  "type": "defect",
+  "severity": "critical",
+  "snippet_lang": "java",
+  "code_snippet": "producer.initTransactions();\nwhile (true) {\n    ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(100));\n    producer.beginTransaction();\n    for (ConsumerRecord<K, V> r : records) {\n        producer.send(new ProducerRecord<>(outputTopic, transform(r)));\n    }\n    producer.sendOffsetsToTransaction(offsets, consumerGroupId);\n    producer.commitTransaction();\n}",
+  "context": {"kafka_version": "4.0", "client": "kafka-clients 4.0.0", "schema": "Avro", "delivery": "exactly-once", "throughput": "3000/s"},
+  "expected_feedback": "Critical: this does not compile against a Kafka 4.x client and would not be exactly-once if it did. (1) sendOffsetsToTransaction(Map, String) was deprecated by KIP-447 and removed in 4.0 — the surviving overload takes ConsumerGroupMetadata, which is what carries the generation id used for zombie fencing; pass consumer.groupMetadata(). (2) No isolation.level is set, and the default is read_uncommitted, so this consumer reads records from transactions that were ABORTED. read_committed is mandatory and is on the consumer, not the producer. (3) enable.auto.commit must be false or offsets commit outside the transaction. (4) There is no abort path: on a retriable KafkaException the code must abortTransaction() AND seek back to the last committed offset, otherwise the polled batch is silently skipped. (5) transactional.id must be stable across restarts for fencing to work.",
+  "violated_rule": "Atomicity mechanism matches the boundary being crossed",
+  "coverage_rules": ["read_committed", "sendOffsetsToTransaction", "groupMetadata", "abortTransaction"],
+  "detector_rules": ["KL012", "KL019"],
+  "checklist_anchor": "Atomicity mechanism matches the boundary being crossed",
+  "reference": "references/consumer-failure-modes.md"
+}
