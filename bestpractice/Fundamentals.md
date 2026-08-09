@@ -291,8 +291,6 @@ Once a skill becomes too complex for a single file, you need a richer directory 
 ```
 go-ci-workflow/
 ├── SKILL.md                           # Entry point: 236-line operating framework
-├── agents/
-│   └── openai.yaml                    # UI metadata
 ├── scripts/
 │   ├── discover_ci_needs.sh           # Repo shape discovery script
 │   ├── run_regression.sh              # Regression test runner
