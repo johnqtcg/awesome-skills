@@ -229,6 +229,41 @@ def rc006(text: str):
         yield 0, "write-through documented without a cache-write failure semantics section"
 
 
+ABSOLUTE_FRESHNESS = re.compile(
+    r"(?:always|guaranteed(?:ly)?|never stale|immediately|zero[- ]staleness)"
+    r"[^.\n]{0,60}?(?:fresh|up[- ]to[- ]date)"
+    r"|(?:fresh|up[- ]to[- ]date)[^.\n]{0,30}?(?:always|guaranteed)",
+    re.I,
+)
+
+
+@rule(
+    "RC017",
+    "No absolute freshness claim about a cache without a qualification on the "
+    "same line -- a cache in front of a database is eventually consistent in "
+    "every pattern.",
+    "global",
+    violation="  2. Cache HIT → return, always fresh since writes update the cache",
+)
+def rc017(text: str):
+    # The original defect: the words "always fresh" sat in a flow diagram three
+    # paragraphs above the section explaining why that is false, and RC006 --
+    # keyed on the phrase "strong (immediate)" -- never saw the rewording.
+    #
+    # The repudiation must be on the SAME LINE as the claim. A window-scoped
+    # check was tried first and let this through: "read-your-writes" appears in
+    # a "Best for" bullet ~200 characters later, so an unqualified "always
+    # fresh" in the diagram was cleared by a sentence that was not about it.
+    # A refutation that is not bound to the claim is a bypass, not a guard.
+    for m in ABSOLUTE_FRESHNESS.finditer(text):
+        lo = text.rfind("\n", 0, m.start()) + 1
+        hi = text.find("\n", m.end())
+        line = text[lo:hi if hi != -1 else len(text)]
+        if re.search(r"\bNOT\b|\bnot\b|\bnever\b|\bno\b", line):
+            continue
+        yield m.start(), f"unqualified freshness claim {m.group(0)!r}"
+
+
 @rule(
     "RC007",
     "Value-shape guidance must name the listpack thresholds and gate per-field "
@@ -316,35 +351,223 @@ def rc009(text: str):
             yield m.start(), f"blocking item `{item}` absent from the Gate 1 STOP condition"
 
 
+TIER_PREFIX = {"Critical": "C", "Standard": "S", "Hygiene": "H"}
+
+
+def skill_items(text: str) -> dict[str, list[int]]:
+    """{'C': [1,2,...]} — the item IDs §5 actually defines, in order."""
+    sec = re.search(r"^## §5\b.*?(?=^## §6\b)", text, re.S | re.M)
+    if not sec:
+        return {}
+    out: dict[str, list[int]] = {}
+    for pref, num in re.findall(r"^\*\*([CSH])(\d+) — ", sec.group(0), re.M):
+        out.setdefault(pref, []).append(int(num))
+    return out
+
+
 @rule(
     "RC010",
-    "Scorecard tier counts in the verdict line must equal the number of "
-    "checkboxes actually listed in each tier.",
+    "§5 must be the only item list: every ID it defines is contiguous per tier "
+    "and covered by exactly one §8 tier range, and §8 defines no items of its own.",
     "skill",
-    violation="**Verdict**: `X/99`; Critical: `Y/9`; Standard: `Z/9`; Hygiene: `W/9`.",
+    violation=(
+        "## §5 x\n\n**C1 — a.**\n\n**C3 — b.**\n\n**S1 — c.**\n\n**H1 — d.**\n\n"
+        "## §6 x\n\n## §8 x\n\n| **Critical** | `C1–C2` |\n| **Standard** | `S1–S1` |\n"
+        "| **Hygiene** | `H1–H1` |\nPASS FAIL INCOMPLETE\n\n## §9 x\n"
+    ),
 )
 def rc010(text: str):
-    tiers = {}
-    for name in ("Critical", "Standard", "Hygiene"):
-        m = re.search(rf"### {name}[^\n]*\n(.*?)(?=\n### |\n\*\*Verdict|\Z)", text, re.S)
-        tiers[name] = len(re.findall(r"^- \[ \]", m.group(1), re.M)) if m else 0
-    v = re.search(
-        r"\*\*Verdict\*\*: `X/(\d+)`; Critical: `Y/(\d+)`; Standard: `Z/(\d+)`; Hygiene: `W/(\d+)`",
-        text,
-    )
-    if not v:
-        yield 0, "verdict line not found or malformed"
+    # The failure this replaces: §5 listed 14 items and §8 scored a DIFFERENT 14,
+    # so a Critical golden defect could be found by §5 and land in a Standard
+    # bucket that tolerates one failure. Two lists cannot be kept in sync by
+    # review; the fix is that there is one list, and this rule proves it.
+    defined = skill_items(text)
+    if not defined:
+        yield 0, "§5 defines no `**<C|S|H><n> — ` items (section missing or reformatted)"
         return
-    total, crit, std, hyg = (int(x) for x in v.groups())
-    for name, declared, actual in (
-        ("Critical", crit, tiers["Critical"]),
-        ("Standard", std, tiers["Standard"]),
-        ("Hygiene", hyg, tiers["Hygiene"]),
-    ):
-        if declared != actual:
-            yield v.start(), f"{name} declared {declared}, {actual} checkboxes present"
-    if total != sum(tiers.values()):
-        yield v.start(), f"total declared {total}, {sum(tiers.values())} checkboxes present"
+
+    for pref, nums in sorted(defined.items()):
+        dupes = {n for n in nums if nums.count(n) > 1}
+        if dupes:
+            yield 0, f"§5 defines {pref}{sorted(dupes)} more than once"
+        expected = list(range(1, max(nums) + 1))
+        if sorted(set(nums)) != expected:
+            missing = sorted(set(expected) - set(nums))
+            yield 0, f"§5 {pref} items are not contiguous from 1 — missing {missing}"
+
+    sec8 = re.search(r"^## §8\b.*?(?=^## §9\b)", text, re.S | re.M)
+    if not sec8:
+        yield 0, "§8 section not found"
+        return
+    body8 = sec8.group(0)
+
+    # §8 must not re-introduce a list of its own.
+    if re.search(r"^- \[ \]", body8, re.M):
+        yield sec8.start(), "§8 declares its own checkbox items — §5 is the only item list"
+
+    for tier, pref in TIER_PREFIX.items():
+        row = re.search(
+            rf"\|\s*\*\*{tier}\*\*\s*\|[^|\n]*?([CSH])(\d+)\s*[–—-]\s*([CSH])?(\d+)",
+            body8,
+        )
+        if not row:
+            yield sec8.start(), f"§8 has no item range for the {tier} tier"
+            continue
+        lo_pref, lo, hi_pref, hi = row.group(1), int(row.group(2)), row.group(3), int(row.group(4))
+        if lo_pref != pref or (hi_pref and hi_pref != pref):
+            yield sec8.start(), f"§8 {tier} range uses prefix {lo_pref}, expected {pref}"
+            continue
+        nums = defined.get(pref, [])
+        if not nums:
+            yield sec8.start(), f"§8 scores {pref}{lo}–{pref}{hi} but §5 defines no {pref} items"
+            continue
+        if (lo, hi) != (1, max(nums)):
+            yield sec8.start(), (
+                f"§8 {tier} range is {pref}{lo}–{pref}{hi} but §5 defines "
+                f"{pref}1–{pref}{max(nums)}")
+
+    for pref in defined:
+        if pref not in TIER_PREFIX.values():
+            yield 0, f"§5 defines {pref}* items that no §8 tier scores"
+
+    for verdict in ("PASS", "FAIL", "INCOMPLETE"):
+        if not re.search(rf"\b{verdict}\b", body8):
+            yield sec8.start(), f"§8 never names the `{verdict}` verdict"
+
+
+VERDICTS = ("PASS", "WARN", "FAIL", "N/A", "NOT SCOREABLE")
+
+
+@rule(
+    "RC014",
+    "The scoring vocabulary must be DEFINED where the items are: a verdict table "
+    "with rows for PASS/WARN/FAIL/N-A/NOT SCOREABLE, or an unjudgeable item "
+    "silently becomes a pass.",
+    "skill",
+    violation=(
+        "## §5 x\n\n| Verdict | Meaning |\n|---|---|\n| **PASS** | ok |\n"
+        "| **FAIL** | no |\n\n**C1 — a.** Silence is FAIL.\n\n## §6 x\n"
+    ),
+)
+def rc014(text: str):
+    sec = re.search(r"^## §5\b.*?(?=^## §6\b)", text, re.S | re.M)
+    if not sec:
+        yield 0, "§5 section not found"
+        return
+    head = sec.group(0)
+    # Parse the table's first column rather than searching §5 for the words.
+    # A bare substring check was tried first and an adversarial probe defeated
+    # it: renaming the WARN row left the rule green, because C6's prose says
+    # "is a FAIL, not a WARN" and that unrelated sentence satisfied the search.
+    # A verdict has to be *defined*, and only a table row defines one.
+    rows = {re.sub(r"[*`]", "", c).strip().upper()
+            for c in re.findall(r"^\|\s*([^|\n]+?)\s*\|", head, re.M)}
+    for token in VERDICTS:
+        if token not in rows:
+            yield sec.start(), f"§5 has no verdict-table row defining `{token}`"
+    # The loophole that makes a dynamic denominator dishonest: marking an item
+    # N/A because nobody wrote about it, rather than because it cannot apply.
+    if not re.search(r"[Ss]ilence is FAIL", head):
+        yield sec.start(), "§5 does not state that an unaddressed item is FAIL, not N/A"
+
+
+VERSION_GATED: tuple[tuple[str, str, str], ...] = (
+    # (token regex, version regex that must be nearby, human name)
+    (r"\bHEXPIRE\b", r"7\.4", "HEXPIRE (7.4+)"),
+    (r"\bDELEX\b", r"8\.4", "DELEX (8.4+)"),
+    (r"\bIFEQ\b", r"8\.4", "SET/DELEX IFEQ (8.4+)"),
+    (r"\bHOTKEYS\b", r"8\.6", "HOTKEYS (8.6+)"),
+    (r"`CF\.", r"8\.0", "cuckoo filter CF.* (8.0+)"),
+    (r"\bOVERWRITTEN\b", r"8\.2", "OVERWRITTEN keyspace event (8.2+)"),
+    (r"\b(?:allkeys|volatile)-lrm\b", r"8\.6", "*-lrm eviction (8.6+)"),
+    (r"\bcompact hash", r"8\.10", "compact hashes (8.10+)"),
+    (r"hash-max-listpack", r"7\.0|8\.10|ziplist", "listpack config names (7.0+)"),
+)
+
+
+@rule(
+    "RC015",
+    "A version-gated Redis feature must carry its version where it is named -- "
+    "an unqualified feature claim is wrong on every older server.",
+    "global",
+    violation="Release the lock with `DELEX key IFEQ token`, which is atomic.",
+)
+def rc015(text: str):
+    # The defect this prevents is the one the 2026-08 review found: the skill
+    # assumed one Redis version globally, so every claim silently applied to a
+    # server that might not have the feature. Naming the version at each use is
+    # the only form that survives a copy-paste into a review.
+    for token_re, ver_re, name in VERSION_GATED:
+        for m in re.finditer(token_re, text):
+            lo, hi = max(0, m.start() - 320), min(len(text), m.end() + 320)
+            if not re.search(ver_re, text[lo:hi]):
+                yield m.start(), f"`{name}` named with no version qualifier nearby"
+
+
+@rule(
+    "RC018",
+    "Keyspace notifications must never be listed as an authoritative invalidation "
+    "mechanism -- Pub/Sub is fire-and-forget and node-local, so it cannot sit in "
+    "the same tier as CDC or a transactional outbox.",
+    "global",
+    violation=(
+        "Invalidation options: TTL expiry, explicit invalidation on write, or "
+        "event-driven (CDC, or keyspace `OVERWRITTEN` on 8.2+)."
+    ),
+)
+def rc018(text: str):
+    # The exact error this rule was written for, in the sentence that shipped it:
+    # `OVERWRITTEN` was listed beside CDC as an equivalent invalidation strategy.
+    # It is not equivalent. Redis documents Pub/Sub as "fire and forget" -- a
+    # disconnected subscriber loses every event delivered while it was away --
+    # and in a cluster events are NOT broadcast, so each node must be subscribed
+    # separately. It also reports that a *Redis key* changed, not that a
+    # *database row* did.
+    durable = re.compile(r"\bCDC\b|transactional outbox|\boutbox\b", re.I)
+    keyspace = re.compile(r"keyspace (?:notification|event)|\bOVERWRITTEN\b|\bTYPE_CHANGED\b")
+    # The qualifier must be near the mention: naming the caveat once, chapters
+    # away, does not stop a reader acting on the sentence in front of them.
+    qualified = re.compile(
+        r"fire[- ]and[- ]forget|fire and forget|best[- ]effort|lossy|not durable"
+        r"|node[- ]local|not an authoritative|must not be counted|are \*\*not\*\*",
+        re.I,
+    )
+    for m in keyspace.finditer(text):
+        lo, hi = max(0, m.start() - 400), min(len(text), m.end() + 400)
+        window = text[lo:hi]
+        if durable.search(window) and not qualified.search(window):
+            yield m.start(), (
+                f"`{m.group(0)}` presented alongside a durable mechanism with no "
+                f"fire-and-forget / best-effort qualifier")
+
+
+@rule(
+    "RC016",
+    "A delayed second delete must not be prescribed as an in-process sleep or "
+    "goroutine -- it dies with the process, exactly like AE-2's write-behind.",
+    "global",
+    violation=(
+        "Schedule the second DEL after 500ms via a sleep in goroutine.\n"
+        "This absorbs the read-populate race."
+    ),
+)
+def rc016(text: str):
+    inproc = re.compile(
+        r"sleep in (?:a )?goroutine|time\.Sleep|time\.AfterFunc|sleeping goroutine", re.I)
+    delayed = re.compile(r"double[- ]delete|second DEL\b|delayed DEL\b|second delete", re.I)
+    # Allow-list the safe shape: naming the mechanism is fine when the same
+    # paragraph rejects it. Without this the rule fires on the table row and the
+    # paragraph written to warn against it.
+    repudiation = re.compile(
+        r"do not|don't|\bnot a\b|fails the same way|acceptable only|\*\*no\*\*"
+        r"|is a hope|loses|silently|never\b|prefer\b",
+        re.I,
+    )
+    offset = 0
+    for para in text.split("\n\n"):
+        if inproc.search(para) and delayed.search(para) and not repudiation.search(para):
+            yield offset, "delayed double-delete prescribed as an in-process sleep/goroutine"
+        offset += len(para) + 2
 
 
 @rule(
@@ -409,9 +632,26 @@ def line_of(text: str, off: int) -> int:
     return text.count("\n", 0, off) + 1
 
 
+def locate(paths: list[Path], texts: list[str], off: int) -> str:
+    """Map an offset in the joined document back to `file:line`.
+
+    A global-scope finding used to print `<all docs>`, which is a defect report
+    nobody can act on -- the reader has to grep for the pattern themselves and
+    may fix a different occurrence than the one that fired.
+    """
+    cursor = 0
+    for p, t in zip(paths, texts):
+        end = cursor + len(t)
+        if off <= end:
+            return f"{p.relative_to(SKILL_DIR)}:{t.count(chr(10), 0, off - cursor) + 1}"
+        cursor = end + 1  # the "\n" join adds one character between files
+    return "<all docs>"
+
+
 def run(paths: list[Path]) -> list[str]:
     findings: list[str] = []
-    joined = "\n".join(p.read_text(encoding="utf-8") for p in paths)
+    texts = [p.read_text(encoding="utf-8") for p in paths]
+    joined = "\n".join(texts)
     joined_masked = blank_wrong_spans(joined)
 
     for p in paths:
@@ -433,10 +673,11 @@ def run(paths: list[Path]) -> list[str]:
                 for off, msg in r._fn(masked):
                     findings.append(f"{rel}:{line_of(masked, off)}: {r.id} {msg}")
 
+    masked_texts = [blank_wrong_spans(t) for t in texts]
     for r in RULES:
         if r.scope == "global":
-            for _, msg in r._fn(joined_masked):
-                findings.append(f"<all docs>: {r.id} {msg}")
+            for off, msg in r._fn(joined_masked):
+                findings.append(f"{locate(paths, masked_texts, off)}: {r.id} {msg}")
     return findings
 
 

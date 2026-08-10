@@ -4,6 +4,15 @@ Load when a design uses a Redis lock for anything beyond suppressing duplicate
 cache fills. All Go below is compiled by `scripts/check_go_snippets.py` against
 `github.com/redis/go-redis/v9`.
 
+- [1. The one-sentence version](#1-the-one-sentence-version)
+- [2. Classification: which kind of lock do you have?](#2-classification-which-kind-of-lock-do-you-have)
+- [3. Acquire — with a fencing token](#3-acquire--with-a-fencing-token)
+- [4. Fencing — the part that is usually skipped](#4-fencing--the-part-that-is-usually-skipped)
+- [5. Renewal — bounded, always](#5-renewal--bounded-always)
+- [6. Release](#6-release)
+- [7. Failover](#7-failover)
+- [8. Review checklist](#8-review-checklist)
+
 ---
 
 ## 1. The one-sentence version
@@ -49,6 +58,17 @@ end
 return nil
 `)
 
+// fenceKeysFor returns the two keys the acquire script touches.
+//
+// The shared "{...}" hash tag is REQUIRED, not cosmetic. In Redis Cluster only
+// the text inside the first {} is hashed, so this pins the lock key and its
+// fence counter to the same slot. Without it the script touches two slots and
+// the server rejects it with CROSSSLOT — on Cluster only, which is why this
+// defect ships: it passes every test on a standalone dev instance.
+func fenceKeysFor(resource string) (lockKey, fenceKey string) {
+    return "{" + resource + "}:lock", "{" + resource + "}:fence"
+}
+
 // acquire returns a strictly increasing fence number, or an error if the lock
 // is held. The fence number — not the token — is what downstream systems check.
 func acquire(ctx context.Context, lockKey, fenceKey, token string, ttl time.Duration) (int64, error) {
@@ -67,6 +87,35 @@ func acquire(ctx context.Context, lockKey, fenceKey, token string, ttl time.Dura
 The token must come from `crypto/rand` or a UUID — never a counter, a hostname,
 or a timestamp. Two holders with the same token can each pass the other's CAS
 release check.
+
+### The fence counter is only as monotonic as the server that holds it
+
+`INCR` is monotonic within one Redis instance's lifetime. It is not monotonic
+across the two events that actually happen in production:
+
+- **Failover.** Replication is asynchronous (§7). A replica promoted mid-flight
+  can hold a counter lower than the value the old master already issued, so the
+  next acquisition re-issues a fence number that was already used.
+- **Loss of the key.** The counter is a plain key. Eviction under `allkeys-*`,
+  an expiry someone added "for hygiene", a `FLUSHDB`, or a restart without
+  persistence all reset it to zero.
+
+The resource-side check in §4 fails **closed** under both: a repeated or lower
+fence is rejected, so the holder aborts instead of corrupting data. That is the
+right failure direction, but it is an outage, not a non-event — the work stops
+until someone notices. Three ways to handle it, in order of preference:
+
+1. **Take the fence from the protected resource**, not from Redis: a Postgres
+   sequence, or the row's own version column returned by the guarded `UPDATE`.
+   The counter then shares fate with the data it protects, which is the only way
+   the two can never disagree.
+2. **Persist and never expire the counter.** No TTL, and a `maxmemory-policy`
+   that cannot evict it (`volatile-*`, with the counter left TTL-less). Accept
+   that failover can still regress it.
+3. **Detect and re-seed.** On a rejected fence, read the resource's
+   `last_fence`, `SET` the counter above it, and retry once. Log every re-seed —
+   a repeating re-seed means the counter is not durable and you are on option 2
+   pretending to be option 1.
 
 ---
 
@@ -158,6 +207,14 @@ func release(ctx context.Context, lockKey, token string) error {
 A plain `DEL` deletes whatever is there — including the lock a *different*
 holder acquired after yours expired. Release always goes through the CAS.
 
+**On Redis 8.4+ this script has a command form**: `DELEX <lockKey> IFEQ <token>`
+does compare-and-delete atomically, with no script to register, no `KEYS`/`ARGV`
+arity to get wrong, and a single key so Cluster raises no CROSSSLOT question.
+Keep the Lua above for 8.2 and below. `DELEX` returns 1 when it deleted and 0
+when the key was absent **or** the token did not match — those two are not
+distinguished, so if "the lock expired under me" must be logged differently from
+"I released normally", keep the Lua, which can return distinct values.
+
 ---
 
 ## 7. Failover
@@ -205,6 +262,8 @@ Mark PASS/WARN/FAIL per item; any FAIL in the Correctness column blocks.
 | 10 | Failover double-grant documented and accepted | required | required |
 | 11 | Acquisition failure path defined (fail fast / bounded retry / queue) | required | required |
 | 12 | Lock hold time and contention exported as metrics | recommended | required |
+| 13 | On Cluster: every key the lock script touches shares a hash tag (no CROSSSLOT) | required | required |
+| 14 | Fence counter is durable, un-evictable, and re-seeded on rejection — or sourced from the resource | — | **required** |
 
 Item 9 is the one that is almost always missing. A design that issues fence
 numbers but has no resource-side check has not implemented fencing — it has

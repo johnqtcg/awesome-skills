@@ -264,3 +264,273 @@ As observed in previous evaluations, the Without-Skill group spontaneously used 
 1. Add a golden fixture for multi-service shared cache scenarios (CACHE-015), covering tenant isolation and keyspace separation
 2. Add AE-14 (Lua script atomicity loss under Redis Cluster) to §7 Anti-Examples, addressing a common misconception in cluster deployments
 3. Consider making the Minimal context depth rule explicit in §4 Degradation Modes: state that unknown scale does not trigger Deep depth (currently implicit — recommend making it explicit)
+
+---
+
+## §9 Remediation Round — 2026-08-10
+
+> §1–§7 above record the 2026-04-18 A/B run and are **superseded as a quality
+> claim**: they were produced before the scorecard defect in §9.1 was known, and
+> a run that could report PASS while finding a Critical defect cannot certify
+> the skill it measured. They are retained as the historical baseline.
+
+### 9.1 The finding that mattered: the scorecard could not act on the checklist
+
+§5 listed 14 checklist items and §8 scored a **different** 14. The two lists had
+drifted apart, and three `critical` golden fixtures mapped only into the
+Standard tier, which tolerates one failure:
+
+| Fixture | Defect | Scored under | Consequence |
+|---------|--------|--------------|-------------|
+| CACHE-012 | Write-behind for financial data, fire-and-forget goroutine | "pattern matches business scenario" (Standard) | Reviewer finds it, reports it Critical, prints PASS |
+| CACHE-014 | Multi-tenant key with no tenant scope — cross-tenant read | "key naming convention" (Standard) | An authorization bypass graded as a naming nit |
+| CACHE-017 | Correctness lock with no fencing token | "distributed locks" (Standard) | Duplicate payment execution scored as a partial pass |
+
+§8's tiers also had no vocabulary for the cases that actually occur: no `N/A`,
+no `NOT SCOREABLE`, no statement of whether `WARN` counts as a pass, and a fixed
+`/14` denominator that forced either a false FAIL for an absent lock or a
+fabricated pass.
+
+**Resolution.** §8 no longer defines items. §5 is the single list, its items
+carry tier IDs (`C1–C9`, `S1–S7`, `H1–H5`), and §8 states only how those IDs are
+counted. The three fixtures above now map to `C6`, `C7`, and `C9` — all
+Critical, all blocking. The scoring vocabulary is defined where the items are:
+PASS / WARN / FAIL / N/A / NOT SCOREABLE, with a dynamic denominator, `WARN`
+explicitly failing the Critical tier, and a third verdict — **INCOMPLETE** —
+for the case that previously had nowhere to go: a Critical item that could not
+be evaluated. "We could not check it" is never a pass.
+
+Three mechanisms hold this in place, so it cannot silently drift back:
+
+- `RC010` (lint) — §5's IDs must be contiguous per tier and exactly covered by
+  §8's declared ranges; §8 must contain no checklist of its own.
+- `RC014` (lint) — §5 must define all five verdicts and must state that silence
+  is FAIL, not N/A.
+- `TestScorecardReachability` (pytest) — every fixture declares the §5 IDs it
+  violates, and a `critical` fixture whose worst item sits below the Critical
+  tier is a test failure. `M15` mutates CACHE-014 back to `H1` and is killed.
+
+### 9.2 Version model
+
+Gate 1 previously offered `6.x / 7.x` and defaulted to **6.0** when unknown. As
+of 2026-08 the current release is **8.10** (2026-07-29), with 8.0 / 8.2 / 8.4 /
+8.6 / 8.8 all GA, and 6.2 / 7.2 / 7.4 still receiving patches. The stale default
+was wrong in both directions — inventing constraints that no longer apply, and
+hiding primitives that are now the better answer.
+
+The version is now gated **per conclusion**, not globally, and seven concrete
+conclusions are enumerated with what changes at each boundary. `RC015` (lint)
+requires every version-gated feature name to carry its version where it appears.
+`references/redis-version-matrix.md` documents each release, the branch to take
+when the version is unknown, and how each claim was verified.
+
+All version facts were taken from primary sources — `src/commands/*.json`
+(`since`, and `SET`'s `history` array), `src/config.c`
+(`maxmemory_policy_enum[]`, the listpack/ziplist config aliases), and the GitHub
+release bodies — not from recollection. The four that change a recommendation
+this skill gives: `DELEX … IFEQ` / `SET … IFEQ` (8.4) replace the Lua CAS lock
+release and enable a version-guarded cache write; `HOTKEYS` (8.6) replaces
+client-side hot-key estimation; the bundled cuckoo filter `CF.*` (8.0) makes the
+penetration filter deletable; compact hashes (8.10) change the Hash-vs-String
+memory arithmetic.
+
+### 9.3 Technical corrections
+
+| Area | Was | Now |
+|------|-----|-----|
+| Write-through read path | "always fresh since writes update cache" — contradicting the section three paragraphs below that explains why it is not | Read-your-writes on the happy path, with the contradiction removed at source; `RC017` fires on any absolute freshness claim not qualified **on the same line** |
+| Cluster fencing example | Lock key and fence counter in one Lua script, different hash slots | Shared hash tag via `fenceKeysFor`, plus the fence counter's durability and failover-monotonicity failure modes and three ways to handle them |
+| Delayed double-delete | Fixed 100ms–1s, "via delayed job, or sleep in goroutine" | Derived from p99.9 DB read + populate + queue latency, with the in-process sleep explicitly rejected as the same defect as AE-2; `RC016` enforces it |
+| Reference navigation | No TOC on any reference (440-line failure-modes file) | TOC on all five, asserted against real headings with GitHub's anchor algorithm — a drifted TOC now fails `M24` |
+
+### 9.4 Gate defects found while fixing the above
+
+Two were not in the review and are worth recording because both were making the
+suite report more confidence than it had:
+
+1. **The Go gate returned 1 unconditionally in a sandbox.** An unwritable build
+   cache produced `go: failed to trim cache: … operation not permitted` with
+   every package built successfully. The gate reported FAIL, and — worse — the
+   mutation sweep credited *every* mutation to "killed by go", because the go
+   gate returned 1 no matter what the mutation did. The previous "12/12 killed"
+   was therefore partly an artifact. The gate now compiles a known-good package
+   first, falls back to a private `GOCACHE`, and classifies a non-zero exit with
+   no compiler diagnostic as INCOMPLETE (exit 3) rather than as a broken
+   snippet. With that fixed, one mutation (`M20`) was immediately exposed as
+   surviving.
+2. **`test_verdict_format` was vacuous.** `assert "X/12" in SKILL_MD or
+   "PASS/FAIL" in SKILL_MD` passed on the second clause, so the `X/12` half had
+   been stale through two renumberings without ever going red. Every scorecard
+   assertion now parses a structure and checks a value.
+
+`COVERAGE.md` also under-reported itself: the gate table was hardcoded at six
+rows while the runner ran seven, and the Go-gate file list was scraped with a
+regex that stopped at the first `]`, claiming coverage of `SKILL.md` alone when
+the gate has always scanned every reference. Both are now derived — the gate
+table is parsed from `run_regression.sh`, and the file list is imported from the
+gate module.
+
+### 9.5 Empirical closure — what is and is not measured
+
+The review's strongest point was that automated verification proved the
+*documents* were self-consistent and never observed a model. Two harnesses now
+exist:
+
+- **`model_eval.py`** — A/B over the 15 defect + good_practice fixtures: arm A
+  is the code alone, arm B adds SKILL.md and the references §10 prescribes. The
+  grader is deterministic, never an LLM, and scores five declared axes: concept
+  recall, §5 item-ID citation, verdict correctness, false alarms on
+  good-practice code, and repetition of claims the skill declares wrong
+  (clause-scoped, so quoting a myth in order to reject it scores clean).
+- **`trigger_eval.py`** — routing recall and precision over 15 positive and 12
+  negative prompts, the negatives being real Redis questions that reuse the
+  description's vocabulary while landing in areas §1 and Gate 2 delegate
+  elsewhere.
+
+Both are self-checking offline, and those checks are regression gates 6 and 7.
+`--calibrate` runs 60 axis probes: for each fixture and each applicable axis, a
+decoy response that should move **only** that axis. It caught two real grader
+defects on first run — the `items` axis was a duplicate of `recall` because of a
+title-keyword fallback, and the false-alarm axis overlapped the verdict axis via
+a shared `Verdict: FAIL` probe. Both were fixed; a grader whose axes move
+together reports health with a mechanism deleted.
+
+**What has not been measured, stated plainly:** the A/B run itself did not
+execute. The nested CLI in this environment is unauthenticated, so both
+harnesses exit 3 (INCOMPLETE) with the reason printed. Verified here is the
+apparatus — flag parsing, prompt delivery over stdin (argv failed: the variadic
+`--disallowed-tools` swallowed the prompt, and arm B's prompt is tens of
+kilobytes), the runner preflight, the exit-3 path, and the calibrated grader.
+**The A/B result is outstanding and no score in this report should be read as
+including it.**
+
+### 9.6 State after this round
+
+| | Before | After |
+|---|--------|-------|
+| Regression gates | 7 | 9 |
+| Lint rules | 13 | 17 |
+| Mutations | 12 (with a broken go gate inflating the kill count) | 24, all killed by the expected gate |
+| Collected tests | 232 | 291 |
+| Scored checklist items | 14 in §5, a different 14 in §8 | 21, one list, tier-tagged |
+| Verdicts | PASS / FAIL | PASS / FAIL / INCOMPLETE, with N/A and NOT SCOREABLE and a dynamic denominator |
+| Redis versions covered | 6.x / 7.x, default 6.0 | 6.2 → 8.10, per-conclusion gating, no default |
+| References | 4, no TOC | 5, all with an asserted TOC |
+| SKILL.md | 389 lines | 439 (budget raised 420 → 440, paid for by moving AE-1…AE-6 to the reference and deleting §8's duplicate list) |
+
+Remaining, in priority order: run the A/B and trigger evaluations against an
+authenticated model and record the numbers here; add fixtures for the nine §5
+items that have none (`C1`, `S1`, `S5`, `S6`, `H1`–`H5` — the list is derived in
+`COVERAGE.md §4`, not hand-maintained); and validate the version matrix against
+live 7.2 / 7.4 / 8.10 servers rather than against the source tree alone.
+
+---
+
+## §10 Remediation Round 2 — 2026-08-10 (same day, second review)
+
+A second review found five issues. Three were in machinery added earlier the
+same day, which is the useful part of the finding: the gates were new, and new
+gates are exactly where an unearned green comes from.
+
+### 10.1 The mutation sweep could still report a kill count it had not earned
+
+Two holes, both about *credibility of the number* rather than the mutations:
+
+- **No baseline requirement.** The sweep only refused to run when the go gate
+  returned 3. If any gate was already red on the unmutated tree, every mutation
+  would be "killed" by that same failing gate and the sweep would print a full
+  score. Now all three gates must return 0 before a single mutation is applied;
+  a 3 is INCOMPLETE, a 1 says so and stops.
+- **Kill attribution was advisory.** A mutation caught by a gate other than its
+  declared killer printed `(expected lint)` and still counted as killed — so a
+  dead lint rule whose mutation happened to break the build would never surface.
+  A mismatch is now a `MISKILLED` result and fails the sweep.
+
+Both were verified by probe: breaking the baseline makes the sweep refuse
+without printing a count, and re-declaring one mutation's killer produces
+`MISKILLED M21 [killed by lint, expected go]` and exit 1.
+
+### 10.2 The Go positive control did not cover the path that actually failed
+
+The probe compiled a dependency-free package. The failure it was written for
+occurs during module resolution, so the probe could pass while the real build
+failed for the same environmental reason — and, worse, Go's cache trim is
+**periodic, not per-invocation**: it records the last attempt in `trim.txt` and
+retries only after an interval. Re-running the old probe three times in a row
+now returns 0 every time, so the conditional fallback fired only sometimes. An
+intermittent fallback is worse than none, because the INCOMPLETE it produces is
+irreproducible.
+
+Fixed at the cause rather than the symptom: the gate now owns a **private,
+persistent `GOCACHE`** unconditionally (stable path, so it stays warm — 7.5s
+cold, 0.5s warm), and the probe imports `github.com/redis/go-redis/v9` and runs
+`go mod tidy`, so it exercises module resolution too. `GOMODCACHE` is
+deliberately left shared; it is the build cache's trim step that needs write
+access.
+
+### 10.3 `OVERWRITTEN` was placed in the wrong reliability tier — a real error introduced by round 1
+
+§5 C2 listed keyspace `OVERWRITTEN` (8.2+) beside CDC as an equivalent
+event-driven invalidation mechanism. It is not equivalent, and the Redis
+documentation is explicit on both counts:
+
+- Pub/Sub is *fire and forget* — "if your Pub/Sub client disconnects, and
+  reconnects later, all the events delivered during the time the client was
+  disconnected are lost." Silent, unbounded loss of invalidations.
+- In a cluster, "every node … generates events about its own subset of the
+  keyspace" and those notifications "**are not** broadcasted to all nodes" — a
+  listener must subscribe to every node, and resharding changes ownership.
+
+A third problem is structural rather than documented: the event says a *Redis
+key* changed, not that a *database row* did. When the DB commits and the cache
+write is the step that failed, no event is emitted at all — the exact case C3
+exists for.
+
+C2 now requires an *authoritative* mechanism (TTL, explicit invalidation, or a
+durable stream: CDC / outbox) and states that keyspace notifications do not
+count, with their legitimate use — best-effort L2→L1 invalidation behind a TTL
+floor — named. `RC018` fires whenever a keyspace notification appears near a
+durable mechanism without a fire-and-forget / best-effort qualifier, and `M26`
+reverts C2 to the defective sentence and is killed.
+
+### 10.4 Gate 1 prose contradicted Gate 1's own table
+
+The paragraph still read "the other five have defaults whose wrongness shows up
+as a tuning problem" after round 1 had made version un-defaultable, `maxmemory`
+ask-only, and deployment mode correctness-relevant for locks and multi-key
+scripts. Corrected: only read:write ratio and peak QPS degrade to tuning; each
+of the other three is named with the reason its default is not safe.
+
+### 10.5 The missing A/B result is now enforced, not promised
+
+The run still has not happened — the nested CLI is unauthenticated, and both
+harnesses exit 3 INCOMPLETE with the reason printed. What changed is that the
+gap is no longer held by a sentence anyone can delete.
+`TestEvalResultsAreNotClaimedWithoutData` binds the claim to the evidence in
+both directions:
+
+- a result-shaped claim in either language's report, with no
+  `model_eval_last_run.json` / `trigger_eval_last_run.json` on disk, **fails**;
+- once an artifact exists, a report that reports no numbers **fails** as behind
+  the evidence;
+- while both artifacts are absent, both reports must state that the run did not
+  happen.
+
+All three were probe-verified, including the fabricated-number case. This does
+not substitute for the measurement — it guarantees the report cannot drift away
+from whatever the measurement did or did not produce.
+
+### 10.6 State after round 2
+
+| | After round 1 | After round 2 |
+|---|---|---|
+| Lint rules | 17 | 18 (`RC018`) |
+| Mutations | 24 | 25, all killed **by the declared gate** |
+| Collected tests | 291 | 294 (2 skipped: the eval artifacts do not exist yet) |
+| Mutation sweep credibility | kill count only | baseline-green required; wrong-gate kills fail |
+| Go gate | private `GOCACHE` on fallback, dep-free probe | private `GOCACHE` always, probe resolves modules |
+| Keyspace notifications | listed beside CDC | separate tier, with `RC018` holding the line |
+
+Still open, unchanged and unhidden: the A/B and trigger runs themselves, fixtures
+for the nine §5 items that have none, and validation of the version matrix
+against live 7.2 / 7.4 / 8.10 servers.

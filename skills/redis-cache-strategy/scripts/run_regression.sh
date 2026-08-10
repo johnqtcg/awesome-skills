@@ -37,27 +37,36 @@ cd "${SKILL_DIR}" || exit 1
 
 # The linter's own selftest runs FIRST: a dead rule reports "clean", so a green
 # lint run means nothing until every rule is proven to still fire.
-run_gate "1/7 Linter selftest (every rule fires on its own violating input)" \
+run_gate "1/9 Linter selftest (every rule fires on its own violating input)" \
     python3 scripts/lint_cache_docs.py --selftest
 
-run_gate "2/7 Semantic doc lint (SKILL.md + references)" \
+run_gate "2/9 Semantic doc lint (SKILL.md + references)" \
     python3 scripts/lint_cache_docs.py
 
-run_gate "3/7 Go snippet compile gate" \
+run_gate "3/9 Go snippet compile gate" \
     python3 scripts/check_go_snippets.py
 
-run_gate "4/7 Contract tests (SKILL.md structure + reference files)" \
+run_gate "4/9 Contract tests (SKILL.md structure + reference files)" \
     python3 -m pytest "${TEST_DIR}/test_skill_contract.py" -q
 
-run_gate "5/7 Golden scenarios (fixtures drive the real checker)" \
+run_gate "5/9 Golden scenarios (fixtures drive the real checker)" \
     python3 -m pytest "${TEST_DIR}/test_golden_scenarios.py" -q
 
-# Last: slowest gate, and it is the one that proves the gates above are not
-# decorative. Each mutation reintroduces a defect that actually shipped.
-run_gate "6/7 Mutation sweep (prove each gate catches its defect)" \
+# The model-facing gates. Neither runs a model here: both check that the
+# measuring apparatus works, so that a real run means something. The runs
+# themselves are opt-in (`--run`) and exit 3 without a model runner.
+run_gate "6/9 Model-eval grader calibration (each axis separates, alone)" \
+    python3 scripts/model_eval.py --calibrate
+
+run_gate "7/9 Trigger corpus is well-formed and discriminating" \
+    python3 scripts/trigger_eval.py --check
+
+# Slowest gate, and the one that proves the gates above are not decorative.
+# Each mutation reintroduces a defect that actually shipped.
+run_gate "8/9 Mutation sweep (prove each gate catches its defect)" \
     python3 scripts/mutation_sweep.py
 
-run_gate "7/7 Coverage doc is generated, not hand-maintained" \
+run_gate "9/9 Coverage doc is generated, not hand-maintained" \
     python3 scripts/gen_coverage.py --check
 
 echo ""
@@ -73,4 +82,4 @@ if [ "${skipped}" -gt 0 ]; then
     echo "redis-cache-strategy regression: INCOMPLETE — ${skipped} gate(s) could not run"
     exit 3
 fi
-echo "redis-cache-strategy regression: passed (7/7 gates)"
+echo "redis-cache-strategy regression: passed (9/9 gates)"

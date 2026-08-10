@@ -11,7 +11,6 @@
     "consistency": "eventual"
   },
   "expected_feedback": "No violations. Correctly implements production-grade cache-aside: (1) singleflight prevents stampede on hot key miss, (2) TTL with jitter prevents avalanche, (3) null-value caching uses a sentinel the JSON encoder cannot emit, so it cannot collide with a real value, (4) a Redis error is distinguished from a miss and surfaced as ErrCacheUnavailable rather than silently entering the populate path, (5) errors.Is is used for both redis.Nil and sql.ErrNoRows so a wrapped error cannot defeat the branch, (6) the singleflight result is type-asserted in two-value form, (7) key naming follows namespace convention.",
-  "violated_rule": null,
   "detectors": [],
   "detector_note": "Exemplar: must produce zero findings from every code rule. This is the false-positive gate — a rule that fires here is over-broad, and an exemplar that fires here is not an exemplar.",
   "coverage_rules": [
@@ -24,5 +23,6 @@
     "cache-aside"
   ],
   "reference": "SKILL.md",
-  "primary_defect_gated_by": null
+  "primary_defect_gated_by": null,
+  "scorecard_items": []
 }

@@ -3,6 +3,12 @@
 Four failure modes that cause production incidents when caching layers are
 improperly designed. Each has distinct triggers, symptoms, and mitigations.
 
+- [1. Cache Stampede (Thundering Herd)](#1-cache-stampede-thundering-herd)
+- [2. Cache Penetration](#2-cache-penetration)
+- [3. Cache Avalanche](#3-cache-avalanche)
+- [4. Hot Key](#4-hot-key)
+- [5. Combined Defense Matrix](#5-combined-defense-matrix)
+
 ---
 
 ## 1. Cache Stampede (Thundering Herd)

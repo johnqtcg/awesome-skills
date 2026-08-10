@@ -29,6 +29,34 @@ Exit codes
 0  all non-skipped snippets compiled
 1  at least one snippet failed to compile
 3  INCOMPLETE -- toolchain or modules unavailable; NOT a pass
+
+Environment failures are not compile failures
+---------------------------------------------
+`go build` exits non-zero for reasons that have nothing to do with the code --
+a read-only build cache in a sandbox produces
+
+    go: failed to trim cache: open .../trim.txt: operation not permitted
+
+with every package built successfully. Reporting that as "a snippet is broken"
+sends the reader hunting a defect that does not exist; reporting it as a pass
+would be worse -- and in a mutation sweep, a gate that returns 1 unconditionally
+credits itself with every kill.
+
+Three layers, in order of how much they are relied on:
+
+1. **A private, persistent GOCACHE, always.** Not a fallback. The cache trim is
+   periodic, not per-invocation: Go records the last trim in `trim.txt` and only
+   retries after an interval, so a cheap probe can succeed while the very next
+   longer command trips the same unwritable cache. A conditional fallback
+   therefore fires only sometimes, which is worse than never -- it makes the
+   gate intermittently INCOMPLETE for a reason nobody can reproduce. Owning the
+   cache removes the cause instead of detecting it. The directory is stable
+   across runs, so it stays warm.
+2. **A positive control.** A known-good package is compiled before the snippets.
+   If that fails, nothing here is measuring snippets and the gate says so.
+3. **Diagnostic-based classification.** A non-zero exit with no `file:line:col:`
+   diagnostic anywhere is reported INCOMPLETE (exit 3), never as a broken
+   snippet.
 """
 
 from __future__ import annotations
@@ -260,6 +288,57 @@ def extract(doc: Path) -> list[Snippet]:
     return out
 
 
+DIAG_RE = re.compile(r"^(?:\./)?[\w./-]+\.go:\d+:\d+:\s", re.M)
+
+
+# Stable so the cache stays warm between runs; under the sandbox-writable temp
+# dir so it exists whether or not $HOME/Library/Caches is reachable.
+PRIVATE_GOCACHE = Path(tempfile.gettempdir()) / "rcs-gocheck-gocache"
+
+
+def build_env() -> dict[str, str]:
+    env = dict(os.environ)
+    env.pop("GOROOT", None)  # inherited GOROOT breaks a differently-installed toolchain
+    env["GOFLAGS"] = "-mod=mod"
+    # Unconditional, not a fallback -- see the module docstring. GOMODCACHE is
+    # deliberately left alone: module downloads should stay shared, and it is the
+    # *build* cache whose trim step needs write access.
+    PRIVATE_GOCACHE.mkdir(parents=True, exist_ok=True)
+    env["GOCACHE"] = str(PRIVATE_GOCACHE)
+    return env
+
+
+def preflight(env: dict[str, str]) -> tuple[bool, str]:
+    """Compile a known-good package that exercises the real dependency path.
+
+    The probe imports one of the same modules the snippets do, so it covers
+    `go mod tidy` and the module cache -- not just the compiler. An earlier
+    version compiled a dependency-free package, which could succeed while the
+    dependency-resolving build that followed failed for an environment reason,
+    leaving exactly the ambiguity the probe exists to remove.
+    """
+    probe = Path(tempfile.mkdtemp(prefix="gocheck-probe-"))
+    try:
+        (probe / "go.mod").write_text(GO_MOD, encoding="utf-8")
+        (probe / "p.go").write_text(
+            'package probe\n\nimport "github.com/redis/go-redis/v9"\n\n'
+            "func F() error { return redis.Nil }\n",
+            encoding="utf-8")
+        tidy = subprocess.run(["go", "mod", "tidy"], cwd=probe, env=env,
+                              capture_output=True, text=True)
+        if tidy.returncode != 0:
+            return False, "`go mod tidy` failed on a known-good package:\n" + tidy.stderr.strip()
+        r = subprocess.run(["go", "build", "./..."], cwd=probe, env=env,
+                           capture_output=True, text=True)
+        if r.returncode == 0:
+            return True, ""
+        if DIAG_RE.search(r.stderr):
+            return False, "the toolchain rejects a known-good package:\n" + r.stderr.strip()
+        return False, r.stderr.strip() or f"exit {r.returncode} with no diagnostic"
+    finally:
+        shutil.rmtree(probe, ignore_errors=True)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", action="store_true", help="machine-readable summary")
@@ -281,16 +360,22 @@ def main() -> int:
         print("INCOMPLETE: no compilable snippets found -- extractor is broken", file=sys.stderr)
         return 3
 
+    env = build_env()
+    usable, detail = preflight(env)   # mutates env with a private GOCACHE if needed
+    if not usable:
+        print("INCOMPLETE: the Go toolchain cannot build a known-good package; "
+              "snippets NOT verified.", file=sys.stderr)
+        print(detail[:2000], file=sys.stderr)
+        return 3
+    if detail:
+        print(f"note: {detail}", file=sys.stderr)
+
     work = Path(tempfile.mkdtemp(prefix="gocheck-"))
     (work / "go.mod").write_text(GO_MOD, encoding="utf-8")
     for s in todo:
         d = work / s.pkg
         d.mkdir(parents=True, exist_ok=True)
         (d / "snippet.go").write_text(s.render(), encoding="utf-8")
-
-    env = dict(os.environ)
-    env.pop("GOROOT", None)  # inherited GOROOT breaks a differently-installed toolchain
-    env["GOFLAGS"] = "-mod=mod"
 
     tidy = subprocess.run(
         ["go", "mod", "tidy"], cwd=work, env=env, capture_output=True, text=True
@@ -311,6 +396,18 @@ def main() -> int:
         m = re.match(r"^(?:\./)?(s\d+_[\w]+)/snippet\.go:(\d+):(\d+):\s*(.*)$", line.strip())
         if m and m.group(1) in by_pkg:
             failures.append((by_pkg[m.group(1)].ref, m.group(4)))
+
+    # Non-zero exit with no compiler diagnostic anywhere is an environment
+    # problem that survived preflight -- report INCOMPLETE, never a snippet
+    # failure. A diagnostic we could not attribute to a package is still a real
+    # failure and falls through to exit 1 with the raw stderr.
+    if build.returncode != 0 and not DIAG_RE.search(build.stderr):
+        print("INCOMPLETE: `go build` failed with no compiler diagnostic; "
+              "snippets NOT verified.", file=sys.stderr)
+        print(build.stderr.strip()[:2000], file=sys.stderr)
+        if not args.keep:
+            shutil.rmtree(work, ignore_errors=True)
+        return 3
 
     ok = build.returncode == 0
     if args.json:

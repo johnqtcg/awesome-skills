@@ -13,12 +13,15 @@ run exits 3 and is reported as SKIPPED — never as a pass.
 | 1 | `lint_cache_docs.py --selftest` | Every rule still fires on its own violating input — a dead rule reports "clean" |
 | 2 | `lint_cache_docs.py` | Semantic invariants the compiler cannot see |
 | 3 | `check_go_snippets.py` | Every Go snippet in the docs actually compiles |
-| 4 | `test_skill_contract.py` | SKILL.md structure, required sections, reference files |
-| 5 | `test_golden_scenarios.py` | Fixtures drive the real checker, both directions |
-| 6 | `mutation_sweep.py` | Each gate rejects the defect it claims to catch |
+| 4 | `test_skill_contract.py` | SKILL.md structure, scorecard arithmetic, reference TOCs |
+| 5 | `test_golden_scenarios.py` | Fixtures drive the real checker, both directions, and every §5 item a defect violates can actually affect the score |
+| 6 | `model_eval.py --calibrate` | The model-eval grader separates on each axis independently — offline, no model |
+| 7 | `trigger_eval.py --check` | The routing corpus is well-formed and its negatives are adversarial |
+| 8 | `mutation_sweep.py` | Each gate rejects the defect it claims to catch |
+| 9 | `gen_coverage.py --check` | This file is generated from the gates, not maintained by hand |
 
-Collected tests: **50** contract · **182** golden.
-Mutations: **12**. Lint rules: **13**.
+Collected tests: **64** contract · **232** golden.
+Mutations: **25**. Lint rules: **18**.
 
 ## 2. Lint rules
 
@@ -32,10 +35,15 @@ Declared as data in `lint_cache_docs.py`; `--selftest` asserts each one fires.
 | `RC004` | code | Redis write whose error is discarded in a non-anti-example (a silent populate/invalidate failure is invisible and unbounded). |
 | `RC005` | code | rand.Intn/Int31n/Int63n whose argument can be zero (panics). |
 | `RC006` | prose | Write-through must not be sold as strong/zero-staleness without the cache-write failure semantics that bound it. |
+| `RC017` | global | No absolute freshness claim about a cache without a qualification on the same line -- a cache in front of a database is eventually consistent in every pattern. |
 | `RC007` | skill | Value-shape guidance must name the listpack thresholds and gate per-field TTL on HEXPIRE/7.4 -- and each claim must live in its OWN bullet. |
 | `RC008` | global | Distributed-lock guidance must cover fencing, bounded renewal and failover -- TTL + token + CAS alone is not a safe lock. |
 | `RC009` | skill | Gate 1 blocking items must appear in a STOP condition and must not be described as assumable. |
-| `RC010` | skill | Scorecard tier counts in the verdict line must equal the number of checkboxes actually listed in each tier. |
+| `RC010` | skill | §5 must be the only item list: every ID it defines is contiguous per tier and covered by exactly one §8 tier range, and §8 defines no items of its own. |
+| `RC014` | skill | The scoring vocabulary must be DEFINED where the items are: a verdict table with rows for PASS/WARN/FAIL/N-A/NOT SCOREABLE, or an unjudgeable item silently becomes a pass. |
+| `RC015` | global | A version-gated Redis feature must carry its version where it is named -- an unqualified feature claim is wrong on every older server. |
+| `RC018` | global | Keyspace notifications must never be listed as an authoritative invalidation mechanism -- Pub/Sub is fire-and-forget and node-local, so it cannot sit in the same tier as CDC or a transactional outbox. |
+| `RC016` | global | A delayed second delete must not be prescribed as an in-process sleep or goroutine -- it dies with the process, exactly like AE-2's write-behind. |
 | `RC013` | code | Blocking O(N) or destructive command on a live keyspace (KEYS/FLUSHALL/FLUSHDB) -- single-threaded Redis stalls every other client meanwhile. |
 | `RC012` | code | Cache write with an explicit zero expiration (no TTL) -- the entry never expires, so a missed invalidation is stale forever, not stale until TTL. |
 | `RC011` | global | Prose must not recommend hash-of-key shard/replica notation without repudiating it (RC001 only sees code blocks). |
@@ -71,10 +79,38 @@ recorded per fixture rather than left silent.
 mechanically gated. The rest depend on the model reading SKILL.md — that is
 the honest limit of a static gate, stated rather than hidden.
 
-## 4. Go compile gate
+## 4. Scorecard reachability
 
-`check_go_snippets.py` extracts every ```go block from SKILL.md and
-`references/*.md`, wraps each in a package, and runs `go build`.
+Each fixture names the §5 item IDs it violates. A `critical` fixture whose
+worst item sits in a lower tier cannot force a FAIL, so that combination is
+a test failure rather than a footnote.
 
-Files covered: `SKILL.md`.
+| Fixture | Severity | §5 items |
+|---------|----------|----------|
+| CACHE-001 | critical | C2, C3 |
+| CACHE-002 | critical | C8 |
+| CACHE-003 | critical | C5 |
+| CACHE-004 | standard | S2 |
+| CACHE-005 | standard | S7 |
+| CACHE-006 | standard | C2 |
+| CACHE-011 | standard | S3 |
+| CACHE-012 | critical | C6 |
+| CACHE-013 | standard | S4 |
+| CACHE-014 | critical | C7 |
+| CACHE-015 | critical | C4 |
+| CACHE-016 | critical | C2, C3 |
+| CACHE-017 | critical | C9, S7 |
+
+§5 defines **21** items; **12** are
+exercised by a fixture. Uncovered: `C1`, `S1`, `S5`, `S6`, `H1`, `H2`, `H3`, `H4`, `H5`. That list is derived as `items − exercised`, not counted from
+passing tests — a new item with no fixture would otherwise be invisible.
+
+## 5. Go compile gate
+
+`check_go_snippets.py` extracts every ```go block from the docs below,
+wraps each in a package, and runs `go build`. A known-good package is
+compiled first, so an environment failure reports INCOMPLETE (exit 3)
+instead of blaming a snippet.
+
+Files covered: `SKILL.md`, `references/cache-anti-examples.md`, `references/cache-failure-modes.md`, `references/cache-patterns.md`, `references/distributed-locks.md`, `references/redis-version-matrix.md`.
 

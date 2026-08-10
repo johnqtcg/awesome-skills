@@ -11,7 +11,6 @@
     "consistency": "eventual"
   },
   "expected_feedback": "Critical: When Redis is unreachable, this function returns an error directly — meaning a Redis outage takes down the order service entirely. Redis is a cache, not the source of truth. Degradation path must exist: (1) on cache error, fall through to database query (with rate limiting to prevent DB overload), (2) optionally serve from local in-process cache if available, (3) return a degraded but functional response rather than 500. Cache unavailability should degrade performance, not availability.",
-  "violated_rule": "Cache-down degradation path exists",
   "coverage_rules": [
     "degradation",
     "cache-down",
@@ -21,5 +20,8 @@
   "reference": "SKILL.md",
   "detectors": [],
   "primary_defect_gated_by": null,
-  "detector_note": "Absence of a degradation path cannot be seen in a snippet that simply never mentions it. Model-judgement only."
+  "detector_note": "Absence of a degradation path cannot be seen in a snippet that simply never mentions it. Model-judgement only.",
+  "scorecard_items": [
+    "C5"
+  ]
 }

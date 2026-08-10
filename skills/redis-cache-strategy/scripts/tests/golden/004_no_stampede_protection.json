@@ -11,7 +11,6 @@
     "peak_qps": "5000"
   },
   "expected_feedback": "Standard: When the hot product key expires, all 5000 concurrent requests miss the cache simultaneously and query the database — a cache stampede (thundering herd). At 5K QPS, this can exhaust DB connection pools and cause cascading timeouts. Use singleflight (golang.org/x/sync/singleflight) to ensure only one goroutine fetches from DB while others wait for the result. Alternative: stale-while-revalidate pattern or probabilistic early expiration.",
-  "violated_rule": "Stampede protection for hot keys",
   "coverage_rules": [
     "stampede",
     "singleflight",
@@ -24,5 +23,8 @@
     "RC004"
   ],
   "primary_defect_gated_by": null,
-  "detector_note": "Absence of singleflight is not reliably greppable; the sentinel == and discarded write are gated."
+  "detector_note": "Absence of singleflight is not reliably greppable; the sentinel == and discarded write are gated.",
+  "scorecard_items": [
+    "S2"
+  ]
 }

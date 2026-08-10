@@ -24,5 +24,6 @@
   "reference": "SKILL.md",
   "detectors": [],
   "primary_defect_gated_by": null,
-  "detector_note": "Workflow fixture: greenfield design request, no code defect to gate."
+  "detector_note": "Workflow fixture: greenfield design request, no code defect to gate.",
+  "scorecard_items": []
 }

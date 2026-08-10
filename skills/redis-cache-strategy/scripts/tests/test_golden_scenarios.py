@@ -26,6 +26,7 @@ an over-broad rule visible instead of merely quiet.
 import importlib.util
 import json
 import pathlib
+import re
 import sys
 
 import pytest
@@ -58,10 +59,23 @@ LINT = _load_linter()
 CODE_RULES = [r for r in LINT.RULES if r.scope == "code"]
 KNOWN_RULE_IDS = {r.id for r in LINT.RULES}
 
+# §5's items, parsed from SKILL.md itself so this file cannot hold a stale copy.
+SKILL_ITEMS = LINT.skill_items(SKILL_MD)
+ALL_ITEM_IDS = {f"{p}{n}" for p, nums in SKILL_ITEMS.items() for n in nums}
+TIER_RANK = {"H": 1, "S": 2, "C": 3}
+SEVERITY_RANK = {"hygiene": 1, "standard": 2, "critical": 3}
+
 
 def _all_docs_lower() -> str:
+    """Joined docs, lowercased, with runs of whitespace collapsed.
+
+    The collapse matters: without it a two-word concept that happens to straddle
+    a line wrap ("… with Redis\\nunavailable …") reads as absent, so the test
+    fails for a formatting reason and gets "fixed" by re-wrapping prose around
+    an assertion. Normalise here instead.
+    """
     parts = [SKILL_MD] + [f.read_text(encoding="utf-8") for f in sorted(REFS_DIR.glob("*.md"))]
-    return "\n".join(parts).lower()
+    return re.sub(r"\s+", " ", "\n".join(parts).lower())
 
 
 def _load_fixtures() -> list[dict]:
@@ -78,7 +92,17 @@ VALID_SEVERITIES = {"critical", "standard", "hygiene", "none"}
 REQUIRED_FIELDS = {
     "id", "title", "type", "severity", "code_snippet", "expected_feedback",
     "coverage_rules", "reference", "detectors", "primary_defect_gated_by",
-    "detector_note",
+    "detector_note", "scorecard_items",
+}
+
+# §5 items that no fixture exercises yet. Derived-minus-declared is asserted
+# below, so adding an item without a fixture is a deliberate edit here rather
+# than a silent hole: "17/17 fixtures pass" says nothing about an item that has
+# no fixture at all, because the denominator is the fixture list.
+ITEMS_WITHOUT_A_FIXTURE = {
+    "C1",  # source of truth — a design statement, not a code shape
+    "S1", "S5", "S6",  # jitter, hot key, staleness window
+    "H1", "H2", "H3", "H4", "H5",  # every hygiene item
 }
 
 # Declared coverage. Fixtures whose HEADLINE defect no code rule can gate --
@@ -216,6 +240,95 @@ class TestDetectorBehaviour:
         if fix["primary_defect_gated_by"] is None:
             assert len(fix["detector_note"].strip()) >= 40, \
                 f"{fix['id']}: ungated primary defect needs a stated reason"
+
+
+# ---------------------------------------------------------------------------
+# the scorecard must be able to act on what the fixtures find
+# ---------------------------------------------------------------------------
+
+class TestScorecardReachability:
+    """The defect this class exists to prevent.
+
+    Before 2026-08-10, §5 listed 14 checklist items and §8 scored a *different*
+    14. Three fixtures marked `critical` — write-behind for money (CACHE-012),
+    a cross-tenant key (CACHE-014), an unfenced correctness lock (CACHE-017) —
+    mapped only to §8 entries in the Standard tier, and Standard tolerated one
+    failure. A review could therefore find all three, report them as Critical
+    in prose, and still print PASS.
+
+    These tests make that unrepresentable: a fixture names the §5 IDs it
+    violates, those IDs must exist, and the tier of at least one of them must be
+    at least as severe as the fixture claims to be.
+    """
+
+    def test_skill_defines_items(self):
+        assert SKILL_ITEMS, "SKILL.md §5 defines no C/S/H items — parser or doc broke"
+        assert set(SKILL_ITEMS) == {"C", "S", "H"}, f"unexpected tiers: {sorted(SKILL_ITEMS)}"
+
+    @pytest.mark.parametrize("fix", FIXTURES, ids=ids(FIXTURES))
+    def test_scorecard_items_exist(self, fix):
+        unknown = set(fix["scorecard_items"]) - ALL_ITEM_IDS
+        assert not unknown, (
+            f"{fix['id']}: names §5 item(s) {sorted(unknown)} that SKILL.md does not define. "
+            f"Defined: {sorted(ALL_ITEM_IDS)}"
+        )
+
+    @pytest.mark.parametrize("fix", [f for f in FIXTURES if f["type"] == "defect"],
+                             ids=ids([f for f in FIXTURES if f["type"] == "defect"]))
+    def test_defect_names_at_least_one_item(self, fix):
+        assert fix["scorecard_items"], \
+            f"{fix['id']} is a defect that violates no §5 item — it cannot affect any score"
+
+    @pytest.mark.parametrize("fix", [f for f in FIXTURES if f["type"] == "defect"],
+                             ids=ids([f for f in FIXTURES if f["type"] == "defect"]))
+    def test_severity_can_actually_block(self, fix):
+        """A `critical` fixture must map to a Critical item, or its severity is decorative."""
+        want = SEVERITY_RANK[fix["severity"]]
+        best = max(TIER_RANK[i[0]] for i in fix["scorecard_items"])
+        assert best >= want, (
+            f"{fix['id']} is severity={fix['severity']} but its worst §5 item is tier "
+            f"{[k for k, v in TIER_RANK.items() if v == best][0]}*. A Critical finding that "
+            f"lands only in Standard cannot force a FAIL — Standard tolerates a miss."
+        )
+
+    @pytest.mark.parametrize("fix", [f for f in FIXTURES if f["type"] != "defect"],
+                             ids=ids([f for f in FIXTURES if f["type"] != "defect"]))
+    def test_non_defect_names_no_items(self, fix):
+        assert fix["scorecard_items"] == [], \
+            f"{fix['id']} is {fix['type']} but claims to violate {fix['scorecard_items']}"
+
+    def test_uncovered_items_are_declared(self):
+        """Coverage is `items - exercised`, not `fixtures that passed`.
+
+        A new §5 item with no fixture is invisible to a suite whose denominator
+        is the fixture list; deriving the complement makes it visible.
+        """
+        exercised = {i for f in FIXTURES for i in f["scorecard_items"]}
+        uncovered = ALL_ITEM_IDS - exercised
+        assert uncovered == ITEMS_WITHOUT_A_FIXTURE, (
+            f"§5 item coverage drifted.\n"
+            f"  newly uncovered (add a fixture, or declare it): "
+            f"{sorted(uncovered - ITEMS_WITHOUT_A_FIXTURE)}\n"
+            f"  now covered (remove from the declaration): "
+            f"{sorted(ITEMS_WITHOUT_A_FIXTURE - uncovered)}"
+        )
+
+    def test_every_critical_item_that_has_a_fixture_is_reachable(self):
+        """Each Critical item with a fixture must have a *critical* fixture.
+
+        Otherwise the item is scored as Critical but only ever demonstrated by a
+        case the suite calls Standard, and nothing proves the tier is load-bearing.
+        """
+        crit_items = {f"C{n}" for n in SKILL_ITEMS.get("C", [])}
+        by_item: dict[str, set[str]] = {}
+        for f in FIXTURES:
+            for i in f["scorecard_items"]:
+                by_item.setdefault(i, set()).add(f["severity"])
+        for item in sorted(crit_items & set(by_item)):
+            assert "critical" in by_item[item], (
+                f"{item} is a Critical item but every fixture naming it is "
+                f"{sorted(by_item[item])} — nothing proves it can force a FAIL"
+            )
 
 
 # ---------------------------------------------------------------------------

@@ -11,7 +11,6 @@
     "consistency": "undefined"
   },
   "expected_feedback": "Critical: Cache and DB are both written directly but no explicit consistency strategy is defined. Other write paths (other services, DB triggers, admin tools) bypass the cache entirely, causing divergence. This is 'write both and hope' — the most common cache consistency anti-pattern. Define a source of truth (DB), choose a pattern (cache-aside with invalidation, or write-through), and ensure ALL write paths invalidate or update the cache. Also: TTL is 0 (immortal key) — stale data persists indefinitely.",
-  "violated_rule": "Cache-DB consistency strategy explicitly defined",
   "coverage_rules": [
     "consistency",
     "source of truth",
@@ -24,5 +23,9 @@
     "RC012"
   ],
   "primary_defect_gated_by": null,
-  "detector_note": "Headline defect (no consistency strategy) is a design judgement; the unbounded TTL and discarded write are gated."
+  "detector_note": "Headline defect (no consistency strategy) is a design judgement; the unbounded TTL and discarded write are gated.",
+  "scorecard_items": [
+    "C2",
+    "C3"
+  ]
 }

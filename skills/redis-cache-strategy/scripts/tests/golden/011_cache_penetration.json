@@ -11,7 +11,6 @@
     "consistency": "eventual"
   },
   "expected_feedback": "Standard: When a non-existent ID is requested, the cache always misses and the DB always returns no rows — but this 'not found' result is never cached. An attacker or misbehaving client can enumerate random IDs to bypass the cache layer entirely and overload the database (cache penetration). Defense: cache the null/not-found result with a short TTL (30-60 seconds): rdb.Set(ctx, key, '__NULL__', 60*time.Second). For APIs with user-supplied IDs, also consider a bloom filter as a first-line defense.",
-  "violated_rule": "Penetration protection",
   "coverage_rules": [
     "penetration",
     "null",
@@ -24,5 +23,8 @@
     "RC004"
   ],
   "primary_defect_gated_by": null,
-  "detector_note": "Penetration protection is an absence; the two == sentinel comparisons that would defeat a null cache are gated."
+  "detector_note": "Penetration protection is an absence; the two == sentinel comparisons that would defeat a null cache are gated.",
+  "scorecard_items": [
+    "S3"
+  ]
 }

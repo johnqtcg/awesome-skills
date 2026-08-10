@@ -23,5 +23,6 @@
     "RC004"
   ],
   "primary_defect_gated_by": null,
-  "detector_note": "Degradation scenario: tests that the model refuses to assert without context. Snippet defect is incidental."
+  "detector_note": "Degradation scenario: tests that the model refuses to assert without context. Snippet defect is incidental.",
+  "scorecard_items": []
 }

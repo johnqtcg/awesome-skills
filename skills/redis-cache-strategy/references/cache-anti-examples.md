@@ -1,7 +1,94 @@
-# Extended Cache Anti-Examples
+# Cache Anti-Examples
 
-Supplementary to the inline anti-examples in §7 of the SKILL.md.
-Load when reviewing caching code that exhibits suspicious patterns.
+Every anti-example this skill ships. AE-1 to AE-6 are the six a review must
+recognise on sight; AE-7 to AE-13 are the longer tail. §10 of SKILL.md loads
+this file for any review or troubleshoot request.
+
+- [AE-1: Immortal cache key — no TTL set](#ae-1-immortal-cache-key--no-ttl-set)
+- [AE-2: Write-behind without durable queue](#ae-2-write-behind-without-durable-queue)
+- [AE-3: Cache-aside without stampede protection](#ae-3-cache-aside-without-stampede-protection)
+- [AE-4: KEYS command for batch invalidation](#ae-4-keys-command-for-batch-invalidation)
+- [AE-5: Distributed lock without TTL or safe release](#ae-5-distributed-lock-without-ttl-or-safe-release)
+- [AE-6: Cache issue reported as business logic bug](#ae-6-cache-issue-reported-as-business-logic-bug)
+- [AE-7: Caching database query results with mutable WHERE clauses](#ae-7-caching-database-query-results-with-mutable-where-clauses)
+- [AE-8: Using Redis as primary data store without persistence or replication](#ae-8-using-redis-as-primary-data-store-without-persistence-or-replication)
+- [AE-9: SET then GET race in cache population](#ae-9-set-then-get-race-in-cache-population)
+- [AE-10: Unbounded cache growth without eviction policy](#ae-10-unbounded-cache-growth-without-eviction-policy)
+- [AE-11: Caching sensitive data without considering expiry and access control](#ae-11-caching-sensitive-data-without-considering-expiry-and-access-control)
+- [AE-12: Cache invalidation via wildcard pattern in production](#ae-12-cache-invalidation-via-wildcard-pattern-in-production)
+- [AE-13: Ignoring cache during load testing](#ae-13-ignoring-cache-during-load-testing)
+
+---
+
+## AE-1: Immortal cache key — no TTL set
+```go
+// WRONG: key lives forever; stale data never expires
+rdb.Set(ctx, "user:123", userData, 0)  // 0 = no expiration
+// RIGHT: always set TTL with jitter, and check that the write landed
+ttl := 30*time.Minute + time.Duration(rand.Intn(300))*time.Second
+if err := rdb.Set(ctx, "user:123", userData, ttl).Err(); err != nil {
+    slog.WarnContext(ctx, "cache populate failed", "key", "user:123", "err", err)
+}
+```
+
+## AE-2: Write-behind without durable queue
+```go
+// WRONG: write to Redis, async goroutine writes DB — if process crashes, data lost
+rdb.Set(ctx, key, value, ttl)
+go func() { db.Save(value) }()  // fire-and-forget = data loss risk
+// RIGHT: use durable queue (Kafka, Redis Stream with ACK) between cache and DB
+```
+
+## AE-3: Cache-aside without stampede protection
+```go
+// WRONG: 1000 concurrent requests all miss cache, all query DB simultaneously
+val, err := rdb.Get(ctx, key).Bytes()
+if errors.Is(err, redis.Nil) {
+    val = db.Query(id)           // 1000 goroutines hit the DB at once...
+    rdb.Set(ctx, key, val, ttl)  // ...and 1000 of them write the same value back
+}
+// RIGHT: singleflight collapses them into one DB query per key
+v, err, _ := sfGroup.Do(key, func() (any, error) {
+    return db.Query(id), nil
+})
+val, _ = v.([]byte)
+```
+
+## AE-4: KEYS command for batch invalidation
+```go
+// WRONG: KEYS blocks Redis for the entire scan — O(N) on all keys
+keys, _ := rdb.Keys(ctx, "user:*").Result()
+rdb.Del(ctx, keys...)
+// RIGHT: use SCAN with bounded cursor iteration, or structured invalidation
+```
+
+## AE-5: Distributed lock without TTL or safe release
+```go
+// WRONG: lock has no TTL — if holder crashes, lock is held forever (deadlock)
+rdb.SetNX(ctx, "lock:order:123", "1", 0)
+// Also WRONG: releasing without checking ownership
+rdb.Del(ctx, "lock:order:123")  // may delete someone else's lock
+// Also WRONG: discarding SetNX's bool — that value IS the lock. Ignoring it
+// means you run the critical section whether or not you acquired anything.
+// RIGHT: TTL + unique token + check acquisition + Lua CAS release
+token := uuid.New().String()
+ok, err := rdb.SetNX(ctx, "lock:order:123", token, 10*time.Second).Result()
+if err != nil || !ok {
+    return // not acquired: do NOT enter the critical section
+}
+// Release with Lua: if redis.call('get',KEYS[1])==ARGV[1] then return redis.call('del',KEYS[1]) end
+```
+
+TTL + token + CAS makes the lock *well-formed*, not *safe*. If the lock guards
+anything outside Redis, see `references/distributed-locks.md` — you also need a
+fencing token, bounded renewal, and a documented failover position.
+
+## AE-6: Cache issue reported as business logic bug
+```
+-- WRONG: "Bug: user sees old profile after update"
+-- This is a cache staleness issue, not a logic bug. Check invalidation strategy.
+-- RIGHT: report as "Cache consistency: stale read after write — invalidation delay"
+```
 
 ---
 
@@ -133,7 +220,7 @@ func invalidateUser(ctx context.Context, id string) error {
 ```
 
 If the entity is stored as a single Hash, one `DEL` of that key covers every
-field — but see §5.2 item 6 in `SKILL.md` before reshaping data into a Hash for
+field — but see §5 item H2 in `SKILL.md` before reshaping data into a Hash for
 this reason alone: it is the right move only when readers actually fetch fields
 individually.
 

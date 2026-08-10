@@ -3,6 +3,13 @@
 Four primary caching patterns for production backend services. Each pattern has
 a distinct consistency model, failure profile, and operational complexity.
 
+- [1. Cache-Aside (Lazy Loading)](#1-cache-aside-lazy-loading)
+- [2. Write-Through](#2-write-through)
+- [3. Write-Behind (Write-Back)](#3-write-behind-write-back)
+- [4. Dual-Write Debounce](#4-dual-write-debounce)
+- [5. Pattern Selection Matrix](#5-pattern-selection-matrix)
+- [6. Operational Checklist for Any Pattern](#6-operational-checklist-for-any-pattern)
+
 ---
 
 ## 1. Cache-Aside (Lazy Loading)
@@ -132,12 +139,14 @@ Write path:
 
 Read path:
   1. App reads from Redis
-  2. Cache HIT → return (always fresh since writes update cache)
+  2. Cache HIT → return the value the last SUCCESSFUL cache write left there
+     (that is read-your-writes on the happy path — NOT "always fresh";
+      see "Write-through does not give you strong consistency" below)
   3. Cache MISS → query database → populate cache → return
 ```
 
 ### Best for
-- Latency-sensitive reads where freshness is critical
+- Latency-sensitive reads that need read-your-writes on the write path
 - Moderate write volume (each write has added Redis SET latency)
 - Systems where cache miss penalty is very high
 
@@ -182,6 +191,7 @@ sufficient — you need the outbox or CDC. Say which one, in writing.
 ### Guardrails
 - Set TTL even in write-through — it is the backstop for every drift case above
 - Guard the cache write with a version check so out-of-order writers cannot invert
+  (`SET key val IFEQ <expected-previous>` on 8.4+; Lua CAS below that)
 - Keep writes idempotent — retry-safe
 - Consider write-through only for data that is read within seconds of writing
 
@@ -238,21 +248,65 @@ In cache-aside, a race exists between write-invalidation and concurrent reads:
 Write path:
   1. App writes to database
   2. App DELs cache key immediately
-  3. App schedules a second DEL after delay (100ms–1s)
-     (via delayed job, or sleep in goroutine)
+  3. App enqueues a second DEL, to run after `delay`, on a DURABLE mechanism
 ```
 
 The second DEL catches the race: if a concurrent reader re-cached stale data
 between step 2 and 3, the delayed DEL cleans it up.
 
+#### Deriving `delay` — it is not a constant
+
+The delay must cover the longest window in which an in-flight reader could still
+write a pre-write value into the cache. That is a measured quantity:
+
+```
+delay ≥ p99.9(DB read for this entity)      ← the slow reader's query
+      + p99(serialise + cache populate)     ← its SET landing after your DEL
+      + scheduling/queue latency of the delayed job itself
+      + margin
+```
+
+A number picked from a blog post — 100ms, 500ms, 1s — is a guess about someone
+else's p99.9. If your slowest read for that entity is 1.4s under load, a 500ms
+double-delete fires *before* the stale write lands and does nothing at all,
+while looking implemented. Measure the read latency distribution for the specific
+entity, and re-derive when it changes.
+
+Whatever you pick becomes part of the staleness window you publish (§5 S6): a
+reader between the two deletes can observe the stale value.
+
+#### The delayed DEL must survive the process
+
+**Do not implement step 3 as `go func() { time.Sleep(d); rdb.Del(...) }()`.**
+That is the same defect as AE-2's fire-and-forget write-behind goroutine, and it
+fails the same way: a deploy, an OOM kill, or a panic between the two deletes
+loses the second one silently, and the stale entry then survives until TTL with
+no record that the mechanism did not run. An in-process sleep is not a retry
+mechanism, it is a hope with a timer.
+
+Durable options, in increasing order of strength:
+
+| Mechanism | Survives process death | Notes |
+|-----------|:----------------------:|-------|
+| Delayed job queue (Redis Stream + consumer group, SQS, Sidekiq-style) | yes | The usual answer; needs the consumer to be running |
+| Transactional outbox row with `run_after` | yes | Committed with the data write, so it cannot be lost even if the process dies before enqueueing |
+| CDC-driven invalidation | yes | Removes the race entirely — no second delete needed |
+| In-process `time.AfterFunc` / sleeping goroutine | **no** | Acceptable only where losing an invalidation is acceptable, i.e. where you did not need double-delete |
+
+If the only available mechanism is in-process, prefer a **version-guarded cache
+write** instead: stamp the cached payload with the row version and refuse to
+overwrite a newer one (`SET … IFEQ` on 8.4+, Lua CAS below). That removes the
+race at its source rather than racing it a second time.
+
 ### Best for
 - Hot keys with frequent concurrent reads AND writes
-- Cache-aside base pattern with known race conditions
-- When staleness window of 100ms–1s is acceptable
+- Cache-aside base pattern with a measured read-latency tail
+- When a staleness window of `delay` is acceptable and published
 
 ### Guardrails
 - Bound the delay queue/retry count to prevent pileup
-- Monitor stale-read rate to tune debounce window
+- Alert when the delayed DEL fails or is dropped — silent loss is the failure mode
+- Monitor stale-read rate to tune the window against the derivation above
 - Consider per-entity debounce policy (not all keys need it)
 
 ---
@@ -262,7 +316,7 @@ between step 2 and 3, the delayed DEL cleans it up.
 | Consistency need | Read:Write ratio | Recommended | Staleness on the happy path | Staleness when the cache write fails |
 |-----------------|:----------------:|-------------|------------------|------------------|
 | Eventual (seconds OK) | Read-heavy (>80%) | **Cache-Aside** | TTL-bounded | TTL-bounded (DEL failure = stale until TTL) |
-| Read-your-writes | Moderate writes | **Write-Through** | Near-zero | **TTL-bounded, or unbounded if TTL is absent** — see "Cache-write failure semantics" |
+| Read-your-writes | Moderate writes | **Write-Through** | Near-zero — read-your-writes, never *zero* | **TTL-bounded, or unbounded if TTL is absent** — see "Cache-write failure semantics" |
 | Best-effort (async) | Write-heavy | **Write-Behind** | Unbounded until flush | Data loss, not just staleness |
 | Eventual + hot keys | Mixed with contention | **Cache-Aside + Debounce** | Debounce window | TTL-bounded |
 

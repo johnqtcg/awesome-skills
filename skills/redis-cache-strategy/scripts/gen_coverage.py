@@ -30,13 +30,57 @@ GOLDEN = TESTS / "golden"
 OUT = TESTS / "COVERAGE.md"
 
 
-def load_linter():
-    spec = importlib.util.spec_from_file_location(
-        "rcs_lint_gen", SKILL_DIR / "scripts" / "lint_cache_docs.py")
+def load_module(name: str, path: Path):
+    spec = importlib.util.spec_from_file_location(name, path)
     mod = importlib.util.module_from_spec(spec)
-    sys.modules["rcs_lint_gen"] = mod
+    sys.modules[name] = mod
     spec.loader.exec_module(mod)
     return mod
+
+
+def load_linter():
+    return load_module("rcs_lint_gen", SKILL_DIR / "scripts" / "lint_cache_docs.py")
+
+
+# What each gate proves. Keyed by the script the runner invokes, so a gate added
+# to run_regression.sh with no entry here is reported as undescribed rather than
+# omitted -- the previous version hardcoded six rows while the runner ran seven,
+# and the seventh was simply invisible in the coverage doc.
+GATE_CLAIMS: dict[str, str] = {
+    "lint_cache_docs.py --selftest":
+        'Every rule still fires on its own violating input — a dead rule reports "clean"',
+    "lint_cache_docs.py": "Semantic invariants the compiler cannot see",
+    "check_go_snippets.py": "Every Go snippet in the docs actually compiles",
+    "test_skill_contract.py": "SKILL.md structure, scorecard arithmetic, reference TOCs",
+    "test_golden_scenarios.py":
+        "Fixtures drive the real checker, both directions, and every §5 item a "
+        "defect violates can actually affect the score",
+    "model_eval.py --calibrate":
+        "The model-eval grader separates on each axis independently — offline, no model",
+    "trigger_eval.py --check":
+        "The routing corpus is well-formed and its negatives are adversarial",
+    "mutation_sweep.py": "Each gate rejects the defect it claims to catch",
+    "gen_coverage.py --check": "This file is generated from the gates, not maintained by hand",
+}
+
+
+def gates() -> list[tuple[str, str, str]]:
+    """(number, gate command, what it proves) parsed from run_regression.sh.
+
+    Derived, not declared: the runner is the only place that decides which gates
+    exist, so the table cannot claim a gate that does not run or miss one that does.
+    """
+    sh = (SKILL_DIR / "scripts" / "run_regression.sh").read_text(encoding="utf-8")
+    out: list[tuple[str, str, str]] = []
+    for m in re.finditer(
+        r'run_gate\s+"(\d+)/\d+[^"]*"\s*\\?\s*\n\s*(.+?)\n', sh, re.M
+    ):
+        num, cmd = m.group(1), m.group(2).strip()
+        cmd = re.sub(r"^python3\s+", "", cmd)
+        cmd = re.sub(r"^-m pytest\s+\"?\$\{TEST_DIR\}/", "", cmd)
+        cmd = cmd.replace("scripts/", "").replace('"', "").replace(" -q", "")
+        out.append((num, cmd, GATE_CLAIMS.get(cmd, "**UNDESCRIBED — add it to GATE_CLAIMS**")))
+    return out
 
 
 def count_tests(path: Path) -> int:
@@ -68,8 +112,6 @@ def build() -> str:
     mut = (SKILL_DIR / "scripts" / "mutation_sweep.py").read_text(encoding="utf-8")
     n_mutations = len(re.findall(r'^\s*\("M\d+",', mut, re.M))
 
-    go_docs = (SKILL_DIR / "scripts" / "check_go_snippets.py").read_text(encoding="utf-8")
-
     L: list[str] = []
     a = L.append
     a("# Test Coverage — redis-cache-strategy")
@@ -84,12 +126,8 @@ def build() -> str:
     a("")
     a("| # | Gate | What it proves |")
     a("|---|------|----------------|")
-    a("| 1 | `lint_cache_docs.py --selftest` | Every rule still fires on its own violating input — a dead rule reports \"clean\" |")
-    a("| 2 | `lint_cache_docs.py` | Semantic invariants the compiler cannot see |")
-    a("| 3 | `check_go_snippets.py` | Every Go snippet in the docs actually compiles |")
-    a("| 4 | `test_skill_contract.py` | SKILL.md structure, required sections, reference files |")
-    a("| 5 | `test_golden_scenarios.py` | Fixtures drive the real checker, both directions |")
-    a("| 6 | `mutation_sweep.py` | Each gate rejects the defect it claims to catch |")
+    for num, cmd, claim in gates():
+        a(f"| {num} | `{cmd}` | {claim} |")
     a("")
     a(f"Collected tests: **{n_contract}** contract · **{n_golden}** golden.")
     a(f"Mutations: **{n_mutations}**. Lint rules: **{len(lint.RULES)}**.")
@@ -127,16 +165,43 @@ def build() -> str:
     a("the honest limit of a static gate, stated rather than hidden.")
     a("")
 
-    a("## 4. Go compile gate")
+    a("## 4. Scorecard reachability")
     a("")
-    a("`check_go_snippets.py` extracts every ```go block from SKILL.md and")
-    a("`references/*.md`, wraps each in a package, and runs `go build`.")
-    docs = re.search(r"DOCS\s*=\s*\[(.*?)\]", go_docs, re.S)
-    if docs:
-        names = re.findall(r'"([^"]+\.md)"', docs.group(1))
-        if names:
-            a("")
-            a("Files covered: " + ", ".join(f"`{n}`" for n in names) + ".")
+    a("Each fixture names the §5 item IDs it violates. A `critical` fixture whose")
+    a("worst item sits in a lower tier cannot force a FAIL, so that combination is")
+    a("a test failure rather than a footnote.")
+    a("")
+    a("| Fixture | Severity | §5 items |")
+    a("|---------|----------|----------|")
+    for f in fixtures:
+        if f["type"] != "defect":
+            continue
+        a(f"| {f['id']} | {f['severity']} | {', '.join(f['scorecard_items']) or '—'} |")
+    a("")
+    exercised = {i for f in fixtures for i in f["scorecard_items"]}
+    items = lint.skill_items((SKILL_DIR / "SKILL.md").read_text(encoding="utf-8"))
+    all_ids = [f"{p}{n}" for p in ("C", "S", "H") for n in sorted(items.get(p, []))]
+    uncovered = [i for i in all_ids if i not in exercised]
+    a(f"§5 defines **{len(all_ids)}** items; **{len(all_ids) - len(uncovered)}** are")
+    a("exercised by a fixture. Uncovered: "
+      + (", ".join(f"`{i}`" for i in uncovered) or "none")
+      + ". That list is derived as `items − exercised`, not counted from")
+    a("passing tests — a new item with no fixture would otherwise be invisible.")
+    a("")
+
+    a("## 5. Go compile gate")
+    a("")
+    a("`check_go_snippets.py` extracts every ```go block from the docs below,")
+    a("wraps each in a package, and runs `go build`. A known-good package is")
+    a("compiled first, so an environment failure reports INCOMPLETE (exit 3)")
+    a("instead of blaming a snippet.")
+    a("")
+    # Imported, not regex-scraped: the previous version matched the first `]` in
+    # `DOCS = [SKILL_DIR / "SKILL.md"] + sorted(...)` and reported that the gate
+    # covered SKILL.md alone, understating its own coverage for months.
+    go = load_module("rcs_gocheck_gen", SKILL_DIR / "scripts" / "check_go_snippets.py")
+    names = [str(d.relative_to(SKILL_DIR)) for d in go.DOCS]
+    a("Files covered: " + ", ".join(f"`{n}`" for n in names) + ".")
     a("")
     return "\n".join(L) + "\n"
 

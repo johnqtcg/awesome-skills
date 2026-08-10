@@ -11,7 +11,6 @@
     "consistency": "eventual"
   },
   "expected_feedback": "No violations. Correct write-through pattern with honest failure semantics: (1) DB is source of truth, written first, (2) cache updated synchronously with a TTL safety net, (3) on cache-write failure the key is invalidated rather than left stale, (4) the DEL fallback is itself error-checked — when both SET and DEL fail the entry is stale until TTL, and the code says so via a metric, an error-level log, and a returned ErrCacheInconsistent instead of returning nil as if the write succeeded, (5) TTL jitter bounds the worst case. Note the consistency label is eventual, not strong: write-through cannot make the double-write atomic, so the honest claim is read-your-writes on the write path with staleness bounded by TTL.",
-  "violated_rule": null,
   "detectors": [],
   "detector_note": "Exemplar: must produce zero findings from every code rule. Also the negative control for issue-4 semantics — the DEL fallback is error-checked, so RC004 must stay silent here while still firing on a bare rdb.Del.",
   "coverage_rules": [
@@ -22,5 +21,6 @@
     "degradation"
   ],
   "reference": "references/cache-patterns.md",
-  "primary_defect_gated_by": null
+  "primary_defect_gated_by": null,
+  "scorecard_items": []
 }

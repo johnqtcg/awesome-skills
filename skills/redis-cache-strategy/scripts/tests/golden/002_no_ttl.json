@@ -11,7 +11,6 @@
     "consistency": "eventual"
   },
   "expected_feedback": "Critical: TTL is 0 — this key never expires. If the product is updated in the database, the cache will serve stale data indefinitely until the process explicitly invalidates it. Even with explicit invalidation, edge cases (missed events, service restarts, network partitions) mean TTL is the safety net. Set a TTL with jitter: e.g., 30 minutes ± random 0-5 minutes to prevent synchronized mass expiration (cache avalanche).",
-  "violated_rule": "TTL set on all cached keys with jitter",
   "coverage_rules": [
     "TTL",
     "jitter",
@@ -24,5 +23,8 @@
     "RC012"
   ],
   "primary_defect_gated_by": "RC012",
-  "detector_note": "Directly gated: expiration 0 is the defect."
+  "detector_note": "Directly gated: expiration 0 is the defect.",
+  "scorecard_items": [
+    "C8"
+  ]
 }
