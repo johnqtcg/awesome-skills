@@ -1,0 +1,16 @@
+{
+  "id": "GOLDEN-004",
+  "title": "Mostly TP plus light AP -- the cheapest of the four HTAP tiers must be raised",
+  "scenario": "MySQL mode, V4.5.0; high-frequency point lookups plus a daily light aggregation, isolation_required=no.",
+  "rules": [
+    "R-HTAP-FOUR-TIERS"
+  ],
+  "coverage_rules": [
+    "columnstore index",
+    "30%",
+    "candidate_ddl"
+  ],
+  "anti_example_patterns": [
+    "C3"
+  ]
+}

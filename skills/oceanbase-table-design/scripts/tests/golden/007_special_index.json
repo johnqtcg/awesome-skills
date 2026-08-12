@@ -1,0 +1,16 @@
+{
+  "id": "GOLDEN-007",
+  "title": "A JSON array containment query (existing table) -- specialized index + sys tenant switch",
+  "scenario": "MySQL mode, V4.5.0; an already-live table needs to filter with JSON_CONTAINS.",
+  "rules": [
+    "R-SPECIAL-INDEX"
+  ],
+  "coverage_rules": [
+    "JSON_CONTAINS",
+    "_enable_add_fulltext_index_to_existing_table",
+    "SYS_NC_mvi_"
+  ],
+  "anti_example_patterns": [
+    "Looking only at the operator name"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "id": "GOLDEN-009",
+  "title": "A primary-key-less columnstore ETL table -- resolve conflicting official documents by scenario",
+  "scenario": "MySQL mode, V4.5.0; a pure append-only event-tracking analytics table, the user explicitly does not want a primary key.",
+  "rules": [
+    "R-DOC-CONFLICT-SPLIT",
+    "R-KEY-3BRANCH"
+  ],
+  "coverage_rules": [
+    "Columnstore table without a primary key",
+    "no_pk_no_uk"
+  ],
+  "anti_example_patterns": [
+    "must not be rejected merely for"
+  ]
+}

@@ -1,0 +1,15 @@
+{
+  "id": "GOLDEN-002",
+  "title": "Omitting Column Group when the tenant's default_table_store_format = column",
+  "scenario": "MySQL mode, V4.5.0, a pure-TP table; the tenant's default storage format has been changed to column.",
+  "rules": [
+    "R-TENANT-DEFAULT-FORMAT"
+  ],
+  "coverage_rules": [
+    "default_table_store_format",
+    "WITH COLUMN GROUP(all columns)"
+  ],
+  "anti_example_patterns": [
+    "only holds when"
+  ]
+}

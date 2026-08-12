@@ -1,0 +1,15 @@
+{
+  "id": "GOLDEN-010",
+  "title": "A full-text index over Chinese-language text -- must not use the SPACE tokenizer",
+  "scenario": "MySQL mode, V4.5.0; a table of Chinese-language articles needs fuzzy search and relevance ranking.",
+  "rules": [
+    "R-SPECIAL-INDEX"
+  ],
+  "coverage_rules": [
+    "WITH PARSER",
+    "TEXT RETRIEVAL SCAN"
+  ],
+  "anti_example_patterns": [
+    "Chinese text must not use `SPACE`"
+  ]
+}

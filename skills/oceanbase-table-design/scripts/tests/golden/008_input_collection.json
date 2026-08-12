@@ -1,0 +1,16 @@
+{
+  "id": "GOLDEN-008",
+  "title": "The user cannot obtain the quantified inputs -- the gate must provide a way through",
+  "scenario": "The user says the production data cannot be queried, but agrees to run a query against the database.",
+  "rules": [
+    "R-INPUT-COLLECTION"
+  ],
+  "coverage_rules": [
+    "GV$OB_SQL_AUDIT",
+    "top1_key_share",
+    "SHOW PARAMETERS"
+  ],
+  "anti_example_patterns": [
+    "Graceful Degradation When Data Is Unavailable"
+  ]
+}

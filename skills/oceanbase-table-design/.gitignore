@@ -1,0 +1,6 @@
+# Skill deliverables should not include generated files
+__pycache__/
+*.py[cod]
+tests/integration/results/
+tests/outputs/
+.firecrawl/

@@ -1,0 +1,16 @@
+{
+  "id": "GOLDEN-005",
+  "title": "Queuing table TABLE_MODE -- the axis is major-compaction aggressiveness, not queuing intensity",
+  "scenario": "MySQL mode, V4.5.0; a task queue table, with no measured scan-degradation data provided.",
+  "rules": [
+    "R-TABLEMODE-COMPACTION"
+  ],
+  "coverage_rules": [
+    "major compaction",
+    "MODERATE",
+    "EXTREME"
+  ],
+  "anti_example_patterns": [
+    "Queue Intensity"
+  ]
+}

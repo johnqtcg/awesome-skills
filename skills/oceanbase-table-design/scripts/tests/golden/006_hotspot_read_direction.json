@@ -1,0 +1,15 @@
+{
+  "id": "GOLDEN-006",
+  "title": "Read hotspot on a config table -- use a duplicated table, do not add partitions or a bucket",
+  "scenario": "MySQL mode, V4.5.0; a 200-row config table with read_qps=50000, write_qps=2, the same row read over and over.",
+  "rules": [
+    "R-HOTSPOT-READ-DIRECTION"
+  ],
+  "coverage_rules": [
+    "read_hot_row",
+    "DUPLICATE_SCOPE"
+  ],
+  "anti_example_patterns": [
+    "do not add partitions"
+  ]
+}

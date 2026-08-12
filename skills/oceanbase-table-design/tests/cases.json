@@ -1,0 +1,857 @@
+{
+  "_comment": "Machine-readable rule catalog and regression cases. cases.md is the human-readable counterpart; the ids in both must correspond one-to-one (enforced by scripts/check_consistency.py). Use scripts/run_cases.py to validate and score.",
+  "rules": {
+    "R-EDITION-ORACLE": {
+      "desc": "Community Edition + Oracle mode must be rejected",
+      "source": "references/capability-matrix.md"
+    },
+    "R-KEY-3BRANCH": {
+      "desc": "The relationship between the partition key and the primary key/unique key is a three-branch conditional rule; having neither a primary key nor a unique key is valid",
+      "source": "references/indexes.md"
+    },
+    "R-KEY-AUTOSPLIT-PREFIX": {
+      "desc": "Automatic partition splitting requires a primary key, with the partition key as a prefix of the primary key",
+      "source": "references/indexes.md"
+    },
+    "R-UK-GLOBAL": {
+      "desc": "A unique index that does not cover all partition key columns must be upgraded to a global unique index, with the cost explained",
+      "source": "references/indexes.md"
+    },
+    "R-ORACLE-NO-KEY": {
+      "desc": "Oracle mode has no PARTITION BY KEY",
+      "source": "references/capability-matrix.md"
+    },
+    "R-ORACLE-NO-COLUMNS": {
+      "desc": "Oracle mode has no COLUMNS keyword",
+      "source": "references/capability-matrix.md"
+    },
+    "R-MYSQL-NO-INTERVAL": {
+      "desc": "MySQL mode has no INTERVAL partitioning",
+      "source": "references/capability-matrix.md"
+    },
+    "R-PKEY-TYPE": {
+      "desc": "In MySQL mode, RANGE/LIST/HASH partition keys must be integer or YEAR type; RANGE/LIST are limited to a single column",
+      "source": "references/capability-matrix.md"
+    },
+    "R-LIST-ENUM-SYNTAX": {
+      "desc": "LIST enumeration uses VALUES IN(...) in MySQL mode and VALUES(...) in Oracle mode",
+      "source": "references/doc-gaps.md"
+    },
+    "R-LIST-DEFAULT": {
+      "desc": "LIST partitioning should include a DEFAULT fallback partition",
+      "source": "references/partitioning.md"
+    },
+    "R-MAXPART": {
+      "desc": "The per-table partition count limit is evaluated **per partitioned object** (the main table plus each independently-partitioned global index); the limit depends on the mode: MySQL = max_partition_num (default 8192, range [8192, 65536]), Oracle = fixed at 65536, this parameter is not used",
+      "source": "references/tablet-capacity.md"
+    },
+    "R-AUTOSPLIT-LIMITS": {
+      "desc": "The ten official restrictions on automatic partition splitting",
+      "source": "references/partitioning.md"
+    },
+    "R-AUTOSPLIT-TRIGGER": {
+      "desc": "The SIZE threshold is determined by auto_split_tablet_size and requires enable_auto_split",
+      "source": "references/partitioning.md"
+    },
+    "R-TG-NONE-VERSION": {
+      "desc": "The risk assessment for SHARDING=NONE branches at V4.4.2 BP1, with interception in both directions",
+      "source": "references/tablegroup.md"
+    },
+    "R-TG-SCOPE-VERSION": {
+      "desc": "Table Group SCOPE requires >= V4.4.2 BP1; lower versions get an alternative",
+      "source": "references/tablegroup.md"
+    },
+    "R-DUPLICATE-TABLE": {
+      "desc": "For a large table joining a small dimension table, prefer a duplicated table; do not force a Table Group",
+      "source": "references/tablegroup.md"
+    },
+    "R-CG-SEMANTICS": {
+      "desc": "Pure columnstore uses each column; all columns, each column is row+column redundancy, roughly 2x storage",
+      "source": "references/storage-format.md"
+    },
+    "R-SKIPINDEX": {
+      "desc": "Low-frequency/narrow multi-dimensional full-table aggregation uses row storage + SKIP_INDEX",
+      "source": "references/storage-format.md"
+    },
+    "R-CS-REPLICA-TOPOLOGY": {
+      "desc": "The columnstore replica is a deployment topology decision; a Hint cannot specify the replica type",
+      "source": "references/storage-format.md"
+    },
+    "R-STORAGE-AXES": {
+      "desc": "Storage decisions have two axes; isolation_required is evaluated first and must not be short-circuited by axis 1",
+      "source": "references/storage-format.md"
+    },
+    "R-QUEUING": {
+      "desc": "High-insert, high-delete tables are identified as queuing tables; recommend TABLE_MODE=QUEUING",
+      "source": "references/storage-format.md"
+    },
+    "R-TABLET-SUM": {
+      "desc": "Tablet count is summed across physical objects, including local and global indexes",
+      "source": "references/tablet-capacity.md"
+    },
+    "R-TABLET-MIN-PERNODE": {
+      "desc": "The limit is min(A, B), compared on a per-node basis",
+      "source": "references/tablet-capacity.md"
+    },
+    "R-NOORDER": {
+      "desc": "The sole criterion for NOORDER is that the business does not require strict monotonic increase; there is no TPS or partitioned-table precondition",
+      "source": "references/doc-gaps.md"
+    },
+    "R-GI-COST": {
+      "desc": "A global index is a cost decision, not a forbidden zone",
+      "source": "references/indexes.md"
+    },
+    "R-GI-DROPPART": {
+      "desc": "Adding a global index to an archive table requires flagging the rebuild cost of DROP PARTITION",
+      "source": "references/partitioning.md"
+    },
+    "R-HOTSPOT-TYPES": {
+      "desc": "Hotspots are first classified by read/write direction, then into five types; sub-partitioning cannot break up a single-key hotspot",
+      "source": "SKILL.md"
+    },
+    "R-MULTI-DIM": {
+      "desc": "When multiple high-frequency dimensions conflict, output a trade-off rather than rejecting the design",
+      "source": "SKILL.md"
+    },
+    "R-INPUT-QUANT": {
+      "desc": "Quantified inputs: if missing, request them or mark as unverified; never fabricate them",
+      "source": "SKILL.md"
+    },
+    "R-L2-NO-REJECT": {
+      "desc": "L2 empirical thresholds must not be used to reject a design",
+      "source": "SKILL.md"
+    },
+    "R-EVIDENCE": {
+      "desc": "Without evidence, must not output pass; only unverified is allowed",
+      "source": "references/verification.md"
+    },
+    "R-VERSION-GATE": {
+      "desc": "When the version is below the feature requirement, reject and provide an alternative",
+      "source": "references/capability-matrix.md"
+    },
+    "R-AUTOINC-PKEY": {
+      "desc": "Using an auto-increment column as the partition key causes cross-node transactions; must be flagged",
+      "source": "references/indexes.md"
+    },
+    "R-CONFIRMED-DDL-ONLY": {
+      "desc": "The main DDL may only use C1 confirmed capabilities; C2/C3 must go into candidate_ddl — marking as unverified does not count as compliant",
+      "source": "SKILL.md"
+    },
+    "R-TABLET-WORST-NODE": {
+      "desc": "Capacity assessment for heterogeneous Zones/Units must use the worst-case node, not the average",
+      "source": "references/tablet-capacity.md"
+    },
+    "R-AUTOINC-MODE-GATE": {
+      "desc": "AUTO_INCREMENT / AUTO_INCREMENT_MODE apply only to MySQL mode; Oracle mode uses IDENTITY or a sequence",
+      "source": "references/capability-matrix.md"
+    },
+    "R-TENANT-DEFAULT-FORMAT": {
+      "desc": "When no Column Group is specified, the actual storage format is determined by the tenant parameter default_table_store_format; it must not be asserted to be row storage",
+      "source": "references/capability-matrix.md"
+    },
+    "R-NDV-GT-PARTITIONS": {
+      "desc": "The cardinality of a HASH/KEY partition key should exceed the number of partitions (L1-B design blocker, NOT L0: the statement is legal, so the DDL is still emitted with the empty-partition count quantified); when distinct_count is missing, this is unverified",
+      "source": "references/partitioning.md"
+    },
+    "R-HTAP-FOUR-TIERS": {
+      "desc": "HTAP has four tiers of storage architecture; columnstore indexes/row-store indexes are C3 and may only go into candidate_ddl",
+      "source": "references/storage-format.md"
+    },
+    "R-TABLEMODE-COMPACTION": {
+      "desc": "The difference among the five TABLE_MODE values is how aggressively major compaction is triggered, not \"queue intensity\"",
+      "source": "references/storage-format.md"
+    },
+    "R-HOTSPOT-READ-DIRECTION": {
+      "desc": "Hotspots must first be classified by read/write direction; read hotspots should use duplicated tables/caching/rate limiting, not additional partitions or buckets",
+      "source": "references/hotspots.md"
+    },
+    "R-SPECIAL-INDEX": {
+      "desc": "JSON array predicates and full-text search must be given a dedicated index contract, including the switch required for existing tables and tokenizer preconditions",
+      "source": "references/special-indexes.md"
+    },
+    "R-INPUT-COLLECTION": {
+      "desc": "When requesting quantified inputs, the data-collection SQL must be provided at the same time; do not merely impose a gate",
+      "source": "references/input-collection.md"
+    },
+    "R-DOC-CONFLICT-SPLIT": {
+      "desc": "When official documentation conflicts, split by scenario and state the basis; do not arbitrarily pick one side and turn it into a hard rule",
+      "source": "references/doc-gaps.md"
+    }
+  },
+  "cases": [
+    {
+      "id": "G1",
+      "tier": "golden",
+      "title": "Creating tables with each partition type in MySQL mode",
+      "rules": [
+        "R-PKEY-TYPE",
+        "R-LIST-ENUM-SYNTAX",
+        "R-LIST-DEFAULT"
+      ],
+      "input": "MySQL mode V4.5.0; separately request HASH / KEY / RANGE / RANGE COLUMNS / LIST partitioned tables",
+      "must_include": [
+        "VALUES IN",
+        "DEFAULT"
+      ],
+      "forbidden_in_ddl": [
+        "PARTITION BY RANGE COLUMNS COLUMNS",
+        "INTERVAL"
+      ]
+    },
+    {
+      "id": "G2",
+      "tier": "golden",
+      "title": "Creating tables with each partition type in Oracle mode",
+      "rules": [
+        "R-ORACLE-NO-KEY",
+        "R-ORACLE-NO-COLUMNS",
+        "R-LIST-ENUM-SYNTAX"
+      ],
+      "input": "Oracle mode V4.5.0; request HASH / RANGE / LIST / INTERVAL partitioned tables, where one table has a two-column partition key",
+      "must_include": [
+        "PARTITION BY HASH",
+        "INTERVAL"
+      ],
+      "forbidden_in_ddl": [
+        "PARTITION BY KEY",
+        "COLUMNS",
+        "VALUES IN"
+      ]
+    },
+    {
+      "id": "I1",
+      "tier": "invalid",
+      "title": "Oracle mode requests KEY partitioning",
+      "rules": [
+        "R-ORACLE-NO-KEY"
+      ],
+      "input": "Oracle mode; the user requests KEY partitioning because the partition key has multiple columns",
+      "must_include": [
+        "HASH",
+        "does not exist|not supported|no such"
+      ],
+      "forbidden_in_ddl": [
+        "PARTITION BY KEY"
+      ]
+    },
+    {
+      "id": "I2",
+      "tier": "invalid",
+      "title": "Primary key missing the partition key",
+      "rules": [
+        "R-KEY-3BRANCH"
+      ],
+      "input": "PARTITION BY HASH(user_id), with the primary key being (order_id)",
+      "must_include": [
+        "fail|blocked|invalid"
+      ]
+    },
+    {
+      "id": "I3",
+      "tier": "invalid",
+      "title": "Unique index missing the partition key",
+      "rules": [
+        "R-UK-GLOBAL"
+      ],
+      "input": "Partitioned by user_id; email is required to be globally unique",
+      "must_include": [
+        "GLOBAL|globally unique",
+        "distributed transaction|cost"
+      ]
+    },
+    {
+      "id": "I4",
+      "tier": "invalid",
+      "title": "Multi-table Table Group + automatic partitioning",
+      "rules": [
+        "R-AUTOSPLIT-LIMITS"
+      ],
+      "input": "Two large tables need aligned partitions in the same table group, while also wanting automatic splitting once a threshold is exceeded",
+      "must_include": [
+        "TABLEGROUP|table group",
+        "not supported|mutually exclusive"
+      ]
+    },
+    {
+      "id": "I5",
+      "tier": "invalid",
+      "title": "Sub-partitioned / columnstore table requests automatic partitioning",
+      "rules": [
+        "R-AUTOSPLIT-LIMITS"
+      ],
+      "input": "A sub-partitioned table (or columnstore table) requests enabling SIZE",
+      "must_include": [
+        "not supported"
+      ]
+    },
+    {
+      "id": "I6",
+      "tier": "invalid",
+      "title": "Older version requests a new feature",
+      "rules": [
+        "R-VERSION-GATE",
+        "R-TG-SCOPE-VERSION"
+      ],
+      "input": "Target version V4.2.3; requests automatic partitioning + Table Group SCOPE",
+      "must_include": [
+        "fail|not supported",
+        "alternative"
+      ]
+    },
+    {
+      "id": "I7",
+      "tier": "invalid",
+      "title": "Using a Hint to route to the columnstore replica",
+      "rules": [
+        "R-CS-REPLICA-TOPOLOGY"
+      ],
+      "input": "The user asks for a Hint to route analytical queries to the columnstore replica",
+      "must_include": [
+        "ODP|OBProxy",
+        "4\\.3\\.3"
+      ]
+    },
+    {
+      "id": "I8",
+      "tier": "invalid",
+      "title": "Community Edition + Oracle mode",
+      "rules": [
+        "R-EDITION-ORACLE",
+        "R-MYSQL-NO-INTERVAL"
+      ],
+      "input": "edition=community, compat_mode=oracle; requests creating an INTERVAL partitioned table",
+      "must_include": [
+        "Community Edition",
+        "not supported|reject"
+      ],
+      "forbidden_in_ddl": [
+        "INTERVAL"
+      ]
+    },
+    {
+      "id": "I9",
+      "tier": "invalid",
+      "title": "MySQL mode uses VARCHAR as the HASH partition key",
+      "rules": [
+        "R-PKEY-TYPE"
+      ],
+      "input": "MySQL mode; requests PARTITION BY HASH(user_code), where user_code is VARCHAR(32)",
+      "must_include": [
+        "KEY",
+        "integer|YEAR"
+      ],
+      "forbidden_in_ddl": [
+        "PARTITION BY HASH\\(user_code\\)"
+      ]
+    },
+    {
+      "id": "I10",
+      "tier": "invalid",
+      "title": "Per-table partition count exceeds the limit (MySQL mode)",
+      "rules": [
+        "R-MAXPART"
+      ],
+      "input": "MySQL mode; requests 200 first-level partitions x 50 sub-partitions = 10000",
+      "must_include": [
+        "max_partition_num",
+        "8192",
+        "MySQL"
+      ]
+    },
+    {
+      "id": "I11",
+      "tier": "invalid",
+      "title": "Oracle mode requests RANGE COLUMNS",
+      "rules": [
+        "R-ORACLE-NO-COLUMNS"
+      ],
+      "input": "Oracle mode; requests RANGE COLUMNS partitioning on the two columns (tenant_id, stat_date)",
+      "must_include": [
+        "COLUMNS",
+        "PARTITION BY RANGE\\s*\\(",
+        "does not exist|no such|syntax error"
+      ],
+      "forbidden_in_ddl": [
+        "RANGE COLUMNS"
+      ]
+    },
+    {
+      "id": "I12",
+      "tier": "invalid",
+      "title": "Oracle mode requests an auto-increment primary key (**must intercept AUTO_INCREMENT**)",
+      "rules": [
+        "R-AUTOINC-MODE-GATE",
+        "R-EDITION-ORACLE"
+      ],
+      "input": "Enterprise Edition, Oracle mode, V4.5.0; the user requests \"make the id column auto-increment as the primary key.\"",
+      "must_include": [
+        "IDENTITY"
+      ],
+      "forbidden_in_ddl": [
+        "AUTO_INCREMENT_MODE",
+        "auto_increment_cache_size"
+      ]
+    },
+    {
+      "id": "I14",
+      "tier": "invalid",
+      "title": "Treating a read-hotspot configuration table as a write hotspot (adding a bucket)",
+      "rules": [
+        "R-HOTSPOT-READ-DIRECTION"
+      ],
+      "input": "MySQL mode V4.5.0; a 200-row global configuration table with read_qps=50000, write_qps=2, where the same row is read repeatedly.",
+      "must_include": [
+        "DUPLICATE_SCOPE|duplicated table"
+      ],
+      "must_not_include": [
+        "bucket column|adding salt"
+      ]
+    },
+    {
+      "id": "B1",
+      "tier": "boundary",
+      "title": "Columnstore syntax for a pure AP table",
+      "rules": [
+        "R-CG-SEMANTICS"
+      ],
+      "input": "An offline analytics table with no TP point queries, performing daily multi-dimensional aggregation",
+      "must_include": [
+        "each column"
+      ],
+      "forbidden_in_ddl": [
+        "all columns, each column"
+      ]
+    },
+    {
+      "id": "B2",
+      "tier": "boundary",
+      "title": "Low-frequency full-table aggregation",
+      "rules": [
+        "R-SKIPINDEX",
+        "R-CG-SEMANTICS"
+      ],
+      "input": "A weekly full-table SUM aggregation, scanning 30% of the columns",
+      "must_include": [
+        "SKIP_INDEX"
+      ],
+      "forbidden_in_ddl": [
+        "COLUMN GROUP"
+      ]
+    },
+    {
+      "id": "B3",
+      "tier": "boundary",
+      "title": "Large table joining a small dictionary table",
+      "rules": [
+        "R-DUPLICATE-TABLE"
+      ],
+      "input": "A 1-billion-row order table partitioned by user_id needs to frequently join a 200-row currency dictionary table (the dictionary table has no user_id column)",
+      "must_include": [
+        "DUPLICATE_SCOPE",
+        "rejected_alternatives|why not"
+      ]
+    },
+    {
+      "id": "B4",
+      "tier": "boundary",
+      "title": "Single-key hotspot",
+      "rules": [
+        "R-HOTSPOT-TYPES"
+      ],
+      "input": "A single user_id accounts for 40% of write volume",
+      "must_include": [
+        "salt|bucket",
+        "fan-out|amplification"
+      ]
+    },
+    {
+      "id": "B5",
+      "tier": "boundary",
+      "title": "Identifying a queuing table",
+      "rules": [
+        "R-QUEUING"
+      ],
+      "input": "A task table with insert_qps ≈ delete_qps ≈ 2000, a steady-state row count of about 5000, and scans that are gradually slowing down",
+      "must_include": [
+        "QUEUING"
+      ]
+    },
+    {
+      "id": "B6",
+      "tier": "boundary",
+      "title": "Two high-frequency dimensions conflict",
+      "rules": [
+        "R-MULTI-DIM",
+        "R-L2-NO-REJECT"
+      ],
+      "input": "An order table needs both point queries by user_id (45%) and aggregation by merchant_id (40%), and both are latency-sensitive",
+      "must_include": [
+        "option|trade-off|weigh"
+      ],
+      "must_not_include": [
+        "design failed",
+        "cannot be designed"
+      ]
+    },
+    {
+      "id": "B7",
+      "tier": "boundary",
+      "title": "Tablet estimation including indexes",
+      "rules": [
+        "R-TABLET-SUM"
+      ],
+      "input": "3 tables with partition counts of 6/12/1; the first table has 3 local indexes plus 1 global index with 4 partitions",
+      "must_include": [
+        "41"
+      ]
+    },
+    {
+      "id": "B8",
+      "tier": "boundary",
+      "title": "Archive table + global index",
+      "rules": [
+        "R-GI-DROPPART",
+        "R-EVIDENCE"
+      ],
+      "input": "A transaction log table RANGE-partitioned by day and retained for 90 days, which also needs a high-frequency query on a column other than the partition key",
+      "must_include": [
+        "DROP PARTITION",
+        "rebuild",
+        "unverified"
+      ]
+    },
+    {
+      "id": "B9",
+      "tier": "boundary",
+      "title": "NOORDER auto-increment column",
+      "rules": [
+        "R-NOORDER"
+      ],
+      "input": "MySQL mode, non-partitioned table, high-concurrency inserts; the business does not require strictly increasing IDs",
+      "must_include": [
+        "NOORDER",
+        "skipped values|non-monotonic"
+      ],
+      "must_not_include": [
+        "TPS > 100",
+        "must be a partitioned table"
+      ]
+    },
+    {
+      "id": "B10",
+      "tier": "boundary",
+      "title": "Insufficient input information",
+      "rules": [
+        "R-INPUT-QUANT",
+        "R-EVIDENCE"
+      ],
+      "input": "Only a single sentence is given: \"Help me design a user table, the data volume is very large\"",
+      "must_include": [
+        "unverified|need|please provide"
+      ]
+    },
+    {
+      "id": "B11",
+      "tier": "boundary",
+      "title": "A partitioned table with neither a primary key nor a unique key must be allowed",
+      "rules": [
+        "R-KEY-3BRANCH"
+      ],
+      "input": "MySQL mode, a pure append-only tracking table with no primary key and no unique key, RANGE-partitioned by event_time",
+      "must_include": [
+        "no_pk_no_uk",
+        "not_applicable",
+        "CREATE TABLE"
+      ],
+      "must_not_include": [
+        "a partitioned table must have a primary key",
+        "missing primary key.*reject"
+      ]
+    },
+    {
+      "id": "B12",
+      "tier": "boundary",
+      "title": "No primary key but has a unique key",
+      "rules": [
+        "R-KEY-3BRANCH"
+      ],
+      "input": "No primary key, but has UNIQUE KEY uk(tenant_id, biz_no); partitioned by tenant_id",
+      "must_include": [
+        "no_pk_has_uk"
+      ]
+    },
+    {
+      "id": "B13",
+      "tier": "boundary",
+      "title": "A table with no primary key requests automatic partitioning",
+      "rules": [
+        "R-KEY-AUTOSPLIT-PREFIX",
+        "R-AUTOSPLIT-LIMITS"
+      ],
+      "input": "The no-primary-key table from B11, with an additional request for automatic splitting once a threshold is exceeded",
+      "must_include": [
+        "primary key prefix|no primary key",
+        "fail|not supported"
+      ]
+    },
+    {
+      "id": "B14",
+      "tier": "boundary",
+      "title": "Version branching for SHARDING = NONE",
+      "rules": [
+        "R-TG-NONE-VERSION"
+      ],
+      "input": "a) ob_version=4.3.5, two 500GB large tables joining a group with SHARDING=NONE; b) ob_version=4.4.2 BP2, the same request",
+      "must_include": [
+        "4\\.4\\.2",
+        "SCOPE",
+        "sharding_semantics_version_branch"
+      ]
+    },
+    {
+      "id": "B15",
+      "tier": "boundary",
+      "title": "Physical isolation must be able to reach a columnstore replica",
+      "rules": [
+        "R-STORAGE-AXES",
+        "R-CS-REPLICA-TOPOLOGY"
+      ],
+      "input": "A pure AP reporting table, isolation_required=yes, OB 4.3.3 + OBProxy 4.3.2 + a dedicated ODP cluster",
+      "must_include": [
+        "columnstore_replica"
+      ],
+      "must_not_include": [
+        "deployment_overlay:\\s*none"
+      ]
+    },
+    {
+      "id": "B16",
+      "tier": "boundary",
+      "title": "The Tablet limit takes min() and compares on a per-node basis",
+      "rules": [
+        "R-TABLET-MIN-PERNODE"
+      ],
+      "input": "unit_memory_gb=8, unit_num=2, _max_tablet_cnt_per_gb=49999 (50000 is out of range; the valid range [1000,50000) is right-open), total Tablet count 41",
+      "must_include": [
+        "163840",
+        "binding_formula|effective formula",
+        "per_node|single node"
+      ]
+    },
+    {
+      "id": "B17",
+      "tier": "boundary",
+      "title": "Auto-increment column used as the partition key",
+      "rules": [
+        "R-AUTOINC-PKEY"
+      ],
+      "input": "The user requests using the auto-increment primary key id directly as the HASH partition key",
+      "must_include": [
+        "cross-node transaction|cannot be routed effectively"
+      ]
+    },
+    {
+      "id": "B18",
+      "tier": "boundary",
+      "title": "Source of the automatic partitioning threshold",
+      "rules": [
+        "R-AUTOSPLIT-TRIGGER"
+      ],
+      "input": "The user says: \"Just have the table automatically split once it exceeds 30GB, write it into the DDL\"",
+      "must_include": [
+        "auto_split_tablet_size",
+        "enable_auto_split"
+      ]
+    },
+    {
+      "id": "B19",
+      "tier": "boundary",
+      "title": "A global index is not a forbidden zone",
+      "rules": [
+        "R-GI-COST"
+      ],
+      "input": "A write-heavy, read-light table that has a business number that must be guaranteed unique across partitions",
+      "must_include": [
+        "globally unique",
+        "index_decision|cost|load test"
+      ],
+      "must_not_include": [
+        "global indexes are prohibited"
+      ]
+    },
+    {
+      "id": "B20",
+      "tier": "boundary",
+      "title": "The same 10000 partitions must be allowed in Oracle mode",
+      "rules": [
+        "R-MAXPART"
+      ],
+      "input": "Oracle mode; requests 200 first-level partitions x 50 sub-partitions = 10000",
+      "must_include": [
+        "65536",
+        "CREATE TABLE"
+      ],
+      "must_not_include": [
+        "8192[^)]{0,20}(exceed|exceeds|violat|reject)"
+      ]
+    },
+    {
+      "id": "B21",
+      "tier": "boundary",
+      "title": "Unconfirmed capabilities must not enter the main DDL",
+      "rules": [
+        "R-CONFIRMED-DDL-ONLY"
+      ],
+      "input": "Oracle mode V4.4.2, a transaction log table partitioned by day, requesting automatic partition management",
+      "must_include": [
+        "INTERVAL",
+        "candidate_ddl",
+        "C2"
+      ],
+      "forbidden_in_ddl": [
+        "DYNAMIC_PARTITION_POLICY"
+      ]
+    },
+    {
+      "id": "B22",
+      "tier": "boundary",
+      "title": "A global index's independent partition count must be limited on its own",
+      "rules": [
+        "R-MAXPART"
+      ],
+      "input": "MySQL mode; the main table has 1 partition, but the global index requests 9000 partitions",
+      "must_include": [
+        "global_index|global index",
+        "max_partition_num|8192"
+      ],
+      "must_not_include": [
+        "partition_limit_result:\\s*pass"
+      ]
+    },
+    {
+      "id": "B23",
+      "tier": "boundary",
+      "title": "Heterogeneous Zones/Units must assess capacity based on the worst-case node",
+      "rules": [
+        "R-TABLET-WORST-NODE"
+      ],
+      "input": "Two units, z1=64GB and z2=1GB, with a total of 30000 Tablets evenly distributed",
+      "must_include": [
+        "worst_node|worst node",
+        "z2"
+      ]
+    },
+    {
+      "id": "B24",
+      "tier": "boundary",
+      "title": "Omitting Column Group when the tenant's default_table_store_format = column",
+      "rules": [
+        "R-TENANT-DEFAULT-FORMAT",
+        "R-CG-SEMANTICS"
+      ],
+      "input": "MySQL mode V4.5.0, a pure TP order table; the tenant's default_table_store_format has already been set to column.",
+      "must_include": [
+        "default_table_store_format",
+        "COLUMN GROUP\\(all columns\\)"
+      ],
+      "must_not_include": [
+        "omitting Column Group means row storage"
+      ]
+    },
+    {
+      "id": "B25",
+      "tier": "boundary",
+      "title": "TP-dominant + lightweight AP (four-tier HTAP selection; should not jump straight to row+column redundancy)",
+      "rules": [
+        "R-HTAP-FOUR-TIERS",
+        "R-STORAGE-AXES"
+      ],
+      "input": "MySQL mode V4.5.0, a high-frequency point-query order table, plus a once-daily lightweight aggregation report; isolation_required=no.",
+      "must_include": [
+        "candidate_ddl",
+        "C3"
+      ]
+    },
+    {
+      "id": "B26",
+      "tier": "boundary",
+      "title": "Criteria for upgrading a queuing table's tier (must not explain TABLE_MODE using \"queue intensity\")",
+      "rules": [
+        "R-TABLEMODE-COMPACTION",
+        "R-QUEUING"
+      ],
+      "input": "MySQL mode V4.5.0, a task queuing table with insert_qps≈delete_qps≈3000 and a steady-state row count of 2000; no measured data on scan degradation is provided.",
+      "must_include": [
+        "major compaction",
+        "QUEUING"
+      ],
+      "must_not_include": [
+        "increasing queue intensity"
+      ]
+    },
+    {
+      "id": "B27",
+      "tier": "boundary",
+      "title": "JSON array containment query (must provide a dedicated index, including the switch for existing tables)",
+      "rules": [
+        "R-SPECIAL-INDEX"
+      ],
+      "input": "MySQL mode V4.5.0; the already-live user_info table needs to filter by JSON_CONTAINS(hobbies).",
+      "must_include": [
+        "_enable_add_fulltext_index_to_existing_table",
+        "ARRAY"
+      ]
+    },
+    {
+      "id": "B28",
+      "tier": "boundary",
+      "title": "The user cannot obtain frequency_share / top1_key_share (must provide the data-collection SQL)",
+      "rules": [
+        "R-INPUT-COLLECTION",
+        "R-INPUT-QUANT",
+        "R-EVIDENCE"
+      ],
+      "input": "The user says: \"I can't query the production data, just give me something based on experience for now,\" but agrees to run a query against the database.",
+      "must_include": [
+        "GV\\$OB_SQL_AUDIT",
+        "unverified"
+      ]
+    },
+    {
+      "id": "B29",
+      "tier": "boundary",
+      "title": "No-primary-key columnstore ETL table (two official documents conflict; must be routed by scenario, not rejected)",
+      "rules": [
+        "R-DOC-CONFLICT-SPLIT",
+        "R-KEY-3BRANCH"
+      ],
+      "input": "MySQL mode V4.5.0, a pure append-only tracking/analytics table used only for batch import and full-table aggregation; the user explicitly does not want a primary key.",
+      "must_include": [
+        "each column",
+        "risk"
+      ],
+      "must_not_include": [
+        "every table must have a primary key"
+      ]
+    },
+    {
+      "id": "B30",
+      "tier": "boundary",
+      "title": "Low-cardinality column used for HASH partitioning (NDV < partition count -- legal DDL, defective design)",
+      "rules": [
+        "R-NDV-GT-PARTITIONS"
+      ],
+      "input": "MySQL mode V4.5.0; the status column has only 6 distinct values, and the user requests PARTITION BY HASH(status) PARTITIONS 128.",
+      "must_include": [
+        "LIST",
+        "cardinality|NDV",
+        "122",
+        "L1-B|L1_blocker"
+      ],
+      "must_not_include": [
+        "infeasible",
+        "refuse to (?:generate|design)"
+      ]
+    }
+  ]
+}

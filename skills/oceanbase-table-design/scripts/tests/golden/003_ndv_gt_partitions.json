@@ -1,0 +1,20 @@
+{
+  "id": "GOLDEN-003",
+  "title": "HASH-partitioning a low-cardinality column -- NDV should exceed the partition count (L1-B, not L0)",
+  "scenario": "MySQL mode, V4.5.0; status has only 6 distinct values, and HASH PARTITIONS 128 is requested. The statement is legal, so the DDL must still be emitted -- with the 122 empty partitions quantified and LIST offered as the corrected design.",
+  "rules": [
+    "R-NDV-GT-PARTITIONS"
+  ],
+  "coverage_rules": [
+    "ndv_vs_partition_count",
+    "empty partitions",
+    "L1-B",
+    "accepted_reason",
+    "empty_partition_estimate"
+  ],
+  "anti_example_patterns": [
+    "low-cardinality",
+    "Never grounds for calling a design infeasible",
+    "A legal statement is never an infeasible design"
+  ]
+}
