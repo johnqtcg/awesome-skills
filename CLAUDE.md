@@ -25,18 +25,7 @@ Important scope note:
 
 ## Skill Structure Convention
 
-Regression-enabled skills under `skills/<name>/` follow this layout:
-
-```
-SKILL.md                    # frontmatter (name, description) + skill body
-references/                 # supporting docs loaded on demand
-scripts/
-  run_regression.sh         # runs all regression checks
-  tests/
-    test_skill_contract.py  # contract tests (required sections, thresholds)
-    test_golden_scenarios.py# golden fixture tests
-    golden/                 # *.json golden fixtures
-```
+Regression-enabled skills under `skills/<name>/` follow the layout visible via `ls skills/<name>/` (SKILL.md, references/, scripts/run_regression.sh, scripts/tests/ with golden/ fixtures), plus these conventions:
 
 - Skill names use `kebab-case`
 - `SKILL.md` frontmatter must have `name` and `description` fields
