@@ -1,0 +1,20 @@
+{
+ "id": "MON-015",
+ "title": "up == 0 with topology unstated — must ask or reason conditionally, not page",
+ "type": "degradation_scenario",
+ "severity": "none",
+ "code_snippet": "# Review this alert. (Deployment topology is deliberately not given.)\n- alert: InstanceDown\n  expr: up{job=\"checkout\"} == 0\n  labels:\n    severity: critical\n  annotations:\n    summary: 'checkout instance {{ $labels.instance }} is down'\n",
+ "context": {
+  "service_type": "API",
+  "stack": "Prometheus + Alertmanager + PagerDuty"
+ },
+ "expected_feedback": "The severity cannot be decided from what is given, and saying so is the correct answer. `up == 0` fires per instance, so whether this is page-worthy depends on the redundancy that was not stated: with several healthy replicas behind a load balancer it is a redundancy event (warning/ticket); on a single-instance service it is user impact (critical). Either ASK for the replica count, or give the conditional answer explicitly -- do not default to critical. Independently of severity: add `for: 5m`, because `up == 0` is true after a single failed scrape. And if an all-replicas-gone page is wanted, it needs `sum(up{job=\"checkout\"}) == 0 or absent(up{job=\"checkout\"})` -- `count(up == 1) == 0` is silent when every replica is down, since an aggregation over an empty vector yields an empty vector rather than 0.",
+ "violated_rule": "Page-worthiness is decided by user impact and redundancy, not by the signal",
+ "coverage_rules": [
+  "severity",
+  "redundancy",
+  "for",
+  "absent"
+ ],
+ "reference": "SKILL.md"
+}

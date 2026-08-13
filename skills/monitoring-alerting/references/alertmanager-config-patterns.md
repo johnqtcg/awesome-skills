@@ -1,8 +1,27 @@
 # Alertmanager Configuration Patterns
 
+<!-- toc -->
+
+**Table of Contents**
+
+- [1. Route Tree Design](#1-route-tree-design)
+  - [1.1 UTF-8 matchers and the parser transition](#11-utf-8-matchers-and-the-parser-transition)
+- [2. group_by / group_wait / group_interval Tuning](#2-group_by--group_wait--group_interval-tuning)
+- [3. Inhibition Rules](#3-inhibition-rules)
+- [4. Multi-Receiver Routing](#4-multi-receiver-routing)
+- [5. Silence vs Inhibition](#5-silence-vs-inhibition)
+
+<!-- /toc -->
+
 ## 1. Route Tree Design
 
 Alertmanager routes form a tree. The root route matches all alerts; child routes refine by label matchers. Evaluation is top-down, first-match-wins (unless `continue: true`).
+
+**Use `matchers`, not `match` / `match_re`.** The map-style `match` and `match_re` fields
+are deprecated in favour of the `matchers` list, and the same applies to inhibition:
+`source_match`/`source_match_re` → `source_matchers`, `target_match`/`target_match_re` →
+`target_matchers`. They still work today, so an existing config using them is a
+modernisation finding rather than a breakage — but do not emit them in new config.
 
 ```yaml
 route:
@@ -12,32 +31,53 @@ route:
   group_interval: 5m
   repeat_interval: 4h
   routes:
-    # Critical → PagerDuty with escalation
-    - match:
-        severity: critical
+    # Page-worthy severity → escalating destination
+    - matchers:
+        - severity = "critical"
       receiver: pagerduty-oncall
       repeat_interval: 5m
       routes:
-        - match_re:
-            service: ^(payments|auth)$
+        - matchers:
+            - service =~ "payments|auth"
           receiver: pagerduty-platform-critical
 
-    # Warning → team Slack channel
-    - match:
-        severity: warning
+    # Warning → team chat channel
+    - matchers:
+        - severity = "warning"
       receiver: team-slack
       repeat_interval: 1h
 
     # Info → no notification, dashboard only
-    - match:
-        severity: info
+    - matchers:
+        - severity = "info"
       receiver: blackhole
 ```
 
 **Key rules:**
 - Every alert must match a route — orphan alerts indicate a routing gap
-- `match` is exact string equality; `match_re` supports regex
+- Matcher operators: `=` exact, `!=` negated, `=~` regex, `!~` negated regex. A `=~`
+  matcher is anchored, so `service =~ "payments|auth"` needs no `^...$`
 - Child routes inherit parent's `group_by` / intervals unless overridden
+- The destinations above (`pagerduty-*`, `team-slack`) are an **example mapping**. Review
+  against the org's own severity → receiver table; what matters is that every severity
+  value in use resolves to a receiver and that page-worthy alerts reach an escalation path
+
+### 1.1 UTF-8 matchers and the parser transition
+
+Alertmanager v0.27.0 introduced a new UTF-8-capable matchers parser and runs a transition
+period supporting both it and the classic parser, so upgrading needs no config change.
+Where a matcher is valid under both parsers but *parses differently*, Alertmanager uses
+the classic parser and logs a warning.
+
+Practical guidance:
+- **New installations**: enable UTF-8 strict mode before writing config, so an ambiguous
+  matcher fails loudly at the start rather than changing meaning at some later upgrade.
+- **Existing installations**: run in fallback mode first and treat those warnings as a
+  work list; only enable strict mode once the log is clean.
+- Quote label values in `matchers` (`severity = "critical"`). Quoting is what keeps a
+  value containing UTF-8, spaces or operators unambiguous under either parser.
+
+Reference: https://prometheus.io/docs/alerting/latest/configuration/
 
 ## 2. group_by / group_wait / group_interval Tuning
 
@@ -112,13 +152,13 @@ For alerts that need to reach multiple channels simultaneously, use `continue: t
 
 ```yaml
 routes:
-  - match:
-      severity: critical
+  - matchers:
+      - severity = "critical"
     receiver: pagerduty-oncall
     continue: true          # don't stop — keep matching
-  - match:
-      severity: critical
-    receiver: critical-slack  # also post to Slack for visibility
+  - matchers:
+      - severity = "critical"
+    receiver: critical-slack  # also post to chat for visibility
 ```
 
 Without `continue`, the first matching route terminates evaluation. With `continue`, Alertmanager continues to the next sibling route.

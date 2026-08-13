@@ -216,6 +216,12 @@ class TestLineCount:
     def test_max_lines(self):
         lines = len(SKILL_MD.splitlines())
         assert lines <= 420, f"SKILL.md is {lines} lines (budget: 420)"
+        # Keep genuine slack, not a tripwire. At 403/420 the next substantive edit trips
+        # the budget, and the reflex when a commit is blocked is to raise the ceiling --
+        # which retires the constraint instead of respecting it.
+        assert lines <= 405, (
+            f"SKILL.md is {lines} lines: under the 420 budget but with <15 lines of "
+            f"headroom. Trim now, while it is a choice rather than a blocked commit.")
 
 
 class TestCrossFileConsistency:

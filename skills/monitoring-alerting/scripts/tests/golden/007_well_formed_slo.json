@@ -1,1 +1,29 @@
-{"id":"MON-007","title":"Well-formed SLO-based monitoring — burn-rate alerts with routing and runbooks","type":"good_practice","severity":"none","code_snippet":"# SLI: availability = non-5xx / total\n# SLO: 99.9% over 30 days (error budget: 0.1%)\n\n- alert: SLOBurnRateCritical\n  expr: |\n    (sum(rate(http_requests_total{status=~\"5..\"}[1h])) / sum(rate(http_requests_total[1h])) > 14.4 * 0.001)\n    and\n    (sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) > 14.4 * 0.001)\n  for: 2m\n  labels:\n    severity: critical\n  annotations:\n    summary: 'SLO burn rate 14.4x — budget exhausted in 2 hours'\n    runbook_url: 'https://wiki/runbooks/slo-burn-rate'\n    dashboard_url: 'https://grafana/d/slo?var-service=payment'\n\n# Routing: critical → PagerDuty, warning → Slack\n# Dashboard: RED method with $service variable","context":{"service_type":"API","traffic":"1000 req/s","stack":"Prometheus + Alertmanager + PagerDuty + Grafana"},"expected_feedback":"No violations. Correctly implements SLO-based monitoring: (1) SLI defined (availability as success ratio), (2) SLO target with error budget (99.9% = 43 min/month), (3) multi-window burn-rate alert (1h + 5m windows) instead of raw threshold, (4) severity labels with correct routing (critical → PagerDuty), (5) runbook_url AND dashboard_url in annotations, (6) RED-method dashboard with variable templating.","coverage_rules":["SLI","SLO","burn-rate","runbook","severity","routing","dashboard"],"reference":"SKILL.md"}
+{
+ "id": "MON-007",
+ "title": "Well-formed SLO monitoring — shared event-set recording rules, burn-rate alerts, routing and runbooks",
+ "type": "good_practice",
+ "severity": "none",
+ "code_snippet": "groups:\n  # --- The event set, defined ONCE. One valid/bad pair PER WINDOW the alert uses. ---\n  # valid = requests excluding health checks, /metrics and client cancellations (499)\n  # bad   = server fault (5xx). 4xx is the caller's fault and stays \"good\".\n  - name: sli_events\n    interval: 30s\n    rules:\n      - record: sli:http_requests_valid:rate1h\n        expr: sum by (job) (rate(http_requests_total{path!~\"/health.*|/metrics\",code!=\"499\"}[1h]))\n      - record: sli:http_requests_bad:rate1h\n        expr: sum by (job) (rate(http_requests_total{path!~\"/health.*|/metrics\",code=~\"5..\"}[1h]))\n      - record: sli:http_requests_valid:rate5m\n        expr: sum by (job) (rate(http_requests_total{path!~\"/health.*|/metrics\",code!=\"499\"}[5m]))\n      - record: sli:http_requests_bad:rate5m\n        expr: sum by (job) (rate(http_requests_total{path!~\"/health.*|/metrics\",code=~\"5..\"}[5m]))\n\n  # --- SLO: 99.9% availability over 30 days ---\n  # Error budget = 0.1% of VALID REQUESTS (request-based). The familiar ~43.2 min/month is\n  # the time-based budget for the same target; here it is only a request-based\n  # approximation under uniform traffic, so we alert on burn rate instead.\n  - name: slo_burn_rate\n    rules:\n      - alert: SLOBurnRateCritical\n        expr: |\n          sli:http_requests_bad:rate1h / sli:http_requests_valid:rate1h > 14.4 * 0.001\n          and\n          sli:http_requests_bad:rate5m / sli:http_requests_valid:rate5m > 14.4 * 0.001\n        for: 2m\n        labels:\n          severity: critical\n        annotations:\n          summary: 'SLO burn rate 14.4x - 2% of 30-day budget spent in 1h (exhausts in ~50h if sustained)'\n          runbook_url: 'https://wiki/runbooks/slo-burn-rate'\n          dashboard_url: 'https://grafana/d/slo?var-service=payment'\n\n# Routing: severity critical -> the org's page-worthy policy (primary: PagerDuty;\n#          secondary: #alerts-critical via continue: true). Example mapping, not a rule.\n# Dashboard: RED method with a $service variable",
+ "context": {
+  "service_type": "API",
+  "traffic": "1000 req/s",
+  "stack": "Prometheus + Alertmanager + PagerDuty + Grafana"
+ },
+ "expected_feedback": "No violations. (1) The whole snippet is a single valid Prometheus rule file -- one `groups:` mapping containing both the recording rules and the alert -- so it loads as written. (2) The event set is defined once, with a valid/bad pair per window (1h and 5m), so availability, error rate and the burn-rate alert all use the same series and remain exact complements; changing the exclusion list cannot make them drift apart. (3) valid and good are both stated: health checks, /metrics and client-cancelled (499) requests are excluded from valid, 4xx stays good, bad = 5xx. (4) The error budget is declared as 0.1% of valid requests -- request-based -- and the ~43.2 min figure is marked as a request-based approximation under uniform traffic rather than presented as a downtime guarantee. (5) The alert is genuinely multi-window: the 1h long window decides whether to alert and the 5m short window gates 'still burning now'. Using the same window on both sides would look like a multi-window rule and behave like a single-window one. (6) severity maps to the org's page-worthy routing policy, which may have a primary action receiver plus secondary visibility receivers. (7) runbook_url and dashboard_url both present. (8) RED-method dashboard with variable templating. Burn-rate arithmetic checks out: 14.4 x (1h / 720h) = 2% of budget per hour, and 720h / 14.4 = ~50h to exhaust if sustained -- a summary claiming 14.4x 'exhausts the 30-day budget in 2 hours' would be wrong by more than an order of magnitude.",
+ "coverage_rules": [
+  "SLI",
+  "SLO",
+  "burn-rate",
+  "runbook",
+  "severity",
+  "routing",
+  "dashboard",
+  "2%",
+  "50h",
+  "valid",
+  "recording rule",
+  "request-based",
+  "multi-window"
+ ],
+ "reference": "SKILL.md"
+}

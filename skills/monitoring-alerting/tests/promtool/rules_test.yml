@@ -1,0 +1,168 @@
+# Temporal unit tests for the SLO burn-rate alert.
+#
+# Why these exist: `promtool check rules` proves the PromQL parses. It says nothing about
+# whether the alert FIRES when it should and STAYS SILENT when it should not -- and a wrong
+# window pairing or a wrong `for` parses perfectly while paging at 3AM. §5.5 of this skill
+# tells readers to write "at least two cases per SLO-critical alert: one where it MUST fire,
+# one where it MUST stay silent". These are that, for the skill's own alert.
+rule_files:
+  - rules.yml
+
+evaluation_interval: 1m
+
+tests:
+  # ── 1. Sustained 10% error ratio: the alert MUST fire ────────────────────────────
+  # 10% >> the 1.44% threshold (14.4 x 0.1%), sustained for 90m so the 1h window is full.
+  - interval: 1m
+    name: sustained burn fires on both windows
+    input_series:
+      - series: 'http_requests_total{job="api",path="/pay",code="200"}'
+        values: '0+90x120'          # 90 good req/min
+      - series: 'http_requests_total{job="api",path="/pay",code="500"}'
+        values: '0+10x120'          # 10 bad req/min -> 10% bad
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: SLOBurnRateCritical
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: api
+            exp_annotations:
+              summary: 'SLO burn rate 14.4x - 2% of 30-day budget spent in 1h (exhausts in ~50h if sustained)'
+              runbook_url: 'https://wiki/runbooks/slo-burn-rate'
+
+  # ── 2. Clean traffic: MUST stay silent ──────────────────────────────────────────
+  - interval: 1m
+    name: no errors stays silent
+    input_series:
+      - series: 'http_requests_total{job="api",path="/pay",code="200"}'
+        values: '0+100x120'
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: SLOBurnRateCritical
+        exp_alerts: []
+
+  # ── 3. THE point of multi-window: a 3-minute spike MUST stay silent ─────────────
+  # The 5m short window crosses the threshold, but the 1h long window does not, so the
+  # `and` holds the alert. If someone "simplifies" the rule to a single window, or reuses
+  # the same window on both sides, this case starts firing and the test goes red.
+  - interval: 1m
+    name: brief spike is absorbed by the long window
+    input_series:
+      - series: 'http_requests_total{job="api",path="/pay",code="200"}'
+        values: '0+100x60 6000+70x60'     # steady, then slightly reduced during the spike
+      - series: 'http_requests_total{job="api",path="/pay",code="500"}'
+        values: '0+0x60 0+30x3 90+0x57'   # zero, then 3 min of errors, then flat again
+    alert_rule_test:
+      - eval_time: 65m
+        alertname: SLOBurnRateCritical
+        exp_alerts: []
+
+  # ── 4. Health checks must NOT count: an all-5xx probe path is excluded ──────────
+  # If the exclusion is dropped from the recording rules, this case fires and goes red.
+  - interval: 1m
+    name: health-check traffic is excluded from the event set
+    input_series:
+      - series: 'http_requests_total{job="api",path="/pay",code="200"}'
+        values: '0+100x120'
+      - series: 'http_requests_total{job="api",path="/healthz",code="500"}'
+        values: '0+100x120'          # a failing probe endpoint, deliberately noisy
+    alert_rule_test:
+      - eval_time: 90m
+        alertname: SLOBurnRateCritical
+        exp_alerts: []
+
+  # ── 5. The short window's real job: STOP alerting after recovery ────────────────
+  # 60 minutes of 10% errors, then 10 minutes clean. The 1h long window is still elevated
+  # (most of it contains the incident), but the 5m short window has gone to zero, so the
+  # `and` clears the alert. Without the short-window clause the alert keeps paging for
+  # nearly an hour after the service recovered -- which is why removing that clause must
+  # turn this case red. Case 3 alone cannot catch that: a brief spike is silent either way.
+  - interval: 1m
+    name: alert clears once the burn stops, thanks to the short window
+    input_series:
+      - series: 'http_requests_total{job="api",path="/pay",code="200"}'
+        values: '0+90x60 5400+100x20'
+      - series: 'http_requests_total{job="api",path="/pay",code="500"}'
+        values: '0+10x60 600+0x20'
+    alert_rule_test:
+      - eval_time: 68m
+        alertname: SLOBurnRateCritical
+        exp_alerts: []
+
+  # ── 6. ALL targets reporting down: AllReplicasDown MUST fire ────────────────────
+  # This is the case `count(up == 1) == 0` gets wrong. Kept as an explicit test because the
+  # broken form looks equivalent and passes `promtool check rules` happily.
+  - interval: 1m
+    name: every replica down fires AllReplicasDown
+    input_series:
+      - series: 'up{job="order-api",instance="a"}'
+        values: '0x10'
+      - series: 'up{job="order-api",instance="b"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: AllReplicasDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: 'No healthy order-api replica is reporting'
+              runbook_url: 'https://wiki/runbooks/all-replicas-down'
+    # ...and the broken form stays silent on the same input. Asserted directly so the
+    # difference is documented, not just claimed in prose.
+    promql_expr_test:
+      - expr: count(up{job="order-api"} == 1) == 0
+        eval_time: 5m
+        exp_samples: []
+      - expr: sum(up{job="order-api"}) == 0
+        eval_time: 5m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+
+  # ── 7. Series gone from discovery: absent() is what catches it ──────────────────
+  - interval: 1m
+    name: series absent fires AllReplicasDown via absent()
+    input_series:
+      - series: 'up{job="other"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: AllReplicasDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: order-api
+            exp_annotations:
+              summary: 'No healthy order-api replica is reporting'
+              runbook_url: 'https://wiki/runbooks/all-replicas-down'
+    promql_expr_test:
+      - expr: sum(up{job="order-api"}) == 0
+        eval_time: 5m
+        exp_samples: []
+
+  # ── 8. One replica of three down: AllReplicasDown must NOT fire ─────────────────
+  - interval: 1m
+    name: partial outage does not trigger the all-down page
+    input_series:
+      - series: 'up{job="order-api",instance="a"}'
+        values: '0x10'
+      - series: 'up{job="order-api",instance="b"}'
+        values: '1x10'
+      - series: 'up{job="order-api",instance="c"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 8m
+        alertname: AllReplicasDown
+        exp_alerts: []
+      - eval_time: 8m
+        alertname: InstanceDown
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: order-api
+              instance: a
+            exp_annotations:
+              summary: 'Replica a is down'
+              runbook_url: 'https://wiki/runbooks/instance-down'

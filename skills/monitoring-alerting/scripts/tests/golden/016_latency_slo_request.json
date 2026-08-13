@@ -1,0 +1,20 @@
+{
+ "id": "MON-016",
+ "title": "Latency SLO requested — must define an event ratio, not a percentile threshold",
+ "type": "degradation_scenario",
+ "severity": "none",
+ "code_snippet": "# \"We want a latency SLO for the search API: 99% of searches should feel fast.\n#  We already export search_request_duration_seconds as a histogram.\"\n# Define the SLI, the SLO, and the alert.\n",
+ "context": {
+  "service_type": "API",
+  "traffic": "4000 req/s",
+  "stack": "Prometheus + Grafana"
+ },
+ "expected_feedback": "Define the SLI as the PROPORTION OF REQUESTS FASTER THAN A THRESHOLD, not a percentile value: `sum(rate(search_request_duration_seconds_bucket{le=\"0.4\"}[5m])) / sum(rate(search_request_duration_seconds_count[5m]))`, with the SLO stated as '99% of valid searches complete under 400ms over 30 days'. `histogram_quantile(0.99, ...)` returns a duration, so there is no countable bad event and therefore no error budget and no burn rate to alert on; it is also unsafe to average across instances or re-aggregate over time. Keep it for dashboards. Numerator and denominator must come from the SAME histogram with the SAME exclusions -- `le=\"0.4\"` over `_count` (or `le=\"+Inf\"`) -- otherwise the ratio can exceed 1. Also state which events are VALID (exclude health checks, /metrics, client-cancelled requests) and note the instrumentation prerequisite: if the histogram carries no status label, a valid-request latency SLI cannot be computed from it and that limitation must be reported rather than papered over. Alert with a multi-window burn rate against this ratio.",
+ "coverage_rules": [
+  "proportion",
+  "valid",
+  "burn-rate",
+  "histogram"
+ ],
+ "reference": "references/sli-slo-patterns.md"
+}

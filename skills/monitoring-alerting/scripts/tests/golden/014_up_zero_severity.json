@@ -1,0 +1,24 @@
+{
+ "id": "MON-014",
+ "title": "Single-replica up == 0 labelled critical — pages for a redundancy event",
+ "type": "defect",
+ "severity": "standard",
+ "code_snippet": "# 6 replicas of order-api behind a load balancer, all healthy except one.\n# Prometheus scrapes each pod.\n- alert: InstanceDown\n  expr: up{job=\"order-api\"} == 0\n  labels:\n    severity: critical\n  annotations:\n    summary: 'Instance {{ $labels.instance }} is down'\n    runbook_url: 'https://wiki/runbooks/instance-down'\n",
+ "context": {
+  "service_type": "API",
+  "traffic": "1000 req/s",
+  "stack": "Prometheus + Alertmanager + PagerDuty",
+  "replicas": "6 behind a load balancer"
+ },
+ "expected_feedback": "Standard: the alert is well-formed (has `for` considerations, severity, runbook) but the severity is wrong for this topology. `up == 0` on ONE of 6 replicas is a redundancy event, not user impact -- the load balancer routes around it and no request fails. Paging on it trains the on-call to ignore pages. Fixes, in order: (1) add `for: 5m`, because `up == 0` is true after a single failed scrape and Prometheus's own canonical example pairs them; (2) drop this rule to `severity: warning` / ticket; (3) add a SEPARATE critical alert for the case that is user impact -- all replicas gone, e.g. `sum(up{job=\"order-api\"}) == 0 or absent(up{job=\"order-api\"})` -- and note **both** halves are required. `count(up{job=\"order-api\"} == 1) == 0` looks equivalent and is silent in exactly the worst case: with every target reporting down, `up == 1` filters to an empty vector, `count()` over an empty vector returns **no result** rather than 0, and `empty == 0` is also empty, so nothing fires. `sum()` over the same series returns 0 and does fire -- but `sum()` is likewise empty if the series disappear from service discovery altogether, which is what `absent()` covers, or better, an external synthetic probe; (4) let the burn-rate alert carry the actual user-impact page, since it measures budget spend rather than pod liveness. Decide page-worthiness from replicas remaining and deadline headroom, not from the signal name.",
+ "violated_rule": "Page-worthiness is decided by user impact and redundancy, not by the signal",
+ "coverage_rules": [
+  "severity",
+  "redundancy",
+  "for",
+  "synthetic",
+  "burn-rate",
+  "absent"
+ ],
+ "reference": "SKILL.md"
+}

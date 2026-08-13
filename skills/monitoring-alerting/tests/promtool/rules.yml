@@ -1,0 +1,56 @@
+# The skill's own SLO rules, in the form references/sli-slo-patterns.md §1.1/§3 prescribes.
+# This file exists to be EXECUTED: `promtool test rules rules_test.yml` asserts the alerts
+# fire and stay silent as documented. `promtool check rules` only proves the syntax parses;
+# a wrong window combination or a wrong `for` parses perfectly and still pages at 3AM.
+groups:
+  - name: sli_events
+    interval: 1m
+    rules:
+      - record: sli:http_requests_valid:rate1h
+        expr: sum by (job) (rate(http_requests_total{path!~"/health.*|/metrics",code!="499"}[1h]))
+      - record: sli:http_requests_bad:rate1h
+        expr: sum by (job) (rate(http_requests_total{path!~"/health.*|/metrics",code=~"5.."}[1h]))
+      - record: sli:http_requests_valid:rate5m
+        expr: sum by (job) (rate(http_requests_total{path!~"/health.*|/metrics",code!="499"}[5m]))
+      - record: sli:http_requests_bad:rate5m
+        expr: sum by (job) (rate(http_requests_total{path!~"/health.*|/metrics",code=~"5.."}[5m]))
+
+  - name: slo_burn_rate
+    interval: 1m
+    rules:
+      - alert: SLOBurnRateCritical
+        expr: |
+          sli:http_requests_bad:rate1h / sli:http_requests_valid:rate1h > 14.4 * 0.001
+          and
+          sli:http_requests_bad:rate5m / sli:http_requests_valid:rate5m > 14.4 * 0.001
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'SLO burn rate 14.4x - 2% of 30-day budget spent in 1h (exhausts in ~50h if sustained)'
+          runbook_url: 'https://wiki/runbooks/slo-burn-rate'
+
+  - name: instance_liveness
+    interval: 1m
+    rules:
+      # "Are ALL replicas gone" needs BOTH halves. `count(up == 1) == 0` is silent when every
+      # target is down (empty vector in, empty vector out) AND when the series disappear.
+      # `sum(...) == 0` covers all-down; `absent(...)` covers gone-from-discovery.
+      - alert: AllReplicasDown
+        expr: sum(up{job="order-api"}) == 0 or absent(up{job="order-api"})
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: 'No healthy order-api replica is reporting'
+          runbook_url: 'https://wiki/runbooks/all-replicas-down'
+
+      # A single replica down is a redundancy event, not user impact -> warning, not a page.
+      - alert: InstanceDown
+        expr: up{job="order-api"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: 'Replica {{ $labels.instance }} is down'
+          runbook_url: 'https://wiki/runbooks/instance-down'
