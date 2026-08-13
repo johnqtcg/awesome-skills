@@ -1,10 +1,19 @@
 {
   "scenario": "Developer searching for real code examples on GitHub",
+  "scope": "programmer-search-patterns.md",
+  "section": "Code search qualifiers",
   "required_keywords": [
     "language:go",
-    "stars:>",
-    "filename:",
     "path:",
-    "GitHub Code Search"
+    "symbol:",
+    "content:",
+    "is:",
+    "path:*.go",
+    "regex:NOT\\s+path:"
+  ],
+  "forbidden_keywords": [
+    "filename:",
+    "stars:",
+    "extension:"
   ]
 }

@@ -1,0 +1,7 @@
+{
+  "id": "GS-E5",
+  "title": "Verifiable semantics: what before:/after: actually filter",
+  "question": "If I add after:2026-01-01 to a Google search, what exactly does that filter on? Can I rely on it to get only recently-published information?",
+  "ground_truth": "Google's help page wording is \"documents last updated before/after a particular date\" — it filters on last-updated time, not publication date and not the date of the event. A 2019 page re-published today passes it; a correct 2024 page untouched since fails it. Verified at https://support.google.com/websearch/answer/2466433 on 2026-08-13.",
+  "why_this_fixture": "The intuitive answer (\"publication date\") is the wrong one, so this measures whether the skill transfers a corrected fact rather than whether the output is well formatted."
+}

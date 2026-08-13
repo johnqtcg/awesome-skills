@@ -1,5 +1,6 @@
 {
   "scenario": "User searching for war casualty data",
+  "scope": "high-conflict-topics.md",
   "required_keywords": [
     "Scope Lock",
     "claim tier",

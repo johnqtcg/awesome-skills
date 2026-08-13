@@ -52,29 +52,77 @@ Use `site:` to search within official docs directly — more accurate than third
 
 ## GitHub Code Search
 
-Search real production code, not tutorials. Use GitHub's search syntax in the GitHub search box or via Google with `site:github.com`.
+Search real production code, not tutorials.
 
-### GitHub Native Search Syntax
+GitHub runs **two search engines with different qualifier sets**. Code search matches file
+content and paths; repository search matches repo metadata. A qualifier from the wrong engine
+does not error — it is reinterpreted as plain search text, so the query silently returns junk.
 
-- `language:go "sync.Pool"` — Go projects using sync.Pool
-- `language:go "errgroup" stars:>100` — popular projects using errgroup
-- `filename:go.mod "go-redis"` — projects depending on go-redis
-- `path:Makefile "golangci-lint"` — projects with golangci-lint in Makefile
+**Tag every GitHub query with the engine it targets**: `[github-code]` or `[github-repo]`
+before the query, in the report and in your own notes. This is not decoration. Given
+`language:go errgroup stars:>100` nobody can tell whether you meant a repository search (valid
+— matches repo metadata mentioning errgroup) or a code search that will silently drop `stars:`
+and return unrelated files. The tag is the only thing that makes the query checkable, by a
+reviewer or by `scripts/lint_search_report.py`. Untagged Google queries need no tag.
+
+### Code search qualifiers
+
+The complete qualifier set for code search: `repo:`, `org:`, `user:`, `enterprise:`,
+`language:`, `license:`, `path:`, `symbol:`, `content:`, `is:` (`archived` / `fork` /
+`vendored` / `generated`), plus regex in `/slashes/` and the boolean operators `AND`, `OR`,
+`NOT`. There is nothing else.
+
+- `language:go "sync.Pool"` — Go files containing the string
+- `language:go symbol:WithContext` — symbol **definitions** only, not call sites
+- `path:go.mod "go-redis"` — projects depending on go-redis
+- `path:/(^|\/)go\.mod$/ "go-redis"` — same, anchored so `vendor/foo/go.mod.bak` cannot match
 - `path:.github/workflows "go test"` — CI configs running Go tests
-- `org:kubernetes language:go "context.WithTimeout"` — Kubernetes codebase usage
+- `org:kubernetes language:go "context.WithTimeout"` — one org's codebase
+- `"fatal error" NOT path:__testing__` — exclude a directory
+- `errgroup NOT is:fork` — skip forks of the same code
+
+`path:` also accepts globs: `path:*.go`, `path:src/*.js`, `path:/src/**/*.js`. A leading `/`
+anchors to the repo root; `*` does not cross `/`, `**` does.
+
+### Qualifiers that do NOT work in code search
+
+| Do not use | Why | Use instead |
+|---|---|---|
+| `filename:go.mod` | legacy qualifier, not in current code search | `path:go.mod`, or a regex to anchor the exact name |
+| `stars:>100` | repository-search qualifier — not available in code search | shortlist repos first (below), then scope with `repo:` / `org:` |
+| `extension:go` | legacy qualifier | `path:*.go` or `language:go` |
+
+### Repository search qualifiers
+
+A separate engine over repo metadata (name, description, README, topics) — this is where
+`stars:` is valid.
+
+- `language:go stars:>=500 errgroup` — popular Go repos whose metadata mentions errgroup
+- `topic:kubernetes stars:100..1000` — by topic within a star band
+- `language:go pushed:>2025-06-01` — still maintained
+
+**"Popular projects using X" needs two steps**, because no single query filters by stars and
+by file content at once:
+
+1. Repository search: `language:go stars:>=1000 <domain keyword>` → shortlist
+2. Code search scoped to that shortlist: `org:<org> language:go "<pattern>"`
 
 ### Google + GitHub
 
-- `site:github.com <library> <pattern>` — find repos using a specific pattern
-- `site:github.com/issues "<error message>"` — find issue discussions
-- `site:github.com/pull "<fix description>"` — find relevant PRs
+- `site:github.com <library> <pattern>` — repos referencing a pattern
+- `site:github.com/<org>/<repo> "<error message>"` — discussions inside one repo
+- `site:github.com/<org>/<repo> inurl:issues "<error message>"` — narrow to that repo's issues
+
+`site:` matches a URL prefix, so `site:github.com/issues` matches only the signed-in issue
+dashboard — never a repository's issues, which live at `github.com/<org>/<repo>/issues/<n>`.
 
 ### Tactics
 
-1. Use `stars:>N` to filter for well-maintained projects
+1. Shortlist by `stars:` in repository search, then read code with `repo:` / `org:` scoping
 2. Use `language:` to avoid cross-language noise
-3. Use `path:` to target specific file types (Makefile, Dockerfile, .github/workflows/)
-4. Production code reveals real patterns — better than tutorials for understanding idiomatic usage
+3. Use `path:` to target file types (`path:Makefile`, `path:Dockerfile`, `path:*.yaml`)
+4. Use `symbol:` when you want the definition and `content:` when you want the mention
+5. Production code reveals real patterns — better than tutorials for idiomatic usage
 
 ## Stack Overflow
 
@@ -152,24 +200,52 @@ For technical selection, performance data must be recent and sourced.
 
 ## Quick-Reference: Google Search Syntax
 
+Operators are graded by support level. Google documents only the first group; the rest are
+community knowledge that Google may change or drop without notice — the `+` operator was
+removed outright. Build the evidence chain on Tier A operators; treat Tier B as convenience and
+Tier C as expendable.
+
+### Tier A — documented in Google's own help page
+
 | Syntax | Effect | Example |
 |--------|--------|---------|
 | `"phrase"` | Exact match | `"fatal error: concurrent map writes"` |
+| `site:` | Restrict to domain | `site:go.dev context.WithTimeout` |
+| `-keyword` | Exclude results with keyword | `苹果 -水果 -食谱` |
+| `-site:` | Exclude a domain | `Go教程 -site:csdn.net` |
+| `filetype:` | Restrict to file format | `Go最佳实践 filetype:pdf` |
+| `before:YYYY-MM-DD` | Document last updated before date | `before:2026-01-01` |
+| `after:YYYY-MM-DD` | Document last updated after date | `Go 1.24 after:2025-01-01` |
+
+**`before:` / `after:` filter on when the document was last updated, not when the event
+happened.** A 2019 tutorial re-published today passes `after:2026-01-01`; a correct 2024 spec
+page that has not been touched since fails it. Use them to cut stale pages out of a noisy
+result set — never as proof that a claim is current. To date the *claim*, read the date printed
+on the page itself. Both `2026-01-01` and `2026/01/01` are accepted, as is a bare year.
+
+### Tier B — undocumented but generally working
+
+| Syntax | Effect | Example |
+|--------|--------|---------|
+| `OR` | Logical OR (must be uppercase) | `(Redis OR Memcached) 缓存方案` |
 | `intitle:` | Title must contain keyword | `intitle:性能优化 Go` |
 | `allintitle:` | Title must contain all keywords | `allintitle:Redis 持久化 RDB` |
 | `intext:` | Body must contain keyword | `intext:"连接池调优"` |
-| `inurl:` | URL must contain keyword | `inurl:github Go context` |
-| `site:` | Restrict to domain | `site:go.dev context.WithTimeout` |
-| `filetype:` | Restrict to file format | `Go最佳实践 filetype:pdf` |
-| `imagesize:WxH` | Restrict image dimensions | `wallpaper imagesize:3840x2160` |
-| `-keyword` | Exclude results with keyword | `苹果 -水果 -食谱` |
-| `-site:` | Exclude a domain | `Go教程 -site:csdn.net` |
-| `OR` | Logical OR (must be uppercase) | `(Redis OR Memcached) 缓存方案` |
+| `inurl:` | URL must contain keyword | `inurl:issues site:github.com` |
 | `*` | Wildcard for unknown words | `"best * for Go"` |
-| `before:YYYY-MM-DD` | Results before date | `before:2026-01-01` |
-| `after:YYYY-MM-DD` | Results after date | `Go 1.24 after:2025-01-01` |
-| `related:` | Find similar websites | `related:github.com` |
-| `define:` | Quick definition lookup | `define:idempotent` |
+
+If a Tier B operator returns obviously unfiltered results, it is being ignored — fall back to a
+quoted phrase plus `site:` rather than assuming the filter applied.
+
+### Tier C — unreliable, verify before relying on it
+
+| Syntax | Status |
+|--------|--------|
+| `related:` | Frequently returns nothing; do not build a source list on it |
+| `define:` | Redirects into the dictionary panel, not a document search |
+| `imagesize:WxH` | Image-search-only, and often overridden by the Tools size filter |
+| `link:` | Removed by Google — always empty |
+| `+keyword` | Removed by Google — use `"keyword"` |
 
 ### Combination Examples
 

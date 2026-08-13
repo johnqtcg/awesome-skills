@@ -1,0 +1,16 @@
+{
+  "scenario": "Developer shortlisting popular repositories before reading code",
+  "scope": "programmer-search-patterns.md",
+  "section": "Repository search qualifiers",
+  "required_keywords": [
+    "stars:",
+    "topic:",
+    "pushed:",
+    "regex:two steps"
+  ],
+  "forbidden_keywords": [
+    "filename:",
+    "symbol:",
+    "content:"
+  ]
+}

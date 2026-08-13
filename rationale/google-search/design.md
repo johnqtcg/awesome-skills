@@ -2,7 +2,7 @@
 title: google-search skill design rationale
 owner: awesome-skills maintainers
 status: active
-last_updated: 2026-03-27
+last_updated: 2026-08-13
 applicable_versions: current repository version
 ---
 
@@ -275,6 +275,53 @@ And in snippet-only mode it requires:
 
 This is mature design because it treats tool limitations as part of the workflow rather than as an exceptional afterthought.
 
+### 4.14 Operator Vocabularies Are Perishable, So They Are Graded Rather Than Listed
+
+The most perishable content in a search skill is the operator vocabulary it teaches, and two forms of decay showed up at once.
+
+GitHub runs two search engines with different qualifier sets. A merged list produced `filename:go.mod` and `stars:>100` as code-search examples; neither qualifier exists in code search, and neither raises an error — GitHub reinterprets an unknown qualifier as ordinary search text, so the query silently returns junk instead of failing. The engines are now documented separately, with a do-not-use table naming the invalid qualifiers and the substitution for each. That table is load-bearing: the rule forbidding a bad qualifier in an example becomes a no-op the moment the table naming it disappears.
+
+Google documents six operators and no more. Presenting `allintitle:`, `intext:`, `imagesize:`, `related:`, and `define:` next to `site:` implies they are equally dependable, and they are not — `+` and `link:` were removed outright. Operators are now graded Tier A (documented), Tier B (undocumented but generally working), Tier C (unreliable), so an evidence chain never rests on a filter that may be silently ignored.
+
+The same section records what `before:` and `after:` actually filter: the document's last-updated time, not the date of the event. A 2019 tutorial re-published today passes `after:2026-01-01`, while a correct 2024 specification page that nobody has touched fails it. Using those operators as proof of currency rather than as noise reduction is how a stale answer acquires a confident date.
+
+### 4.15 Prepared Queries and Executed Queries Are Separate Budgets
+
+Quick mode allowed two queries while the workflow demanded "at least three variants". Both rules were right about different things; stating them in the same units made them contradictory. The budget now governs *executed* queries only. Variant preparation is separate, and a prepared-but-unrun variant is delivered as a reusable query marked `not run`. That keeps the value of the third variant without letting an unexecuted query pose as evidence, which is exactly what the Execution Integrity gate exists to prevent.
+
+### 4.16 Label Sets Are Closed and Defined in Exactly One Place
+
+The dual-label rule in 4.10 only works if the label values are fixed, and they had drifted into three versions: the Output Contract enumerated one tier list, `source-evaluation.md` enumerated a different one ending in "or another clearly named tier", and a worked example used `Medium-High` and `Mixed official + practitioner` — values on neither list. An open enum is not a label system, it is a naming convention.
+
+Both lists are now closed — `High` / `Medium` / `Low`, and six source tiers including `Practitioner report` — defined only in `source-evaluation.md` and referenced from everywhere else instead of restated. When a number rests on two tiers, the rule is to label the weaker one. That rule is what forced the second worked example to be rewritten: pairing a genuine vendor page about connection-pool knob semantics with a blog's sizing formula does not make the formula official. The honest verdict is `Partial`, with the missing evidence link named and the formula labeled `Practitioner report` / `Low`.
+
+### 4.17 Tests Must Distinguish a Recommendation from a Warning
+
+The regression suite matched keywords against one concatenated blob of `SKILL.md` plus every reference file. That shape cannot observe correctness: `assert "filename:" in ALL_CONTENT` passed while the docs recommended the qualifier, and passed again after it moved into a do-not-use table. Two such assertions made the error load-bearing — correcting the syntax would have broken the tests.
+
+Checks are now bound to the smallest scope that contains the claim (file, then section), can forbid patterns as well as require them, and are backed by a semantic linter whose every rule is proved to fire on a mutation that reintroduces the specific defect it targets. Some rules exist only to keep the others honest: one fails if the do-not-use table disappears, because deleting it would make the rule above it vacuous; others return `unknown` instead of passing when the input does not let them decide — no executed-query list to compare against, or a GitHub query that has not declared its engine. A check that cannot see its subject must say so.
+
+### 4.18 When Intent Is Undecidable, Require a Declaration Instead of Guessing
+
+A second review pass found the linter itself failing open in the same shape it was built to catch. The clearest case: `language:go errgroup stars:>100` produced no findings. The engine had been *guessed* from the qualifiers, and `stars:` made repository search the obvious guess — a reading under which the query is entirely valid. But that string is also exactly what someone writes when they wanted code from popular projects and did not know `stars:` is unavailable in code search. Both readings are consistent with every character of the input.
+
+Widening or narrowing the detector cannot fix this, because the missing information is not in the query — it is the author's intent. So the skill now requires GitHub queries to carry `[github-code]` or `[github-repo]`, and an undeclared one is reported `unknown` with the guess named. Declared as code search, the same query correctly fails on `stars:`; declared as repository search, it correctly passes.
+
+The general rule: when two readings of an input are equally valid and lead to different verdicts, a checker must not pick one. Either the format carries the disambiguator, or the verdict is `unknown`. Silently choosing is how a checker reports green on the case it was written for.
+
+### 4.19 An A/B That Varies Two Things Measures Neither
+
+The forward eval harness written for 4.17's behavioural gap shipped with the defect it was built to expose. Its control arm ran with `--tools ""`:
+
+- with-skill: skill loaded, search tools available
+- without-skill: no skill, **and no way to search**
+
+So the delta measured "skill plus a search tool" against "model priors" — for a *search* skill, close to meaningless. The control arm could not cite a URL or check a qualifier against a live source however good its instructions would have been, which guarantees a delta on exactly the criteria that look most like evidence. It read as rigorous because the arms were labelled `with_skill` and `without_skill`; the labels described the intent, not the manipulation.
+
+The fix is one shared tool grant passed to both arms, with the prompt as the only difference, asserted by a test that fails if any branch varies the command by arm. Three smaller corrections came with it: a run with zero wins now exits INCONCLUSIVE rather than success (no losses is not evidence of benefit), repeats are aggregated by majority instead of trusting one sample of a stochastic model, and call order is shuffled so run-time drift cannot land on one arm systematically.
+
+The first result of the corrected harness is worth recording, because it is not flattering. On a plain factual lookup and on the `before:`/`after:` semantics question, the control arm — same model, same tools, no skill — produced the correct answer with citations, in one case almost the same wording the skill teaches. Criteria of that kind come back **uninformative**, and uninformative is the honest verdict: with search capability held constant, this skill adds nothing measurable to a factual lookup that a capable model can already perform. Its value has to be sought where the discipline actually bites — refusing to answer when no source exists, refusing to summarise a page it never opened, and labelling what a number rests on. Building a fixture set that makes the skill win would have been easy and worthless.
+
 ## 5. Problems This Design Solves
 
 Combining the current `SKILL.md`, key references, and the evaluation report, the skill solves the following problems:
@@ -356,5 +403,7 @@ Review quarterly; review immediately if the gates, Output Contract, or source-ev
 - `skills/google-search/references/ai-search-and-termination.md`
 - `skills/google-search/references/high-conflict-topics.md`
 - `skills/google-search/references/chinese-search-ecosystem.md`
+- `skills/google-search/references/worked-examples.md`
+- `skills/google-search/scripts/tests/COVERAGE.md`
 - `evaluate/google-search-skill-eval-report.md`
 - `evaluate/google-search-skill-eval-report.zh-CN.md`

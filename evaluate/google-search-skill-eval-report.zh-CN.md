@@ -3,6 +3,7 @@
 > 评估框架: [skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator)
 > 评估日期: 2026-03-12
 > 评估对象: `google-search`
+> 2026-08-13 修订：新增 3.5 节「结论的适用范围」。A/B 实验**未**重跑，所有实测数字仍来自 2026-03-12 那次运行。
 
 ---
 
@@ -25,6 +26,8 @@
 | **每 1% 通过率提升的 Token 成本** | ~42 tok（SKILL.md）/ ~99 tok（full） | — | — |
 
 **关键发现：google-search skill 的核心价值是搜索纪律和报告规范，而非搜索内容质量。** 基础模型已具备出色的搜索和信息综合能力（答案正确性、来源覆盖、代码示例质量均优），但完全缺乏搜索过程的元数据记录（模式选择、预算控制、证据链追踪、降级声明、可信度标签、可复用查询）。Skill 填补的正是这一"搜索操作纪律"的空白。
+
+**+74.1 个百分点这个数字必须和 3.5 节「结论的适用范围」一起读。** 它衡量的是对本 skill 自己定义的输出格式的遵守程度，评分用的 assertion 大多在检查 skill 规定的字段，而且两组实验没有用同一个模型。答案正确性两组都是 3/3。
 
 ---
 
@@ -49,16 +52,27 @@
 
 google-search 是一个**多文件 skill**（1 个 SKILL.md + 6 个参考文件），条件加载设计。
 
-| 文件 | 单词数 | 估算 Token | 加载条件 |
-|------|--------|-----------|---------|
-| **SKILL.md** | 2,085 | ~3,100 | 始终加载 |
-| **references/query-patterns.md** | 1,191 | ~1,800 | 始终加载（查询构建） |
-| **references/programmer-search-patterns.md** | 1,031 | ~1,500 | 程序员搜索类 |
-| **references/source-evaluation.md** | 911 | ~1,400 | 来源评估/冲突处理 |
-| **references/ai-search-and-termination.md** | 549 | ~800 | 终止/升级决策 |
-| **references/high-conflict-topics.md** | 947 | ~1,400 | 高冲突主题 |
-| **references/chinese-search-ecosystem.md** | 279 | ~400 | 中文/中国话题 |
-| **SKILL.md 描述（always in context）** | ~60 | ~80 | 始终 |
+下表是 **2026-03-12 当天实测的体积**，已经不能描述当前的 skill——2026-08-13 那次修订让 SKILL.md 和
+`programmer-search-patterns.md` 明显变长了。不要直接引用这张表，重新测一次：
+
+```bash
+cd skills/google-search && for f in SKILL.md references/*.md; do echo "$(wc -w < "$f")  $f"; done
+```
+
+| 文件 | 单词数（2026-03-12） | 估算 Token | 2026-08-13 实测 | 加载条件 |
+|------|---------------------|-----------|----------------|---------|
+| **SKILL.md** | 2,085 | ~3,100 | 3,016 | 始终加载 |
+| **references/query-patterns.md** | 1,191 | ~1,800 | 1,373 | 始终加载（查询构建） |
+| **references/programmer-search-patterns.md** | 1,031 | ~1,500 | 1,771 | 程序员搜索类 |
+| **references/source-evaluation.md** | 911 | ~1,400 | 1,132 | 来源评估/冲突处理 |
+| **references/ai-search-and-termination.md** | 549 | ~800 | 549 | 终止/升级决策 |
+| **references/high-conflict-topics.md** | 947 | ~1,400 | 970 | 高冲突主题 |
+| **references/chinese-search-ecosystem.md** | 279 | ~400 | 904 | 中文/中国话题 |
+| **references/worked-examples.md** | —（漏记） | — | 1,019 | 输出校准 |
+| **SKILL.md 描述（always in context）** | ~60 | ~80 | ~60 | 始终 |
+
+其中两个 3 月的数字当时就是错的：`chinese-search-ecosystem.md` 记为 279 词，今天实测 904；
+`worked-examples.md` 整行漏掉了。本报告的 Token 估算按每词约 1.5 token 折算，是推算值而非实测值。
 
 **各场景实际加载量**：
 
@@ -149,6 +163,32 @@ google-search 是一个**多文件 skill**（1 个 SKILL.md + 6 个参考文件�
 | 失败类型 | 搜索纪律 + 报告格式 | 报告格式 |
 
 google-search 的 assertion delta 更大，因为它要求的不仅是报告模板（deep-research 的 7-section），还包括**搜索过程的元数据**（模式、预算、证据链、降级级别、可复用查询、精确查询策略）。基础模型连这些概念都不产出。
+
+### 3.5 结论的适用范围
+
++74.1 个百分点这个结果有三条限制。写在这里，是因为这个数字很容易被读成"搜索质量提升了 74 个点"，而它并不是这个意思。
+
+**一、assertion 大多在检查 skill 自己规定的字段。** 执行模式、降级级别、证据链状态、可信度与来源层级标签、可复用查询，这些都是本 skill 定义出来的东西。不加载 skill 的一组没有任何理由输出它们，所以在这些条目上必然是 0 分。3.3 节本身已经把 without-skill 失败的 20 条全部归入搜索纪律和报告格式，而不是答案错误。因此这个差值衡量的是**对 skill 自己引入的格式的遵守程度**，不能说明答案变准了。
+
+**二、两组实验没有用同一个模型。** 按 2.2 节的记录，with-skill 用默认模型，without-skill 用 fast 模型。模型能力和 skill 是否加载这两个变量混在一起，差值中有多少来自 skill 无法分离。要分清楚，只能让两组跑同一个模型再测一次。
+
+**三、内容质量没有测出差别。** 4.5 节和概览表都记录为 3/3 对 3/3。在用户最关心的答案正确性上，这次评估没有测到任何提升——而标题上的数字并不体现这一点。
+
+这份报告能支持的结论是：加载 skill 后，模型能稳定产出一份可审计的搜索报告，代价约为 SKILL.md 的 3,100 tokens。它不能支持的结论是：skill 让搜索变得更准确，或者除"符合本 skill 输出格式"之外还有哪个维度提升了 74 个点。
+
+**四、2.3 节和第五节的所有 Token 数字都早于 2026-08-13 那次修订。** SKILL.md 从 2,085 词增长到 3,016，`programmer-search-patterns.md` 从 1,031 增长到 1,771。效费比（每 1% 通过率提升的 Token、每条 assertion 的 Token）是用旧的分子除旧的分母得到的，**不能**改用当前体积重算——那个通过率提升是 3 月的内容产生的，不是今天的内容产生的。第五节只能当作 3 月版本的记录来读。
+
+下一版应当做三件事：两组用同一个模型；至少一部分 assertion 用外部可核对的事实评分（某个确定的版本号、某个确定的发布日期），而不是看某个字段在不在；再加一个正确答案是"证据不足、不给结论"的场景，把诚实降级真正测出来，而不是假定它成立。
+
+**这套 harness 现在已经写好，但还没有跑过。** `skills/google-search/scripts/eval_forward.py` 实现了上面三条：两组共用一个 `--model`；评分标准检查的是对照一手来源核实过的事实（`go doc database/sql` 的默认值、GitHub code search 的限定词集合），而不是某个字段在不在；另外加了两个正确答案是"带标签地拒答"的场景——一个是任何厂商都没有发布过的官方推荐值，一个是围墙花园里的内容。它**故意没有**"是否打印了降级级别"这类判据。它的评分器在离线状态下受测（`--self-test` 加 `scripts/tests/test_forward_eval.py`，后者还会验证这套 harness 有能力报出 skill **输**），harness 自身出错时退出 INCOMPLETE 而不是给出评分。真正执行需要一个已登录、未被沙箱限制的终端：
+
+```bash
+cd skills/google-search && python3 scripts/eval_forward.py --run --model sonnet --out eval_out
+```
+
+在那条命令跑完之前，本报告里没有任何数字能描述当前版本的实际行为。
+
+离线回归测试存在方向相反的同一类局限。它现在检查的是取值、结构和作用范围，而不是关键词是否出现，也覆盖了查询语法有效性和输出契约的符合度——但它无法观察模式选择是否正确、列出的查询是否真的执行过、引用的页面是否真的打开过。详见 `skills/google-search/scripts/tests/COVERAGE.md` 的 "What these tests still cannot prove" 一节。
 
 ---
 

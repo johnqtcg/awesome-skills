@@ -3,6 +3,7 @@
 > Evaluation framework: [skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator)
 > Evaluation date: 2026-03-12
 > Subject: `google-search`
+> Revised 2026-08-13: added § 3.5 Validity Limitations. The A/B experiment was **not** re-run; all measured numbers are from the 2026-03-12 run.
 
 ---
 
@@ -25,6 +26,8 @@ This evaluation assesses the google-search skill along two dimensions: **actual 
 | **Token cost per 1% pass-rate gain** | ~42 tok (SKILL.md) / ~99 tok (full) | — | — |
 
 **Key finding: The core value of the google-search skill is search discipline and report structure, not search content quality.** The base model already has strong search and synthesis ability (answer correctness, source coverage, code example quality all good), but lacks metadata for the search process (mode choice, budget control, evidence chain tracking, degradation declaration, confidence labels, reusable queries). The skill fills this "search operation discipline" gap.
+
+**Read the +74.1 point figure together with § 3.5 Validity Limitations.** It measures compliance with the output contract this skill itself defines, it was scored on assertions that mostly test skill-mandated fields, and the two arms did not run on the same model. Answer correctness scored 3/3 in both arms.
 
 ---
 
@@ -49,16 +52,29 @@ This evaluation assesses the google-search skill along two dimensions: **actual 
 
 google-search is a **multi-file skill** (1 SKILL.md + 6 reference files) with conditional loading.
 
-| File | Word count | Est. Tokens | Load condition |
-|------|------------|-------------|-----------------|
-| **SKILL.md** | 2,085 | ~3,100 | Always |
-| **references/query-patterns.md** | 1,191 | ~1,800 | Always (query construction) |
-| **references/programmer-search-patterns.md** | 1,031 | ~1,500 | Programmer search |
-| **references/source-evaluation.md** | 911 | ~1,400 | Source evaluation / conflict handling |
-| **references/ai-search-and-termination.md** | 549 | ~800 | Termination / escalation decisions |
-| **references/high-conflict-topics.md** | 947 | ~1,400 | High-conflict topics |
-| **references/chinese-search-ecosystem.md** | 279 | ~400 | Chinese / China topics |
-| **SKILL.md description (always in context)** | ~60 | ~80 | Always |
+Sizes below are **as measured on 2026-03-12**, the day this A/B ran. They no longer describe
+the current skill — the 2026-08-13 revision grew SKILL.md and `programmer-search-patterns.md`
+substantially. Re-derive rather than trusting this table:
+
+```bash
+cd skills/google-search && for f in SKILL.md references/*.md; do echo "$(wc -w < "$f")  $f"; done
+```
+
+| File | Word count (2026-03-12) | Est. Tokens | Measured 2026-08-13 | Load condition |
+|------|------------------------|-------------|--------------------|-----------------|
+| **SKILL.md** | 2,085 | ~3,100 | 3,016 | Always |
+| **references/query-patterns.md** | 1,191 | ~1,800 | 1,373 | Always (query construction) |
+| **references/programmer-search-patterns.md** | 1,031 | ~1,500 | 1,771 | Programmer search |
+| **references/source-evaluation.md** | 911 | ~1,400 | 1,132 | Source evaluation / conflict handling |
+| **references/ai-search-and-termination.md** | 549 | ~800 | 549 | Termination / escalation decisions |
+| **references/high-conflict-topics.md** | 947 | ~1,400 | 970 | High-conflict topics |
+| **references/chinese-search-ecosystem.md** | 279 | ~400 | 904 | Chinese / China topics |
+| **references/worked-examples.md** | — (omitted) | — | 1,019 | Output calibration |
+| **SKILL.md description (always in context)** | ~60 | ~80 | ~60 | Always |
+
+Two of the March figures were already wrong when written: `chinese-search-ecosystem.md` was
+recorded as 279 words against 904 today, and `worked-examples.md` was left out of the table
+entirely. Token estimates in this report use ≈1.5 tokens per word; they are derived, not counted.
 
 **Actual load per scenario:**
 
@@ -149,6 +165,32 @@ google-search is a **multi-file skill** (1 SKILL.md + 6 reference files) with co
 | Failure type | Search discipline + report format | Report format |
 
 google-search has a larger assertion delta because it requires not only a report template (deep-research’s 7-section) but also **search process metadata** (mode, budget, evidence chain, degradation level, reusable queries, precise query strategies). The base model does not produce these concepts at all.
+
+### 3.5 Validity Limitations
+
+Three limits bound what the +74.1 percentage-point figure supports. They are recorded here because the number otherwise reads as a claim about search quality, which it is not.
+
+**1. The assertions mostly test fields the skill mandates.** Execution mode, degradation level, evidence-chain status, confidence and source-tier labels, reusable queries — these are artifacts this skill defines. A run with no skill loaded has no reason to emit any of them and scores zero on those items by construction. § 3.3 already classifies all 20 without-skill failures as search-discipline and report-format items rather than wrong answers. The delta therefore measures **compliance with a format the skill itself introduces**. It is not evidence that answers got better.
+
+**2. The two arms did not use the same model.** Per § 2.2, with-skill runs used the default model while without-skill runs used the fast model. Model capability is confounded with skill presence, so no portion of the delta can be attributed cleanly to the skill. Only re-running both arms on one model can separate the two.
+
+**3. Content quality showed no measurable difference.** § 4.5 and the overview table both record 3/3 versus 3/3 on answer correctness. On the dimension users care about most, this evaluation found no gain — which the headline number does not convey.
+
+What the evaluation does support: with the skill loaded, the model reliably produces an auditable search report, at a cost of roughly 3,100 tokens for SKILL.md. What it does not support: that the skill makes searches more accurate, or that any 74-point gain exists on an axis other than conformance to this skill's own output contract.
+
+**4. Every token figure in § 2.3 and § 5 predates the 2026-08-13 revision.** SKILL.md grew from 2,085 to 3,016 words and `programmer-search-patterns.md` from 1,031 to 1,771. The cost-effectiveness ratios (tokens per 1% pass-rate gain, tokens per assertion) divide an old numerator by an old denominator and must not be recomputed against current sizes — the pass-rate gain was produced by the March content, not by today's. Treat § 5 as a record of the March version.
+
+A future revision should hold the model constant across arms; score at least some assertions against externally verifiable ground truth (a known version number, a known release date) instead of the presence of a field; and include one scenario whose correct answer is a refusal to conclude, so honest degradation is measured rather than assumed.
+
+**That harness now exists but has not been run.** `skills/google-search/scripts/eval_forward.py` implements all three corrections: one `--model` for both arms, criteria that check facts verified against primary sources (`go doc database/sql` defaults, GitHub's code-search qualifier set) rather than field presence, and two scenarios whose correct answer is a labelled refusal — an official recommendation no vendor publishes, and content inside a walled garden. It deliberately has no "did it print a degradation line" criterion. Its grader is tested offline (`--self-test` plus `scripts/tests/test_forward_eval.py`, which also verifies the harness can report the skill *losing*), and a harness failure exits INCOMPLETE rather than grading. Executing it needs an authenticated CLI in an unsandboxed shell:
+
+```bash
+cd skills/google-search && python3 scripts/eval_forward.py --run --model sonnet --out eval_out
+```
+
+Until that runs, no number in this report describes the current skill's behaviour.
+
+Offline regression tests have the mirror-image limitation. They now check values, structure, and scope instead of keyword presence, and they cover query-syntax validity and output-contract conformance — but they cannot observe mode selection, whether a listed query was executed, or whether a cited page was opened. See `skills/google-search/scripts/tests/COVERAGE.md` § "What these tests still cannot prove".
 
 ---
 

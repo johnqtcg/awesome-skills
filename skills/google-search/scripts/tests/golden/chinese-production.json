@@ -1,10 +1,11 @@
 {
   "scenario": "Developer searching for Chinese production experience",
+  "scope": "chinese-search-ecosystem.md",
   "required_keywords": [
     "site:zhihu.com",
     "site:juejin.cn",
     "踩坑",
     "生产环境",
-    "regex:最佳实践.*after:"
+    "regex:最佳实践 after:"
   ]
 }

@@ -1,5 +1,7 @@
 {
   "scenario": "Go developer debugging a runtime error",
+  "scope": "programmer-search-patterns.md",
+  "section": "Error Debugging",
   "required_keywords": [
     "exact error message",
     "site:stackoverflow.com",

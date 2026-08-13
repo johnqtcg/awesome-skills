@@ -1,0 +1,7 @@
+{
+  "id": "GS-E2",
+  "title": "Verifiable fact: GitHub code-search qualifiers",
+  "question": "Using GitHub search, how do I find every repository whose go.mod depends on go-redis? Give me the exact query syntax.",
+  "ground_truth": "Code search: `path:go.mod \"go-redis\"`, or an anchored regex `path:/(^|\\/)go\\.mod$/ \"go-redis\"`. `filename:` is a legacy qualifier that no longer exists in code search, and `stars:` is repository-search only. Verified against GitHub's code-search syntax reference.",
+  "why_this_fixture": "A base model answering from priors very often emits `filename:` and `stars:` here — the same stale syntax this skill's own docs carried until 2026-08-13. It measures transfer of a correct fact, not format."
+}

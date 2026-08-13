@@ -1,9 +1,12 @@
 {
   "scenario": "Developer comparing framework performance",
+  "scope": "programmer-search-patterns.md",
+  "section": "Performance Benchmarks",
   "required_keywords": [
     "TechEmpower",
     "benchmark",
     "after:",
-    "regex:vs.*benchmark"
+    "regex:vs.*benchmark",
+    "regex:methodology"
   ]
 }

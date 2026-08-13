@@ -37,6 +37,16 @@ class TestFrontmatter:
     def test_has_allowed_tools(self):
         assert re.search(r"^allowed-tools:", SKILL_TEXT, re.MULTILINE)
 
+    def test_allowed_tools_preapproves_the_search_action(self):
+        """`allowed-tools` lists the tools this skill may use without a permission prompt.
+        A search skill that does not pre-approve searching leaves its own core action to a
+        prompt; WebFetch alone only covers reading a URL you already have."""
+        m = re.search(r"^allowed-tools:\s*(.+)$", SKILL_TEXT, re.MULTILINE)
+        assert m, "allowed-tools missing"
+        granted = {t.strip() for t in m.group(1).replace(",", " ").split()}
+        for tool in ("WebSearch", "WebFetch"):
+            assert tool in granted, f"{tool} not pre-approved; granted={sorted(granted)}"
+
 
 # ── Mandatory H2 Sections ────────────────────────────────────────────────
 
@@ -149,6 +159,26 @@ class TestAntiExamples:
         assert bad_count >= 2, f"Need >= 2 BAD examples, found {bad_count}"
         assert good_count >= 2, f"Need >= 2 GOOD examples, found {good_count}"
 
+    def test_anti_examples_do_not_restate_a_query_count(self):
+        """Query counts live in the mode-definitions table and nowhere else.
+
+        An anti-example demanding "at least two queries in every mode" contradicts the
+        table's `Quick | 1–2`, and a Quick factual question answered by one Precision query
+        against an official source should not be forced to spend a second. State the
+        *condition* instead of a count so there is no second number to keep in sync.
+        """
+        section = SKILL_TEXT.split("## Anti-Examples")[1].split("\n## ")[0]
+        assert not re.search(
+            r"at least (?:two|three|2|3)\b[^.]{0,60}quer", section, re.IGNORECASE
+        ), "anti-examples restate a query minimum; the mode table owns those numbers"
+
+    def test_mode_table_is_the_single_source_of_query_counts(self):
+        row = next(
+            (l for l in SKILL_TEXT.split("\n") if re.match(r"^\|\s*Quick\s*\|", l)), ""
+        )
+        assert row, "Quick row missing from the mode-definitions table"
+        assert re.search(r"\|\s*1[–-]2\s*\|", row), f"Quick query range changed: {row!r}"
+
 
 # ── Honest Degradation ──────────────────────────────────────────────────
 
@@ -156,6 +186,47 @@ class TestDegradation:
     def test_three_levels(self):
         for level in ["Full", "Partial", "Blocked"]:
             assert f"**{level}**" in SKILL_TEXT, f"Degradation level '{level}' must be defined"
+
+    def test_full_requires_the_whole_evidence_chain(self):
+        """Gate 3 defines chains of two or three links for Standard and Deep. Judging the
+        strongest source alone cannot establish that the chain is complete, which is how a
+        Partial gets labeled Full: the official page found answers an adjacent question."""
+        row = next((l for l in SKILL_TEXT.split("\n") if l.startswith("| **Full**")), "")
+        assert row, "Full row not found in the degradation table"
+        assert "evidence chain" in row.lower(), (
+            "the Full condition must reference the evidence chain, not only the strongest source"
+        )
+
+    @staticmethod
+    def _decision_tree():
+        return SKILL_TEXT.split("**Decision tree**")[1].split("```")[1]
+
+    def test_every_degradation_level_is_reachable(self):
+        """Blocked must be decided before the chain question.
+
+        Every Blocked case also has an unsatisfied evidence chain, so asking about the chain
+        first routes "budget exhausted, nothing found" to Partial and leaves Blocked
+        unreachable — while Partial promises a qualified answer that does not exist.
+        """
+        tree = self._decision_tree()
+        for level in ("Full", "Partial", "Blocked"):
+            assert level in tree, f"{level} is not an outcome in the decision tree"
+        assert tree.index("Blocked") < tree.index("evidence chain"), (
+            "Blocked is nested below the evidence-chain question, so it can never be reached"
+        )
+
+    def test_decision_tree_asks_about_total_failure_first(self):
+        tree = self._decision_tree()
+        first = next(l.strip() for l in tree.split("\n") if l.strip())
+        assert re.search(r"budget|paywall|walled garden", first, re.IGNORECASE), (
+            f"first decision-tree question is {first!r}, not the total-failure check"
+        )
+
+    def test_decision_tree_still_checks_the_chain_before_the_source(self):
+        tree = self._decision_tree()
+        assert tree.index("evidence chain") < tree.index("target confidence"), (
+            "the chain must be tested before judging whether the sources answer the question"
+        )
 
 
 # ── Output Contract ──────────────────────────────────────────────────────
@@ -175,6 +246,48 @@ class TestOutputContract:
     @pytest.mark.parametrize("field", REQUIRED_FIELDS)
     def test_output_field_present(self, field):
         assert field in SKILL_TEXT, f"Output contract missing field: {field}"
+
+    def test_key_numbers_row_defers_to_the_canonical_label_lists(self):
+        """One list, not two. SKILL.md used to restate the source-tier values, and the copy
+        drifted: it said Official/Primary/Third-party/OSINT/Adversary while
+        source-evaluation.md said something else and the worked example used a third form
+        ("Mixed official + practitioner") that appeared on neither list."""
+        row = next(
+            (l for l in SKILL_TEXT.split("\n") if "**Key numbers**" in l), ""
+        )
+        assert row, "Key numbers row not found"
+        assert "source-evaluation.md" in row, "row must point at the canonical list"
+        assert "OSINT" not in row and "Adversary" not in row, (
+            "row restates the tier enum instead of deferring to it"
+        )
+
+    def test_quick_mode_output_shape_is_constrained(self):
+        """Quick mode must be compact, and compactness must not be readable as permission to
+        drop MUST fields.
+
+        The first version of this guidance said "if the metadata is longer than the answer, cut
+        the metadata". In the 2026-08-13 live eval the with-skill arm then produced a correct
+        answer with no labels, no cited URL and no reusable queries — every MUST field for Quick
+        gone. Brevity guidance has to name what is not cuttable.
+        """
+        assert re.search(r"Quick mode output shape", SKILL_TEXT), \
+            "no Quick-mode output shape rule"
+        block = SKILL_TEXT.split("Quick mode output shape")[1][:1400]
+        assert "No tables" in block or "no tables" in block
+        assert re.search(r"never dropped|not to delete fields", block), (
+            "the shape rule must state that MUST fields survive compression"
+        )
+        for field in ("1", "2", "3", "7", "8"):
+            assert field in block.split("MUST in Quick")[0][-120:], (
+                f"field {field} is not listed as MUST in the Quick shape rule"
+            )
+
+    def test_reusable_queries_row_requires_marking_unrun_queries(self):
+        row = next((l for l in SKILL_TEXT.split("\n") if "**Reusable queries**" in l), "")
+        assert "not run" in row, (
+            "listing a query you never executed without marking it violates the Execution "
+            "Integrity gate"
+        )
 
 
 # ── Worked Examples ──────────────────────────────────────────────────────
@@ -241,6 +354,20 @@ class TestProgrammerSearchPatterns:
         for syntax in ['`"phrase"`', '`site:`', '`filetype:`', '`intitle:`', '`after:`']:
             assert syntax in content, f"Syntax table missing: {syntax}"
 
+    REQUIRED_GITHUB_SUBSECTIONS = [
+        "Code search qualifiers",
+        "Qualifiers that do NOT work in code search",
+        "Repository search qualifiers",
+    ]
+
+    @pytest.mark.parametrize("sub", REQUIRED_GITHUB_SUBSECTIONS)
+    def test_github_engines_are_separated(self, content, sub):
+        """GitHub's code search and repository search take different qualifiers. Presenting
+        one merged list is what put `filename:` and `stars:>100` in the code-search
+        examples, neither of which exists in that engine."""
+        assert re.search(rf"^#+\s+{re.escape(sub)}\s*$", content, re.MULTILINE), \
+            f"missing subsection: {sub}"
+
 
 # ── Source Evaluation Scorecard ──────────────────────────────────────────
 
@@ -274,6 +401,75 @@ class TestAISearchTermination:
 
 
 # ── Line Count Guard ─────────────────────────────────────────────────────
+
+class TestLocalLinksResolve:
+    """Every skill-local path cited anywhere in the package must exist.
+
+    A path that resolves in this repository but not in an installed copy is a broken evidence
+    link for every user who installs the skill. `evaluate/` and `rationale/` live one level
+    above the package, so citing them bare reads as a local file that is not there — they must
+    be introduced as repository references instead.
+    """
+
+    PACKAGE_FILES = [SKILL_MD] + sorted(
+        [os.path.join(REFS_DIR, f) for f in os.listdir(REFS_DIR) if f.endswith(".md")]
+    ) + [
+        os.path.join(SKILL_ROOT, "scripts", f)
+        for f in sorted(os.listdir(os.path.join(SKILL_ROOT, "scripts")))
+        if f.endswith((".py", ".sh", ".md"))
+    ] + [
+        os.path.join(SKILL_ROOT, "scripts", "tests", f)
+        for f in sorted(os.listdir(os.path.join(SKILL_ROOT, "scripts", "tests")))
+        if f.endswith((".py", ".md"))
+    ]
+
+    # paths that intentionally point outside the package
+    EXTERNAL_PREFIXES = ("evaluate/", "rationale/", "outputexample/", "bestpractice/",
+                         "skills/", "docs/", ".claude/")
+
+    @pytest.mark.parametrize("path", PACKAGE_FILES)
+    def test_cited_local_paths_exist(self, path):
+        text = _read(path)
+        # a filename cannot begin with a dot: "`.meta.json`" names a suffix pattern, not a file
+        cited = set(re.findall(r"`([A-Za-z0-9][A-Za-z0-9_./-]*\.(?:md|py|sh|json))`", text))
+        cited |= set(re.findall(r"\]\(([A-Za-z0-9][A-Za-z0-9_./-]*\.md)[^)]*\)", text))
+        missing = []
+        for ref in cited:
+            if ref.startswith(self.EXTERNAL_PREFIXES) or ref.startswith("http"):
+                continue
+            candidates = [
+                os.path.join(SKILL_ROOT, ref),
+                os.path.join(os.path.dirname(path), ref),
+                os.path.join(REFS_DIR, os.path.basename(ref)),
+                os.path.join(SKILL_ROOT, "scripts", os.path.basename(ref)),
+                os.path.join(SKILL_ROOT, "scripts", "tests", os.path.basename(ref)),
+            ]
+            if not any(os.path.exists(c) for c in candidates):
+                missing.append(ref)
+        assert not missing, f"{os.path.basename(path)} cites missing local files: {missing}"
+
+    def test_the_resolver_is_not_vacuous(self):
+        """Negative control: if the extractor found nothing, the test above would pass on any
+        broken link."""
+        text = _read(SKILL_MD)
+        cited = set(re.findall(r"`([A-Za-z0-9][A-Za-z0-9_./-]*\.(?:md|py|sh|json))`", text))
+        assert len(cited) >= 6, f"extractor found only {cited}"
+
+    @pytest.mark.parametrize("external", ["evaluate/"])
+    def test_out_of_package_references_are_introduced_as_such(self, external):
+        for path in self.PACKAGE_FILES:
+            text = _read(path)
+            if external not in text:
+                continue
+            assert re.search(
+                r"repositor|not (?:be )?ship|not part of|one level above|repo-level",
+                text,
+                re.IGNORECASE,
+            ), (
+                f"{os.path.basename(path)} cites {external} without saying it lives outside "
+                f"the installed package"
+            )
+
 
 class TestLineLimits:
     def test_skill_md_under_500_lines(self):

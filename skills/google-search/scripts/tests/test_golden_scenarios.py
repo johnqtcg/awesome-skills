@@ -1,7 +1,14 @@
 """
 Golden scenario tests for the google-search skill.
-Validates that SKILL.md and reference files contain expected keywords
-for common search scenarios that the skill must handle.
+
+Each fixture states which *file* (and optionally which section) must carry the pattern.
+A fixture may also forbid patterns within that scope.
+
+Why the scope field exists: these checks used to match against one blob of SKILL.md plus
+every reference file, so "the GitHub section documents `path:`" was satisfied by the word
+`path:` appearing anywhere in seven files, and a forbidden pattern could never be expressed
+at all. A scope wider than the claim fails open — see the module docstring of
+scripts/lint_search_report.py for the concrete defect that shipped behind it.
 """
 
 import json
@@ -32,6 +39,33 @@ def _all_content() -> str:
 ALL_CONTENT = _all_content()
 
 
+def _section(text: str, heading: str) -> str:
+    m = re.search(rf"^(#{{1,6}})\s+{re.escape(heading)}\s*$", text, re.MULTILINE)
+    if not m:
+        return ""
+    level = len(m.group(1))
+    rest = text[m.end():]
+    nxt = re.search(rf"^#{{1,{level}}}\s+\S", rest, re.MULTILINE)
+    return rest[: nxt.start()] if nxt else rest
+
+
+def _scope_text(fixture) -> tuple[str, str]:
+    """Resolve a fixture's scope to (text, label). Missing scopes are a hard error, not
+    a silent fall back to the whole corpus."""
+    scope = fixture.get("scope")
+    if not scope:
+        return ALL_CONTENT, "corpus"
+    path = SKILL_MD if scope == "SKILL.md" else os.path.join(REFS_DIR, scope)
+    assert os.path.isfile(path), f"fixture scope names a missing file: {scope}"
+    text = _read(path)
+    heading = fixture.get("section")
+    if heading:
+        text = _section(text, heading)
+        assert text.strip(), f"fixture scope names a missing section: {scope} § {heading}"
+        return text, f"{scope} § {heading}"
+    return text, scope
+
+
 # ── Golden Fixture Tests ─────────────────────────────────────────────────
 
 def _load_golden_fixtures():
@@ -47,138 +81,158 @@ def _load_golden_fixtures():
     return fixtures
 
 
-@pytest.mark.parametrize("fixture", _load_golden_fixtures())
-def test_golden_scenario(fixture):
-    """Each golden fixture defines required keywords that must appear in the skill corpus."""
+GOLDEN_FIXTURES = _load_golden_fixtures()
+
+
+def _match(pattern: str, text: str) -> bool:
+    if pattern.startswith("regex:"):
+        return bool(re.search(pattern[len("regex:"):], text, re.IGNORECASE))
+    return pattern.lower() in text.lower()
+
+
+@pytest.mark.parametrize("fixture", GOLDEN_FIXTURES)
+def test_golden_scenario_required(fixture):
+    """Required patterns must appear inside the fixture's declared scope."""
     scenario = fixture.get("scenario", "unknown")
-    keywords = fixture.get("required_keywords", [])
-    for kw in keywords:
-        if kw.startswith("regex:"):
-            pattern = kw[len("regex:"):]
-            assert re.search(pattern, ALL_CONTENT, re.IGNORECASE), \
-                f"[{scenario}] regex pattern not found: {pattern}"
-        else:
-            assert kw.lower() in ALL_CONTENT.lower(), \
-                f"[{scenario}] keyword not found: {kw}"
+    text, label = _scope_text(fixture)
+    for kw in fixture.get("required_keywords", []):
+        assert _match(kw, text), f"[{scenario}] not found in {label}: {kw}"
 
 
-# ── Inline Scenario Tests ────────────────────────────────────────────────
+@pytest.mark.parametrize("fixture", GOLDEN_FIXTURES)
+def test_golden_scenario_forbidden(fixture):
+    """Forbidden patterns must not appear inside the fixture's declared scope.
 
-class TestErrorDebuggingScenario:
-    """A developer searching for a Go error message."""
-
-    def test_exact_error_pattern(self):
-        assert '"<exact error message>"' in ALL_CONTENT or \
-               '"exact error message"' in ALL_CONTENT.lower()
-
-    def test_stackoverflow_pattern(self):
-        assert "site:stackoverflow.com" in ALL_CONTENT
-
-    def test_github_issues_pattern(self):
-        assert "site:github.com" in ALL_CONTENT
-
-
-class TestOfficialDocsScenario:
-    """A developer searching for Go standard library documentation."""
-
-    def test_go_dev_site(self):
-        assert "site:go.dev" in ALL_CONTENT
-
-    def test_pkg_go_dev(self):
-        assert "site:pkg.go.dev" in ALL_CONTENT
+    This is what a corpus-wide `in` check cannot express: `stars:` must be absent from the
+    code-search recommendations while still being present in the table that warns about it.
+    """
+    scenario = fixture.get("scenario", "unknown")
+    forbidden = fixture.get("forbidden_keywords", [])
+    if not forbidden:
+        pytest.skip("fixture declares no forbidden patterns")
+    text, label = _scope_text(fixture)
+    for kw in forbidden:
+        assert not _match(kw, text), f"[{scenario}] forbidden pattern present in {label}: {kw}"
 
 
-class TestChineseProductionExperience:
-    """A developer searching for Chinese production experience reports."""
-
-    def test_zhihu(self):
-        assert "site:zhihu.com" in ALL_CONTENT
-
-    def test_juejin(self):
-        assert "site:juejin.cn" in ALL_CONTENT
-
-    def test_pitfall_keywords(self):
-        assert "踩坑" in ALL_CONTENT
+def test_at_least_one_fixture_declares_a_scope():
+    """Negative control: if every fixture fell back to the corpus, the scope machinery
+    above would be dead code and these tests would be the old fail-open shape."""
+    scoped = [f.values[0] for f in GOLDEN_FIXTURES if f.values[0].get("scope")]
+    assert len(scoped) >= 3, f"only {len(scoped)} scoped fixture(s)"
 
 
-class TestPerformanceBenchmarkScenario:
-    """A developer searching for framework benchmarks."""
-
-    def test_techempower(self):
-        assert "TechEmpower" in ALL_CONTENT
-
-    def test_after_date(self):
-        assert "after:" in ALL_CONTENT
-
-    def test_benchmark_keyword(self):
-        assert "benchmark" in ALL_CONTENT.lower()
+def test_at_least_one_fixture_declares_forbidden_patterns():
+    forbidding = [f.values[0] for f in GOLDEN_FIXTURES if f.values[0].get("forbidden_keywords")]
+    assert forbidding, "no fixture exercises the forbidden-pattern path"
 
 
-class TestHighConflictScenario:
-    """A user searching for war casualty numbers."""
+def test_fixtures_are_substantive():
+    """An emptied fixture would pass every check above without asserting anything."""
+    for param in GOLDEN_FIXTURES:
+        data = param.values[0]
+        assert len(data.get("required_keywords", [])) >= 3, data.get("scenario")
 
-    def test_scope_lock(self):
-        assert "scope" in ALL_CONTENT.lower() and "lock" in ALL_CONTENT.lower()
 
-    def test_claim_tiers(self):
-        assert "claim tier" in ALL_CONTENT.lower() or "source tier" in ALL_CONTENT.lower()
+def test_forbidden_check_fires_when_the_pattern_is_in_scope():
+    """Negative control for the mechanism itself.
 
-    def test_as_of_date(self):
-        assert "as of DATE" in ALL_CONTENT or "As of DATE" in ALL_CONTENT
+    `filename:` must be absent from the code-search recommendations and present in the
+    table that warns about it. Pointing the forbidden check at the warning table must
+    therefore FAIL — if it passed, the check would be inert and the code-search fixture's
+    green result would mean nothing.
+    """
+    control = {
+        "scenario": "control",
+        "scope": "programmer-search-patterns.md",
+        "section": "Qualifiers that do NOT work in code search",
+        "forbidden_keywords": ["filename:"],
+    }
+    text, _ = _scope_text(control)
+    assert _match("filename:", text), "warning table no longer names filename:"
+    with pytest.raises(AssertionError):
+        test_golden_scenario_forbidden(control)
+
+
+def test_missing_scope_is_an_error_not_a_corpus_fallback():
+    """A typo'd scope must fail loudly. Falling back to the whole corpus is how a
+    narrowed check silently reverts to the fail-open shape it replaced."""
+    with pytest.raises(AssertionError):
+        _scope_text({"scope": "no-such-file.md"})
+    with pytest.raises(AssertionError):
+        _scope_text({"scope": "SKILL.md", "section": "No Such Heading"})
+
+
+# ── Scoped Scenario Tests ────────────────────────────────────────────────
+#
+# The scenarios above are covered by the golden fixtures, which bind each pattern to the
+# file and section that owns it. The whole-corpus versions of those same assertions were
+# deleted rather than kept alongside: `assert "filename:" in ALL_CONTENT` passed both while
+# the docs recommended that qualifier and after they moved it into a do-not-use table, so
+# keeping it would have re-added the fail-open signal the fixtures exist to remove.
+#
+# What remains here are checks that are genuinely about a single file's structure.
+
+QPAT = _read(os.path.join(REFS_DIR, "query-patterns.md"))
+PROG = _read(os.path.join(REFS_DIR, "programmer-search-patterns.md"))
 
 
 class TestToolDiscoveryScenario:
     """A user searching for online tools or software alternatives."""
 
-    def test_online_tool_pattern(self):
-        assert "online tool" in ALL_CONTENT.lower()
+    def test_tools_section_exists(self):
+        assert _section(QPAT, "Tools and Software").strip()
 
-    def test_alternatives_pattern(self):
-        assert "alternatives" in ALL_CONTENT.lower()
+    def test_task_first_patterns(self):
+        body = _section(QPAT, "Tools and Software")
+        assert "online tool" in body.lower()
+        assert "alternative" in body.lower()
 
-
-class TestPDFReportScenario:
-    """A user searching for PDF reports or whitepapers."""
-
-    def test_filetype_pdf(self):
-        assert "filetype:pdf" in ALL_CONTENT
-
-    def test_report_pattern(self):
-        assert "report" in ALL_CONTENT.lower()
-
-
-class TestWalledGardenScenario:
-    """A user searching for content locked in Chinese platforms."""
-
-    def test_wechat(self):
-        assert "WeChat" in ALL_CONTENT or "微信" in ALL_CONTENT
-
-    def test_xiaohongshu(self):
-        assert "Xiaohongshu" in ALL_CONTENT or "小红书" in ALL_CONTENT
-
-    def test_platform_search_recommendation(self):
-        assert "search within the app" in ALL_CONTENT.lower() or \
-               "search directly" in ALL_CONTENT.lower()
-
-
-class TestGitHubCodeSearchScenario:
-    """A developer searching for real code examples on GitHub."""
-
-    def test_language_filter(self):
-        assert "language:go" in ALL_CONTENT
-
-    def test_stars_filter(self):
-        assert "stars:>" in ALL_CONTENT
-
-    def test_filename_filter(self):
-        assert "filename:" in ALL_CONTENT
+    def test_does_not_lead_with_the_unreliable_related_operator(self):
+        body = _section(QPAT, "Tools and Software")
+        for line in body.split("\n"):
+            if re.match(r"^\s*[-*]\s+`", line) and "related:" in line:
+                assert "returns nothing" in body, (
+                    "related: may only appear with its reliability caveat"
+                )
 
 
 class TestQueryRefinementScenario:
     """Skill must support iterative query refinement."""
 
     def test_refinement_loop(self):
-        assert "Refinement Loop" in ALL_CONTENT
+        body = _section(QPAT, "Refinement Loop")
+        assert body.strip(), "Refinement Loop section missing from query-patterns.md"
+        steps = [l for l in body.split("\n") if re.match(r"^\s*\d+\.", l)]
+        assert len(steps) >= 5, f"refinement loop has only {len(steps)} steps"
 
     def test_noise_reduction(self):
-        assert "Noise Reduction" in ALL_CONTENT or "noise" in ALL_CONTENT.lower()
+        assert _section(QPAT, "Noise Reduction").strip()
+
+
+class TestOperatorTiering:
+    """Google operators must be graded, not presented as uniformly stable."""
+
+    TIERS = [
+        "Tier A — documented in Google's own help page",
+        "Tier B — undocumented but generally working",
+        "Tier C — unreliable, verify before relying on it",
+    ]
+
+    @pytest.mark.parametrize("heading", TIERS)
+    def test_tier_section_present(self, heading):
+        assert _section(PROG, heading).strip(), f"missing operator tier: {heading}"
+
+    def test_documented_tier_holds_only_googles_documented_operators(self):
+        body = _section(PROG, self.TIERS[0])
+        for undocumented in ("intitle:", "allintitle:", "intext:", "inurl:", "related:"):
+            assert undocumented not in body, (
+                f"{undocumented} is not on Google's documented list but sits in Tier A"
+            )
+
+    def test_date_operator_semantics_are_stated(self):
+        body = _section(PROG, self.TIERS[0])
+        assert "last updated" in body.lower(), (
+            "before:/after: filter on document update time; without that caveat the skill "
+            "treats a re-published 2019 page as fresh evidence"
+        )

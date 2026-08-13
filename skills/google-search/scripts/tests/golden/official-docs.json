@@ -1,9 +1,11 @@
 {
   "scenario": "Developer searching for Go standard library docs",
+  "scope": "programmer-search-patterns.md",
+  "section": "Official Documentation",
   "required_keywords": [
     "site:go.dev",
     "site:pkg.go.dev",
-    "Official Documentation",
-    "release note"
+    "site:go.dev/ref",
+    "regex:release announcement"
   ]
 }

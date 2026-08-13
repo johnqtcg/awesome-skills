@@ -1,9 +1,12 @@
 {
   "scenario": "User searching for content locked in Chinese platforms",
+  "scope": "chinese-search-ecosystem.md",
+  "section": "Platform-specific (not indexed by Google)",
   "required_keywords": [
     "WeChat",
-    "Xiaohongshu",
     "微信搜一搜",
-    "regex:search.*(within|directly)"
+    "Xiaohongshu",
+    "小红书",
+    "regex:[Ss]earch within the app"
   ]
 }

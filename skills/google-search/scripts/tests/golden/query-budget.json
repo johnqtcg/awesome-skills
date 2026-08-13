@@ -1,0 +1,13 @@
+{
+  "scenario": "Prepared query variants must be distinguished from executed queries",
+  "scope": "query-patterns.md",
+  "section": "Core Pattern Set",
+  "required_keywords": [
+    "Primary",
+    "Precision",
+    "Expansion",
+    "regex:Variants prepared",
+    "regex:Queries executed",
+    "regex:not run"
+  ]
+}

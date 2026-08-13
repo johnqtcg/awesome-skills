@@ -1,0 +1,19 @@
+{
+  "scenario": "Skill must grade Google operators by support level, not present all as stable",
+  "scope": "programmer-search-patterns.md",
+  "section": "Tier A — documented in Google's own help page",
+  "required_keywords": [
+    "site:",
+    "filetype:",
+    "before:",
+    "after:",
+    "regex:last updated",
+    "regex:not (when|as proof)"
+  ],
+  "forbidden_keywords": [
+    "related:",
+    "link:",
+    "imagesize:",
+    "intitle:"
+  ]
+}

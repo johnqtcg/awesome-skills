@@ -1,0 +1,7 @@
+{
+  "id": "GS-E1",
+  "title": "Verifiable fact: database/sql pool defaults",
+  "question": "In Go's standard library `database/sql`, what are the default values of MaxOpenConns and MaxIdleConns? I need the exact defaults, not advice on tuning.",
+  "ground_truth": "MaxOpenConns default 0 (unlimited); MaxIdleConns default 2, and it is silently reduced to match MaxOpenConns when that is lower. Verified with `go doc database/sql.DB.SetMaxOpenConns` / `.SetMaxIdleConns` on go1.26.1.",
+  "why_this_fixture": "An external, checkable answer. The March A/B scored this scenario on whether a mode label was printed; this scores whether the number is right."
+}

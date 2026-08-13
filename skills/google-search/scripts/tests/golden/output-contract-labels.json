@@ -1,0 +1,16 @@
+{
+  "scenario": "Confidence and source-tier labels come from closed enums",
+  "scope": "source-evaluation.md",
+  "section": "Numeric Claim Labels",
+  "required_keywords": [
+    "`High`",
+    "`Medium`",
+    "`Low`",
+    "Practitioner report",
+    "Adversary claim",
+    "regex:closed"
+  ],
+  "forbidden_keywords": [
+    "another clearly named tier"
+  ]
+}

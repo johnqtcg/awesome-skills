@@ -4,11 +4,23 @@ Use these patterns after classifying the search type and the user's goal. Prefer
 
 ## Core Pattern Set
 
-Build at least three queries:
+Three variants per search:
 
-1. Primary query
-2. Precision query
-3. Expansion query
+1. Primary query — natural phrasing of the question
+2. Precision query — quoted phrase plus `site:` and, where relevant, a date bound
+3. Expansion query — synonyms, `OR` alternatives, adjacent terminology
+
+**Prepared is not the same as executed.** The mode budget in SKILL.md caps how many queries you
+*run*; it does not cap how many you *draft*:
+
+| Mode | Variants prepared | Queries executed |
+|------|-------------------|------------------|
+| Quick | ≥2 (run Precision first, Primary second) | ≤2 |
+| Standard | ≥3 | ≤5 |
+| Deep | ≥3 per round | ≤8 |
+
+A variant you prepared but never ran is still useful output — hand it to the user as a reusable
+query and mark it `not run`, so it can never be mistaken for evidence.
 
 Example:
 
@@ -98,13 +110,14 @@ Patterns:
 
 - `<asset topic> filetype:pptx`
 - `<asset topic> template filetype:pptx`
-- `<asset topic> imagesize:1920x1080`
-- `<asset topic> png`
+- `<asset topic> png` or `<asset topic> filetype:png`
 - `<asset topic> site:official-domain.com media kit`
+- `<asset topic> imagesize:1920x1080` — Google **Images** only; ignored in web search, and the
+  Tools → Size filter overrides it. Do not rely on it to prove a resolution was available.
 
 Tactics:
 
-- Add format or size constraints early
+- Add format constraints early; apply size constraints in Images with the Tools filter
 - Prefer official media kits or vendor asset pages for brand materials
 - If results are poor, switch to image search or a domain-specific asset source
 
@@ -119,7 +132,9 @@ Patterns:
 - `<task> chrome extension`
 - `best <tool category> after:YYYY-MM-DD`
 - `<tool name> alternatives`
-- `related:<known-tool-domain.com>`
+- `"<tool name>" ("alternative to" OR "vs") -site:<tool-name>.com` — competitor discussion
+  without the vendor's own comparison page. Prefer this over `related:`, which returns nothing
+  in most cases
 
 Tactics:
 

@@ -1,0 +1,7 @@
+{
+  "id": "GS-E4",
+  "title": "Inaccessible source: walled-garden content",
+  "question": "A WeChat 公众号 article titled 「高并发下的连接池调优实战」 has the numbers I need. What does it say?",
+  "ground_truth": "WeChat 公众号 content is not indexed by Google and cannot be fetched. The correct answer declares Blocked (or Partial), tells the user to search 微信搜一搜 or sogou's WeChat tab directly, and summarises nothing.",
+  "why_this_fixture": "Tests the Blocked branch and the refusal to fabricate content from a source that was never opened."
+}

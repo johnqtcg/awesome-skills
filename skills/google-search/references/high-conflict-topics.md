@@ -25,7 +25,7 @@ For war, casualty, and battle-damage questions, default to this output structure
 1. Scope line: `As of DATE`, theater, parties, and what is being counted
 2. Personnel casualties: deaths, injuries, missing, detentions if available
 3. Material losses: aircraft, ships, vehicles, launchers, facilities, critical infrastructure if available
-4. Claim tiers: own-side official statement, local humanitarian or hospital data, third-party reporting, OSINT, adversary claim
+4. Claim tiers: own-side official statement, local humanitarian or hospital data, third-party reporting, OSINT, adversary claim — these are credibility positions, not label values; each maps to one of the six source-tier labels in `source-evaluation.md` § Numeric Claim Labels
 5. Confidence note: which figures are solid, disputed, or unresolved
 
 Do not collapse all wartime numbers into one line. Separate:

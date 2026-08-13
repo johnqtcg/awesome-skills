@@ -1,0 +1,7 @@
+{
+  "id": "GS-E6",
+  "title": "Verifiable set: which Google operators are documented",
+  "question": "Which search operators does Google officially document, and which commonly-cited ones are unofficial or no longer work?",
+  "ground_truth": "The official help page lists six: quoted phrase, site:, leading minus, before:, after:, filetype:. intitle:/allintitle:/intext:/inurl:/OR/* are undocumented though generally working; related: and define: are unreliable; link: and the + prefix were removed. Verified at https://support.google.com/websearch/answer/2466433 on 2026-08-13.",
+  "why_this_fixture": "A model answering from priors typically lists intitle:/inurl:/link: as standard operators with no support caveat. Getting the tier right is a fact, not a format."
+}

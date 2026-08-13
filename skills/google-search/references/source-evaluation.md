@@ -82,12 +82,37 @@ Never present an inference as a confirmed fact.
 
 ## Numeric Claim Labels
 
+This section is the canonical definition of both label sets. Every other file in this skill
+defers to it. Both lists are **closed** — using a value that is not on them is a defect.
+
 Every key numeric claim in the final answer must include both:
 
-- A confidence label: `High`, `Medium`, or `Low`
-- A source-tier label: `Official`, `Primary document/data`, `Reputable third-party`, `OSINT`, `Adversary claim`, or another clearly named tier
+- A confidence label — exactly one of: `High`, `Medium`, `Low`
+- A source-tier label — exactly one of: `Official`, `Primary document/data`,
+  `Reputable third-party`, `Practitioner report`, `OSINT`, `Adversary claim`
 
 Use the source-tier label to show where the number comes from, and the confidence label to show how much trust it deserves after cross-checking.
+
+**Do not coin intermediate or composite labels.** `Medium-High` is not a confidence level; take
+the lower of the two. `Mixed official + practitioner` is not a source tier — a number has exactly
+one origin, so label the tier of the source the number is actually taken from. When two tiers
+jointly support it, label the **weaker** one and name the stronger source separately under Key
+evidence. A formula quoted from a blog post and merely "consistent with" vendor documentation is
+`Practitioner report`, not `Official`.
+
+### Wartime claim tiers map onto the same labels
+
+`high-conflict-topics.md` orders wartime claims by a domain-specific vocabulary. Those are
+positions in a credibility ordering, not extra label values — a report still labels every
+number with one of the six tiers above:
+
+| Wartime claim tier | Label to emit |
+|---|---|
+| Own-side official statement | `Official` |
+| Local humanitarian or hospital data | `Primary document/data` |
+| Third-party reporting | `Reputable third-party` |
+| OSINT (imagery, flight data, geolocation) | `OSINT` |
+| Adversary claim about the other side's losses | `Adversary claim` |
 
 ### Confidence definitions
 
