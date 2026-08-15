@@ -1,0 +1,17 @@
+{
+  "id": "DEP-005",
+  "title": "Licence observation stated as a legal conclusion",
+  "type": "defect",
+  "severity": "standard",
+  "priority": "P2",
+  "code_snippet": "$ go-licenses report ./...\nexample.com/qux,https://example.com/qux/LICENSE,GPL-3.0\n\n# Auditor's report:\n# \"GPL-3.0 transitive dependency detected. Your binary is GPL-encumbered and you cannot ship this product. Replace the dependency immediately.\"",
+  "violated_rule": "Every copyleft/unknown licence has an escalation record",
+  "expected_feedback": "The classification is a fact; the conclusion is not. Whether an obligation attaches depends on whether the artifact is distributed, whether the module is linked into the shipped binary, the licence version, any exception clause, and whether the code was modified — none of which were checked. Emit the escalation packet with go mod why -m, go list -deps, and the go-licenses type (restricted), and route to legal review. The skill does not give legal advice.",
+  "coverage_rules": [
+    "does not give legal advice",
+    "escalation packet",
+    "UNKNOWN to this audit",
+    "go list -deps"
+  ],
+  "reference": "references/license-compliance.md"
+}

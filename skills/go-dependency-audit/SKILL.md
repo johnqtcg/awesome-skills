@@ -1,13 +1,14 @@
 ---
 name: go-dependency-audit
 description: >
-  Go dependency audit specialist for CVE scanning (govulncheck), license
-  compliance, outdated dependency detection, upgrade impact analysis, and
-  supply chain security. ALWAYS use when auditing go.mod dependencies,
-  running govulncheck, checking license compatibility, planning dependency
-  upgrades, or investigating supply chain risks in Go projects. Complements
+  Go dependency audit specialist for CVE scanning (govulncheck), license risk
+  triage, outdated dependency detection, upgrade impact analysis, and supply
+  chain security. ALWAYS use when auditing go.mod dependencies, running
+  govulncheck, checking license compatibility, planning dependency upgrades, or
+  investigating supply chain risks in Go projects. Read-only by default — emits
+  a remediation plan instead of mutating go.mod/go.sum. Complements
   security-review (code-level) with module-level supply chain analysis.
-allowed-tools: Read, Grep, Glob, Bash(govulncheck*), Bash(go mod*), Bash(go list*), Bash(go version*), Bash(go vet*), Bash(trivy*), Bash(nancy*), Bash(go-licenses*), Bash(cat go.mod*), Bash(cat go.sum*), Bash(git log*), Bash(git blame*)
+allowed-tools: Read, Grep, Glob, Bash(govulncheck*), Bash(GOWORK=off govulncheck*), Bash(go version*), Bash(go env GO*), Bash(go list -mod=readonly*), Bash(go mod graph*), Bash(go mod verify*), Bash(go mod why*), Bash(go mod edit -json*), Bash(go mod tidy -diff*), Bash(go -C * list -mod=readonly*), Bash(go -C * mod graph*), Bash(go -C * mod verify*), Bash(go -C * mod why*), Bash(go -C * mod edit -json*), Bash(go -C * mod tidy -diff*), Bash(GOWORK=off go -C * list -mod=readonly*), Bash(GOWORK=off go list -mod=readonly*), Bash(go-licenses check*), Bash(go-licenses report*), Bash(go-licenses help*), Bash(GOWORK=off go-licenses check*), Bash(GOWORK=off go-licenses report*), Bash(trivy fs*), Bash(nancy sleuth*), Bash(jq -s*), Bash(jq -rs*), Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git blame*)
 ---
 
 ## Quick Reference
@@ -16,77 +17,145 @@ allowed-tools: Read, Grep, Glob, Bash(govulncheck*), Bash(go mod*), Bash(go list
 |-------------------------------------------|--------------------------------------------|
 | Run a full dependency audit               | S2 Gates -> S5 Checklist -> S9 Output      |
 | Scan for known CVEs                       | S2 Gates -> S5.1 CVE Scanning              |
-| Check license compliance                  | S5.2 License Compliance                    |
-| Plan a major version upgrade              | S5.3 Upgrade Planning                      |
-| Investigate supply chain risk             | S5.4 Supply Chain Security                 |
+| Triage a finding / decide urgency         | S6 — evidence tier, NOT a CVSS guess       |
+| Check license risk                        | S5.2 + `references/license-compliance.md`  |
+| Plan a version upgrade                    | S5.3 + `references/upgrade-planning.md`    |
+| Investigate supply chain risk             | S5.4 + `references/supply-chain-security.md` |
 | Review go.mod hygiene                     | S5.5 Module Hygiene                        |
-| Triage a govulncheck finding              | S7 Anti-Examples -> analysis ref           |
+| Actually apply a fix                      | S1.3 Remediation Boundary                  |
 
 ---
 
-## 1 Scope
+## 1 Scope & Operating Mode
 
-**In scope**: go.mod/go.sum analysis, CVE scanning via govulncheck (primary),
-license compliance checking, outdated dependency reporting, upgrade path
-planning, breaking change assessment, supply chain posture (proxy, checksum,
-private modules), circular dependency detection, +incompatible version triage.
+### 1.1 In scope
 
-**Out of scope**: application code security (use `security-review`), micro-
-benchmark performance (use `go-benchmark`), infrastructure provisioning,
-container image scanning (Dockerfile-level), runtime behavior analysis.
+go.mod/go.sum analysis, CVE scanning via govulncheck (primary), license risk
+triage, outdated dependency reporting, upgrade path planning, breaking change
+assessment, supply chain posture (proxy, checksum DB, private modules),
+`+incompatible` triage, module graph analysis.
+
+### 1.2 Out of scope
+
+Application code security (use `security-review`), micro-benchmark performance
+(use `go-benchmark`), infrastructure provisioning, container image scanning,
+runtime behavior analysis, and **legal determinations about license
+obligations** — see S5.2: this skill produces evidence and escalation triggers,
+never verdicts.
+
+### 1.3 Remediation Boundary (NON-NEGOTIABLE)
+
+**An audit is read-only. It observes; it does not repair.**
+
+| Class            | Commands                                                                 | Allowed during audit |
+|------------------|--------------------------------------------------------------------------|----------------------|
+| Read-only probe  | `govulncheck`, `go list -mod=readonly`, `go mod graph/verify/why`, `go mod edit -json`, `go mod tidy -diff`, `go version -m`, `go env <VAR>…`, `go-licenses check/report/help`, `git status/diff/log` | Yes |
+| Mutating         | `go get`, `go mod tidy` (without `-diff`), `go mod edit -require`, `go work`, **`go env -w`**, **`go list -mod=mod`**, `go-licenses save`, `go install`, `cyclonedx-gomod -output` | No — emit as plan |
+| Destructive      | `git checkout`, `git restore`, `git reset`, `rm`                           | Never — not even to roll back |
+
+`allowed-tools` pre-approves; it does not forbid. It keeps writes off the
+auto-approved surface, while gate 2/11's snapshot *detects* a mutation that
+happened anyway. Two writes wear the name of a read, and a coarse list lets
+both through:
+**`go env -w`** rewrites Go's persistent env file rather than printing it, and
+**`go list -mod=mod`** lets package loading update `go.mod`/`go.sum`. Readonly is
+the default since Go 1.16, but `GOFLAGS` can override it — so every
+package-loading command here states `-mod=readonly`. Writes that produce a
+deliverable (`go-licenses save`, SBOM, tool installs) are remediation: emitted
+under S9.7, marked `# EMIT` in the references, never run. Guarded by
+regression checks DA008/DA014/DA015 — static checks that keep writes off the
+auto-approved surface; they cannot stop a write at runtime.
+
+1. **Emit, do not execute.** Every fix is delivered as a copy-pasteable command
+   block under S9.7, for a human to run. The skill never runs it.
+2. **Never generate a rollback that discards uncommitted work.** `git checkout
+   go.mod go.sum` overwrites unstaged edits with no recovery path. Require a
+   clean worktree instead — `git status --porcelain go.mod go.sum` empty before
+   any upgrade loop — and stop on failure rather than revert.
+3. **Prove read-only-ness.** Record `git status --porcelain go.mod go.sum` at the
+   start and end. If it differs, a probe mutated the module files (e.g.
+   `go mod download` on Go < 1.18) — say so in S9.8 rather than silently
+   reporting post-mutation state.
+4. Switching to remediation requires the user to ask for it in this turn.
+   "Audit our dependencies" is not authorization to upgrade them.
 
 ---
 
-## 2 Mandatory Gates
+## 2 Gates
 
-Gates are serial hard blockers. Failure at any gate stops all subsequent work.
+Gates are checked in order. Each gate declares a **class** that determines what
+failure does — this is the only thing that decides stop-vs-continue.
 
-### Gate 1: Module Discovery
+### 2.1 Gate classes
 
-Locate and parse go.mod. STOP if no go.mod found in project root or specified path.
+| Class       | Meaning                                          | On failure                                                        |
+|-------------|--------------------------------------------------|-------------------------------------------------------------------|
+| **BLOCK**   | The audit's subject does not exist or is untrustworthy | Stop. Emit no findings. Emit the reason + what would unblock, headed `NOT AN AUDIT`. |
+| **DEGRADE** | A capability is unavailable; the subject is fine | Continue. Enter the matching S4 mode, list the lost coverage in S9.8. |
+| **WARN**    | An observation worth reporting                   | Continue at full scope. Record as a finding.                       |
 
-| Item              | How to check                            | Required |
-|-------------------|-----------------------------------------|----------|
-| go.mod exists     | `Glob("**/go.mod")`                     | Yes      |
-| go.sum exists     | Adjacent to go.mod                      | Yes      |
-| Go version        | `go version` / go directive in go.mod   | Yes      |
-| Module path       | `module` directive in go.mod            | Yes      |
-| Workspace         | Check for go.work (note but don't fail) | No       |
+A gate has exactly one class. There is no gate that both stops and degrades.
 
-### Gate 2: Tool Availability
+### 2.2 Gate table
 
-Check scanning tools. Degrade gracefully if optional tools are missing.
+Order matters. Gates 1–2 touch no Go tooling, so the read-only baseline is
+captured before anything could disturb it.
 
-| Tool           | Check command                 | Required | Fallback                    |
-|----------------|-------------------------------|----------|-----------------------------|
-| govulncheck    | `govulncheck -version`        | Yes      | STOP — primary CVE scanner  |
-| go-licenses    | `go-licenses version`         | No       | Manual license review       |
-| trivy          | `trivy --version`             | No       | govulncheck-only mode       |
-| nancy          | `nancy --version`             | No       | govulncheck-only mode       |
+| #  | Gate                    | Check                                              | Class   | Failure action                                        |
+|----|-------------------------|----------------------------------------------------|---------|-------------------------------------------------------|
+| 1  | Module exists           | `Glob("**/go.mod")` — filesystem only               | BLOCK   | No Go module here — nothing to audit                  |
+| 2  | Baseline snapshot       | `git status --porcelain go.mod go.sum` — **before any `go` command** | WARN | Note uncommitted module edits; the audit reflects the worktree, not HEAD |
+| 3  | go.mod is well-formed   | `go mod edit -json` parses; `module` directive present | BLOCK | Malformed manifest — findings would be fiction         |
+| 4  | Module graph resolvable | `go list -mod=readonly -m all` succeeds             | DEGRADE | -> `no-graph` mode (see below)                        |
+| 5  | Checksums available     | go.sum covers every non-replaced external requirement | DEGRADE | -> `no-integrity` mode (see below — absence alone is not a failure) |
+| 6  | Checksums verify        | `go mod verify`                                     | WARN    | **Report as a P1 finding, do not stop** — a tampered cache is exactly what an audit exists to surface |
+| 7  | govulncheck available   | `govulncheck -version`                              | DEGRADE | -> `no-cve` mode                                      |
+| 8  | Vuln DB reachable       | `govulncheck` exits 0 or 3, not 1                   | DEGRADE | -> `no-cve` mode (offline)                            |
+| 9  | License tool available  | `go-licenses help` lists subcommands                | DEGRADE | -> `no-license` mode                                  |
+| 10 | Tidy state              | `go mod tidy -diff` (**Go 1.23+**; skip below that) | WARN    | Report untidy go.mod as a hygiene finding             |
+| 11 | Closing snapshot        | `git status --porcelain go.mod go.sum` matches gate 2 | WARN  | A probe mutated the module files — say so in S9.8     |
 
-### Gate 3: Dependency Graph Completeness
+Four rationales, each replacing a worse rule:
 
-Verify go.mod/go.sum are in sync. STOP if graph is broken.
+- **Gate 2 precedes every `go` command.** A baseline taken after `go list` cannot
+  prove the audit was read-only — `go list` is one of the things it would have to
+  exonerate.
+- **Gate 4 is DEGRADE, not BLOCK.** Gate 3 already caught a broken manifest; a
+  failure here is environmental (offline, proxy down, missing credentials, cold
+  cache) — a lost capability, not an untrustworthy subject.
+- **Gate 5 is conditional, not "file exists".** A missing `go.sum` is legal when
+  the module has no dependencies or every requirement is redirected by a local
+  `replace`. Decide by what is required, not by `ls`: external non-`replace`d
+  requirements with checksums missing -> DEGRADE; none, or all locally replaced
+  -> **N/A**, legitimately absent, not a finding; cannot tell (gate 4 already
+  degraded) -> DEGRADE, naming the unresolved graph as the cause.
 
-| Check                        | Command                      | Failure action              |
-|------------------------------|------------------------------|-----------------------------|
-| Modules resolved             | `go mod verify`              | STOP — integrity failure    |
-| Tidy state                   | `go mod tidy -diff` (1.21+)  | WARN — suggest tidy first   |
-| No missing deps              | `go mod download`            | STOP — unresolvable deps    |
+- **Gate 6 is WARN.** An integrity failure is the highest-value output this skill
+  can produce; stopping would suppress the finding the user most needs.
+- **Gate 9 uses `help`, not `--help`.** `go-licenses --help` prints only the
+  logging flags and never lists commands — a useless liveness probe.
 
-### Gate 4: Scope Classification
+### 2.3 Multi-module repositories
 
-Classify the audit into one of three modes:
+Gate 1 globs for **every** `go.mod`. If it finds more than one, **the unit of
+audit is the module, not the repository** — running the gates once in the root
+audits one module and reports it as though it covered all of them. When >1 is
+found, before gate 3:
 
-| Mode         | Trigger                                         | Deliverable                           |
-|--------------|-------------------------------------------------|---------------------------------------|
-| **Quick**    | "check for CVEs", single concern                | CVE scan + severity triage            |
-| **Standard** | "audit dependencies", pre-release check         | Full 5-domain audit + upgrade plan    |
-| **Deep**     | "supply chain review", compliance audit         | All domains + license + provenance    |
+1. **Load `references/multi-module.md`** and follow it. Do not improvise.
+2. **Snapshot all manifests at once**, still before any `go` command:
+   `git status --porcelain -- '**/go.mod' '**/go.sum'`
+3. **List every module in S9.1**; name any you skipped in S9.8.
 
-### Gate 5: Output Completeness
+Single-module repositories skip this — the gate table runs once.
 
-Before delivering, verify all S9 output sections are present. STOP and fill gaps.
+### 2.4 Scope classification
+
+| Mode         | Trigger                                    | Output contract |
+|--------------|--------------------------------------------|-----------------|
+| **Quick**    | "check for CVEs", one named concern        | S9 subset (9.1, 9.2, 9.3, 9.8, 9.9) |
+| **Standard** | "audit dependencies", pre-release check    | Full S9          |
+| **Deep**     | "supply chain review", compliance audit    | Full S9 + provenance/SBOM |
 
 ---
 
@@ -95,12 +164,17 @@ Before delivering, verify all S9 output sections are present. STOP and fill gaps
 ### Quick
 Single-concern scan. Load no reference files.
 - Triggers: "run govulncheck", "any CVEs?", "check this dependency"
-- Coverage: govulncheck scan, severity triage, immediate remediation
+- Coverage: govulncheck scan + S6 triage + immediate remediation plan
+- **Output**: the S9 subset above. Do not emit empty License/Supply-Chain
+  sections — omit them and say why in S9.8.
 
 ### Standard (default)
-Full audit across 5 domains. Load `references/govulncheck-patterns.md`.
+Full audit across 5 domains. Load `govulncheck-patterns.md`,
+`license-compliance.md`, `upgrade-planning.md` — one per domain this depth
+covers. (`supply-chain-security.md` is Deep-only; `multi-module.md` loads on the
+gate-1 trigger regardless of depth.)
 - Triggers: pre-release audit, "audit our dependencies", quarterly review
-- Coverage: CVE scan, license check, outdated report, upgrade assessment, module hygiene
+- Coverage: CVE scan, license risk, outdated report, upgrade assessment, hygiene
 - Force Standard if: multiple go.mod files, compliance requirements, CI integration
 
 ### Deep
@@ -113,19 +187,24 @@ Comprehensive supply chain review. Load all references.
 
 ## 4 Degradation Modes
 
-When prerequisites are incomplete, produce explicitly-marked partial output.
+Each mode is entered by exactly one DEGRADE gate. Modes compose — record all
+that apply.
 
-| Available Data                 | Mode       | Can Deliver                              | Cannot Claim                  |
-|--------------------------------|------------|------------------------------------------|-------------------------------|
-| go.mod + govulncheck           | Full       | CVE scan + severity + remediation plan   | License or upgrade analysis   |
-| go.mod only, no tools          | Manual     | Dependency list + version analysis       | CVE status, reachability      |
-| go.sum missing                 | Degraded   | Module list + known issues               | Integrity verification        |
-| No go.mod found                | Planning   | Go module setup guidance                 | Any audit findings            |
-| govulncheck unavailable        | Partial    | License + outdated + hygiene checks      | CVE scan results              |
+| Mode            | Entered by | Can still deliver                                | MUST NOT claim                                |
+|-----------------|------------|--------------------------------------------------|-----------------------------------------------|
+| `no-graph`      | Gate 4     | Direct requirements read from `go.mod`           | Anything about indirect dependencies, or that the list is complete |
+| `no-integrity`  | Gate 5     | Module list, versions, licenses, hygiene         | Reproducible-build or tamper-detection status |
+| `no-cve`        | Gate 7, 8  | License, outdated, hygiene, supply chain posture | Any CVE status — present, absent, or reachable |
+| `no-license`    | Gate 9     | CVE, outdated, hygiene, supply chain posture     | License distribution or compliance posture    |
+| `no-reachability` | `-scan` was not `symbol`, or binary mode | Which modules are affected           | That any finding is or is not reachable       |
 
-Mark degraded outputs: `# DEGRADED: [reason] - [what's missing]`
+Mark every degraded output inline: `# DEGRADED [<mode>]: <what is missing>`
 
-Never fabricate CVE findings. Never claim "no vulnerabilities" without scanning.
+Two absolute rules:
+
+- **Never fabricate CVE findings.**
+- **Never claim "no vulnerabilities" without a scan that completed.** A
+  govulncheck exit code of 1 is a *failed scan*, not a clean one.
 
 ---
 
@@ -133,249 +212,239 @@ Never fabricate CVE findings. Never claim "no vulnerabilities" without scanning.
 
 ### 5.1 CVE Scanning
 
-1. **govulncheck in source mode is primary** — `govulncheck ./...` checks reachability,
-   not just version matching. Binary-only scanning misses call-graph context.
-2. **Source mode confirms reachability** — a CVE in a dependency is only actionable
-   if your code reaches the vulnerable function. govulncheck traces the call graph.
-3. **Transitive CVEs need triage** — indirect dependencies with CVEs may not be
-   reachable. Check `go mod why <pkg>` to confirm the dependency chain.
-4. **CVSS score alone is insufficient** — a CVSS 9.8 in an unreachable function is
-   less urgent than a CVSS 6.5 in a hot code path. Reachability determines priority.
+1. **`govulncheck ./...` in source mode is primary** — it traces the call graph,
+   so it reports whether your code can actually reach the vulnerable symbol.
+2. **The `-scan` level decides what "found" means** — `symbol` (default) reports
+   reachable symbols, `package` imported packages, `module` required versions.
+   Lowering it raises noise and forfeits reachability.
+3. **Exit code is the CI contract, and `-format json` breaks it** — text mode:
+   `3` found at scan level, `2` invalid usage, `1` error, `0` clean. `-json` /
+   `-format sarif` / `-format openvex` exit **0 regardless of findings**, so a
+   CI job gating on `$?` after them never fails.
+4. **govulncheck reports no CVSS score** — see S6.1. Priority comes from the
+   evidence tier, not from a severity number the tool never emitted.
+5. **Test files are excluded by default** — `-test` defaults to false, so
+   test-only dependencies are not analyzed unless you pass `-test`.
+6. **Transitive findings still need `go mod why -m <module>`** to establish which
+   direct dependency pulls them in — that is the module you actually upgrade.
 
-### 5.2 License Compliance
+### 5.2 License Risk Triage
 
-5. **Categorize licenses by risk** — Permissive (MIT, Apache-2.0, BSD) are low risk.
-   Copyleft (GPL, AGPL, LGPL) require legal review. Unknown licenses are blockers.
-6. **Transitive licenses propagate** — a GPL transitive dependency makes the entire
-   binary GPL-encumbered. Check the full dependency tree, not just direct imports.
-7. **License files must exist** — missing LICENSE file is a red flag. The module may
-   have implicit "all rights reserved" status.
-8. **Commercial license compatibility** — proprietary projects cannot use AGPL
-   dependencies. Document license compatibility matrix for the project.
+> **This skill does not give legal advice and does not decide whether a license
+> is compatible with a project.** It gathers the facts a lawyer needs and states
+> which facts trigger escalation. Every copyleft finding routes to legal review.
+
+7. **Report the license, the path, and the trigger conditions — never a verdict.**
+   Whether a copyleft obligation attaches turns on facts this skill cannot see:
+   distribution, linkage vs build-tool-only, licence version and exceptions,
+   modification, deployment model. Record the observable; escalate the rest.
+8. **Use the scanner's own vocabulary** — `go-licenses` types are `forbidden`,
+   `restricted`, `reciprocal`, `notice`, `permissive`, `unencumbered`, `unknown`;
+   `--disallowed_types` defaults to `forbidden,unknown`. Reporting in the tool's
+   terms keeps the output auditable and version-stable.
+9. **Distinguish shipped from not-shipped, and label the evidence grade.**
+   Required (`go list -m all`) < build-dependency (`go list -mod=readonly -deps
+   <main pkg>`, after discovering `main` packages — never assume `./cmd/...`) <
+   binary (`go version -m <artifact>`, which reads the module list the build
+   actually recorded). Say which grade you have; only the last supports the
+   phrase "linked into the shipped binary".
+10. **A missing LICENSE file is the highest-signal license finding** — no grant
+    of rights was located. An escalation trigger, not a legal conclusion.
+11. **Escalate with the facts attached**: module path, licence identifier and
+    version, `go mod why -m` path, evidence grade for shipping (item 9), and
+    whether the project distributes binaries or runs a network service.
 
 ### 5.3 Upgrade Planning
 
-9. **Semantic versioning drives risk assessment** — patch upgrades (v1.2.3 -> v1.2.4)
-   are safe. Minor upgrades (v1.2 -> v1.3) need changelog review. Major upgrades
-   (v1 -> v2) require migration planning.
-10. **Check CHANGELOG and release notes before upgrading** — not all maintainers
-    follow semver correctly. A "minor" release may contain breaking changes.
-11. **`+incompatible` versions signal migration debt** — these modules published v2+
-    without proper go.mod support. Plan migration to properly-versioned forks.
-12. **`go get -u` is dangerous** — it upgrades ALL transitive dependencies, not just
-    the target. Use `go get pkg@version` for precise control.
+12. **Semver signals intent, not a guarantee.** Patch/minor are *lower risk*,
+    not safe, and **`v0.x.y` carries no compatibility promise at all**. Read the
+    changelog; diff the API surface when there is none.
+13. **`+incompatible` is a silent major-version upgrade hazard** — the module
+    published v2+ tags without a module-aware `go.mod`, so the toolchain treats
+    those versions as part of the *same* module as v1.x. MVS can therefore
+    upgrade v1.5.2 straight to v4.1.2+incompatible during a routine `-u`. Plan
+    migration to a `/vN` path.
+14. **`go get -u` upgrades far more than the target** — it raises the target and
+    its dependencies. Use `go get <module>@<version>` for precise control, and
+    remember that even a precise `go get` can move *other* modules, because
+    minimal version selection re-solves the whole graph.
 
 ### 5.4 Supply Chain Security
 
-13. **go.sum is your integrity anchor** — it contains cryptographic hashes for every
-    dependency. Commit both go.mod and go.sum. Verify with `go mod verify`.
-14. **GOPROXY configuration matters** — use a trusted proxy (proxy.golang.org or
-    corporate mirror). Direct fetches from source repos lose immutability guarantees.
-15. **GOPRIVATE for internal modules** — prevents leaking internal module paths to
-    public proxy/checksum servers. Set for all internal domain patterns.
-16. **Deleted tags break reproducibility** — if a dependency tag is deleted upstream,
-    builds fail. Monitor dependency availability. Use `replace` as emergency fix.
+15. **go.sum is an integrity anchor, not a lockfile.** It records expected hashes;
+    it does not pin which version is selected — that is `go.mod` + MVS. Commit
+    both; verify with `go mod verify`.
+16. **GOPROXY affects availability and privacy, not checksum verification.**
+    Validation is controlled by `GOSUMDB` and disabled per pattern by
+    `GOPRIVATE`/`GONOSUMDB` — `GOPROXY=direct` still verifies.
+17. **`GOPRIVATE` for internal modules** — stops internal module paths leaking to
+    the public proxy and checksum database. Shorthand for `GONOPROXY` +
+    `GONOSUMDB`.
+18. **Deleted upstream tags break builds** — `proxy.golang.org` caches immutably,
+    so a cached version survives tag deletion. Prefer the proxy over `direct`.
 
 ### 5.5 Module Hygiene
 
-17. **Run `go mod tidy` before committing** — removes unused dependencies, adds
-    missing ones, updates go.sum. Check the diff to understand what changed.
-18. **Minimize `replace` directives** — each replace is technical debt. Document why
-    each exists and when it can be removed. Temporary replaces for debugging must
-    never be committed.
-19. **Avoid circular dependencies between modules** — A imports B, B imports A
-    creates cascading version conflicts. Design clear module boundaries.
-20. **Do not commit go.work** — workspace files are local development aids. Add
-    go.work and go.work.sum to .gitignore.
+19. **Check tidiness without mutating** — `go mod tidy -diff` (Go 1.23+) prints
+    the change and exits non-zero if non-empty. Below 1.23 report the check as
+    unavailable rather than running the mutating `go mod tidy`.
+20. **Minimize `replace` directives** — each is technical debt, and a local-path
+    `replace` in a committed go.mod breaks every machine but the author's.
+21. **Module-graph cycles are legal in Go and are not, by themselves, a defect.**
+    Modules may require each other; only *package* import cycles are rejected by
+    the compiler. Report a cycle as a WARN-level design smell that widens upgrade
+    blast radius — never as a failed check.
+22. **`go.work` is normally not committed** — it encodes one developer's local
+    layout. Exception: a single-repository workspace whose `use` directives are
+    all repo-relative. Check the paths before flagging it.
 
 ---
 
-## 6 Severity Model
+## 6 Triage & Priority Model
 
-### P0 Critical
-- Known RCE, auth bypass, or data exfiltration CVE in a **reachable** direct dependency
-- CVSS >= 9.0 AND govulncheck confirms call-graph reachability
-- Must patch immediately — merge-blocking
+### 6.1 The tool gives you evidence, not a score
 
-### P1 High
-- CVE with CVSS >= 7.0 AND reachable, OR critical CVE in reachable transitive dependency
-- AGPL/GPL license violation in proprietary project
-- Integrity failure: go.sum mismatch or missing checksums
+The Go vulnerability database does **not** publish CVSS scores, so govulncheck
+never prints one. Its report carries the `GO-YYYY-NNNN` ID, aliases (CVE/GHSA),
+summary, affected ranges, fixed version, and `database_specific.review_status`
+(`REVIEWED` / `UNREVIEWED`). Both rules are mandatory:
 
-### P2 Medium
-- CVE with CVSS >= 4.0 but limited exploitability or partial reachability
-- Dependency 2+ major versions behind latest
-- `+incompatible` version in active dependency
-- License ambiguity (missing LICENSE file)
+- **Never state a CVSS score sourced from govulncheck.** It did not produce one.
+- Any CVSS must be enriched from a *named external source* keyed on the alias —
+  "CVSS 9.8 (NVD, CVE-2023-44487)" — and recorded in S9.3. With no such lookup
+  the column reads `not retrieved`, never a guess.
 
-### P3 Low
-- CVE in unreachable transitive dependency (govulncheck confirms no path)
-- Minor version behind latest (within same major)
-- Hygiene issues: unnecessary `replace` directives, untidy go.mod
-- EOL library with no known active CVEs
+### 6.2 Evidence tiers
+
+govulncheck groups findings into result sections. The section *is* the evidence.
+
+| Section                   | Meaning                                                | Tier |
+|---------------------------|--------------------------------------------------------|------|
+| `=== Symbol Results ===`  | A vulnerable symbol is reachable from your call graph  | **E1 Called** |
+| `=== Package Results ===` | You import the affected package; no reachable symbol proven | **E2 Imported** |
+| `=== Module Results ===`  | The module is required at an affected version only     | **E3 Required** |
+
+`No vulnerabilities found.` = zero findings at any tier.
+
+### 6.3 Priority
+
+| Priority | Condition |
+|----------|-----------|
+| **P0** | E1 Called, a fix version exists, and the call path is reachable from a network-facing entry point |
+| **P1** | E1 Called (any other case); **or** `go mod verify` reported a checksum mismatch; **or** an unlicensed dependency is linked into a shipped binary |
+| **P2** | E2 Imported; **or** a copyleft dependency linked into a shipped artifact and pending legal review; **or** a `+incompatible` direct dependency |
+| **P3** | E3 Required only; minor-version drift; hygiene findings; EOL library with no current findings |
+
+Escalation modifiers — apply, then state the reason:
+
+- **No fix version available** — escalate one; remediation is a compensating
+  control, not an upgrade.
+- **`UNREVIEWED` report** — absence of a symbol-level finding is not proof of
+  unreachability. Hold at the tier reported and note the status.
+- **Reachability not established** (`-scan module|package`, binary mode, or
+  reflection/`unsafe`/plugin in the path) — `no-reachability` mode. Report the
+  tier obtained; never downgrade on absent evidence.
+- **Test-only dependency** — de-escalate one, only after `go mod why -m` confirms
+  no non-test path exists.
 
 ---
 
 ## 7 Anti-Examples
 
-### AE-1: Reporting every CVE without checking reachability
+Each rule below is binding on its own. Worked WRONG/RIGHT pairs for all six are
+in `references/anti-examples.md` — load it when an audit is about to do one of
+these things, or when explaining why not.
 
-```
-# WRONG: flag all CVE matches from version database
-Found: CVE-2023-44487 in golang.org/x/net v0.15.0 (CVSS 7.5)
-Action: UPGRADE IMMEDIATELY
-// Version-only matching reports CVEs for functions you never call.
-// govulncheck source mode may show: "No vulnerabilities found" — the
-// vulnerable function is not reachable from your code.
-
-# RIGHT: run govulncheck in source mode, triage by reachability
-$ govulncheck ./...
-Vulnerability GO-2023-2102 (CVE-2023-44487) — NOT CALLED
-  Package: golang.org/x/net/http2
-  Your code does not call the vulnerable function.
-// Result: P3 Low — track for next upgrade cycle, not urgent
-```
-
-### AE-2: Ignoring transitive dependency licenses
-
-```
-# WRONG: "all our direct dependencies are MIT, we're fine"
-go.mod: github.com/foo/bar v1.0.0  // MIT license
-// But bar depends on github.com/baz/qux which is GPL-3.0.
-// Your binary links GPL code. Legal team will not be happy.
-
-# RIGHT: check full transitive license tree
-$ go-licenses report ./... 2>/dev/null | grep -v "Apache\|MIT\|BSD"
-github.com/baz/qux  GPL-3.0
-// Flag for legal review before release
-```
-
-### AE-3: Using `go get -u` for a single dependency upgrade
-
-```
-# WRONG: upgrade everything to fix one CVE
-$ go get -u ./...
-// Upgrades 47 transitive dependencies. Three of them have breaking
-// changes. CI breaks. Rollback takes hours.
-
-# RIGHT: targeted upgrade of the specific vulnerable dependency
-$ go get golang.org/x/net@v0.17.0
-$ go mod tidy
-// Only the target and its direct requirements change
-```
-
-### AE-4: Leaving `replace` directives after debugging
-
-```
-# WRONG: committed go.mod with local path replace
-replace github.com/company/lib => ../lib
-// Works on your machine. CI fails. Production deploy fails.
-// Every developer must have identical directory structure.
-
-# RIGHT: remove replace before committing, or use versioned fork
-replace github.com/company/lib => github.com/yourfork/lib v1.2.3-fix
-// Temporary: document in PR, set reminder to remove after upstream merges
-```
-
-### AE-5: Claiming "no vulnerabilities" without running govulncheck
-
-```
-# WRONG: "I checked go.mod, all versions look recent, we're safe"
-// Manual version inspection cannot assess CVE status.
-// A v1.20.0 released yesterday could already have a CVE.
-
-# RIGHT: always run govulncheck for CVE claims
-$ govulncheck ./...
-No vulnerabilities found.
-// Only govulncheck (or equivalent scanner) can make this claim
-```
-
-### AE-6: Treating +incompatible as harmless
-
-```
-# WRONG: "it compiles, so +incompatible is fine"
-require github.com/uber/jaeger-client-go v2.29.1+incompatible
-// +incompatible means this module lacks go.mod for v2+.
-// MVS cannot resolve version conflicts properly.
-// Upgrade path is unpredictable.
-
-# RIGHT: plan migration to module-aware version
-// Check if maintainer has published go.mod-aware v2
-// If not, evaluate alternative libraries
-// Document +incompatible as technical debt with timeline
-```
+| ID   | Anti-pattern                                    | Rule                                                                 |
+|------|-------------------------------------------------|----------------------------------------------------------------------|
+| AE-1 | Assigning a CVSS score govulncheck never emitted | Report `CVSS: not retrieved`, or cite the external database and alias it came from. Priority comes from the evidence tier. |
+| AE-2 | Turning a licence observation into a legal verdict | Emit the escalation packet — module, licence, path, linkage, distribution — and route to legal. Never conclude. |
+| AE-3 | Gating CI on an exit code `-json` always sets to 0 | Gate on the text-mode exit code (3 = found, 1 = broke), or parse findings from JSON with `jq -s`. |
+| AE-4 | Rolling back with a command that destroys work   | Never emit `git checkout`/`restore`/`reset`. Require a clean worktree up front and stop on failure. |
+| AE-5 | Claiming "no vulnerabilities" from a failed scan | Only exit 0 with `No vulnerabilities found.` supports that claim. Exit 1 means `no-cve`, status UNKNOWN. |
+| AE-6 | Treating `+incompatible` as harmless             | It is the *same* module as v1.x to MVS, so `-u` can cross a major version silently. Track as P2 with a `/vN` migration plan. |
 
 ---
 
 ## 8 Dependency Audit Scorecard
 
-Three-tier scoring applied after every audit.
+Twelve checks in three tiers, applied after every audit —
+**load `references/scorecard.md`** for the item list and score them there.
 
-### Critical (must all pass — any failure = audit incomplete)
+A check that could not run because of a DEGRADE gate scores **N/A** and leaves
+both numerator and denominator; it never counts as a pass. Score each tier as a
+ratio over its applicable items, because a fixed threshold breaks the moment an
+item goes N/A:
 
-1. **govulncheck executed** — source mode scan completed without error
-2. **No reachable P0 CVEs** — all CVSS >= 9.0 reachable vulns addressed
-3. **go.mod/go.sum integrity verified** — `go mod verify` passes
+```
+critical = passed / applicable   must be 1.00      (0 applicable -> tier N/A)
+standard = passed / applicable   must be >= 0.80
+hygiene  = passed / applicable   must be >= 0.75
+PASS iff every non-N/A tier meets its threshold.
+```
 
-### Standard (>= 4 of 5 must pass)
-
-4. **No reachable P1 CVEs** — all CVSS >= 7.0 reachable vulns addressed or waived
-5. **License compliance checked** — no copyleft violations in proprietary projects
-6. **No +incompatible direct dependencies** — all direct deps have proper go.mod
-7. **Dependencies within 1 major version of latest** — no severely outdated modules
-8. **GOPROXY and GOPRIVATE configured** — supply chain basics in place
-
-### Hygiene (>= 3 of 4 must pass)
-
-9. **go.mod is tidy** — `go mod tidy` produces no diff
-10. **No unnecessary replace directives** — each replace has documented justification
-11. **Circular dependencies absent** — `go mod graph` shows no cycles
-12. **go.work not committed** — workspace file in .gitignore
-
-**Verdict**: Critical 3/3 AND Standard >= 4/5 AND Hygiene >= 3/4 = **PASS**
+Report ratio and raw counts: `Standard 3/3 (1.00) — 2 items N/A`. In a
+multi-module audit the repository verdict is the **worst** module's, never an
+average — an average lets a clean module mask a failing one.
 
 ---
 
 ## 9 Output Contract
 
-Every response MUST include these sections. Volume rules: P0/P1 findings fully
-detailed; P2 up to 10; P3 summary only.
+Quick mode emits 9.1, 9.2, 9.3, 9.8, 9.9; Standard and Deep emit all nine. An
+omitted section must be named in 9.8 with the reason — never silently dropped,
+never emitted empty. Volume: P0/P1 fully detailed, P2 up to 10, P3 summary.
 
 ### 9.1 Audit Context
-Module path, Go version, dependency count (direct/indirect), scan timestamp.
+Every module audited (path + directory), Go version, direct/indirect counts,
+worktree state, tool versions, scan timestamp.
 
 ### 9.2 Mode & Depth
-`Quick | Standard | Deep` with rationale for selection.
+`Quick | Standard | Deep`, plus every active degradation mode from S4 and the
+gate that triggered it.
 
 ### 9.3 CVE Scan Results
-govulncheck output summary: reachable vulns, unreachable vulns, total modules.
-Per finding: CVE ID, CVSS, affected module, reachable (yes/no), fix version.
+Command (with `-scan`/`-mode`), exit code, and per finding: GO-ID, aliases,
+module, evidence tier (E1/E2/E3), fixed version, review status, priority, and
+CVSS **with its source** or `not retrieved`.
 
-### 9.4 License Summary
-License distribution table. Flag any copyleft, unknown, or missing licenses.
+### 9.4 License Inventory
+Per dependency: licence identifier, scanner classification, shipping evidence
+grade (S5.2 item 9). Separate escalation table for copyleft/unknown/missing with
+the item-11 facts attached. No verdicts.
 
 ### 9.5 Outdated Dependencies
-Direct dependencies behind latest, grouped by severity (major/minor/patch behind).
+Direct dependencies behind latest, grouped by major/minor/patch drift, with the
+`v0.x` ones called out as unbounded-risk regardless of the size of the bump.
 
 ### 9.6 Supply Chain Posture
-GOPROXY config, GOPRIVATE, go.sum status, replace directives inventory.
+Actual `go env` values (`GOPROXY`, `GOPRIVATE`, `GONOPROXY`, `GONOSUMDB`,
+`GOSUMDB`); go.sum status and `go mod verify` result; `replace` inventory.
 
-### 9.7 Upgrade Recommendations
-Prioritized upgrade plan: immediate (P0/P1 CVE fixes), short-term (P2, license),
-backlog (P3, hygiene). Each with: module, current -> target version, risk level.
+### 9.7 Remediation Plan
+Prioritized, **as commands for the user to run** — this skill does not run them.
+Immediate (P0/P1), short-term (P2), backlog (P3). Each entry: module, current ->
+target, evidence tier resolved, and precondition (clean worktree, green baseline).
 
 ### 9.8 Uncovered Risks
-What this audit did NOT cover. Mandatory — never empty. Examples: "transitive
-license check skipped — go-licenses not installed", "binary-only deps not scanned",
-"private module registry not audited".
+What this audit did NOT cover. Mandatory — never empty. Must include every
+degradation mode, N/A scorecard item, omitted output section, module not audited,
+and escalation handed to another party.
 
 ### 9.9 Machine-Readable Summary
 ```json
-{"summary":{"pass":true,"score":"10/12"},"counts":{"p0":0,"p1":1,"p2":3,"p3":5},
-"modules":{"direct":12,"indirect":47,"vulnerable":4,"eol":1}}
+{"summary":{"pass":true,"modes":["no-license"],
+ "tiers":{"critical":{"passed":3,"applicable":3,"ratio":1.0},
+          "standard":{"passed":4,"applicable":4,"ratio":1.0,"na":1},
+          "hygiene":{"passed":3,"applicable":4,"ratio":0.75}}},
+"counts":{"p0":0,"p1":1,"p2":3,"p3":5},
+"evidence":{"e1_called":1,"e2_imported":3,"e3_required":5},
+"modules":{"direct":12,"indirect":47,"affected":4},
+"scan":{"tool":"govulncheck","mode":"source","scan_level":"symbol","exit_code":3}}
 ```
 
-**Scorecard appended**: `X/12 — Critical Y/3, Standard Z/5, Hygiene W/4 — PASS/FAIL`
+**Scorecard appended**, ratios with raw counts and N/A totals:
+`Critical 3/3 (1.00) · Standard 4/4 (1.00, 1 N/A) · Hygiene 3/4 (0.75) — PASS`
 
 ---
 
@@ -384,9 +453,20 @@ license check skipped — go-licenses not installed", "binary-only deps not scan
 | Condition                                    | Load                                   |
 |----------------------------------------------|----------------------------------------|
 | CVE scanning (Standard+)                     | `references/govulncheck-patterns.md`   |
-| License compliance (Standard+)               | `references/license-compliance.md`     |
-| Upgrade planning, version migration          | `references/upgrade-planning.md`       |
+| License risk triage (Standard+)              | `references/license-compliance.md`     |
+| Upgrade planning, version migration (Standard+) | `references/upgrade-planning.md`    |
 | Supply chain review (Deep)                   | `references/supply-chain-security.md`  |
+| About to do — or explain — an S7 anti-pattern | `references/anti-examples.md`          |
+| More than one `go.mod` found (gate 1)         | `references/multi-module.md`           |
+| Scoring the audit (S8)                        | `references/scorecard.md`             |
 
-Each reference has a table of contents. Load relevant sections, not the
-entire file, when only a specific pattern is needed.
+Each reference has a table of contents — load the relevant sections, not the
+whole file.
+
+**Tool-version note (G1)**: commands here are verified against `govulncheck
+v1.1.4`, `go-licenses v2.0.1`, and Go 1.26.1.
+`go mod tidy -diff` additionally requires Go 1.23+.
+Check `govulncheck -version` and the local `go` version before relying on a
+flag. A govulncheck built against a *different* Go than the one on `PATH` fails
+package loading with exit 1 — that is `no-cve`, and the fix is to rebuild
+govulncheck, not to report a clean scan.

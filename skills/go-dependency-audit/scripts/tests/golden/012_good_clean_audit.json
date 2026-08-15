@@ -1,0 +1,17 @@
+{
+  "id": "DEP-012",
+  "title": "Clean Standard audit with honest degradation reporting",
+  "type": "good_practice",
+  "severity": "none",
+  "priority": null,
+  "code_snippet": "$ git status --porcelain go.mod go.sum   # (empty)\n$ go mod verify\nall modules verified\n$ govulncheck ./... ; echo rc=$?\nNo vulnerabilities found.\nrc=0\n$ go-licenses check ./... --disallowed_types=forbidden,unknown ; echo rc=$?\nrc=0\n$ go env GOPROXY GOPRIVATE GOSUMDB\nhttps://proxy.golang.org,direct\ngithub.com/company/*\nsum.golang.org\n$ git status --porcelain go.mod go.sum   # (still empty)",
+  "violated_rule": null,
+  "expected_feedback": "No violations. The scan completed (rc=0), so 'No vulnerabilities found.' is a supportable claim; the worktree is byte-identical before and after, proving the audit was read-only; licence policy is stated rather than implied; and real go env values are reported instead of assumed.",
+  "coverage_rules": [
+    "Prove read-only-ness",
+    "git status --porcelain go.mod go.sum",
+    "recorded",
+    "No vulnerabilities found."
+  ],
+  "reference": "SKILL.md"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "DEP-013",
+  "title": "Emergency patch emitted as a verified plan",
+  "type": "good_practice",
+  "severity": "none",
+  "priority": null,
+  "code_snippet": "# Emitted under S9.7 for the user to run:\ngit status --porcelain go.mod go.sum   # must be empty\ngo mod why -m golang.org/x/net\ngo get golang.org/x/net@v0.17.0\ngo mod tidy\ngit diff go.mod go.sum\ngo mod verify && go build ./... && go test ./...\ngovulncheck ./... ; echo rc=$?    # rc=0 confirms resolution",
+  "violated_rule": null,
+  "expected_feedback": "No violations. Precondition checked before anything moves, the module that actually pulls the dependency in is identified first, the version is named rather than swept with -u, the go.mod diff is inspected because minimal version selection re-solves the graph, and resolution is confirmed by a re-scan rather than by a successful build.",
+  "coverage_rules": [
+    "Emit, do not execute",
+    "go mod why -m",
+    "rc=0 confirms resolution",
+    "must be empty"
+  ],
+  "reference": "references/upgrade-planning.md"
+}

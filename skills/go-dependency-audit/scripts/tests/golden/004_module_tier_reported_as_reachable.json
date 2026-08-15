@@ -1,0 +1,17 @@
+{
+  "id": "DEP-004",
+  "title": "Module-level finding reported as proven unreachable",
+  "type": "defect",
+  "severity": "standard",
+  "priority": "P3",
+  "code_snippet": "$ govulncheck -scan module ./...\n=== Module Results ===\n\nVulnerability #1: GO-2024-0007\n  Module: example.com/alpha\n    Found in: example.com/alpha@v1.3.0\n\nYour code may be affected by 1 vulnerability.\n\n# Auditor's report:\n# \"Not called — your code is NOT affected. Closing as a false positive.\"",
+  "violated_rule": "no-reachability",
+  "expected_feedback": "A module-level scan cannot establish reachability, so the absence of an E1 tier means 'not measured', not 'not reachable'. This is no-reachability mode: report the E3 Required tier actually obtained, at P3, and state that reachability was never assessed. Re-run with -scan symbol to measure it. 'Your code is NOT affected' is also not a string govulncheck v1.x emits.",
+  "coverage_rules": [
+    "no-reachability",
+    "E3 Required",
+    "never downgrade on absent evidence",
+    "-scan symbol"
+  ],
+  "reference": "references/govulncheck-patterns.md"
+}

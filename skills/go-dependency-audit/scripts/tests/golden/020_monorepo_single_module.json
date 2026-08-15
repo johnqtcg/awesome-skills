@@ -1,0 +1,17 @@
+{
+  "id": "DEP-020",
+  "title": "Monorepo audited as one module, reported as the whole repository",
+  "type": "defect",
+  "severity": "critical",
+  "priority": "P1",
+  "code_snippet": "$ find . -name go.mod\n./go.mod\n./worker/go.mod\n./tools/go.mod\n\n# Auditor ran, from the repo root:\n$ govulncheck ./...\nNo vulnerabilities found.\n\n# and reported:\n# \"Repository audit complete - 0 vulnerabilities across all modules.\"",
+  "violated_rule": "the unit of\naudit is the module, not the repository",
+  "expected_feedback": "Three modules exist; one was scanned. govulncheck ./... from the root covers the root module only - a nested go.mod is excluded from its parent's build list, so ./worker and ./tools were never loaded. Load references/multi-module.md, run gates 3-10 per module with -C, and report a per-module table. A repository-level claim built from one module is the worst output this skill can produce.",
+  "coverage_rules": [
+    "the unit of\naudit is the module, not the repository",
+    "references/multi-module.md",
+    "excluded from the parent's build",
+    "name any you skipped in S9.8"
+  ],
+  "reference": "references/multi-module.md"
+}

@@ -1,0 +1,17 @@
+{
+  "id": "DEP-017",
+  "title": "Deep supply chain review",
+  "type": "workflow",
+  "severity": "none",
+  "priority": null,
+  "code_snippet": "User: \"Do a supply chain review — we onboard a new vendor next month.\"\nRepo: internal modules under github.com/company/*, corporate proxy, no SBOM in the release pipeline.",
+  "violated_rule": null,
+  "expected_feedback": "Deep depth. Load all four references. Report real go env values for GOPROXY, GOPRIVATE, GONOPROXY, GONOSUMDB and GOSUMDB rather than assumed ones, and check that GOPRIVATE covers every internal prefix actually present in go.mod — a partial pattern leaks the modules it misses. Cover retracted and deprecated modules, SBOM generation, and replace-directive provenance. GOPROXY=direct is not an integrity finding; GOSUMDB=off is.",
+  "coverage_rules": [
+    "`GOPRIVATE` covers every internal module prefix",
+    "-retracted",
+    "GOSUMDB=off",
+    "SBOM Generation"
+  ],
+  "reference": "references/supply-chain-security.md"
+}

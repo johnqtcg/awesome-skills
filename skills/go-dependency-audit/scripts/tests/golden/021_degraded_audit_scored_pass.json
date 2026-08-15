@@ -1,0 +1,17 @@
+{
+  "id": "DEP-021",
+  "title": "Degraded audit scored PASS by counting unrunnable checks as passes",
+  "type": "defect",
+  "severity": "critical",
+  "priority": "P1",
+  "code_snippet": "# go-licenses unavailable -> no-license mode. Auditor's scorecard:\n# Standard: 4/5 PASS  (licence inventory: pass, escalation records: pass)\n# Verdict: PASS",
+  "violated_rule": "never counts as a pass",
+  "expected_feedback": "The two licence items could not run, so they score N/A and leave both numerator and denominator: standard becomes 2/3 = 0.67, below the 0.80 threshold, and the verdict is FAIL. Counting an unrunnable check as a pass is exactly how a degraded audit reports success. See references/scorecard.md for the worked example.",
+  "coverage_rules": [
+    "never counts as a pass",
+    "references/scorecard.md",
+    "Scoring Worked Example",
+    "passed / applicable"
+  ],
+  "reference": "references/scorecard.md"
+}

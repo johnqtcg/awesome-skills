@@ -1,0 +1,17 @@
+{
+  "id": "DEP-018",
+  "title": "Quick mode padded out to the full output contract",
+  "type": "defect",
+  "severity": "hygiene",
+  "priority": "P3",
+  "code_snippet": "User: \"Any CVEs in this repo?\"\n\n# Auditor's report includes:\n# 9.4 License Summary: (none)\n# 9.5 Outdated Dependencies: (none)\n# 9.6 Supply Chain Posture: (none)\n# 9.7 Upgrade Recommendations: (none)",
+  "violated_rule": "Quick mode emits",
+  "expected_feedback": "Quick mode's contract is the S9 subset — 9.1, 9.2, 9.3, 9.8 and 9.9. Emitting the remaining sections as '(none)' implies they were checked and came back empty, which is the opposite of what happened. Omit them and name the omission in S9.8.",
+  "coverage_rules": [
+    "Quick mode emits",
+    "S9 subset",
+    "Do not emit empty",
+    "never emitted empty"
+  ],
+  "reference": "SKILL.md"
+}

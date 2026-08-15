@@ -1,0 +1,17 @@
+{
+  "id": "DEP-002",
+  "title": "Claiming a clean dependency tree without a completed scan",
+  "type": "defect",
+  "severity": "critical",
+  "priority": "P1",
+  "code_snippet": "$ govulncheck ./...\ngovulncheck: loading packages: err: exit status 1\n$ echo rc=$?\nrc=1\n\n# Auditor's report:\n# \"No vulnerabilities found. Dependencies are clean.\"",
+  "violated_rule": "govulncheck completed",
+  "expected_feedback": "Exit code 1 is a failed scan, not a clean one — only exit 0 with 'No vulnerabilities found.' supports that claim. Enter no-cve mode, mark the output '# DEGRADED [no-cve]', and record CVE status as UNKNOWN. Never claim 'no vulnerabilities' without a scan that completed.",
+  "coverage_rules": [
+    "exit code of 1 is a *failed scan*",
+    "-> `no-cve` mode",
+    "Never fabricate CVE findings",
+    "Exit 1 is not a clean scan"
+  ],
+  "reference": "references/govulncheck-patterns.md"
+}

@@ -1,16 +1,17 @@
 {
   "id": "DEP-003",
-  "title": "go.sum integrity verification failure — checksum mismatch",
+  "title": "Checksum mismatch suppressed by stopping the audit",
   "type": "defect",
   "severity": "critical",
-  "code_snippet": "// go mod verify output:\n// github.com/foo/bar v1.2.3: dir has been modified\n// github.com/foo/bar v1.2.3: zip has been modified\n// SECURITY ERROR\n// This download does NOT match the expected hash.",
-  "violated_rule": "go.mod/go.sum integrity verified — go mod verify passes",
-  "expected_feedback": "P1 Critical: go.sum integrity failure — cached module content does not match recorded checksums. This could indicate supply chain tampering. Clear module cache (go clean -modcache), re-download, and re-verify. If mismatch persists, investigate the module source.",
+  "priority": "P1",
+  "code_snippet": "$ go mod verify\ngithub.com/example/dep v1.4.2: checksum mismatch\nSECURITY ERROR\n\n# Auditor's report:\n# \"Gate failed — integrity check did not pass. Stopping the audit; no findings to report.\"\n# (and then, to 'reset': go clean -modcache)",
+  "violated_rule": "Checksum state reported",
+  "expected_feedback": "Two errors. First, a checksum mismatch is a WARN-class gate, not a BLOCK: it must be reported as a P1 finding, because it is the highest-value output an audit can produce — stopping suppresses exactly the thing the user needs. Second, clearing the module cache destroys the evidence. Report it; do not repair it.",
   "coverage_rules": [
-    "go.mod/go.sum integrity verified",
-    "go mod verify",
-    "go.sum is your integrity anchor",
-    "checksum mismatch"
+    "Checksum state reported",
+    "not a failed check",
+    "do not stop",
+    "destroys the evidence"
   ],
   "reference": "references/supply-chain-security.md"
 }

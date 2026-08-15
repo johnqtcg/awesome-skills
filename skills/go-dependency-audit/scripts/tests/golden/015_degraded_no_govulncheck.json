@@ -1,0 +1,17 @@
+{
+  "id": "DEP-015",
+  "title": "govulncheck unavailable — DEGRADE class gate",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "priority": null,
+  "code_snippet": "$ govulncheck -version\nzsh: command not found: govulncheck\n$ go list -m all | wc -l\n      59",
+  "violated_rule": null,
+  "expected_feedback": "Gate 6 is DEGRADE class, not BLOCK: the module is fine, one capability is missing. Continue in no-cve mode and deliver licence, outdated, hygiene, and supply-chain-posture coverage. Mark the output '# DEGRADED [no-cve]', list the lost coverage in S9.8, and score every CVE scorecard item N/A so it leaves the denominator rather than counting as a pass.",
+  "coverage_rules": [
+    "-> `no-cve` mode",
+    "A capability is unavailable",
+    "removed from both numerator and denominator",
+    "never counts as a pass"
+  ],
+  "reference": "SKILL.md"
+}

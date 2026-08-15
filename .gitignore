@@ -14,3 +14,6 @@ runtime/
 site/
 .cache/
 .understand-anything/
+
+# Forward-eval run artifacts (recorded model output; not source)
+skills/*/scripts/eval_runs/

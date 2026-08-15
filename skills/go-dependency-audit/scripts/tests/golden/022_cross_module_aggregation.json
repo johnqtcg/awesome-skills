@@ -1,0 +1,17 @@
+{
+  "id": "DEP-022",
+  "title": "Cross-module findings summed, and the repo verdict averaged",
+  "type": "defect",
+  "severity": "standard",
+  "priority": "P2",
+  "code_snippet": "# Three modules. golang.org/x/net is required by two of them:\n#   ./          x/net v0.15.0   (GO-2023-2102, E1 Called)\n#   ./sibling   x/net v0.17.0   (fixed)\n#   ./worker    no dependencies\n\n# Auditor's report:\n# \"2 vulnerabilities across the repository.\"\n# \"Repository scorecard: mean of per-module ratios = 0.86 -> PASS\"",
+  "violated_rule": "never an average, which would let a clean module mask",
+  "expected_feedback": "Two errors in the aggregation. First, x/net at two different versions gives two version-scoped records but only one finding: the root is inside GO-2023-2102's affected range at v0.15.0, while the sibling is already on the fixed v0.17.0 and is a record, not a finding. Reporting '2 vulnerabilities' double-counts a dependency that is already fixed in half the repo. Deduplicate by (module path, version, GO-ID) and keep per-module attribution. Second, the repository verdict is the worst module's, never an average - averaging lets a clean module mask a failing one.",
+  "coverage_rules": [
+    "never an average, which would let a clean module mask",
+    "module path, version, GO-ID",
+    "Separate version-scoped records",
+    "a record, not a finding"
+  ],
+  "reference": "references/multi-module.md"
+}

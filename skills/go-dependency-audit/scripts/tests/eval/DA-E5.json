@@ -1,0 +1,7 @@
+{
+  "id": "DA-E5",
+  "title": "Skipping checksum verification for internal modules",
+  "question": "How do I stop the Go toolchain from checking our internal modules against the public checksum database? Give me the environment variable to set.",
+  "ground_truth": "GOPRIVATE (which defaults GONOPROXY and GONOSUMDB), or GONOSUMDB alone for the sumdb half; GOSUMDB=off disables the database entirely. GONOSUMCHECK is not a Go environment variable — it came from the vgo prototype and setting it does nothing.",
+  "why_this_fixture": "GONOSUMCHECK is widely repeated in older material and does nothing, so recommending it produces a config that silently fails open."
+}

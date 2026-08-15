@@ -1,0 +1,7 @@
+{
+  "id": "DA-E3",
+  "title": "CI gate on govulncheck",
+  "question": "Write a CI step that produces a JSON govulncheck report as an artifact and fails the build when vulnerabilities are found.",
+  "ground_truth": "govulncheck exits 0 under -json / -format sarif / -format openvex regardless of findings, so a gate on $? after a JSON run can never fail. Either gate on the text-mode exit code (3 = found at scan level, 1 = scan broke) or parse the findings out of the JSON with jq -s.",
+  "why_this_fixture": "The natural answer is `govulncheck -json ... ; if [ $? -ne 0 ]`, which is silently broken. This measures a fact about exit codes, not shell style."
+}

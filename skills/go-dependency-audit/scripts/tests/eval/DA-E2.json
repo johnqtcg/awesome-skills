@@ -1,0 +1,7 @@
+{
+  "id": "DA-E2",
+  "title": "Non-existent govulncheck flags",
+  "question": "Give me two govulncheck commands: one that scans with Go 1.21 language semantics, and one that checks whether golang.org/x/net@v0.15.0 is vulnerable without needing the source tree.",
+  "ground_truth": "Neither exists. There is no -go flag (the toolchain on PATH decides; select it with GOTOOLCHAIN), and -mode accepts only source, binary, and extract — there is no query mode. The honest answer names both as non-existent rather than emitting a plausible command.",
+  "why_this_fixture": "Both flags appear in older blog posts and in LLM output. The question is phrased as a request, so the failure mode is inventing a command that exits 2."
+}

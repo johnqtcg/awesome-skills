@@ -1,0 +1,17 @@
+{
+  "id": "DEP-014",
+  "title": "No go.mod present — BLOCK class gate",
+  "type": "degradation_scenario",
+  "severity": "none",
+  "priority": null,
+  "code_snippet": "$ ls\nmain.go  README.md\n$ find . -name go.mod\n# (no output)",
+  "violated_rule": null,
+  "expected_feedback": "Gate 1 is BLOCK class: the audit's subject does not exist, so there are no findings to degrade into. Stop, emit no findings, and head the response 'NOT AN AUDIT' with the reason and what would unblock it (go mod init). Do not present module setup guidance as though it were audit output.",
+  "coverage_rules": [
+    "NOT AN AUDIT",
+    "Module exists",
+    "what would unblock",
+    "Emit no findings"
+  ],
+  "reference": "SKILL.md"
+}

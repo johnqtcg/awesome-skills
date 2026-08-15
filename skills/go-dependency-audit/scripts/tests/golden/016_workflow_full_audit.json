@@ -1,0 +1,17 @@
+{
+  "id": "DEP-016",
+  "title": "Standard pre-release audit, end to end",
+  "type": "workflow",
+  "severity": "none",
+  "priority": null,
+  "code_snippet": "User: \"Audit our dependencies before the 2.4 release.\"\nRepo: single go.mod, go 1.23, 14 direct / 61 indirect, govulncheck and go-licenses both installed, worktree clean.",
+  "violated_rule": null,
+  "expected_feedback": "Standard depth. Run gates 1-9 and record each class outcome. Load references/govulncheck-patterns.md. Produce all nine S9 sections, with S9.3 naming the exact command, its -scan level, its exit code, and per finding the evidence tier plus CVSS source or 'not retrieved'. S9.7 emits commands for the user to run; the audit runs none of them. S9.8 is non-empty. Append the scorecard with N/A items removed from the denominator.",
+  "coverage_rules": [
+    "pre-release check",
+    "evidence tier",
+    "Uncovered Risks",
+    "as commands for the user to run"
+  ],
+  "reference": "SKILL.md"
+}

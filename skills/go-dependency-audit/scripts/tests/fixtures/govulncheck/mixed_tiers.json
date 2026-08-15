@@ -1,0 +1,85 @@
+{
+  "config": {
+    "protocol_version": "v0.1.0",
+    "scanner_name": "govulncheck",
+    "scanner_version": "v1.1.4",
+    "scan_level": "symbol",
+    "scan_mode": "source"
+  }
+}
+{
+  "osv": {
+    "id": "GO-2024-0001",
+    "aliases": ["CVE-2024-11111"],
+    "summary": "Reachable symbol vulnerability",
+    "details": "Synthetic fixture entry.",
+    "affected": [{"package": {"name": "example.com/vmod", "ecosystem": "Go"}}],
+    "database_specific": {
+      "url": "https://pkg.go.dev/vuln/GO-2024-0001",
+      "review_status": "REVIEWED"
+    }
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-0001",
+    "fixed_version": "v1.2.0",
+    "trace": [
+      {"module": "example.com/vmod", "version": "v1.0.0"}
+    ]
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-0001",
+    "fixed_version": "v1.2.0",
+    "trace": [
+      {"module": "example.com/vmod", "version": "v1.0.0",
+       "package": "example.com/vmod/pkg", "function": "Vuln"},
+      {"module": "example.com/main", "version": "v0.0.1",
+       "package": "example.com/main", "function": "main"}
+    ]
+  }
+}
+{
+  "osv": {
+    "id": "GO-2024-0002",
+    "summary": "Imported package, no reachable symbol",
+    "details": "Synthetic fixture entry.",
+    "affected": [{"package": {"name": "example.com/imported", "ecosystem": "Go"}}],
+    "database_specific": {
+      "url": "https://pkg.go.dev/vuln/GO-2024-0002",
+      "review_status": "UNREVIEWED"
+    }
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-0002",
+    "fixed_version": "v0.9.1",
+    "trace": [
+      {"module": "example.com/imported", "version": "v0.9.0",
+       "package": "example.com/imported/sub"}
+    ]
+  }
+}
+{
+  "osv": {
+    "id": "GO-2024-0003",
+    "summary": "Required module only",
+    "details": "Synthetic fixture entry.",
+    "affected": [{"package": {"name": "example.com/required", "ecosystem": "Go"}}],
+    "database_specific": {
+      "url": "https://pkg.go.dev/vuln/GO-2024-0003",
+      "review_status": "REVIEWED"
+    }
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-0003",
+    "trace": [
+      {"module": "example.com/required", "version": "v2.3.4"}
+    ]
+  }
+}

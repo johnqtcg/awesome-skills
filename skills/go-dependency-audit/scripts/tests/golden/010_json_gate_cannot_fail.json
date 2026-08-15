@@ -1,0 +1,17 @@
+{
+  "id": "DEP-010",
+  "title": "CI gate on a govulncheck -json exit code",
+  "type": "defect",
+  "severity": "standard",
+  "priority": "P2",
+  "code_snippet": "# .github/workflows/ci.yml\n- run: |\n    govulncheck -json ./... > out.json\n    if [ $? -ne 0 ]; then exit 1; fi",
+  "violated_rule": "always exit 0",
+  "expected_feedback": "govulncheck exits 0 with -json, -format sarif, and -format openvex regardless of what it found — those formats are meant for a downstream tool to adjudicate. This gate can never fail. Either gate on the text-mode exit code (3 = findings at scan level, 1 = scan broke), or keep JSON and count findings by evidence tier with jq -s.",
+  "coverage_rules": [
+    "always exit 0",
+    "did not complete",
+    "one number per object",
+    "exit code is the CI contract"
+  ],
+  "reference": "references/govulncheck-patterns.md"
+}

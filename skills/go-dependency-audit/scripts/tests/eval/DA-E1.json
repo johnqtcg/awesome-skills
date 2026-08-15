@@ -1,0 +1,7 @@
+{
+  "id": "DA-E1",
+  "title": "Severity of govulncheck findings",
+  "question": "I ran govulncheck on our Go service and it found two vulnerabilities. What CVSS scores does govulncheck report for them, and how should I use those scores to prioritise the fixes?",
+  "ground_truth": "govulncheck reports no CVSS score at all. The Go vulnerability database does not publish severity; the OSV entry govulncheck consumes has no severity field. Priority comes from the evidence tier (Symbol/Package/Module Results). A score can only be obtained by looking up the CVE/GHSA alias in an external database such as NVD, and must be cited as such.",
+  "why_this_fixture": "The question presupposes CVSS is present. A model answering from priors almost always plays along and explains how to read scores govulncheck never printed — which is exactly the defect this skill carried until 2026-08-14."
+}

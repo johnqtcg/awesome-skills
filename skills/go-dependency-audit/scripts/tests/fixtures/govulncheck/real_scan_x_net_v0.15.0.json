@@ -1,0 +1,1800 @@
+{
+ "config": {
+  "protocol_version": "v1.0.0",
+  "scanner_name": "govulncheck",
+  "scanner_version": "v1.1.4",
+  "db": "https://vuln.go.dev",
+  "db_last_modified": "2026-08-13T21:43:54Z",
+  "go_version": "go1.26.1",
+  "scan_level": "symbol",
+  "scan_mode": "source"
+ }
+}
+{
+ "osv": {
+  "id": "GO-2023-2102",
+  "summary": "HTTP/2 rapid reset can cause excessive work in net/http",
+  "aliases": [
+   "CVE-2023-39325",
+   "GHSA-4374-p667-p6c8"
+  ],
+  "database_specific": {
+   "url": "https://pkg.go.dev/vuln/GO-2023-2102",
+   "review_status": "REVIEWED"
+  }
+ }
+}
+{
+ "osv": {
+  "id": "GO-2024-2687",
+  "summary": "HTTP/2 CONTINUATION flood in net/http",
+  "aliases": [
+   "CVE-2023-45288",
+   "GHSA-4v7x-pqxf-cx7m"
+  ],
+  "database_specific": {
+   "url": "https://pkg.go.dev/vuln/GO-2024-2687",
+   "review_status": "REVIEWED"
+  }
+ }
+}
+{
+ "osv": {
+  "id": "GO-2023-2102",
+  "summary": "HTTP/2 rapid reset can cause excessive work in net/http",
+  "aliases": [
+   "CVE-2023-39325",
+   "GHSA-4374-p667-p6c8"
+  ],
+  "database_specific": {
+   "url": "https://pkg.go.dev/vuln/GO-2023-2102",
+   "review_status": "REVIEWED"
+  }
+ }
+}
+{
+ "osv": {
+  "id": "GO-2024-2687",
+  "summary": "HTTP/2 CONTINUATION flood in net/http",
+  "aliases": [
+   "CVE-2023-45288",
+   "GHSA-4v7x-pqxf-cx7m"
+  ],
+  "database_specific": {
+   "url": "https://pkg.go.dev/vuln/GO-2024-2687",
+   "review_status": "REVIEWED"
+  }
+ }
+}
+{
+ "osv": {
+  "id": "GO-2026-6090",
+  "summary": "Limit handshake messages we are willing to accept post-handshake in crypto/tls",
+  "aliases": [
+   "CVE-2026-56862"
+  ],
+  "database_specific": {
+   "url": "https://pkg.go.dev/vuln/GO-2026-6090",
+   "review_status": "REVIEWED"
+  }
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2023-2102",
+  "fixed_version": "v0.17.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-3333",
+  "fixed_version": "v0.33.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2025-3503",
+  "fixed_version": "v0.36.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2025-3595",
+  "fixed_version": "v0.38.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4440",
+  "fixed_version": "v0.45.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4441",
+  "fixed_version": "v0.45.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4918",
+  "fixed_version": "v0.53.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5025",
+  "fixed_version": "v0.55.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5026",
+  "fixed_version": "v0.55.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5027",
+  "fixed_version": "v0.55.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5028",
+  "fixed_version": "v0.55.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5029",
+  "fixed_version": "v0.55.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5030",
+  "fixed_version": "v0.55.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5942",
+  "fixed_version": "v0.56.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5970",
+  "fixed_version": "v0.39.0",
+  "trace": [
+   {
+    "module": "golang.org/x/text",
+    "version": "v0.13.0"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4864",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4865",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4866",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4869",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4870",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4918",
+  "fixed_version": "v1.26.3",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4946",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4947",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4970",
+  "fixed_version": "v1.26.5",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4971",
+  "fixed_version": "v1.26.3",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4976",
+  "fixed_version": "v1.26.3",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4977",
+  "fixed_version": "v1.26.3",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4980",
+  "fixed_version": "v1.26.3",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4981",
+  "fixed_version": "v1.26.3",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4982",
+  "fixed_version": "v1.26.3",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4986",
+  "fixed_version": "v1.26.3",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5026",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5037",
+  "fixed_version": "v1.26.4",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5038",
+  "fixed_version": "v1.26.4",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5039",
+  "fixed_version": "v1.26.4",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5856",
+  "fixed_version": "v1.26.5",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5942",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5972",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-6088",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-6089",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-6090",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-6091",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-6218",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2023-2102",
+  "fixed_version": "v0.17.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4918",
+  "fixed_version": "v0.53.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-6218",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "net/url"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4970",
+  "fixed_version": "v1.26.5",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "os"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4864",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "internal/syscall/unix"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4870",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/tls"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5856",
+  "fixed_version": "v1.26.5",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/tls"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-6090",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/tls"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4866",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/x509"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4946",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/x509"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4947",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/x509"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5037",
+  "fixed_version": "v1.26.4",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/x509"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5972",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "encoding/asn1"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4971",
+  "fixed_version": "v1.26.3",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "net"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4981",
+  "fixed_version": "v1.26.3",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "net"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5942",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "net"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5039",
+  "fixed_version": "v1.26.4",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "net/textproto"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5026",
+  "fixed_version": "v0.55.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/idna"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5970",
+  "fixed_version": "v0.39.0",
+  "trace": [
+   {
+    "module": "golang.org/x/text",
+    "version": "v0.13.0",
+    "package": "golang.org/x/text/unicode/norm"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4918",
+  "fixed_version": "v1.26.3",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "net/http"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5026",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "net/http"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-6089",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "net/http"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5038",
+  "fixed_version": "v1.26.4",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "mime"
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5972",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "encoding/asn1",
+    "function": "Unmarshal",
+    "position": {
+     "filename": "src/encoding/asn1/asn1.go",
+     "offset": 33808,
+     "line": 1140,
+     "column": 6
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4870",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/tls",
+    "function": "Read",
+    "receiver": "*Conn",
+    "position": {
+     "filename": "src/crypto/tls/conn.go",
+     "offset": 43677,
+     "line": 1379,
+     "column": 16
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "Error",
+    "receiver": "connError",
+    "position": {
+     "filename": "http2/errors.go",
+     "offset": 3770,
+     "line": 114,
+     "column": 20
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "String",
+    "receiver": "Setting",
+    "position": {
+     "filename": "http2/http2.go",
+     "offset": 2960,
+     "line": 121,
+     "column": 18
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "String",
+    "receiver": "SettingID",
+    "position": {
+     "filename": "http2/http2.go",
+     "offset": 4307,
+     "line": 167,
+     "column": 20
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "Write",
+    "receiver": "*responseWriter",
+    "position": {
+     "filename": "http2/server.go",
+     "offset": 92836,
+     "line": 2898,
+     "column": 26
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "WriteString",
+    "receiver": "*responseWriter",
+    "position": {
+     "filename": "http2/server.go",
+     "offset": 92932,
+     "line": 2902,
+     "column": 26
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "Error",
+    "receiver": "StreamError",
+    "position": {
+     "filename": "http2/errors.go",
+     "offset": 2647,
+     "line": 86,
+     "column": 22
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "Error",
+    "receiver": "pseudoHeaderError",
+    "position": {
+     "filename": "http2/errors.go",
+     "offset": 3921,
+     "line": 120,
+     "column": 28
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "ConfigureServer",
+    "position": {
+     "filename": "http2/server.go",
+     "offset": 7953,
+     "line": 248,
+     "column": 6
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5856",
+  "fixed_version": "v1.26.5",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/tls",
+    "function": "Write",
+    "receiver": "*Conn",
+    "position": {
+     "filename": "src/crypto/tls/conn.go",
+     "offset": 38821,
+     "line": 1202,
+     "column": 16
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-6090",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/tls",
+    "function": "Write",
+    "receiver": "*Conn",
+    "position": {
+     "filename": "src/crypto/tls/conn.go",
+     "offset": 38821,
+     "line": 1202,
+     "column": 16
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5037",
+  "fixed_version": "v1.26.4",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/x509",
+    "function": "Error",
+    "receiver": "HostnameError",
+    "position": {
+     "filename": "src/crypto/x509/verify.go",
+     "offset": 3774,
+     "line": 109,
+     "column": 24
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4870",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/tls",
+    "function": "HandshakeContext",
+    "receiver": "*Conn",
+    "position": {
+     "filename": "src/crypto/tls/conn.go",
+     "offset": 47983,
+     "line": 1513,
+     "column": 16
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-6090",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/tls",
+    "function": "HandshakeContext",
+    "receiver": "*Conn",
+    "position": {
+     "filename": "src/crypto/tls/conn.go",
+     "offset": 47983,
+     "line": 1513,
+     "column": 16
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-6089",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "net/http",
+    "function": "ListenAndServe",
+    "receiver": "*Server",
+    "position": {
+     "filename": "src/net/http/server.go",
+     "offset": 110448,
+     "line": 3348,
+     "column": 18
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4971",
+  "fixed_version": "v1.26.3",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "net",
+    "function": "Listen",
+    "position": {
+     "filename": "src/net/dial.go",
+     "offset": 30626,
+     "line": 966,
+     "column": 6
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5856",
+  "fixed_version": "v1.26.5",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/tls",
+    "function": "Read",
+    "receiver": "*Conn",
+    "position": {
+     "filename": "src/crypto/tls/conn.go",
+     "offset": 43677,
+     "line": 1379,
+     "column": 16
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "ServeConn",
+    "receiver": "*Server",
+    "position": {
+     "filename": "http2/server.go",
+     "offset": 13052,
+     "line": 401,
+     "column": 18
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5037",
+  "fixed_version": "v1.26.4",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/x509",
+    "function": "VerifyHostname",
+    "receiver": "*Certificate",
+    "position": {
+     "filename": "src/crypto/x509/verify.go",
+     "offset": 29096,
+     "line": 927,
+     "column": 23
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "String",
+    "receiver": "*writeData",
+    "position": {
+     "filename": "http2/write.go",
+     "offset": 2906,
+     "line": 104,
+     "column": 21
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "Read",
+    "receiver": "*requestBody",
+    "position": {
+     "filename": "http2/server.go",
+     "offset": 78765,
+     "line": 2437,
+     "column": 23
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5039",
+  "fixed_version": "v1.26.4",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "net/textproto",
+    "function": "ReadMIMEHeader",
+    "receiver": "*Reader",
+    "position": {
+     "filename": "src/net/textproto/reader.go",
+     "offset": 13692,
+     "line": 507,
+     "column": 18
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4870",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/tls",
+    "function": "Write",
+    "receiver": "*Conn",
+    "position": {
+     "filename": "src/crypto/tls/conn.go",
+     "offset": 38821,
+     "line": 1202,
+     "column": 16
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "Close",
+    "receiver": "*requestBody",
+    "position": {
+     "filename": "http2/server.go",
+     "offset": 78618,
+     "line": 2428,
+     "column": 23
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "Error",
+    "receiver": "headerFieldValueError",
+    "position": {
+     "filename": "http2/errors.go",
+     "offset": 4370,
+     "line": 138,
+     "column": 32
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4866",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/x509",
+    "function": "Verify",
+    "receiver": "*Certificate",
+    "position": {
+     "filename": "src/crypto/x509/verify.go",
+     "offset": 18349,
+     "line": 542,
+     "column": 23
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5037",
+  "fixed_version": "v1.26.4",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/x509",
+    "function": "Verify",
+    "receiver": "*Certificate",
+    "position": {
+     "filename": "src/crypto/x509/verify.go",
+     "offset": 18349,
+     "line": 542,
+     "column": 23
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4946",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/x509",
+    "function": "Verify",
+    "receiver": "*Certificate",
+    "position": {
+     "filename": "src/crypto/x509/verify.go",
+     "offset": 18349,
+     "line": 542,
+     "column": 23
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "Error",
+    "receiver": "duplicatePseudoHeaderError",
+    "position": {
+     "filename": "http2/errors.go",
+     "offset": 4076,
+     "line": 126,
+     "column": 37
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "WriteHeader",
+    "receiver": "*responseWriter",
+    "position": {
+     "filename": "http2/server.go",
+     "offset": 91387,
+     "line": 2833,
+     "column": 26
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-4947",
+  "fixed_version": "v1.26.2",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/x509",
+    "function": "Verify",
+    "receiver": "*Certificate",
+    "position": {
+     "filename": "src/crypto/x509/verify.go",
+     "offset": 18349,
+     "line": 542,
+     "column": 23
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "Write",
+    "receiver": "chunkWriter",
+    "position": {
+     "filename": "http2/server.go",
+     "offset": 80934,
+     "line": 2501,
+     "column": 23
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "String",
+    "receiver": "ErrCode",
+    "position": {
+     "filename": "http2/errors.go",
+     "offset": 1596,
+     "line": 49,
+     "column": 18
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "String",
+    "receiver": "FrameHeader",
+    "position": {
+     "filename": "http2/frame.go",
+     "offset": 4675,
+     "line": 176,
+     "column": 22
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "String",
+    "receiver": "FrameWriteRequest",
+    "position": {
+     "filename": "http2/writesched.go",
+     "offset": 5659,
+     "line": 161,
+     "column": 29
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2023-2102",
+  "fixed_version": "v0.17.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "ServeConn",
+    "receiver": "*Server",
+    "position": {
+     "filename": "http2/server.go",
+     "offset": 13052,
+     "line": 401,
+     "column": 18
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-6090",
+  "fixed_version": "v1.26.6",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/tls",
+    "function": "Read",
+    "receiver": "*Conn",
+    "position": {
+     "filename": "src/crypto/tls/conn.go",
+     "offset": 43677,
+     "line": 1379,
+     "column": 16
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "Error",
+    "receiver": "headerFieldNameError",
+    "position": {
+     "filename": "http2/errors.go",
+     "offset": 4221,
+     "line": 132,
+     "column": 31
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2026-5856",
+  "fixed_version": "v1.26.5",
+  "trace": [
+   {
+    "module": "stdlib",
+    "version": "v1.26.1",
+    "package": "crypto/tls",
+    "function": "HandshakeContext",
+    "receiver": "*Conn",
+    "position": {
+     "filename": "src/crypto/tls/conn.go",
+     "offset": 47983,
+     "line": 1513,
+     "column": 16
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "String",
+    "receiver": "FrameType",
+    "position": {
+     "filename": "http2/frame.go",
+     "offset": 1293,
+     "line": 55,
+     "column": 20
+    }
+   }
+  ]
+ }
+}
+{
+ "finding": {
+  "osv": "GO-2024-2687",
+  "fixed_version": "v0.23.0",
+  "trace": [
+   {
+    "module": "golang.org/x/net",
+    "version": "v0.15.0",
+    "package": "golang.org/x/net/http2",
+    "function": "Error",
+    "receiver": "ConnectionError",
+    "position": {
+     "filename": "http2/errors.go",
+     "offset": 2010,
+     "line": 67,
+     "column": 26
+    }
+   }
+  ]
+ }
+}

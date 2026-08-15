@@ -1,0 +1,17 @@
+{
+  "id": "DEP-009",
+  "title": "Remediation plan that discards uncommitted work",
+  "type": "defect",
+  "severity": "critical",
+  "priority": "P1",
+  "code_snippet": "# Emitted by the audit as its remediation plan:\nfor dep in $(go list -m -u all | awk '{print $1}'); do\n  go get \"$dep@latest\" && go mod tidy\n  go test ./... || git checkout go.mod go.sum   # rollback\ndone",
+  "violated_rule": "Never generate a rollback that discards uncommitted work",
+  "expected_feedback": "git checkout overwrites the worktree copy, so any unstaged go.mod edit in progress is gone with no reflog entry. Require a clean worktree first (git status --porcelain go.mod go.sum must be empty), commit after each successful step so every green state is a restore point, and stop on failure rather than reverting. The audit emits this plan; it does not run it.",
+  "coverage_rules": [
+    "Never generate a rollback that discards uncommitted work",
+    "git status --porcelain go.mod go.sum",
+    "Emit, do not execute",
+    "restore point"
+  ],
+  "reference": "references/upgrade-planning.md"
+}

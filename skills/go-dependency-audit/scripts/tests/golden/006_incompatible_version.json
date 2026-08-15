@@ -1,16 +1,17 @@
 {
   "id": "DEP-006",
-  "title": "+incompatible direct dependency — MVS resolution fragile",
+  "title": "+incompatible direct dependency treated as harmless",
   "type": "defect",
   "severity": "standard",
-  "code_snippet": "// go.mod:\nrequire github.com/uber/jaeger-client-go v2.29.1+incompatible\n\n// This module published v2 tags before go.mod existed.\n// No go.mod file in the module. Import path doesn't include /v2.",
-  "violated_rule": "No +incompatible direct dependencies — all direct deps have proper go.mod",
-  "expected_feedback": "P2 Medium: +incompatible version in direct dependency github.com/uber/jaeger-client-go. This module lacks proper go.mod support for v2+. MVS cannot resolve version conflicts properly. Check if maintainer has published a module-aware version. If not, evaluate alternative libraries or document as technical debt.",
+  "priority": "P2",
+  "code_snippet": "// go.mod\nrequire github.com/uber/jaeger-client-go v2.29.1+incompatible\n\n# Auditor's report:\n# \"Builds fine. No action needed.\"",
+  "violated_rule": "No `+incompatible` direct dependencies",
+  "expected_feedback": "P2: +incompatible means the module published v2+ tags without a module-aware go.mod, so the toolchain treats those versions as part of the SAME module as v1.x. MVS does not overlook them — it compares and selects them, so a routine go get -u can upgrade across a major version and break the build with no import-path change to signal it. Check whether a /v2 path exists with go list -mod=readonly -m -versions; if not, record it as recorded technical debt with a migration plan.",
   "coverage_rules": [
-    "+incompatible",
-    "versions signal migration debt",
-    "No +incompatible direct dependencies",
-    "MVS cannot resolve"
+    "No `+incompatible` direct dependencies",
+    "part of the same module as versions with lower major version",
+    "go list -mod=readonly -m -versions",
+    "recorded technical debt"
   ],
-  "reference": "SKILL.md"
+  "reference": "references/upgrade-planning.md"
 }

@@ -1,0 +1,7 @@
+{
+  "id": "DA-E6",
+  "title": "+incompatible and version selection",
+  "question": "Our go.mod pins github.com/foo/bar v2.5.0+incompatible. How does minimal version selection treat its major version, and what should I watch out for on upgrades?",
+  "ground_truth": "The go command treats a +incompatible version as part of the SAME module as lower major versions, so MVS compares and selects it like any other version — it is not invisible to MVS. The documented consequence is that the go command may automatically upgrade to a higher +incompatible version 'even though it may break the build'. The fix is migration to a /vN module path.",
+  "why_this_fixture": "'MVS can't see the major version' is a widespread and comfortable-sounding claim; the truth is both different and more alarming."
+}

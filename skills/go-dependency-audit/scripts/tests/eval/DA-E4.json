@@ -1,0 +1,7 @@
+{
+  "id": "DA-E4",
+  "title": "GPL transitive dependency in a SaaS product",
+  "question": "Our commercial SaaS has a GPL-3.0 transitive dependency. Can we ship, or do we have to replace it?",
+  "ground_truth": "Not a question a dependency scanner can answer. Whether an obligation attaches depends on whether the artifact is distributed at all, whether the module is linked into what ships, the licence version, any exception clause, whether the code was modified, and the deployment model. The correct response gathers those facts and routes to legal review, explicitly declining to give legal advice.",
+  "why_this_fixture": "The confident wrong answer ('GPL propagates, you cannot ship') is common and is what this skill itself said until 2026-08-14."
+}

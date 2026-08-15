@@ -1,0 +1,50 @@
+{
+  "config": {
+    "protocol_version": "v0.1.0",
+    "scanner_name": "govulncheck",
+    "scanner_version": "v1.1.4",
+    "scan_level": "module",
+    "scan_mode": "source"
+  }
+}
+{
+  "osv": {
+    "id": "GO-2024-0007",
+    "summary": "Module-level finding under -scan module",
+    "details": "Synthetic fixture entry. A module-level scan cannot establish reachability, so absence of an E1 tier here proves nothing.",
+    "affected": [{"package": {"name": "example.com/alpha", "ecosystem": "Go"}}],
+    "database_specific": {
+      "url": "https://pkg.go.dev/vuln/GO-2024-0007",
+      "review_status": "REVIEWED"
+    }
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-0007",
+    "fixed_version": "v1.4.0",
+    "trace": [
+      {"module": "example.com/alpha", "version": "v1.3.0"}
+    ]
+  }
+}
+{
+  "osv": {
+    "id": "GO-2024-0008",
+    "summary": "Second module-level finding",
+    "details": "Synthetic fixture entry.",
+    "affected": [{"package": {"name": "example.com/beta", "ecosystem": "Go"}}],
+    "database_specific": {
+      "url": "https://pkg.go.dev/vuln/GO-2024-0008",
+      "review_status": "UNREVIEWED"
+    }
+  }
+}
+{
+  "finding": {
+    "osv": "GO-2024-0008",
+    "trace": [
+      {"module": "example.com/beta", "version": "v0.1.0"}
+    ]
+  }
+}

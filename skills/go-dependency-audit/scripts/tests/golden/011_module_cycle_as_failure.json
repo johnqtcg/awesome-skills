@@ -1,0 +1,17 @@
+{
+  "id": "DEP-011",
+  "title": "Module-graph cycle reported as a failed check",
+  "type": "defect",
+  "severity": "hygiene",
+  "priority": "P3",
+  "code_snippet": "$ go mod graph | head\nexample.com/a@v1.0.0 example.com/b@v1.1.0\nexample.com/b@v1.1.0 example.com/a@v1.0.0\n\n# Auditor's report:\n# \"FAIL — circular dependency between modules a and b. Audit incomplete.\"",
+  "violated_rule": "never as a failed check",
+  "expected_feedback": "Module-graph cycles are legal in Go; modules may require each other, and only package-level import cycles are rejected by the compiler. This cannot be a pass/fail item. Report it as a WARN-level design observation: the cycle couples the two modules' release cadences and widens upgrade blast radius.",
+  "coverage_rules": [
+    "legal in Go",
+    "never as a failed check",
+    "import cycles",
+    "blast radius"
+  ],
+  "reference": "references/upgrade-planning.md"
+}

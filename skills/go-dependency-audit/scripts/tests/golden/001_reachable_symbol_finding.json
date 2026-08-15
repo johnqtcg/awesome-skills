@@ -1,0 +1,17 @@
+{
+  "id": "DEP-001",
+  "title": "Reachable symbol-level finding with an available fix",
+  "type": "defect",
+  "severity": "critical",
+  "priority": "P0",
+  "code_snippet": "$ govulncheck ./... ; echo rc=$?\n=== Symbol Results ===\n\nVulnerability #1: GO-2024-0001\n  Module: example.com/vmod\n    Found in: example.com/vmod@v1.0.0\n    Fixed in: example.com/vmod@v1.2.0\n    Example traces found:\n      #1: main.main calls vmod.Vuln\n\nYour code is affected by 1 vulnerability from 1 module.\nrc=3\n\n# Auditor's report:\n# \"Low priority — no CVSS published, so severity is unknown.\"",
+  "violated_rule": "No unaddressed P0 findings",
+  "expected_feedback": "P0: GO-2024-0001 is an E1 Called finding — govulncheck placed it under === Symbol Results === with a trace from main, and a fix version (v1.2.0) exists. The absence of a CVSS score is expected: the Go vulnerability database does not publish severity scores, so it can never be a reason to downgrade. Priority comes from the evidence tier.",
+  "coverage_rules": [
+    "=== Symbol Results ===",
+    "E1 Called",
+    "does **not** publish CVSS scores",
+    "No unaddressed P0 findings"
+  ],
+  "reference": "references/govulncheck-patterns.md"
+}

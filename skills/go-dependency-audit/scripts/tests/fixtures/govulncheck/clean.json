@@ -1,0 +1,14 @@
+{
+  "config": {
+    "protocol_version": "v0.1.0",
+    "scanner_name": "govulncheck",
+    "scanner_version": "v1.1.4",
+    "scan_level": "symbol",
+    "scan_mode": "source"
+  }
+}
+{
+  "progress": {
+    "message": "Scanning your code and 42 packages across 7 dependent modules for known vulnerabilities..."
+  }
+}

@@ -1,275 +1,398 @@
 # Supply Chain Security
 
+> Environment-variable names and semantics below are verified against
+> `go help environment` and `go env` on Go 1.26.1. Go's module environment has
+> accumulated obsolete names from the pre-release `vgo` prototype that still
+> circulate in blog posts; S3.4 lists the ones that do nothing.
+
 ## Table of Contents
 1. Go Module Security Model
-2. go.sum and Integrity Verification
-3. GOPROXY Configuration
+2. go.sum: What It Guarantees and What It Does Not
+3. Checksum Database and Proxy Configuration
 4. Private Module Handling
-5. Deleted Tag Recovery
-6. SBOM Generation
-7. Supply Chain Threat Model
+5. Retracted and Deprecated Modules
+6. Deleted Tag Recovery
+7. SBOM Generation
+8. Supply Chain Threat Model
 
 ---
 
 ## 1 Go Module Security Model
 
-### Three Pillars
+### Three pillars
 
-1. **Immutable module versions** — once published, a version cannot change content
-2. **Cryptographic verification** — go.sum records hashes, verified against sumdb
-3. **Transparency log** — sum.golang.org provides public accountability
+1. **Immutable module versions** — once published and cached, a version's content
+   is fixed
+2. **Cryptographic verification** — `go.sum` records hashes, checked on every use
+3. **Transparency log** — `sum.golang.org` is an append-only, tamper-evident
+   record of module hashes
 
-### Trust Boundaries
+### Trust boundaries
 
 ```
-Developer Machine
-  -> GOPROXY (cache/mirror)
-    -> Source Repository (GitHub, GitLab, etc.)
-      -> sum.golang.org (checksum database)
+Developer / CI machine
+  -> GOPROXY (cache / mirror)          availability + privacy
+    -> Source repository (GitHub, ...)  authoritative but MUTABLE (tags move)
+  -> GOSUMDB (sum.golang.org)          integrity, independent of GOPROXY
 ```
 
-Each boundary has different trust properties:
-- **GOPROXY**: caches content, may be corporate or public
-- **Source repo**: authoritative source, but mutable (tags can be moved/deleted)
-- **sum.golang.org**: append-only transparency log, tamper-evident
+The critical property: **the checksum database is consulted independently of the
+proxy**. A malicious or compromised proxy cannot serve altered content without
+the hash mismatching. This is why the proxy and the sumdb are separate knobs.
 
 ---
 
-## 2 go.sum and Integrity Verification
+## 2 go.sum: What It Guarantees and What It Does Not
 
-### go.sum Format
+### Format
 
-Each line contains:
+Each line has three space-separated fields: module path, version, and hash.
+
 ```
-module/path version h1:hash=
-module/path version/go.mod h1:hash=
+module/path version         h1:hash=     # hash of the files in the module .zip
+module/path version/go.mod  h1:hash=     # hash of the go.mod file alone
 ```
 
-Two entries per module version:
-- `h1:hash` — SHA-256 of the module zip archive
-- `/go.mod h1:hash` — SHA-256 of the go.mod file alone
+A version may therefore appear under **at most two kinds of entry** — the `/go.mod`
+one, and the module-zip one. It is not a guarantee that both are present: a module
+pulled in only for graph resolution, whose source is never downloaded, carries the
+`/go.mod` entry alone. `h1` is SHA-256 and is currently the only algorithm.
 
-### Verification Commands
+`go.sum` may also be **empty or absent entirely** — legitimately so, when the
+module has no dependencies, or when every dependency is replaced with a local
+directory via `replace`. A missing `go.sum` is a question to ask, not an
+automatic finding.
+
+### go.sum is an integrity anchor, not a lockfile
+
+This distinction causes real confusion, and the audit must get it right:
+
+| | `go.sum` | A lockfile (`package-lock.json`, `Cargo.lock`) |
+|---|---|---|
+| Decides which versions are used | **No** | Yes |
+| Records expected hashes | Yes | Yes |
+| Contains only selected versions | **No** — may include versions considered but not selected | Yes |
+| Removing a line changes the build | No — it removes a *check* | Yes |
+
+Version selection comes from the `require` directives in `go.mod` plus minimal
+version selection. `go.sum` says "if you use this version, its hash must be this"
+— nothing about which version you use. An audit that calls `go.sum` a lockfile
+will mis-explain every reproducibility question that follows.
+
+### Verification
 
 ```bash
-# Verify all cached modules match go.sum
+# Verify downloaded modules in the cache still match their go.sum hashes
 go mod verify
-# Output: "all modules verified" or lists mismatches
+# -> "all modules verified", or a list of mismatches
 
-# Download and verify all dependencies
-go mod download -x
-# -x flag shows what's being fetched
+# Show what a build would fetch, without mutating go.mod/go.sum
+go list -mod=readonly -m -json all
 ```
 
-### Common Integrity Failures
+`go mod verify` checks the **local module cache** against `go.sum`. It detects a
+tampered or corrupted cache. It does not re-fetch from upstream, and it does not
+prove that `go.sum` itself is correct — that is what the checksum database did
+when the entries were first written.
 
-| Error                                    | Cause                         | Fix                        |
-|------------------------------------------|-------------------------------|----------------------------|
-| `SECURITY ERROR` in go mod verify        | Cache tampered                | Clear cache, re-download   |
-| `verifying: checksum mismatch`           | go.sum out of date            | `go mod tidy`              |
-| `no required module provides package`    | Module removed from registry  | `replace` with fork        |
-| `GONOSUMCHECK` bypass detected           | sum checking disabled         | Remove bypass, investigate |
+### Failure modes
 
-### go.sum Best Practices
+| Symptom                                       | Cause                              | Response                                    |
+|-----------------------------------------------|------------------------------------|---------------------------------------------|
+| `go mod verify` reports a mismatch            | Module cache modified or corrupted | **P1 finding.** Report it; do not "fix" it by clearing the cache mid-audit — that destroys the evidence |
+| `checksum mismatch` / `SECURITY ERROR` on fetch | Upstream content differs from the recorded hash | Stop. This is either a moved tag or a substituted artifact. Investigate before proceeding |
+| `missing go.sum entry`                        | `go.mod` requires a module `go.sum` doesn't cover | The tree is untidy; report it. Remediation is `go mod tidy`, which the audit emits rather than runs |
 
-1. **Always commit go.sum** — it's the integrity anchor for reproducible builds
-2. **Review go.sum diffs** — new entries mean new dependencies added
-3. **Never manually edit go.sum** — let `go mod tidy` manage it
-4. **Alert on unexpected go.sum changes** — could indicate dependency injection
+### Practices
+
+1. **Commit `go.sum`.** Without it every build re-derives trust from scratch.
+2. **Review `go.sum` diffs in PRs.** New entries mean new code entering the build.
+3. **Never hand-edit `go.sum`.** A hand-edited entry is indistinguishable from an
+   attacker-edited one.
 
 ---
 
-## 3 GOPROXY Configuration
+## 3 Checksum Database and Proxy Configuration
 
-### Default Configuration
+### The variables that exist
+
+| Variable     | Controls                                                        |
+|--------------|-----------------------------------------------------------------|
+| `GOPROXY`    | Where modules are fetched from. Comma-separated; `direct` means straight from the source repo |
+| `GOSUMDB`    | Which checksum database to consult. `off` disables checksum-database verification entirely |
+| `GONOSUMDB`  | Glob patterns exempt from checksum-database lookup              |
+| `GONOPROXY`  | Glob patterns fetched directly, bypassing the proxy             |
+| `GOPRIVATE`  | Shorthand that sets the default for both `GONOPROXY` and `GONOSUMDB` |
+| `GOINSECURE` | Glob patterns allowed over plain HTTP. Does **not** disable checksum-database validation |
+| `GOVCS`      | Which version-control tools may be used for which module prefixes |
+| `GOFLAGS`    | Default flags for every `go` command                            |
 
 ```bash
-# Default (Go 1.13+)
+# Default
 GOPROXY=https://proxy.golang.org,direct
-```
+GOSUMDB=sum.golang.org
 
-### Corporate Proxy Setup
-
-```bash
-# Company proxy first, public fallback, then direct
+# Corporate proxy first, public fallback, then direct
 GOPROXY=https://goproxy.company.com,https://proxy.golang.org,direct
 
-# Company proxy only (no external access)
+# Corporate proxy only, no egress
 GOPROXY=https://goproxy.company.com
-
-# Direct only (no proxy, not recommended)
-GOPROXY=direct
 ```
 
-### GONOSUMDB and GONOSUMCHECK
+### GOPROXY does not control integrity
+
+A frequent and consequential error is to treat `GOPROXY=direct` as "unverified".
+It is not: `GOSUMDB` still applies, and `go.sum` is still enforced. What changes
+is availability and privacy.
+
+| Configuration              | Integrity                              | Privacy                          | Availability            |
+|----------------------------|----------------------------------------|----------------------------------|-------------------------|
+| `proxy.golang.org`         | Full — sumdb + go.sum                  | Module paths visible to the proxy| Immutable cache; third-party dependency |
+| Corporate proxy            | Full — sumdb + go.sum                  | Internal                         | Self-managed            |
+| `GOPROXY=direct`           | Full — sumdb + go.sum                  | Source repos see your fetches    | Breaks if a tag is deleted |
+| `GOSUMDB=off`              | **go.sum only** — no first-use verification | n/a                         | n/a                     |
+| `GONOSUMDB`/`GOPRIVATE` match | **go.sum only**, for matching paths | n/a                              | n/a                     |
+
+The row that actually weakens integrity is `GOSUMDB=off`, not `GOPROXY=direct`.
+With the sumdb off, `go.sum` entries added from then on are trusted on first use
+with nothing to check them against.
+
+### 3.4 Obsolete names that do nothing
+
+These appear widely in older documentation. They are **not** Go environment
+variables; setting them has no effect, and an audit that reports them as a
+misconfiguration is reporting noise:
+
+| Name            | Reality                                                     |
+|-----------------|-------------------------------------------------------------|
+| `GONOSUMCHECK`  | From the `vgo` prototype. Never shipped. Ignored entirely    |
+| `GONOSUMDB=*` as "disable everything" | Real variable, but scoped to path globs; the switch to disable verification is `GOSUMDB=off` |
+| `GOPROXY=off`   | Real, but means "no network at all" — fails unless every module is already cached, not "no verification" |
+
+Verify against the running toolchain rather than from memory:
 
 ```bash
-# Skip sum database check for private modules
-GONOSUMDB=*.company.com,github.com/company/*
-
-# Skip ALL sum verification (DANGEROUS — only for debugging)
-GONOSUMCHECK=*  # Never use in CI/production
+go env GOPROXY GOSUMDB GOPRIVATE GONOPROXY GONOSUMDB GOFLAGS GOVCS
 ```
 
-### Proxy Security Considerations
-
-| Configuration           | Integrity | Privacy        | Availability      |
-|-------------------------|-----------|----------------|-------------------|
-| proxy.golang.org        | High      | Module names leak| Google-dependent |
-| Corporate proxy         | High      | Internal        | Self-managed     |
-| `direct` only           | Medium    | Source repos see| Source-dependent  |
-| `GONOSUMCHECK=*`        | None      | N/A            | N/A               |
+Report the values this returns. An empty `GOPRIVATE` in a repo that imports
+internal modules is a genuine finding; a missing `GONOSUMCHECK` is not.
 
 ---
 
 ## 4 Private Module Handling
 
-### GOPRIVATE Configuration
-
 ```bash
-# Tell Go tools these modules are private
+# One setting covers both proxy bypass and sumdb bypass
 GOPRIVATE=*.company.com,github.com/company/*
 
-# GOPRIVATE is shorthand for:
+# Or set them separately when the two lists differ — e.g. route private
+# modules through an internal proxy while still skipping the public sumdb
+GONOPROXY=none
 GONOSUMDB=*.company.com,github.com/company/*
-GONOPROXY=*.company.com,github.com/company/*
 ```
 
-### Why GOPRIVATE Matters
+### Why it matters
 
-Without GOPRIVATE:
-- Private module names are sent to proxy.golang.org (information leak)
-- Private module checksums are sent to sum.golang.org (information leak)
-- Download attempts from public proxy fail (revealing existence of private modules)
+Without `GOPRIVATE`, for every internal module the toolchain will:
 
-### Private Module Authentication
+- request it from the public proxy. The `go` command transmits no personally
+  identifying information, but it does transmit **the full module path** in the
+  request URL — leaking internal service and project names.
+- query the checksum database at `$GOSUMDB/lookup/$module@$version` — for example
+  `https://sum.golang.org/lookup/golang.org/x/text@v0.3.2`. What leaks here is
+  again **the module path and version in the URL**, not a locally-computed hash.
+- then fail the fetch, because neither service can reach a private repository.
+
+Two corrections to the folklore around this:
+
+1. **The client does not upload your code's hash.** It asks the database for a
+   `go.sum` line by name. The disclosure is the name and version, which is
+   usually the sensitive part anyway.
+2. **A genuinely unreachable private module does not end up in the transparency
+   log.** sum.golang.org can only record a checksum for a module it can fetch;
+   for a private repository the lookup simply fails. The lasting exposure is the
+   request itself reaching a third party, not a permanent public record of your
+   module. Do not overstate this — the fix is the same either way.
+
+The disclosure happens *before* the failure, so the error message is not your
+first warning. A `GOPRIVATE` pattern that covers only some internal prefixes
+leaks exactly the ones it misses — and a **typo** leaks too: with a private proxy
+first and a public fallback, `go mod download corp.example.com/secret-product/typo@latest`
+falls through to the public proxy on a 404, carrying `secret-product` in the URL.
+
+### Authentication
+
+`.netrc` for HTTPS. **`.netrc` performs no variable expansion** — a literal
+`${GITHUB_TOKEN}` in the file is sent as those characters, and the auth failure
+that follows is opaque. Generate the file with the value already substituted, and
+restrict its mode:
 
 ```bash
-# .netrc for HTTPS authentication
+umask 077
+cat > "$HOME/.netrc" <<EOF
 machine github.com
-  login oauth2
+  login x-access-token
   password ${GITHUB_TOKEN}
-
-# Or: git config for SSH
-git config --global url."ssh://git@github.com/company/".insteadOf "https://github.com/company/"
+EOF
+# The heredoc is unquoted, so the shell expands the token before writing.
 ```
 
-### CI Configuration
+Or route over SSH instead of embedding a token at all:
 
 ```bash
-# CI environment variables
-export GOPRIVATE="github.com/company/*"
-export GONOSUMDB="github.com/company/*"
-# Ensure CI has credentials for private repos
+git config --global \
+  url."ssh://git@github.com/company/".insteadOf "https://github.com/company/"
 ```
+
+### CI checklist
+
+```bash
+export GOPRIVATE="github.com/company/*"
+# and ensure the runner holds credentials for those repos
+```
+
+An audit should report whether `GOPRIVATE` covers every internal module prefix
+actually present in `go.mod` — a partial pattern leaks the modules it misses.
 
 ---
 
-## 5 Deleted Tag Recovery
+## 5 Retracted and Deprecated Modules
 
-### Problem
+Two module-level signals that most audits miss entirely, because neither is a
+CVE and neither shows up in `govulncheck`:
+
+```bash
+# Retractions and deprecations for the modules you use
+go list -mod=readonly -m -u -retracted all
+
+# Machine-readable
+go list -mod=readonly -m -u -json all | jq 'select(.Retracted != null or .Deprecated != "")
+  | {Path, Version, Retracted, Deprecated}'
+```
+
+- **Retracted** — the author published a `retract` directive marking this exact
+  version as broken or unsafe. Using a retracted version is nearly always a
+  defect, and the author has told you so in-band. Treat as P2, or higher when the
+  retraction rationale describes a security issue.
+- **Deprecated** — the module's `go.mod` carries a `// Deprecated:` comment on the
+  module directive. The module still works; the author has stopped supporting it.
+  Treat as P3 with a migration note.
+
+Both fields are documented members of `go list -m`'s `Module` struct, alongside
+`Dir`, `Sum`, and `GoModSum`.
+
+---
+
+## 6 Deleted Tag Recovery
+
+### Symptom
 
 ```
 go: github.com/foo/bar@v1.2.3: reading github.com/foo/bar/go.mod at revision v1.2.3:
   unknown revision v1.2.3
 ```
 
-A dependency tag was deleted upstream. Your build breaks.
+An upstream tag was deleted or moved. Builds that worked yesterday now fail.
 
-### Recovery Steps
+### Recovery
 
-**Step 1: Check if proxy has cached version**
+**1. Try the proxy — it caches immutably.**
+
 ```bash
-# proxy.golang.org caches immutably — tag deletion doesn't affect cached versions
-GOPROXY=https://proxy.golang.org go mod download github.com/foo/bar@v1.2.3
+GOPROXY=https://proxy.golang.org GOFLAGS=-mod=mod go mod download github.com/foo/bar
 ```
 
-**Step 2: If proxy doesn't have it, find the commit**
+Tag deletion upstream does not remove an already-cached version from the proxy.
+This alone resolves most occurrences.
+
+**2. If the proxy does not have it, locate the commit.**
+
 ```bash
-# Check git history for the deleted tag
-git ls-remote https://github.com/foo/bar | grep v1.2
-# Use commit hash as pseudo-version
-go get github.com/foo/bar@commithash
+git ls-remote https://github.com/foo/bar | grep -i 'v1\.2'
+go get github.com/foo/bar@<commit-sha>
 ```
 
-**Step 3: Use replace as emergency fix**
+The result is a pseudo-version pinned to that commit.
+
+**3. Bridge with `replace` while you plan the real fix.**
+
 ```go
-// go.mod
-replace github.com/foo/bar v1.2.3 => github.com/foo/bar v1.2.4
-// Or point to your fork
+// go.mod — both sides carry a version when redirecting a specific one
 replace github.com/foo/bar v1.2.3 => github.com/yourfork/bar v1.2.3-restored
 ```
 
-**Step 4: Permanent fix**
+A `replace` used this way is a temporary bridge. Record the reason and the
+removal condition next to it (an issue link, not a bare marker comment), and give
+it an owner — undocumented `replace` directives outlive everyone who understood
+them.
+
+**4. Move to a version that exists.**
+
 ```bash
-# Upgrade to a version that exists
-go get github.com/foo/bar@v1.3.0  # Next available version
-go mod tidy
+go get github.com/foo/bar@v1.3.0
 ```
 
 ### Prevention
 
-1. **Use proxy.golang.org** — it caches versions immutably
-2. **Vendor dependencies** — `go mod vendor` creates local copies
-3. **Monitor dependency availability** — alert on `go mod download` failures in CI
-4. **Pin with go.sum** — the hash in go.sum ensures version immutability even with proxy
+1. **Keep `proxy.golang.org` (or a mirror) in `GOPROXY`** — immutable caching is
+   the single most effective mitigation
+2. **`go mod vendor`** for builds that must survive total upstream loss
+3. **Alert on `go mod download` failures in CI** — the first failure is the
+   warning
+4. **Commit `go.sum`** — it pins content even when a tag is repointed
 
 ---
 
-## 6 SBOM Generation
+## 7 SBOM Generation
 
-### Software Bill of Materials
-
-An SBOM lists all components in your software, required for:
-- Regulatory compliance (Executive Order 14028, EU CRA)
-- Incident response (quickly check if you're affected by a new CVE)
-- License auditing (complete transitive dependency inventory)
-
-### Go Module SBOM
+An SBOM inventories every component in the artifact. Required for regulatory
+regimes (US EO 14028, EU CRA), and — more usefully day to day — it answers "are
+we affected?" in minutes when a new CVE lands.
 
 ```bash
-# CycloneDX format (industry standard)
-# Install: go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
+# EMIT — remediation, not an audit probe: this installs a tool and
+# writes a file. The audit hands these to a human; it never runs them.
+go install github.com/CycloneDX/cyclonedx-gomod/cmd/cyclonedx-gomod@latest
 cyclonedx-gomod mod -json -output sbom.json
 
-# SPDX format
-# Install: go install github.com/spdx/tools-golang/cmd/builder@latest
-# (requires manual configuration)
-
-# Simple module list (not a standard SBOM but useful)
-go list -m -json all > modules.json
+# Ad-hoc module inventory (not a standard SBOM, but scriptable)
+go list -mod=readonly -m -json all > modules.json
 ```
 
-### SBOM Contents Should Include
+Note that `govulncheck -format json` also emits an `SBOM` message describing what
+it scanned — useful for proving that the scan covered what you think it did.
 
-- Module path and version for every dependency
-- License identifier (SPDX format)
-- Checksum (from go.sum)
-- Direct vs. transitive classification
-- Build timestamp and Go version
+An SBOM should carry, per component: module path and version, licence identifier
+(SPDX), checksum from `go.sum`, direct-vs-transitive classification, and the Go
+toolchain version used for the build.
 
 ---
 
-## 7 Supply Chain Threat Model
+## 8 Supply Chain Threat Model
 
-### Attack Vectors
+| Vector                 | Example                                       | Mitigation                                    |
+|------------------------|-----------------------------------------------|-----------------------------------------------|
+| Typosquatting          | `github.com/g0lang/net` (zero for "o")        | Review every new direct dependency by hand    |
+| Account takeover       | Maintainer credentials compromised, new version published | `go.sum` protects existing versions; nothing protects you from a *new* version you choose to adopt |
+| Dependency confusion   | Internal module name also exists publicly     | `GOPRIVATE` / `GONOPROXY`                     |
+| Tag manipulation       | Tag repointed to a different commit           | `go.sum` hash mismatch on fetch               |
+| Malicious minor update | Backdoor introduced in a patch release        | Review `go.mod`/`go.sum` diffs; pin versions; delay adoption |
+| Abandoned library      | No maintainer, vulnerabilities unfixed        | Track deprecation (S5) and last-commit dates  |
+| Build-tool dependency  | Code generator or linter with repo write access | Audit the tools too; they are rarely in the shipped binary but they run in CI |
 
-| Vector                      | Example                                  | Mitigation                         |
-|-----------------------------|------------------------------------------|------------------------------------|
-| Typosquatting               | `github.com/g0lang/net` (zero for O)     | Review new deps carefully          |
-| Account takeover            | Maintainer account compromised           | go.sum detects changed content     |
-| Dependency confusion        | Internal name matches public module       | GOPRIVATE configuration            |
-| Tag manipulation            | Tag moved to different commit             | go.sum hash verification           |
-| Malicious update            | Backdoor in minor version update         | Review diffs, pin versions         |
-| Abandoned library           | No maintainer, CVEs unfixed              | Monitor dependency health          |
+Note where `go.sum` does and does not help. It defends the integrity of a version
+you have already accepted. It does not evaluate a version you are about to accept
+— that is what dependency review is for.
 
-### Defense Checklist
+### Defense checklist
 
-1. **go.sum committed and verified** — never bypass checksum verification
-2. **GOPRIVATE set for all internal domains** — prevent information leakage
-3. **GOPROXY points to trusted proxy** — immutable caching layer
-4. **Minimal direct dependencies** — reduce attack surface
-5. **Regular govulncheck scans** — detect known vulnerabilities
-6. **Dependency review in PRs** — review go.mod/go.sum changes
-7. **SBOM generated and maintained** — inventory for incident response
-8. **Replace directives documented** — each with justification and removal timeline
+1. `go.sum` committed; `go mod verify` in CI
+2. `GOSUMDB` on (not `off`); `GOPRIVATE` covering every internal prefix
+3. `GOPROXY` pointing at an immutable cache
+4. Minimal direct dependencies — every one is an ongoing commitment
+5. `govulncheck` on a schedule, not only on change (the database moves; your code does not)
+6. `go.mod`/`go.sum` diffs reviewed in every PR, by a human
+7. SBOM produced per release and retained
+8. Every `replace` directive documented with a rationale and a removal condition
+9. Retracted and deprecated modules tracked (S5)

@@ -1,0 +1,17 @@
+{
+  "id": "DEP-019",
+  "title": "Explaining why a proposed practice is wrong, with a worked pair",
+  "type": "workflow",
+  "severity": "none",
+  "priority": null,
+  "code_snippet": "User: \"Our CI runs `govulncheck -json ./... && echo ok`. A teammate says\nthat's wrong but can't explain why. Walk me through it.\"",
+  "violated_rule": null,
+  "expected_feedback": "This is an S7 anti-pattern (AE-3), so load references/anti-examples.md and answer with the WRONG/RIGHT pair rather than paraphrasing. The rule table in SKILL.md S7 is binding on its own — govulncheck exits 0 under -json whatever it found — but the worked pair is what makes the fix copy-pasteable: gate on the text-mode exit code, or parse findings from JSON with jq -s.",
+  "coverage_rules": [
+    "This gate can never fail",
+    "Gate on the text-mode exit code",
+    "references/anti-examples.md",
+    "binding on its own"
+  ],
+  "reference": "references/anti-examples.md"
+}

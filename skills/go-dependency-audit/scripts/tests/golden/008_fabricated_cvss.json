@@ -1,0 +1,17 @@
+{
+  "id": "DEP-008",
+  "title": "CVSS score attributed to govulncheck output",
+  "type": "defect",
+  "severity": "critical",
+  "priority": "P1",
+  "code_snippet": "$ govulncheck ./...\n=== Symbol Results ===\nVulnerability #1: GO-2024-0001\n  Module: example.com/vmod\n\n# Auditor's report:\n# \"GO-2024-0001 — CVSS 7.5 (High). Priority P1 on the CVSS threshold.\"",
+  "violated_rule": "Never state a CVSS score sourced from govulncheck",
+  "expected_feedback": "govulncheck printed no CVSS score and cannot: the Go vulnerability database does not publish severity. That 7.5 was invented or silently copied. Report CVSS as 'not retrieved', or enrich it from a named external source keyed on the CVE/GHSA alias and cite that source. Either way the priority comes from the evidence tier, not the number.",
+  "coverage_rules": [
+    "Never state a CVSS score sourced from govulncheck",
+    "not retrieved",
+    "named external",
+    "keyed on the alias"
+  ],
+  "reference": "references/govulncheck-patterns.md"
+}
