@@ -1,15 +1,28 @@
 #!/usr/bin/env bash
 # Run all regression tests for the log-analyzer skill.
+#
+# This discovers test files rather than listing them: an earlier version named
+# two files explicitly, so test suites added later were never executed here even
+# though they passed under `pytest skills/`.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_DIR="${SCRIPT_DIR}/tests"
 
-echo "[1/2] Contract tests (SKILL.md structure + reference files)"
-python3 -m pytest "${TEST_DIR}/test_skill_contract.py" -v
+shopt -s nullglob
+TESTS=("${TEST_DIR}"/test_*.py)
+shopt -u nullglob
 
-echo "[2/2] Golden scenario tests (log-analysis coverage detection)"
-python3 -m pytest "${TEST_DIR}/test_golden_scenarios.py" -v
+if [ ${#TESTS[@]} -eq 0 ]; then
+  echo "FAIL: no test files found under ${TEST_DIR}" >&2
+  exit 1
+fi
 
-echo ""
-echo "log-analyzer skill regression checks passed."
+echo "Running ${#TESTS[@]} test suites:"
+for t in "${TESTS[@]}"; do echo "  - $(basename "$t")"; done
+echo
+
+python3 -m pytest "${TESTS[@]}" -q
+
+echo
+echo "log-analyzer skill regression checks passed (${#TESTS[@]} suites)."

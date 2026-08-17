@@ -2,6 +2,90 @@
 
 A focused reference for the unix toolset most useful in log analysis. The point is not exhaustiveness — it is *which command for which question*.
 
+## Contents
+
+- [Forbidden Forms](#forbidden-forms)
+- [`jq` — JSON Logs](#jq--json-logs)
+- [`rg` (ripgrep) — Fast Scanning](#rg-ripgrep--fast-scanning)
+- [`awk` — Field-Aware Filtering](#awk--field-aware-filtering)
+- [`journalctl` — systemd Journal](#journalctl--systemd-journal)
+- [`kubectl logs` — Container Logs](#kubectl-logs--container-logs)
+- [Streaming / Large Files](#streaming--large-files)
+- [Bucket Counts (Histograms)](#bucket-counts-histograms)
+- [Identifier Stripping (Pre-Counting)](#identifier-stripping-pre-counting)
+- [Diff Two Windows](#diff-two-windows)
+- [Common Pitfalls](#common-pitfalls)
+
+## Forbidden Forms
+
+Referenced from SKILL.md §Command Safety Contract. Every entry below writes,
+deletes, or executes. **Never issue these**, regardless of whether a permission
+prompt would approve them — the user cannot audit what they did not see proposed.
+
+| Forbidden form | What it actually does | Use instead |
+|---|---|---|
+| `sed -i` / `sed … w FILE` / `s///w FILE` | edits the source log **in place** | `sed` to stdout; let the user redirect |
+| `sort -o FILE` | writes FILE (works even when input == output) | `sort` to stdout |
+| `sort --compress-program=CMD` | spawns CMD for spill files | `sort` to stdout |
+| `uniq IN OUT` | second positional arg is an **output file**, silently overwritten | `uniq IN` |
+| `awk 'BEGIN{system("…")}'` | arbitrary command execution | `awk` reading to stdout only |
+| `awk '… > "f"'` / `printf > "f"` / `\| "cmd"` | file write / command pipe from inside awk | same |
+| `gzip FILE` (no `-c`) | **replaces** FILE with FILE.gz — the log is gone | `gzip -c`, or `zcat` to read |
+| `journalctl --vacuum-size=` / `--vacuum-time=` / `--vacuum-files=` | permanently deletes archived journals | `journalctl --since/--until` |
+| `journalctl --rotate` / `--flush` / `--relinquish-var` | mutates journal storage | same |
+| `rg --pre CMD` / `--pre-glob` | spawns a process for **every file searched** | plain `rg` / `grep` |
+| `file -C` | compiles and writes a `.mgc` magic file | `file` without `-C` |
+| `date -s` / `--set` | sets the system clock | read timestamps; never set them |
+| any `kubectl` verb but `logs` | mutates cluster state | `kubectl logs` |
+| `>`, `>>`, `tee`, `dd`, `truncate` | writes files | print to stdout, or use the tool's own `--output` |
+
+When a step genuinely must produce a file, use the tool's own writer rather than
+carving out an exception for `>`. A subcommand can enforce what a shell redirect
+cannot: `redact_log.py write -o PATH` creates with `O_EXCL | O_NOFOLLOW`, so it
+refuses an existing path or a symlink and cannot overwrite the log being read. It
+is not auto-approved, so it prompts once — creating a file deserves a human.
+
+Verified by execution, or against upstream documentation (systemd
+`man/journalctl.xml` for the vacuum family; ripgrep `flags/defs.rs` for `--pre`:
+*"ripgrep will unconditionally spawn a process for every file that is searched"*).
+The attack corpus in `scripts/tests/test_allowed_tools.py` asserts none of these
+can be auto-approved.
+
+**Auto-approved (cannot write, delete, or execute):** `grep`, `jq`, `wc`, `cut`,
+`head`, `tail`, `zcat`, `stat`, `kubectl logs`, and the two read-only subcommands
+`redact_log.py scan` / `redact_log.py verify`.
+
+**Allowed but prompts:** `awk`, `sed`, `sort`, `uniq`, `rg`, `journalctl`, `file`,
+`date`, and `redact_log.py write` — for the first eight, safe and destructive forms
+share a prefix so a glob cannot separate them; `write` creates a file. Propose them
+normally and note the prompt in Execution Status.
+
+The script grants are written as
+`Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/redact_log.py scan *)` and `… verify *)`,
+each anchored on the literal interpreter + path + subcommand so `python3 -c
+'<anything>'` cannot match. `scan` and `verify` register no output option, so
+argparse rejects `--output` on them — their read-only-ness is enforced by the
+parser rather than by this paragraph.
+
+### `${CLAUDE_SKILL_DIR}` version facts
+
+Added in Claude Code **v2.1.69**. Verified by fetching `anthropics/claude-code`
+`CHANGELOG.md` and locating the mention *relative to the version headings*: the
+file contains exactly one `CLAUDE_SKILL_DIR` line — *"Added `${CLAUDE_SKILL_DIR}`
+variable for skills to reference their own directory in SKILL.md content"* — and it
+sits inside the `## 2.1.69` block. (Reviews have twice proposed `v2.1.73`; that
+block does not contain the entry. Re-check by walking back to the nearest `^## `
+heading, not by proximity search — the changelog is reverse-chronological, which is
+how the wrong neighbour gets picked.)
+
+The current skills documentation states it is substituted in **two places — the
+skill's markdown content and Bash rules in `allowed-tools`** — and gives no
+separate version for the second. An earlier revision of this file claimed a
+distinct `v2.1.129` gate for `allowed-tools`; that number is supported by neither
+source and has been removed. If a build ever did leave the rule unsubstituted it
+would simply never match, so the command would prompt instead of auto-running — a
+safe degradation, not a failure.
+
 ## `jq` — JSON Logs
 
 Common patterns:
@@ -129,8 +213,8 @@ zcat app.log.gz | jq -c 'select(.level=="ERROR")'
 # In-place sort by size with split
 LC_ALL=C sort -k1,1 app.log | head -100
 
-# Parallel jq on a directory
-ls *.log | xargs -P 4 -I{} jq -c 'select(.level=="ERROR")' {} > /tmp/errs.jsonl
+# Parallel jq on a directory (to stdout; pipe onward rather than redirecting)
+ls *.log | xargs -P 4 -I{} jq -c 'select(.level=="ERROR")' {}
 
 # Tail a live stream and feed jq incrementally
 tail -F app.log | jq -c 'select(.level=="ERROR")'
@@ -170,13 +254,17 @@ This collapses cardinality before counting. The full identifier value is still a
 
 ## Diff Two Windows
 
+Process substitution keeps both sides as pipes, so no intermediate file is
+written and no stale `/tmp` file from an earlier run can be compared by mistake.
+
 ```bash
-# Error classes seen now but not in baseline
-jq -r 'select(.level=="ERROR") | .err.code // .msg' last-hour.log | sort -u > /tmp/now.txt
-jq -r 'select(.level=="ERROR") | .err.code // .msg' baseline.log  | sort -u > /tmp/then.txt
-comm -23 /tmp/now.txt /tmp/then.txt   # new error classes
-comm -12 /tmp/now.txt /tmp/then.txt   # persistent error classes
-comm -13 /tmp/now.txt /tmp/then.txt   # error classes that disappeared (also interesting)
+# Reuse the same two pipes for each comparison direction.
+now() { jq -r 'select(.level=="ERROR") | .err.code // .msg' last-hour.log | sort -u; }
+was() { jq -r 'select(.level=="ERROR") | .err.code // .msg' baseline.log  | sort -u; }
+
+comm -23 <(now) <(was)   # new error classes
+comm -12 <(now) <(was)   # persistent error classes
+comm -13 <(now) <(was)   # error classes that disappeared (also interesting)
 ```
 
 ## Common Pitfalls

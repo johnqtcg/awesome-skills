@@ -2,6 +2,14 @@
 
 Detect the format **before** parsing. Picking the wrong tool (e.g., `grep` against JSON) hides fields you need and creates false confidence in negative results.
 
+## Contents
+
+- [Detection Rules of Thumb](#detection-rules-of-thumb)
+- [Parsing Recipes](#parsing-recipes)
+- [Mixed-Format Sources](#mixed-format-sources)
+- [Performance Notes](#performance-notes)
+- [When Format Detection Fails](#when-format-detection-fails)
+
 ## Detection Rules of Thumb
 
 | Visual cue (first non-blank line) | Likely format | Notes |
@@ -132,7 +140,7 @@ Record both formats in `Execution Status: Format`.
 
 - For files > 1 GB, use streaming pipelines (`zcat … | jq -c 'select(…)'`) rather than `cat`-then-process. Memory will not survive a `jq` over a 10 GB file held in RAM.
 - `rg` is faster than `grep` on large directories and respects `.gitignore` by default.
-- For repeated queries, build a single intermediate filtered file (`jq -c 'select(.level=="ERROR")' app.log > /tmp/errs.json`) and re-query that, rather than re-scanning the original.
+- For repeated queries, filter once and re-pivot in the same pipeline (`jq -c 'select(.level=="ERROR")' app.log | jq -c 'select(.path=="/v1/checkout")'`) rather than re-scanning the original. Do not redirect to an intermediate file — §Command Safety Contract forbids shell redirection; if you genuinely need one on disk, ask the user to create it.
 - Avoid `cat | grep | grep | grep` chains; combine with `awk '/A/ && /B/ && !/C/'` or one anchored regex.
 
 ## When Format Detection Fails

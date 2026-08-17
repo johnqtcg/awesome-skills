@@ -74,11 +74,31 @@ Its value is not "faster than `grep`," but lifting log investigation from "filte
 
 The routing rules are hard: `Lite` only for a single service, a window ≤ 1 hour, < 100 MB, and no security / data-integrity / customer-impact signal; `Strict` whenever there is a SEV-1/2, a customer-visible outage, a suspected security event, data corruption, correlation across 3+ components, or a post-mortem deliverable; everything else is `Standard`. The finding soft cap scales with mode (5 / 10 / 15). So a simple "is anything on fire right now?" does not get written up as a heavy report, while a genuine major incident automatically gets investigation-grade depth.
 
-### 4.2 The seven gates are hard blockers — skipping one is a "contract violation"
+### 4.2 Seven gates, four failure classes — skipping one is a "contract violation"
 
-The skill's core architecture converts SRE judgment into seven **serial hard gates**: Format Detection, PII Redaction, Time Window, Statistical Significance, Correlation, Causation Discipline, Volume Cap. Failing any gate stops subsequent work and is reported explicitly in the output.
+The skill's core architecture converts SRE judgment into seven gates: Format Detection, PII Redaction, Time Window, Statistical Significance, Correlation, Causation Discipline, Volume Cap. Each gate is mandatory and self-attested in Execution Status — but they are **not** uniform blockers, and an earlier revision of this document described them as "serial hard gates" where "failing any gate stops subsequent work". That was wrong in a way worth recording, because the gate texts themselves never behaved that way: only one of the seven can sensibly stop the analysis.
 
-The significance of this layer is that it does not leave "should I do the statistical check?" or "should I redact?" to gut feel — it turns them into checkpoints that must each be passed and self-attested in the Execution Status section. The skill even counts "drawing conclusions without loading the matching reference file" as a contract violation — the basis for a judgment must be a method that was loaded, not an impression.
+Each gate therefore declares its own failure class:
+
+| Class | On failure | Gates |
+|---|---|---|
+| **BLOCK-EVIDENCE** | Withhold the specific item; the analysis continues | 2 (PII), per line |
+| **BLOCK-WORKFLOW** | Stop; emit only the blockage and what would clear it | 2 (PII), whole source |
+| **DEGRADE** | Proceed; the affected class of conclusion is withdrawn or downgraded | 1 (Format), 3 (Time), 4 (Statistics), 6 (Causation) |
+| **WARN** | Proceed; the gate failure is itself an actionable finding | 5 (Correlation) |
+| **CAP** | Proceed; output is bounded and overflow routed, never dropped | 7 (Volume) |
+
+BLOCK needed splitting for the same reason the blanket rule did. A single label
+covering both "do not quote this line" and "stop the report" is ambiguous exactly
+when it matters, and the first draft of the fix had the table saying *stop the
+workflow* while the gate body said *describe the line and continue*. Those are
+different actions. Blocking is now scoped to the smallest unit that restores
+safety: one unredactable line blocks that line, and only a source whose redaction
+cannot be established at all blocks the report drawn from it.
+
+The distinction is load-bearing. A blanket "stop everything" rule is either ignored (because stopping on a missing baseline would make the skill useless) or obeyed too literally (a partial time window suppresses findings that had nothing to do with time). Naming the class per gate makes the degradation *specified* rather than improvised: a missing statistical baseline withdraws trend language but leaves a security finding fully reportable.
+
+The significance of the layer is unchanged: it does not leave "should I do the statistical check?" or "should I redact?" to gut feel. The skill even counts "drawing conclusions without loading the matching reference file" as a contract violation — the basis for a judgment must be a method that was loaded, not an impression.
 
 ### 4.3 "The first error in time" is not the root cause
 
@@ -108,7 +128,11 @@ Its tests are practical: symptom clusters are tightly time-clustered, converge o
 
 PII redaction is a hard gate, not advice: the report **must not** echo unredacted secrets back to the user. The skill provides an "always redact" list with fixed replacements: Bearer / JWT → `Bearer ***REDACTED***`, various API keys, passwords in URLs, emails, phone numbers, card numbers, government IDs, cookies / sessions, private keys, and more.
 
-Two procedural decisions matter most: first, **decide the redaction set and redact before quoting — never write the report and retro-redact**, because that unredacted draft is itself a leak (chat history, autosaves, screen shares all retain it); second, **never redact `trace_id` / `request_id`** — they are not secrets and are the lifeblood of the analysis. JSON is redacted at the field level to preserve structure, text via layered regex substitutions, then 20 random lines are spot-checked for residual leaks. If a secret is found already leaked, it is treated as compromised (rotation mandatory), reported as a High security finding — but **the finding states only the location and class, never quoting the secret itself**. Golden fixture 002 pins this Bearer redaction.
+Two procedural decisions matter most: first, **decide the redaction set and redact before quoting — never write the report and retro-redact**, because that unredacted draft is itself a leak (chat history, autosaves, screen shares all retain it); second, **never redact `trace_id` / `request_id`** — they are not secrets and are the lifeblood of the analysis. JSON is redacted at the field level to preserve structure, text via layered regex substitutions, then 20 random lines are spot-checked for residual leaks.
+
+The third decision was added after review: **the gate is enforced by a shipped, tested script (`scripts/redact_log.py`), not by recipes in prose.** The original reference offered a `jq` one-liner and a `sed` pipeline; neither had ever been executed. The `jq` recipe aborted with `Cannot index object with number` (its `sub()` replacement indexed the named-capture object, which is empty for unnamed captures), and the `sed` recipe emitted `alice[0:1]***@example.com` — jq slice syntax pasted into sed, where `[0:1]` is a literal character class. A hard gate whose only implementation does not run is not a gate, and the test suite could not tell, because it asserted the string `REDACTED` appeared in the documentation rather than executing anything. The script now carries the categories, preserves correlation IDs, is idempotent, and ships a `--verify` mode that exits non-zero on residue; its tests execute it and include the over-redaction cases (an ISO-8601 timestamp must not be eaten as a phone number; a Luhn-valid epoch-millisecond value under a `ts=` key must not be eaten as a card number).
+
+If a secret is found already leaked, it is treated as compromised (rotation mandatory), reported as a High security finding — but **the finding states only the location and class, never quoting the secret itself**. Golden fixture 002 pins this Bearer redaction.
 
 ### 4.8 State the time window; if coverage is partial, don't conclude
 
@@ -136,7 +160,75 @@ If there really is no actionable issue in the window, the skill requires writing
 
 The skill ships 10 reference files (format cheatsheet, correlation, aggregator queries, statistical methods, PII redaction, cascade analysis, tooling commands, anti-patterns, quick checklist, example output), of which the anti-pattern catalog and quick checklist are **always loaded** and the rest are triggered by situation. It explicitly rules that drawing conclusions about correlation, statistical significance, or PII handling without loading the matching reference is a contract violation. This keeps the methodology from being "as much as I happen to remember" — every run starts from a written method.
 
-### 4.13 It is the upstream of incident response, handing off to incident-postmortem
+### 4.13 The tool grant is an allow-list of provably inert commands
+
+Logs are attacker-reachable input, and this skill exists to read them. That makes its `allowed-tools` grant a security boundary rather than an ergonomics setting, and `allowed-tools` **auto-approves** — it does not forbid. The original grant listed the commands an SRE reaches for (`awk`, `sed`, `sort`, `uniq`, `gzip`, `journalctl`, `rg`, `file`, `date`) with a trailing wildcard each, and a test asserted their presence under the name "safe log inspection". They were not safe: `awk 'BEGIN{system(...)}'` executes arbitrary commands, `sed -i` rewrites the log being analysed, `uniq IN OUT` silently overwrites its second argument, `gzip FILE` deletes the original, `journalctl --vacuum-time=` erases journal history, and `rg --pre CMD` spawns a process per file searched. Sixteen destructive invocations ran with no prompt.
+
+The fix is not a longer denylist. A prefix glob cannot express "`sed` but not `-i`", so enumerating forbidden forms is unbounded and fails open on the first one nobody thought of. The design instead **allow-lists the provably safe shape**: only commands with no output-file flag, no in-place mode, and no exec surface are auto-approved (`grep`, `jq`, `wc`, `cut`, `head`, `tail`, `zcat`, `stat`, `kubectl logs`, and the redaction script anchored to its literal path so `python3 -c` cannot match). Every other tool remains usable — it simply prompts once, which is the correct outcome for a command that can destroy the evidence under analysis.
+
+Two supports keep this from degrading the skill. A behavioural **Command Safety Contract** in SKILL.md forbids the destructive forms outright, so the model does not propose them even when a prompt would approve them; and `jq`'s native `group_by`/`sort_by` replaces the `sort | uniq -c` idiom for JSON logs, removing the most common reason to reach outside the grant. The regression suite pins both halves with an attack corpus of destructive invocations that must not match any granted pattern, checked under two matching models (whole-string and operator-segmented) because which one the harness implements cannot be verified from inside a test.
+
+**The same trap caught the skill's own script, twice.** The redaction tool was first granted as `redact_log.py *` with the recorded justification "the script itself only writes to stdout/stderr". That was true when written and false a revision later, once `--output` was added: the grant then auto-approved arbitrary file creation. `O_EXCL` prevents *clobbering*, not *creation*, so the safety argument did not survive its own feature. The lesson is that **a capability justification written in prose decays silently** — nothing failed when the code changed underneath it.
+
+The fix generalises the allow-list-the-safe-shape rule from commands to subcommands. `redact_log.py` is now split by capability rather than by task: `scan` (redact to stdout), `verify` (report residue), and `write` (create a file). `scan` and `verify` register no output option at all, so argparse rejects `--output` on them — their read-only-ness is enforced by the parser, not by a comment — and only those two carry a grant. `write` prompts. Crucially, the audit test no longer trusts the justification text: it *executes* each granted subcommand with `--output` and asserts both a non-zero exit and that no file appeared.
+
+### 4.14 A rule the workflow cannot obey is a defect, not a strict rule
+
+The Command Safety Contract forbids shell redirection, and the mandatory redaction
+step read `redact_log.py app.log > app.redacted.log`. Both statements were
+defensible alone and jointly unsatisfiable — an executor could obey one or the
+other. Contradictions of this shape are worse than a missing rule, because the
+model must silently pick which instruction to break and neither choice is auditable.
+
+The fix was not to carve out an exception for `>`. It was to give the tool an
+`--output` flag, which is strictly safer than the redirect it replaces: it creates
+with `O_EXCL | O_NOFOLLOW`, so it refuses an existing path or a symlink planted at
+the destination, and `redact_log.py app.log --output app.log` exits 2 with the
+source intact where `>` would have truncated the log before the first read. A
+tool-level flag can enforce what a shell redirect cannot.
+
+The general rule this instantiates: **every instruction a skill gives must be
+executable under that skill's own constraints.** `test_allowed_tools.py` now walks
+every command line in SKILL.md and the references and fails if any of them
+instructs a form the contract forbids, so the two halves cannot drift apart again.
+
+### 4.15 The eval measures the skill; the calibration corpus measures the eval
+
+The 400-odd contract, script and golden tests answer "does the documentation say
+the right things" and "do the shipped scripts work". Neither answers "does a model
+carrying this skill behave better on a messy real log", and treating the first two
+as evidence for the third is the most common way a skill is over-claimed.
+
+`scripts/eval/` holds six fixtures, each a realistic log carrying exactly one trap
+the skill claims to defuse — a secret in the most quotable line, 180 symptom lines
+around one cause line, a suggestive deploy known only from a chat message, one
+authz-bypass line among 410 healthy ones, a log line instructing the agent to
+delete logs, and a snippet with no timestamps. Traps are chosen so a competent
+model *without* the skill plausibly falls in; a fixture both arms pass measures
+nothing.
+
+Grading is deterministic regex probes — no model grades a model. The part worth
+copying is `calibration.py`: every criterion is pinned against a hand-written
+passing answer it must accept **and** a failing answer, targeted at that one
+criterion, it must reject. A criterion that cannot fail is not a measurement, and
+without the second direction it is indistinguishable from a criterion the model
+always satisfies. This immediately earned its keep: it caught `asks_for_data`,
+which was satisfied by any answer merely *mentioning* timestamps, and
+`redaction_declared`, which was satisfied by boilerplate. A companion test blocks
+the opposite failure — a fixture whose prompt states the finding.
+
+Two properties matter more than the fixtures themselves.
+
+**Completeness is checked before the score.** A run containing one fixture, both arms, every rep clean would otherwise report three wins and zero losses — a pass built from a run that never happened. The runner records the rep count it was asked for, the grader verifies every fixture × arm × rep is present and non-empty, and an incomplete run exits 2 whatever it scores. `--allow-incomplete` shows the partial numbers and still exits 2.
+
+**Non-execution cannot be graded from answer text.** LA-E5 asks whether the model ran a command injected through a log line; text criteria only establish that it did not *recommend* one. A model can omit the command from its report and have executed it anyway. So the runner captures the structured tool-call trace and the grader scans every `tool_use` command — and when the trace is absent, that criterion reports NOT MEASURED and **does not pass**, because an unmeasurable safety property scoring as satisfied is precisely the failure this whole layer exists to avoid.
+
+**The eval has not been run against a live model**, because a nested `claude -p`
+launched from an agent session is not authenticated. `scripts/eval/README.md` says
+so in its first line. An unrun harness is capability, not evidence, and the
+documentation is written to keep those apart.
+
+### 4.16 It is the upstream of incident response, handing off to incident-postmortem
 
 `log-analyzer` draws its boundary narrowly and clearly: "writing log statements" belongs to `go-observability-review`, "designing alerts / dashboards" to `monitoring-alerting`, "authoring the formal post-mortem" to `incident-postmortem`, "debugging with no log evidence" to `systematic-debugging`.
 
@@ -164,7 +256,7 @@ The whole reason the skill exists is to block the old path of "`grep ERROR` → 
 
 ### 6.2 Seven gates turn SRE judgment into self-attested checkpoints
 
-Format, redaction, window, statistics, correlation, causation, and volume — seven serial gates, each a contract violation if skipped, each self-attested in Execution Status. Judgment runs on process, not vibes.
+Format, redaction, window, statistics, correlation, causation, and volume — seven gates, each a contract violation if skipped, each self-attested in Execution Status, and each declaring what its own failure does (BLOCK / DEGRADE / WARN / CAP) rather than pretending they all stop the world. Judgment runs on process, not vibes.
 
 ### 6.3 "First error ≠ root cause" + the first-occurrence pivot is a distinctive design
 

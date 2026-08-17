@@ -2,6 +2,15 @@
 
 In a real outage the log is dominated by **symptom clusters** — many downstream errors caused by a single upstream failure. Counting symptoms inflates severity and points at the wrong service. Cascade analysis separates the cause cluster from its symptom clusters.
 
+## Contents
+
+- [Two Cluster Types](#two-cluster-types)
+- [Recognising Cascades](#recognising-cascades)
+- [Practical Procedure](#practical-procedure)
+- [Common Cascade Shapes](#common-cascade-shapes)
+- [When the Cause Is Outside the Logs](#when-the-cause-is-outside-the-logs)
+- [Quoting Cascades in Reports](#quoting-cascades-in-reports)
+
 ## Two Cluster Types
 
 **Cause cluster** — errors at the failing component itself. Usually small, often 1–5 lines. Examples:

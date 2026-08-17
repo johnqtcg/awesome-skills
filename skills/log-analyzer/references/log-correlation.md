@@ -2,6 +2,17 @@
 
 The single most valuable move in a multi-service investigation is **walking one failed request end-to-end**, not summarising a thousand.
 
+## Contents
+
+- [The Correlation Field Hierarchy](#the-correlation-field-hierarchy)
+- [The Walking-the-Trace Procedure](#the-walking-the-trace-procedure)
+- [Reading the Walked Trace](#reading-the-walked-trace)
+- [When Correlation IDs Are Missing](#when-correlation-ids-are-missing)
+- [Fallback: Pivot by `request_id` Within One Service](#fallback-pivot-by-requestid-within-one-service)
+- [Fallback: Time Plus User](#fallback-time-plus-user)
+- [Quoting Trace Walks in Reports](#quoting-trace-walks-in-reports)
+- [Anti-Patterns Specific to Correlation](#anti-patterns-specific-to-correlation)
+
 ## The Correlation Field Hierarchy
 
 | Field | Scope | Source | Purpose |
@@ -34,8 +45,13 @@ Field names vary. In `slog` you may see `trace_id`; in `zap` projects sometimes 
    trace=4bf92f3577b34da6a3ce929d0e0e4736
    for f in checkout-svc.log payment-svc.log inventory-svc.log gateway.log kafka-consumer.log; do
      jq -c --arg t "$trace" 'select(.trace_id==$t)' "$f"
-   done | jq -s 'sort_by(.time)' > /tmp/trace.json
+   done | jq -s 'sort_by(.time) | .[]'
    ```
+
+   Print the ordered trace rather than writing it to a file: the report needs the
+   hops, not an artefact, and shell redirection is forbidden by §Command Safety
+   Contract. If you do need it on disk, `redact_log.py write` is the only writer
+   this skill ships, and it will prompt.
 
 4. **Order by timestamp** and reconstruct the hop sequence (service → operation → status → latency).
 

@@ -2,6 +2,24 @@
 
 This file is **always loaded**. It is the short list of mistakes that make log analysis worse than no analysis at all. Each anti-pattern below has been observed in real reports.
 
+## Contents
+
+- [A1 — "First ERROR = root cause"](#a1--first-error--root-cause)
+- [A2 — "N errors is a lot" (without denominator)](#a2--n-errors-is-a-lot-without-denominator)
+- [A3 — "Pasting a Bearer token into the report"](#a3--pasting-a-bearer-token-into-the-report)
+- [A4 — "Concluding from a 30-second slice"](#a4--concluding-from-a-30-second-slice)
+- [A5 — "Symptom cluster mistaken for cause"](#a5--symptom-cluster-mistaken-for-cause)
+- [A6 — "Trace ID present but ignored"](#a6--trace-id-present-but-ignored)
+- [A7 — "Identifier-laden `msg` strings counted literally"](#a7--identifier-laden-msg-strings-counted-literally)
+- [A8 — "Calling `level=warn` retries 'broken'"](#a8--calling-levelwarn-retries-broken)
+- [A9 — "Counting stack-trace frames as separate errors"](#a9--counting-stack-trace-frames-as-separate-errors)
+- [A10 — "Comparing windows of different lengths"](#a10--comparing-windows-of-different-lengths)
+- [A11 — "Hypothesis presented as confirmed"](#a11--hypothesis-presented-as-confirmed)
+- [A12 — "Aggregator counts without sampling check"](#a12--aggregator-counts-without-sampling-check)
+- [A13 — "Naming individuals in findings"](#a13--naming-individuals-in-findings)
+- [A14 — "Refusing to surface that the data is insufficient"](#a14--refusing-to-surface-that-the-data-is-insufficient)
+- [A15 — "Skipping `Execution Status` because findings are clear"](#a15--skipping-execution-status-because-findings-are-clear)
+
 ## A1 — "First ERROR = root cause"
 
 **Wrong**: greps for `ERROR`, takes the earliest line, declares it the cause.

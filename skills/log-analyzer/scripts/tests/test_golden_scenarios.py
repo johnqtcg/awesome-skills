@@ -1,10 +1,25 @@
 """Golden scenario tests for log-analyzer skill.
 
-Each fixture in golden/ describes a real-shaped log analysis situation. The
-test asserts that SKILL.md and the reference set together contain enough
-guidance to handle the situation — not that an LLM, when given the skill,
-will produce the exact expected output, which is a model-evaluation concern
-captured in evaluate/log-analyzer-skill-eval-report.md.
+Each fixture in golden/ describes a real-shaped log analysis situation. These
+tests assert only that SKILL.md and the reference set together *document* the
+rules the situation needs.
+
+WHAT THESE TESTS DO NOT SHOW. A coverage_rule is matched as a substring against
+the concatenated docs, so passing means "this phrase is written down somewhere",
+not "the guidance is correct", "the commands run", or "a model given this skill
+behaves better". Those are three different claims and need three different
+instruments:
+
+  - do the shipped commands actually work?  -> test_redact_log.py (executes them)
+  - is the granted tool surface safe?       -> test_allowed_tools.py (attack corpus)
+  - is the worked example self-consistent?  -> test_example_output.py (parses it)
+  - does a model behave better with it?     -> NOT MEASURED. There is no forward
+    behavioural eval for this skill. Earlier revisions of this docstring pointed
+    at evaluate/log-analyzer-skill-eval-report.md, which has never existed; do
+    not cite it as evidence.
+
+Treat a green run here as "the knowledge surface mentions the right things",
+which is necessary and nowhere near sufficient.
 
 Coverage taxonomy:
     type     ∈ {defect, good_practice, degradation_scenario, workflow}

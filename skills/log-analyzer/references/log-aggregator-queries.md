@@ -4,6 +4,17 @@ When logs live in an aggregator instead of files, the choice of query language m
 
 Always state the **query string and time bounds** in the report so others can re-run.
 
+## Contents
+
+- [Loki / Grafana (LogQL)](#loki--grafana-logql)
+- [Elasticsearch / OpenSearch (KQL or Query DSL)](#elasticsearch--opensearch-kql-or-query-dsl)
+- [Datadog (Logs Search)](#datadog-logs-search)
+- [CloudWatch Logs Insights](#cloudwatch-logs-insights)
+- [Splunk (SPL)](#splunk-spl)
+- [Cross-Aggregator Concepts to Always State](#cross-aggregator-concepts-to-always-state)
+- [Sampling, Rollups, and the Truth-in-Logs Problem](#sampling-rollups-and-the-truth-in-logs-problem)
+- [Cost-Conscious Querying](#cost-conscious-querying)
+
 ## Loki / Grafana (LogQL)
 
 Loki separates **stream selectors** (label-based, fast) from **filters** (line-content). Always start with the smallest stream selector that scopes correctly, then filter.
@@ -160,8 +171,12 @@ Aggregator queries cost money or quota. For each investigation:
 
 - Build the **smallest selector that bounds correctly** (service + env + time).
 - Filter on indexed fields (`service`, `level`, `trace_id`) before unindexed fields (`msg`, free text).
-- For repeated queries during an investigation, cache the result locally and re-pivot:
+- For repeated queries during an investigation, pipe the result straight into the
+  pivot rather than caching it to a file — the aggregator query is the expensive
+  part, and shell redirection is forbidden by §Command Safety Contract:
   ```bash
-  logcli query '{app="checkout-svc"} |= "ERROR"' --since=1h --output=jsonl > /tmp/errs.jsonl
-  jq -c 'select(.path=="/v1/checkout")' /tmp/errs.jsonl
+  logcli query '{app="checkout-svc"} |= "ERROR"' --since=1h --output=jsonl \
+    | jq -c 'select(.path=="/v1/checkout")'
   ```
+  If a genuinely repeated re-pivot makes a local copy worth it, ask the user to
+  run the query and save it themselves; do not issue a redirect yourself.
