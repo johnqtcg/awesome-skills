@@ -1,0 +1,20 @@
+{
+  "id": "API-018",
+  "title": "PUT used for partial update — method semantics violated",
+  "type": "defect",
+  "severity": "standard",
+  "scorecard_item": "S1",
+  "violated_rule": "Method & success-status semantics",
+  "code_snippet": "PUT /api/v1/users/{id}\n{\"display_name\": \"Bob\"}\n→ 200 OK\n// Server merges: fields absent from the body keep their stored values.\n// Spec documents this endpoint as \"update a user\".\n\nGET /api/v1/users/{id} → 200 with body\nPOST /api/v1/users     → 200 OK {\"id\": \"u-9\"}",
+  "context": {
+    "api_type": "internal",
+    "consumers": "admin console"
+  },
+  "expected_feedback": "Standard (S1, nature [P] — §8.1: FAIL): two method/status defects. (1) PUT means replace the entire resource; a server that merges absent fields has PATCH semantics behind a PUT verb, so a client that legitimately omits a field to clear it gets the opposite of what the method promises. Use PATCH for partial update and reserve PUT for full replacement — or keep PUT and require the complete representation. (2) A successful create returns 200; it should be 201. Note the boundary: the missing `Location` header on that 201 is a [D] recommendation and not part of this finding — RFC 9110 §15.3.2 says the target URI identifies the new resource when Location is absent.",
+  "coverage_rules": [
+    "PATCH",
+    "full replacement",
+    "201"
+  ],
+  "reference": "references/api-anti-examples.md"
+}

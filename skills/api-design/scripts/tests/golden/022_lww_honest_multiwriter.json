@@ -1,0 +1,27 @@
+{
+  "id": "API-022",
+  "title": "False positive — T4 live, multi-writer LWW stated honestly with the trade-off accepted",
+  "type": "false_positive",
+  "severity": "none",
+  "scorecard_item": null,
+  "violated_rule": null,
+  "code_snippet": "PUT /api/v1/documents/{id}/presence\n{\"cursor_line\": 402, \"viewing\": true}\n→ 204 No Content    // no ETag, no If-Match\n\n// Spec: \"Several collaborators write this record concurrently. Resolution is\n//        last-write-wins by design: presence is advisory, refreshed every 5s,\n//        and a lost update is corrected by the next heartbeat. Optimistic\n//        locking would add a 412 retry loop to a hot path for no benefit.\"\n// Document *content* is edited through a separate CRDT endpoint with its own\n// conflict resolution; this endpoint carries no durable state.",
+  "context": {
+    "api_type": "internal",
+    "consumers": "collaborative editor clients"
+  },
+  "expected_feedback": "No violations. Trigger T4 is genuinely live — several writers touch one record — so this is precisely the case where an over-strict reviewer reaches for 'multi-writer without ETag is a FAIL'. That would be a false positive. §8.1 asks which of three things is true: a policy is stated, and its premise holds. Presence really is advisory, it really is refreshed on a 5-second heartbeat, and durable content really is handled by a separate CRDT endpoint, so a lost update costs nothing and self-heals. Contrast API-021, where the premise was falsified by a second writer the spec did not acknowledge. The difference is not multi-writer versus single-writer — both are multi-writer — it is whether the stated justification survives contact with the design. Record the trade-off in the report; do not score it. A reviewer may note that the 5s heartbeat is load-bearing and should be documented as a constraint, which is a [D] suggestion, not a defect.",
+  "must_not_flag": [
+    "multi-writer last-write-wins reported as a defect when the stated premise holds",
+    "a demand for ETag/If-Match on an advisory, self-healing resource under T4"
+  ],
+  "licensed_by": [
+    "lww-acceptable"
+  ],
+  "coverage_rules": [
+    "premise holds",
+    "T4",
+    "advisory"
+  ],
+  "reference": "SKILL.md"
+}

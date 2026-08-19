@@ -1,0 +1,27 @@
+{
+  "id": "API-015",
+  "title": "False positive — JSON response field reorder classified as a breaking change",
+  "type": "false_positive",
+  "severity": "none",
+  "scorecard_item": null,
+  "violated_rule": null,
+  "code_snippet": "// PR: reorder struct fields (linter suggestion), no field added/removed/renamed/retyped\ntype UserResp struct {                 type UserResp struct {\n    Name  string `json:\"name\"`            ID    string `json:\"id\"`\n    ID    string `json:\"id\"`              Name  string `json:\"name\"`\n    Email string `json:\"email\"`           Email string `json:\"email\"`\n}                                      }\n\n// Consumer audit: 2 consumers, both decode with encoding/json into typed structs\n//   (key-based). No consumer prefix-matches or index-matches the body.\n// No response signing, no HMAC over the body, no ETag derived from body bytes,\n//   no golden-file test asserting exact response bytes.",
+  "context": {
+    "api_type": "internal",
+    "consumers": "two Go services"
+  },
+  "expected_feedback": "No violations, and specifically not a breaking change. RFC 8259 §1 defines a JSON object as an unordered collection of name/value pairs, so key order is not part of the contract and every spec-conformant consumer is unaffected. The reorder does change the serialized byte sequence, because encoding/json emits struct fields in declaration order, but that only matters when a named consumer parses positionally or by string prefix, or when a byte-exact artifact derives from the raw body (HMAC, response signature, content-addressed cache key, an ETag hashed from the body, or a golden-file test). The consumer audit in this snippet rules out both, so S5 classifies the change as non-breaking and no migration plan or version bump is required. Reporting this as breaking by default is a false positive that generates noise on routine refactors. Had a positional consumer existed, the correct report names that consumer and records its non-conformance — it does not generalize into a rule about JSON.",
+  "must_not_flag": [
+    "a struct field reorder reported as a breaking API change with no positional consumer and no body digest",
+    "a demand for a version bump or migration plan for a pure field reorder"
+  ],
+  "licensed_by": [
+    "field-reorder-not-breaking"
+  ],
+  "coverage_rules": [
+    "RFC 8259",
+    "unordered",
+    "byte-exact"
+  ],
+  "reference": "references/compatibility-rules.md"
+}

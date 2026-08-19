@@ -2,11 +2,20 @@
   "id": "API-001",
   "title": "Verb in URL — POST /createUser violates REST resource naming",
   "type": "defect",
-  "severity": "critical",
+  "severity": "hygiene",
   "code_snippet": "POST /api/v1/createUser\n{\n  \"name\": \"Alice\",\n  \"email\": \"alice@example.com\"\n}\n→ 200 OK {\"id\": \"123\", \"name\": \"Alice\"}",
-  "context": {"api_type": "internal", "consumers": "frontend"},
-  "expected_feedback": "Critical: URL contains a verb ('createUser'). REST resources are nouns — the HTTP method IS the verb. POST /api/v1/createUser should be POST /api/v1/users. This breaks REST conventions, makes the API unpredictable (is it /getUser, /fetchUser, /retrieveUser?), and complicates OpenAPI tooling that expects resource-based paths. Additionally: response returns 200 instead of 201 Created, and is missing a Location header pointing to the created resource.",
-  "violated_rule": "Resource naming follows REST conventions",
-  "coverage_rules": ["resource naming", "plural nouns", "kebab-case"],
-  "reference": "SKILL.md"
+  "context": {
+    "api_type": "internal",
+    "consumers": "frontend"
+  },
+  "expected_feedback": "Hygiene tier, item 1, nature [D], no live trigger — §8.1 makes this a **WARN**, so H1 is reported but not failed: URL contains a verb ('createUser'). REST resources are nouns — the HTTP method IS the verb; POST /api/v1/createUser should be POST /api/v1/users. This makes the API unpredictable (is it /getUser, /fetchUser, /retrieveUser?) and complicates OpenAPI tooling that expects resource-based paths. Naming is a convention, not a protocol requirement. Two consequences to state in the report: it belongs in the Hygiene tier, not Critical; and because no risk trigger is live, §8.1 scores it WARN — H1 still passes. It would only become a FAIL if the deviation were also inconsistent across the API under a live trigger. Standard tier, item 2, nature [P] — §8.1 makes any invariant violation a **FAIL**, so S1 fails: the genuine protocol defect in this snippet is the response — a successful create returns 200 with no Location header instead of 201 Created plus Location pointing at the new resource. That one is not a matter of taste.",
+  "violated_rule": "Resource naming and hierarchy consistent",
+  "coverage_rules": [
+    "resource naming",
+    "plural nouns",
+    "kebab-case",
+    "201 Created"
+  ],
+  "reference": "SKILL.md",
+  "scorecard_item": "H1"
 }

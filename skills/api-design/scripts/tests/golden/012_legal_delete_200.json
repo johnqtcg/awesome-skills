@@ -1,0 +1,27 @@
+{
+  "id": "API-012",
+  "title": "False positive — DELETE returning 200 with the deleted representation is RFC-conformant",
+  "type": "false_positive",
+  "severity": "none",
+  "scorecard_item": null,
+  "violated_rule": null,
+  "code_snippet": "DELETE /api/v1/documents/{id}\nAuthorization: Bearer <token>\n\n→ 200 OK\n   {\"data\": {\"id\": \"doc-9\", \"title\": \"Q3 plan\", \"deleted_at\": \"2026-08-18T09:12:00Z\"}}\n\n// Spec: \"DELETE returns 200 with the deleted document so the editor can offer Undo.\n//        Every DELETE in this API returns 200 + representation. Not cacheable.\"\n// Async deletes elsewhere in the API return 202 with a status URL, also documented.",
+  "context": {
+    "api_type": "internal",
+    "consumers": "web editor SPA"
+  },
+  "expected_feedback": "No violations. RFC 9110 §9.3.5 lists 200 OK as a conformant response to a successfully applied DELETE when the response includes a representation describing the status, alongside 204 (nothing to supply) and 202 (not yet enacted). This API returns the deleted document because the client needs it for an Undo affordance, the choice is documented, and it is applied consistently across the resource class — which is exactly what S1 asks for. Reporting '200 on DELETE should be 204' here is a false positive: it cites a house preference as a protocol violation. The only DELETE facts worth confirming are that the contract states which code is used and that the response is treated as non-cacheable.",
+  "must_not_flag": [
+    "200 on a successful DELETE reported as a protocol or semantic violation",
+    "a demand to change 200 + representation into 204 No Content"
+  ],
+  "licensed_by": [
+    "delete-200-legal"
+  ],
+  "coverage_rules": [
+    "9.3.5",
+    "conformant",
+    "204 No Content"
+  ],
+  "reference": "references/api-anti-examples.md"
+}

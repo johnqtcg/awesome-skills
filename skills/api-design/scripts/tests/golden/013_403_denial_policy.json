@@ -1,0 +1,27 @@
+{
+  "id": "API-013",
+  "title": "False positive — 403 on denial is a sanctioned policy when existence is not confidential",
+  "type": "false_positive",
+  "severity": "none",
+  "scorecard_item": null,
+  "violated_rule": null,
+  "code_snippet": "GET /api/v1/teams/{team_id}/settings\n// Internal admin console. team_id is shown in the UI nav to every employee,\n// so team existence is not confidential. Only team owners may read settings.\n\n// Caller is an employee, not an owner of team-42:\n→ 403 Forbidden\n   {\"error\": {\"code\": \"forbidden\", \"message\": \"Owner role required\", \"trace_id\": \"req-7\"}}\n\n// Spec: \"Every endpoint under /teams/{team_id} answers 403 on role failure.\n//        Ownership is verified server-side before any read.\"\n// Server logs the denial with identical detail whether the team exists or not.",
+  "context": {
+    "api_type": "internal",
+    "consumers": "employee admin console"
+  },
+  "expected_feedback": "No violations. The object-level authorization check itself is present and verified before the read, which is the C1 requirement. The denial status code is a [C] policy choice: the OWASP Authorization Regression Testing Cheat Sheet accepts 403 or 404 and forbids only 200. Here team existence is already public inside the console, so 403 leaks nothing and gives the caller an actionable message; the policy is applied uniformly across the resource class, which closes the enumeration oracle that a 403/404 mixture would open. Demanding 404 here to avoid revealing existence is a false positive: it applies a threat model that does not hold on this API. Surface the trade-off in the report, do not score it.",
+  "must_not_flag": [
+    "403 on authorization denial reported as an information-disclosure defect",
+    "a mandate to return 404 instead of 403 without a confidential-existence threat model"
+  ],
+  "licensed_by": [
+    "denial-403-permitted"
+  ],
+  "coverage_rules": [
+    "denial status policy",
+    "403",
+    "existence oracle"
+  ],
+  "reference": "references/error-model-patterns.md"
+}

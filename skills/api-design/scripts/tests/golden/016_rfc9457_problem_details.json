@@ -1,0 +1,27 @@
+{
+  "id": "API-016",
+  "title": "False positive — a consistent RFC 9457 problem+json API judged against the house envelope",
+  "type": "false_positive",
+  "severity": "none",
+  "scorecard_item": null,
+  "violated_rule": null,
+  "code_snippet": "POST /api/v1/orders   → 422\nContent-Type: application/problem+json\n{\n  \"type\": \"https://api.example.com/probs/validation\",\n  \"title\": \"Request validation failed\",\n  \"status\": 422,\n  \"detail\": \"email must be a valid email address\",\n  \"instance\": \"/orders/1e4f\",\n  \"errors\": [{\"field\": \"email\", \"code\": \"invalid_format\"}]\n}\n\n// Every 4xx/5xx in this API uses application/problem+json with a stable `type` URI.\n// No `error.code` wrapper anywhere. Documented in the OpenAPI spec.",
+  "context": {
+    "api_type": "public",
+    "consumers": "partner"
+  },
+  "expected_feedback": "No violations. C2 asks for four invariants — non-2xx status, a stable machine-identifiable discriminator, one shape across the whole API, and no sensitive leakage. RFC 9457 satisfies all four, with the `type` URI as the discriminator. The house envelope {error:{code,message,details,trace_id}} is item 4, which is [D] and deliberately unscored, so its absence cannot cost a Critical point. Demanding migration to the house envelope is a false positive: it reports a convention as an invariant. The only genuine gap worth a note is that problem+json has no dedicated correlation field here — recommend carrying the trace id as an extension member or a response header, as a [D] suggestion, not a defect.",
+  "must_not_flag": [
+    "an RFC 9457 problem+json API reported as violating the error-envelope rule",
+    "a demand to migrate a consistent problem+json API to the house {error:{...}} shape"
+  ],
+  "licensed_by": [
+    "error-shape-agnostic"
+  ],
+  "coverage_rules": [
+    "RFC 9457",
+    "problem+json",
+    "discriminator"
+  ],
+  "reference": "references/error-model-patterns.md"
+}

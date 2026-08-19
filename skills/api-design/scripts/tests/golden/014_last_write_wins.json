@@ -1,0 +1,26 @@
+{
+  "id": "API-014",
+  "title": "False positive — documented last-write-wins without ETag on a single-writer resource",
+  "type": "false_positive",
+  "severity": "none",
+  "scorecard_item": null,
+  "violated_rule": null,
+  "code_snippet": "PUT /api/v1/users/me/notification-preferences\n{\"email_digest\": true, \"push\": false}\n→ 200 OK\n// No ETag, no If-Match.\n\n// Spec: \"Only the owning user may write their own preferences; there is no admin or\n//        batch writer for this resource. Concurrent writes resolve last-write-wins.\n//        A lost update means one toggle from one of the user's own two tabs is\n//        discarded; the user sees current state on reload.\"\n// No T4 contention: single writer by construction.",
+  "context": {
+    "api_type": "internal",
+    "consumers": "first-party mobile + web"
+  },
+  "expected_feedback": "No violations. Concurrency control is a [C] rule: optimistic locking with ETag/If-Match and last-write-wins are both legitimate resolutions. This resource is single-writer by construction, the loss scenario is a discarded UI toggle rather than a financial or inventory error, and the policy is written down — which is the reviewable requirement for S2. Risk trigger T4 (real multi-writer contention) is absent, so there is nothing to escalate. Reporting 'missing ETag/If-Match — concurrent updates silently overwrite' is a false positive here: it converts an unstated-policy rule into a mandatory-mechanism rule. The finding would be valid only if the policy were undocumented, or under T4, or on a resource where a lost update is material such as a balance, stock count, or permission grant.",
+  "must_not_flag": [
+    "absence of ETag/If-Match reported as a defect on a documented single-writer resource",
+    "last-write-wins reported as inherently unsafe"
+  ],
+  "licensed_by": [
+    "lww-acceptable"
+  ],
+  "coverage_rules": [
+    "last-write-wins",
+    "policy is stated"
+  ],
+  "reference": "references/error-model-patterns.md"
+}

@@ -1,0 +1,20 @@
+{
+  "id": "API-019",
+  "title": "No input validation specified — undefined behaviour on bad input",
+  "type": "defect",
+  "severity": "standard",
+  "scorecard_item": "S3",
+  "violated_rule": "Input validation is specified",
+  "code_snippet": "POST /api/v1/subscriptions\n{\"email\": \"...\", \"plan\": \"...\", \"seats\": 5, \"starts_at\": \"...\"}\n\n// Spec says only: \"Creates a subscription. Returns 201.\"\n// No field is marked required or optional. No types, no bounds, no enum for `plan`.\n// Observed: seats=-3 is accepted; missing email returns 500.",
+  "context": {
+    "api_type": "public",
+    "consumers": "partner"
+  },
+  "expected_feedback": "Standard (S3, nature [P] — §8.1: FAIL): the contract does not define what a valid request is, so every client discovers the rules by trial and error and the server has no defensible rejection path. The 500 on a missing email is the symptom; the defect is the missing spec — report it as a design gap, not as an implementation bug. Required: per field, a type, required/optional status, and bounds (`seats` >= 1, `plan` as an enum, `starts_at` as RFC 3339). Which rejection code to use is [D], not [P]: 422 with field-level details is this skill's default, and a consistent 400 is an equally valid house convention — RFC 9110 §15.5.21 does not mandate 422 for validation. What is not acceptable is 500 for caller error.",
+  "coverage_rules": [
+    "input validation",
+    "design gap",
+    "422"
+  ],
+  "reference": "SKILL.md"
+}

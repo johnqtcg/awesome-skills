@@ -1,0 +1,20 @@
+{
+  "id": "API-021",
+  "title": "T4 live and the stated LWW premise is contradicted by a second writer",
+  "type": "defect",
+  "severity": "standard",
+  "scorecard_item": "S2",
+  "violated_rule": "Write-conflict policy",
+  "code_snippet": "PATCH /api/v1/listings/{id}\n{\"price_cents\": 4990}\n→ 200 OK        // no ETag, no If-Match\n\n// Spec: \"Concurrent updates resolve last-write-wins. This is safe because a\n//        listing is only ever edited by its owning seller.\"\n\n// But elsewhere in the same service:\n//   - a nightly repricing job PATCHes the same field on 40k listings\n//   - support staff can PATCH price_cents from the admin console\n// So the resource has three writers, not one.",
+  "context": {
+    "api_type": "internal",
+    "consumers": "seller web app, repricing job, admin console"
+  },
+  "expected_feedback": "Standard (S2, nature [C], trigger T4 live — §8.1 row 'a policy is stated, but the design contradicts the premise the policy rests on': **FAIL**). A write-conflict policy *is* stated, so this is not the 'no policy' case, and last-write-wins is not being reported as inherently wrong. What fails is the justification: the spec says LWW is safe because only the owning seller writes a listing, while the same service ships a nightly repricing job and an admin console that both PATCH price_cents. The premise is false, and a seller edit silently overwriting a repricing run is a real lost update on a money field. Name the second and third writer as the evidence — that is what makes this a factual contradiction rather than a preference. Fix either side: add ETag/If-Match with 412 on mismatch, or route batch repricing through a separate field or a merge rule, or amend the spec to state honestly that three writers race and lost updates are accepted — but that last option is hard to defend on price.",
+  "coverage_rules": [
+    "contradicts the premise",
+    "T4",
+    "If-Match"
+  ],
+  "reference": "SKILL.md"
+}

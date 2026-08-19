@@ -2,11 +2,20 @@
   "id": "API-011",
   "title": "No rate limiting — public API without abuse protection",
   "type": "defect",
-  "severity": "standard",
+  "severity": "hygiene",
   "code_snippet": "// Public API endpoints — no rate limit mentioned in spec\nGET /api/v1/products\nGET /api/v1/products/{id}\nPOST /api/v1/orders\n// Auth: API key required\n// Rate limit: not defined",
-  "context": {"api_type": "public", "consumers": "partner integrations"},
-  "expected_feedback": "Standard: Public API with partner consumers has no rate limiting defined. Without rate limits, a single partner (intentionally or accidentally) can overwhelm the service with requests, degrading performance for all consumers. Fix: define per-API-key rate limits (e.g., 1000 requests/min), return 429 Too Many Requests with Retry-After header when exceeded. Consider different tiers for different partner plans. Document limits in API documentation and OpenAPI spec.",
-  "violated_rule": "Rate limiting defined per actor type",
-  "coverage_rules": ["rate limit", "429", "Retry-After"],
-  "reference": "SKILL.md"
+  "context": {
+    "api_type": "public",
+    "consumers": "partner integrations"
+  },
+  "expected_feedback": "Hygiene (H4, nature [C], trigger T5 live — §8.1 makes an unstated policy a FAIL here): a public API reachable by partner API keys has no rate-limit policy in the spec. With untrusted callers (T5) the policy is binding: one partner can saturate the service accidentally or deliberately. Fix: per-API-key limits returning 429 with Retry-After, tiered per partner plan, documented in the OpenAPI spec. What is being reported is the missing policy, not a missing implementation — an explicit 'no limit; capacity bounded by the upstream gateway' decision would also satisfy H4 for a trusted internal caller. Two things are being separated here. The tier is Hygiene, so this can never trip the any-FAIL Critical gate. The severity is FAIL only because T5 is live; without untrusted callers the same silence is a WARN. What is never reportable is the option chosen — a stated \"no limit\" passes.",
+  "violated_rule": "Rate-limit policy stated",
+  "coverage_rules": [
+    "rate limit",
+    "429",
+    "Retry-After",
+    "T5"
+  ],
+  "reference": "SKILL.md",
+  "scorecard_item": "H4"
 }

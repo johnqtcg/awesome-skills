@@ -1,0 +1,20 @@
+{
+  "id": "API-020",
+  "title": "Unbounded limit and unstable sort — pagination that silently loses rows",
+  "type": "defect",
+  "severity": "standard",
+  "scorecard_item": "S4",
+  "violated_rule": "Pagination bounded and stable",
+  "code_snippet": "GET /api/v1/events?offset=0&limit=100000&sort=created_at,desc\n// No server-side max on `limit`.\n// created_at has second granularity; thousands of events share a timestamp.\n// ~40M rows, high insert rate.",
+  "context": {
+    "api_type": "public",
+    "consumers": "partner ETL jobs"
+  },
+  "expected_feedback": "Standard (S4, nature [D], trigger T5 live): two defects. (1) No server-side maximum on `limit` — one partner can request 100k rows and take the service down; cap it (100 is a common default) and document the cap. (2) The sort key is not unique, so rows sharing a created_at value have no deterministic order between requests: an item can appear on two consecutive pages or on neither. Append a unique tie-breaker such as `id` to every sort. At 40M rows with a high insert rate, offset pagination also drifts as rows are inserted ahead of the cursor position — recommend cursor pagination for this dataset. Because the callers are untrusted (T5), the unbounded limit is a FAIL rather than a WARN.",
+  "coverage_rules": [
+    "tie-breaker",
+    "max",
+    "cursor"
+  ],
+  "reference": "references/api-anti-examples.md"
+}

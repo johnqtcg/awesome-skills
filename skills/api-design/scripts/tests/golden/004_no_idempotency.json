@@ -4,9 +4,18 @@
   "type": "defect",
   "severity": "standard",
   "code_snippet": "POST /api/v1/orders\nContent-Type: application/json\n{\n  \"items\": [{\"sku\": \"WIDGET-1\", \"qty\": 2}],\n  \"total\": 49.99\n}\n→ 201 Created\n// No Idempotency-Key support — client retry creates duplicate order",
-  "context": {"api_type": "public", "consumers": "mobile app"},
-  "expected_feedback": "Standard: POST /orders (create) has no idempotency mechanism. Mobile clients frequently retry requests (network timeout, app backgrounded, user double-tap). Without Idempotency-Key support, each retry creates a new order — leading to duplicate charges. Fix: support Idempotency-Key header. On first request: process normally, store response keyed by idempotency key. On retry (same key, same body): return cached response. On conflict (same key, different body): return 409.",
-  "violated_rule": "Idempotency strategy exists for create/action mutations",
-  "coverage_rules": ["idempotency", "Idempotency-Key", "retry"],
-  "reference": "SKILL.md"
+  "context": {
+    "api_type": "public",
+    "consumers": "mobile app"
+  },
+  "expected_feedback": "Standard (S2, nature [C], trigger T1 live — §8.1 makes an unstated policy a FAIL here): POST /orders creates a priced order (total 49.99), so a replay charges the customer twice — risk trigger T1 (money movement) makes retry safety binding here rather than merely recommended. Mobile clients retry constantly (network timeout, app backgrounded, user double-tap). Fix: accept an Idempotency-Key header; on the first request process normally and store the response keyed by scope (tenant + subject + method + path) plus the key; on a retry with the same key and same body return the cached response with X-Idempotent-Replayed: true; on the same key with a different body return 409 idempotency_conflict. Set the TTL from the maximum client retry window plus clock skew, not from a fixed 24h habit. Note the boundary: the nature of this rule does not change without the trigger — only its severity does. On an append-only endpoint with no external side effect (T1–T3 absent) the same missing policy is a WARN, and a documented \"replays are harmless here\" is a PASS.",
+  "violated_rule": "Retry safety and write-conflict policy specified where risk triggers apply",
+  "coverage_rules": [
+    "idempotency",
+    "Idempotency-Key",
+    "retry",
+    "T1"
+  ],
+  "reference": "SKILL.md",
+  "scorecard_item": "S2"
 }

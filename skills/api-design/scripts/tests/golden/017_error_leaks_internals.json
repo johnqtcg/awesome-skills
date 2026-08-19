@@ -1,0 +1,20 @@
+{
+  "id": "API-017",
+  "title": "Driver error and authorization state leaked to the caller",
+  "type": "defect",
+  "severity": "critical",
+  "scorecard_item": "C3",
+  "violated_rule": "No internal or sensitive data in responses",
+  "code_snippet": "GET /api/v1/patients/{id}   → 500\n{\n  \"error\": {\n    \"code\": \"internal_error\",\n    \"message\": \"pq: relation \\\"patients_v2\\\" does not exist (host db-prod-3.internal)\",\n    \"metric\": \"http_request_errors_total\",\n    \"audit\": {\"subject\": \"user-456\", \"tenant\": \"acme\", \"role\": \"viewer\"}\n  }\n}\n\n// 200 responses return the full patient record including SSN and diagnosis history,\n// regardless of which fields the caller asked for.",
+  "context": {
+    "api_type": "public",
+    "consumers": "partner portal"
+  },
+  "expected_feedback": "Critical (C3, nature [P] — §8.1: an invariant violation is a FAIL in both columns): three separate disclosures in one response. (1) The driver message leaks the database engine, a table name and an internal hostname — return a generic message and log the detail against trace_id. (2) `metric` couples the public contract to internal monitoring names and tells an attacker what is instrumented. (3) `audit.subject/tenant/role` echoes resolved authorization state back to the caller, handing over a map of the permission model; that belongs in the audit sink. Trigger T6 is live — this endpoint returns PHI — which adds an obligation to the same [P] rule rather than changing its severity: the 200 path must return only the fields the caller needs (data minimization), not the whole record. C3 is Critical, so this alone fails the review regardless of the other tiers.",
+  "coverage_rules": [
+    "data minimization",
+    "audit sink",
+    "T6"
+  ],
+  "reference": "references/error-model-patterns.md"
+}

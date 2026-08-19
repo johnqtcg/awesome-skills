@@ -4,8 +4,17 @@
   "type": "degradation_scenario",
   "severity": "none",
   "code_snippet": "// Someone shared this endpoint spec without context\nPOST /api/v1/payments\n{\"amount\": 100, \"currency\": \"USD\"}",
-  "context": {"api_type": "unknown", "consumers": "unknown"},
-  "expected_feedback": "Degraded mode: no consumer type or public/internal classification provided. Cannot assess versioning requirements, rate-limit strategy, or deprecation policy without knowing who calls this API. Flag: payment endpoint without Idempotency-Key (Critical for financial operations), no error model visible, no auth model specified. All recommendations conditional on unknown consumer context. Must NOT claim API design is complete without knowing who the consumers are. Uncovered Risks must list all unknowns.",
-  "coverage_rules": ["Degraded", "never claim", "Uncovered Risk"],
-  "reference": "SKILL.md"
+  "context": {
+    "api_type": "unknown",
+    "consumers": "unknown"
+  },
+  "expected_feedback": "Minimal mode (review mode, consumers unknown): Gate 1 classifies this as review, so an unknown consumer degrades rather than stops — do not refuse the review, and do not invent the consumer. Assessable now: the path /api/v1/payments is itself evidence of risk trigger T1 (money movement), so retry safety is binding despite the missing context — flag the absent Idempotency-Key. Also assessable: no error model is visible, and no auth model is specified. Not assessable, and therefore N/A rather than FAIL: versioning strategy, deprecation policy, rate-limit sizing, pagination fitness. Must NOT claim the design is complete or backward compatible without knowing who the consumers are. Uncovered Risks must list every unknown and every item left N/A because its risk trigger could not be determined.",
+  "coverage_rules": [
+    "Minimal",
+    "never claim",
+    "Uncovered Risk",
+    "T1"
+  ],
+  "reference": "SKILL.md",
+  "scorecard_item": null
 }
