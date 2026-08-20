@@ -115,9 +115,9 @@ The Bear/Current floor is critical. A 50% expected return is not attractive if B
 
 ## Probability-Weight Discipline
 
-**Use the calibrated framework in `scenario-probability-calibration.md`** for probability assignment. The previous "Good-Company score → Bull weight" mapping is **deprecated** — it was uncalibrated and circular.
+**Use the anchored procedure in `scenario-probability-calibration.md`** for probability assignment. The previous "Good-Company score → Bull weight" mapping is **deprecated** — it was circular (the same model produced the score and then read a weight off a mapping it had judged reasonable). The replacement is *auditable*, not yet *calibrated*: its archetype figures are judgment priors until `scripts/finlib/calibration.py` reports a ≥10-verdict matured sample.
 
-Summary of the calibrated framework:
+Summary of the anchored procedure:
 
 1. **Anchor 1**: Start with the archetype base rate (see sector-archetypes.md and calibration file).
 2. **Anchor 2**: Adjust downward for each independent positive assumption above 1 (Bull) or independent failure condition (Bear).

@@ -1,6 +1,10 @@
 # Cognitive-Bias Gates
 
-Load during Step 5e. Run 6 binary self-check questions. Document each as PASS or FLAG with rationale.
+Load during Step 5e. Run every gate documented below — Gates 1-6 on every run, Gate 7 only for option-dominated names. Document each as PASS, FLAG, or (Gate 7 when it does not apply) N/A, with a rationale.
+
+> The count is deliberately not restated as a number here. It drifted twice — the
+> main skill said "Run 6 binary checks" above a list of 7 while this file
+> documented 6 gates. `test_skill_frontmatter.py` now derives both from the files.
 
 Gates 1–4 are the four cognitive biases from the source document most relevant to the verdict step — the failure modes that turn a sound analysis into a bad recommendation. Gate 5 adds information-edge honesty (no faked private-information certainty); Gate 6 adds the mirror check — no hiding behind consensus with zero articulated edge.
 
@@ -96,7 +100,7 @@ Story bias: FLAG — initial draft referenced "AI tailwinds" without sizing. Rep
 
 ### How confirmation bias manifests
 
-- All 5 workers report mostly positive Findings
+- Every dispatched worker reports mostly positive Findings (the fan-out is 4-6 depending on depth and Tier-1 triggers — see `dispatch-protocol.md`)
 - The Findings that surface skew toward confirming the prior view
 - "Risks I Accept" reads like marketing copy ("currency headwinds", "competition") rather than substantive risks
 
@@ -224,11 +228,48 @@ Consensus clone: PASS — 变量观点：无. Verdict is consensus-aligned (Buy,
 
 ---
 
+## Gate 7 — Inverted Rigor (option-dominated names only)
+
+**Applies only when the Optionality Overlay is attached** (Step 2b: the visible business is worth < ~30-40% of market cap). For every other name this gate is `N/A`, not `PASS` — recording a pass on a gate that never ran overstates the audit.
+
+**Question**: Is the segment driving the *largest* share of value the *least*-modeled thing in the report?
+
+### How inverted rigor manifests
+
+- A four-method valuation on the visible ~10% of value, and one judgment sentence for the decisive ~90%
+- The option/venture value appears as a single number with no range and no `P(success)`
+- Reverse-DCF on the visible business is read as "priced for impossible growth" and used to cut the tier — which is tautological for an option stock and says nothing
+- A material engine (e.g. a fast-growing energy/storage segment) is mentioned in prose but never modeled
+
+### How to detect
+
+- Rank the report's sections by modeling depth; rank the SOTP legs by share of value. If the two orderings are inverted, FLAG.
+- Check every `option` leg in `sotp.json` carries low/base/high **and** a `P(success)` range. A point estimate is an automatic FLAG.
+- Check `option_share_of_value` (modeled) against `market_implied_option_share`. If the modeled share is near zero while the market-implied share is most of the price, the SOTP was not actually built.
+
+### PASS condition
+
+The SOTP (Step 5c, `scripts/finlib/sotp.py`) exists, every material engine is a modeled leg, every venture leg carries ranges plus `P(success)`, and Bull/Bear come from the venture tree rather than pp-subtraction.
+
+### FLAG condition
+
+Any material driver of value is a bare judgment number. Resolution is to build the missing leg, not to add a caveat — this is the signature failure for these names and a disclosure does not fix it.
+
+### What to write in the output
+
+```
+- Inverted rigor: N/A (not option-dominated — visible business is 78% of market cap)
+- Inverted rigor: FLAG — robotaxi leg was a single $X judgment; rebuilt as an option leg
+  (TAM -> share -> take-rate x P(success) 15-35%), which widened the Bear target to $__
+```
+
+---
+
 ## Bonus — Reverse Sanity Check
 
-If all 4 gates pass without flags, ask one more question: **Am I being too confident about the gates themselves?**
+If every applicable gate passes without flags, ask one more question: **Am I being too confident about the gates themselves?**
 
-A clean run that says "PASS, PASS, PASS, PASS" without any flagged adjustments is suspicious. Re-examine each — the gates are designed to catch real biases; if your analysis caught zero biases, you're either unusually disciplined or you're rubber-stamping the checks.
+A clean run that returns nothing but PASS is suspicious. Re-examine each — the gates are designed to catch real biases; if your analysis caught zero biases, you're either unusually disciplined or you're rubber-stamping the checks.
 
 Most quality analyses surface at least one flag. The flag is not a sign of bad work — it's a sign you found a bias before publishing.
 
@@ -248,6 +289,8 @@ Each FLAG reduces conviction. Mapping:
 A "Buy" with Low conviction is fine — it tells the user the position size should be modest. The output should not bury the conviction tag; surface it next to the verdict.
 
 The mapping above counts **Gates 1–4** (the bias gates). **Gates 5 and 6 are honesty/edge gates**: a FLAG there is resolved by *adding the missing disclosure* (the information-edge statement, or the variant-perception statement), not by cutting a conviction notch. They do not, by themselves, move conviction — they ensure the report is honest about what kind of call it is.
+
+**Gate 7 is a rework gate**, and it is stricter than either class: a FLAG means the valuation itself is incomplete, so it is resolved by **building the missing SOTP leg and re-deriving the targets**, not by adjusting conviction or adding a caveat. A report may not publish with Gate 7 flagged. Where the gate does not apply, record `N/A` — never `PASS`.
 
 ---
 

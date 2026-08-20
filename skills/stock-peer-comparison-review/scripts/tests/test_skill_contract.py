@@ -107,3 +107,50 @@ def test_does_not_recommend_verdict(skill_text: str) -> None:
 def test_12_items_present(skill_text: str) -> None:
     for i in range(1, 13):
         assert f"P-{i:02d}" in skill_text, f"missing P-{i:02d} in panel"
+
+
+# --------------------------------------------------------------------------- #
+# Official-spec frontmatter validation.
+#
+# A skill must be independently verifiable: running only this skill's regression
+# must catch a frontmatter defect that stops it loading. The regex-based
+# `frontmatter` fixture above tolerates malformed YAML and returns a dict anyway,
+# which is how a bare ": " inside an unquoted description survived — it made the
+# whole block invalid YAML while every existing test stayed green.
+# The cross-skill sweep lives in stock-analysis-lead/scripts/tests/test_skill_frontmatter.py.
+# --------------------------------------------------------------------------- #
+
+def test_frontmatter_is_valid_yaml() -> None:
+    yaml = pytest.importorskip("yaml", reason="pyyaml is declared in requirements.txt")
+    match = re.match(r"^---\n(.*?)\n---", SKILL_MD.read_text(encoding="utf-8"), re.DOTALL)
+    assert match, "unterminated frontmatter block"
+    try:
+        data = yaml.safe_load(match.group(1))
+    except yaml.YAMLError as exc:
+        raise AssertionError(f"frontmatter is not valid YAML: {exc}") from exc
+    assert isinstance(data, dict), "frontmatter must be a mapping"
+    assert data["name"] == SKILL_NAME
+
+
+def test_description_meets_the_spec(skill_text: str) -> None:
+    yaml = pytest.importorskip("yaml", reason="pyyaml is declared in requirements.txt")
+    match = re.match(r"^---\n(.*?)\n---", skill_text, re.DOTALL)
+    desc = yaml.safe_load(match.group(1))["description"]
+    assert "<" not in desc and ">" not in desc, "angle brackets are rejected by the spec"
+    assert len(desc) <= 1024, f"description is {len(desc)} chars, limit 1024"
+
+
+def test_unquoted_description_has_no_bare_colon_space(skill_text: str) -> None:
+    """The exact mechanism that broke this skill family: `Foo: bar` inside an
+    unquoted YAML scalar invalidates the entire frontmatter."""
+    match = re.match(r"^---\n(.*?)\n---", skill_text, re.DOTALL)
+    for line in match.group(1).splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("description:"):
+            continue
+        value = stripped[len("description:"):].strip()
+        if value.startswith(("'", '"')):
+            continue
+        assert ": " not in value, (
+            "unquoted description contains a bare ': ' — use an em-dash or quote the scalar"
+        )

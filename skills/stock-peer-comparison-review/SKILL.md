@@ -1,6 +1,6 @@
 ---
 name: stock-peer-comparison-review
-description: Independently benchmark a US-listed target equity against 2-4 closest peers on a fixed 12-item ratio panel — growth rates, profitability, capital intensity, balance sheet leverage, capital returns, and valuation multiples. Provides cross-validation for moat and market-share claims made by the business and industry reviewers. Trigger when running a Standard-or-deeper stock-analysis-lead workup; supplies the independent quantitative comparison that single-name analysis cannot. Dispatched by stock-analysis-lead.
+description: Independently benchmark a US-listed target equity against 2-4 closest peers on a fixed 12-item ratio panel — growth rates, profitability, capital intensity, balance sheet leverage, capital returns, and valuation multiples. Provides cross-validation for moat and market-share claims made by the business and industry reviewers. Trigger when running a Standard-or-deeper stock-analysis-lead workup, and at Lite depth when a peer set exists and the question is valuation- or moat-shaped; supplies the independent quantitative comparison that single-name analysis cannot. Dispatched by stock-analysis-lead as a Tier-1 conditional worker.
 allowed-tools: Read, Grep, Glob, WebSearch, WebFetch, Bash
 ---
 
@@ -19,13 +19,14 @@ The output is a small, dense, rank-ordered comparison table. It is **not a recom
 
 ## When To Use
 
-- Orchestrator dispatches in Standard or Strict depth.
+- Orchestrator dispatches in Standard or Strict depth (Tier-1 always-on at those depths).
+- Lite depth **and** a peer set of >=2 names exists **and** the question is valuation- or moat-shaped ("expensive", "cheap", "fair price", "moat", "vs peers", "losing share") -> dispatched in **Lite mode**: General 12-item panel only, no archetype-specific extension. See `stock-analysis-lead/references/dispatch-protocol.md` Part 1 Tier 1 for the authoritative trigger.
 - User explicitly asks "how does X compare to peers".
 - A specific competitive claim ("losing share", "best-in-class margins") needs independent verification.
 
 ## When NOT To Use
 
-- Lite depth (orchestrator skips this worker to save tokens).
+- Lite depth with no peer set, or a Lite question that is not valuation/moat-shaped — the Tier-1 trigger does not fire and the orchestrator scores the peer-dependent items `UNSCORED` rather than guessing.
 - Companies with no comparable peers (rare, but e.g., single-issuer ADRs, novel asset classes).
 - Sector ETFs or funds (compose peer index instead).
 
@@ -158,6 +159,69 @@ If target is materially mid-panel (not 1st or last in any item), output:
 Target is materially mid-panel: no item where it leads, no item where it lags by >25%.
 Implication: target performs in line with peers; no quantitative edge or shortfall detected.
 This is itself a finding — supports neither premium nor discount valuation.
+```
+
+### Machine-Readable Findings Block (mandatory)
+
+End the reply with **exactly one** fenced block tagged `findings-json`, carrying
+**Worker Findings Contract v1** (full schema and error codes:
+`stock-analysis-lead/references/worker-contract.md`). The orchestrator synthesizes
+the verdict **from this block only** — anything stated in the Markdown above but
+omitted here does not reach the report. Everything above the fence is for the
+human reader.
+
+```findings-json
+{
+  "contract_version": "1",
+  "worker": "stock-peer-comparison-reviewer",
+  "prefix": "P",
+  "status": "OK",
+  "depth_mode": "<echo the dispatched depth>",
+  "archetype_applied": "<echo the dispatched archetype>",
+  "archetype_challenge": null,
+  "findings": [
+    {
+      "id": "P-NN",
+      "severity": "High|Medium|Low",
+      "title": "<= 80 chars",
+      "citation": {"source": "10-K", "locator": "<item/page/note>", "fiscal_period": "FY2025"},
+      "evidence": "direct quote <= 60 words, or a computed figure with its inputs",
+      "implication": "one sentence on what this means for the thesis",
+      "confidence": "first-hand|second-hand"
+    }
+  ],
+  "positives": [],
+  "data_gaps": [],
+  "checklist_coverage": {"items_total": 12, "items_checked": 0, "items_not_found": 0, "ids_not_checked": []},
+  "mandatory_checks_run": []
+}
+```
+
+Contract rules that fail validation if broken:
+
+- `status` is one of `OK` / `DEGRADED` / `SKIPPED` / `REFUSED`; any value other
+  than `OK` **requires** a `status_reason`. The gate returns `SKIPPED (...)` in
+  prose *and* `"status": "SKIPPED"` here.
+- Every finding ID must start with `P` — the prefix is the whole segment
+  before the first hyphen.
+- `citation` is an **object**, never a bare string; `locator` and `fiscal_period`
+  must be non-empty. A finding with no real citation is suppressed, not emitted.
+- `source: "aggregator"` forces `confidence: "second-hand"` — this is what makes
+  the first-hand data rule checkable rather than aspirational.
+- `checklist_coverage`: `items_checked + items_not_found` must reach
+  `items_total` (12), so "the checklist ran to completion" is verifiable.
+- `archetype_challenge`: `null` when the dispatched archetype fits. When the
+  evidence says it does not, file `{"proposed", "reason", "evidence"}` instead of
+  silently analyzing against thresholds you believe are wrong — this is the only
+  sanctioned way to disagree with the orchestrator's classification.
+- `mandatory_checks_run`: list the archetype-specific check IDs the dispatch
+  marked REQUIRED. Omitting one that was required fails validation.
+
+Self-check before replying:
+
+```bash
+python3 <path-to>/stock-analysis-lead/scripts/finlib/worker_contract.py \
+  validate --reply <this-reply>.md --expect-worker stock-peer-comparison-reviewer
 ```
 
 ## Cross-Reference Rules

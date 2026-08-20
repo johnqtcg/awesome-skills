@@ -14,22 +14,36 @@ This is a minimal feedback mechanism — not a full portfolio system. But it con
 
 ## File Location and Format
 
-The log lives at:
+**The path is resolved, never hardcoded.** v2 baked one developer's personal Claude project directory into the skill, which broke on any other machine, project, or agent runtime. `scripts/finlib/verdictlog.py` is now the only sanctioned reader/writer and resolves in this order (first hit wins):
 
+1. `--log <path>` argument
+2. `$STOCK_VERDICT_LOG`
+3. `$XDG_STATE_HOME/stock-analysis/verdicts.jsonl` (when `XDG_STATE_HOME` is set)
+4. `./.stock-analysis/verdicts.jsonl` (when that directory exists — per-project logs)
+5. `~/.local/state/stock-analysis/verdicts.jsonl`
+
+```bash
+python3 scripts/finlib/verdictlog.py path      # where would it go?
+python3 scripts/finlib/verdictlog.py init      # opt in, once
 ```
-~/.claude/projects/-Users-john-awesome-skills/memory/stock-analysis-verdicts.jsonl
-```
 
-(Adjust the prefix path to the actual project memory directory if different.)
+**Persistence is opt-in.** If the resolved directory does not exist, `append` refuses and reports why rather than creating it. The log holds the user's investment views; nothing writes them to disk on the user's behalf without them asking. A refused append is reported in the Verdict Log section as `NOT PERSISTED` — it never silently succeeds or silently fails.
 
-**Format**: JSON Lines (one verdict per line). Each line is independently parseable; appends are atomic.
+**Concurrency.** `append` takes an `O_EXCL` lock file for the duration of the write and `fsync`s. Two analyses running at once cannot interleave a torn line; the second fails loudly with the lock path.
+
+**Format**: JSON Lines (one verdict per line), so appends never rewrite the file. Each line is independently parseable, and a corrupt line is skipped on read rather than killing the reader.
+
+**Schema versioning.** Every line carries `schema_version`. Current: **`"3"`**. `verdictlog.py migrate --entry <old>.json` brings an older line forward; it **marks** absent fields in `fields_unavailable_at_write_time` rather than back-filling them, because a guessed probability would be read by the Calibration Loop as one the analysis actually assigned.
 
 ---
 
-## Per-Verdict Schema
+## Per-Verdict Schema — v3
+
+v2 stored no probabilities, no discount rate, no model inputs, and no peer set. That made its own Calibration Loop uncomputable: the loop asks for "average Bull probability assigned", and the log did not contain it. v3 adds exactly the fields needed to close that loop, plus the fields needed to reproduce the target.
 
 ```json
 {
+  "schema_version": "3",
   "ticker": "AAPL",
   "company_name": "Apple Inc.",
   "verdict_date": "2026-05-20",
@@ -39,46 +53,87 @@ The log lives at:
   "target_base": 260.00,
   "target_bull": 320.00,
   "target_bear": 180.00,
-  "weighted_expected_price": 250.00,
-  "weighted_return_36mo": 0.171,
+  "prob_bull": 0.25,
+  "prob_base": 0.55,
+  "prob_bear": 0.20,
+  "weighted_expected_price": 259.00,
+  "weighted_return_36mo": 0.213,
   "bear_to_current_ratio": 0.84,
   "horizon_months": 36,
-  "archetype": "Hyperscaler",
+  "archetype": "Hyperscaler / Mega-Cap Tech Platform",
   "good_company_score": 9,
-  "key_bull_assumptions": [
-    "Services revenue grows 15%/yr through 2028",
-    "iPhone unit volume stable +2%/yr",
-    "Vision Pro / AR achieves $5B+ run-rate by 2028"
-  ],
-  "key_bear_assumptions": [
-    "China revenue declines 15%/yr on geopolitical pressure",
-    "Services antitrust outcome adverse",
-    "Apple Intelligence fails to drive iPhone upgrade cycle"
-  ],
-  "invalidation_triggers": [
-    "Sell if Services revenue growth <8% for 2 consecutive quarters",
-    "Sell if China revenue declines >25% YoY"
-  ],
+  "depth_mode": "Standard",
+
+  "probability_anchors": {
+    "archetype_prior_bull": 0.30,
+    "independent_assumptions": 3,
+    "assumption_adjustment_pp": -5,
+    "momentum_adjustment_pp": 2,
+    "disconfirming_evidence_cited": "Short interest at 18-month high; SPV operating-lease thesis"
+  },
+  "dcf": {
+    "wacc": 0.09,
+    "terminal_g": 0.03,
+    "terminal_multiple_derived": 14.7,
+    "reverse_dcf_implied_growth": 0.14,
+    "sensitivity_revenue_cagr_3pp": [232.0, 291.0]
+  },
+  "model": {
+    "engine": "finlib.valuation",
+    "model_json_sha256": "9f2c…",
+    "grounding": "OK",
+    "anchors_from_financials_json": true
+  },
+  "peer_set": ["GOOGL", "MSFT", "AMZN"],
+  "momentum": {"bucket": "Mild Positive", "adjustment_pp": 2},
+  "sotp": null,
+
+  "workers_validated": ["stock-business-reviewer", "stock-earnings-quality-reviewer",
+                        "stock-balance-sheet-reviewer", "stock-industry-reviewer",
+                        "stock-management-reviewer"],
+  "workers_failed": [{"worker": "stock-peer-comparison-reviewer", "state": "TIMEOUT"}],
+  "quorum": "full",
+
+  "key_bull_assumptions": ["Services revenue grows 15%/yr through 2028"],
+  "key_bear_assumptions": ["China revenue declines 15%/yr on geopolitical pressure"],
+  "invalidation_triggers": ["Sell if Services revenue growth <8% for 2 consecutive quarters"],
   "data_gaps_noted": ["DEF 14A details not retrieved"],
   "cognitive_bias_flags": [],
-  "depth_mode": "Standard",
-  "skill_version": "v2"
+  "prior_verdict_changed_provisional": false
 }
 ```
 
-All fields are required except `data_gaps_noted` and `cognitive_bias_flags` (which may be empty arrays).
+### Validation (enforced by `verdictlog.py validate`)
 
----
+Required: `schema_version`, `ticker`, `company_name`, `verdict_date`, `verdict`, `conviction`, `current_price`, the three `target_*`, the three `prob_*`, `weighted_expected_price`, `weighted_return_36mo`, `bear_to_current_ratio`, `horizon_months`, `archetype`, `good_company_score`, `depth_mode`, `key_bull_assumptions`, `key_bear_assumptions`, `invalidation_triggers`, `workers_validated`, `quorum`.
+
+Optional: `probability_anchors`, `dcf`, `model`, `peer_set`, `momentum`, `sotp`, `workers_failed`, `data_gaps_noted`, `cognitive_bias_flags`, `prior_verdict_changed_provisional`.
+
+Arithmetic and enum rules that FAIL the append:
+
+| Rule | Why |
+|---|---|
+| `prob_bull + prob_base + prob_bear = 1.00` (±0.01) | a probability set that does not sum to one is not a probability set |
+| each `prob_*` in `[0, 1]` | store fractions, not percentages — `25` silently breaks every average |
+| `weighted_expected_price ≈ Σ(prob × target)` within 2% | the recorded probabilities must be the ones that produced the target, or calibration audits numbers no analysis used |
+| `verdict` ∈ the six verdict labels; `conviction` ∈ High/Medium/Low | free-text labels cannot be aggregated |
+| `quorum` ∈ `full` / `degraded` | a `none` quorum forbids a verdict, so no entry should exist to log |
+| `good_company_score` an integer 0–10 | a fractional score means the checklist was not scored |
+| assumption and trigger arrays non-empty | an unfalsifiable verdict cannot be reviewed later, which defeats the log's purpose |
+| `dcf.terminal_g < dcf.wacc` | otherwise the Gordon terminal value is undefined |
 
 ## Workflow Integration
 
-### Step 1.5b — Past Verdict Review (NEW)
+### Step 5f-bis — Prior Verdict Review (blind-first)
 
-After ticker validation but before depth selection, the orchestrator MUST:
+**This moved.** v2 read the prior verdict at Step 1.5b — before data acquisition, before any worker ran. That handed the entire analysis an anchor and then asked the Step 5e anchoring self-check to detect it; the two instructions were in direct tension and the earlier one wins in practice. The review now runs *after* Step 5f has committed a provisional verdict, so this run's judgment is formed independently and then compared.
 
-1. Read the verdict log file (if it exists).
-2. Filter for past entries on the same ticker.
-3. If found, the most recent past verdict becomes mandatory reading:
+```bash
+python3 scripts/finlib/verdictlog.py read --ticker <TICKER> --limit 3
+```
+
+1. Only after a provisional verdict exists, read up to 3 prior entries for the ticker.
+2. If found, the most recent becomes mandatory reading:
    - State the past verdict date, verdict, target, conviction
    - Compare past Bull/Base/Bear targets to today's current price
    - Identify which Bull/Bear assumptions have been validated, invalidated, or remain open
@@ -88,15 +143,18 @@ If past verdict is older than 12 months, summary review is sufficient; if more r
 
 If no past verdict exists, skip and proceed.
 
-### Step 5f — Verdict Commit and Log Append (UPDATED)
+### Step 5g — Verdict Commit and Log Append
 
-After committing the verdict, the orchestrator MUST:
+```bash
+python3 scripts/finlib/verdictlog.py validate --entry run/verdict.json   # fails closed
+python3 scripts/finlib/verdictlog.py append   --entry run/verdict.json
+```
 
-1. Construct the JSON object per the schema above.
-2. Append one line to the log file (JSON Lines format — newline-terminated).
-3. Include the new line's `verdict_date` in the final report under "Tracking" so the user can audit.
+1. Construct the JSON object per the v3 schema above and write it to `run/verdict.json` — the run bundle carries it whether or not persistence is opted into.
+2. `validate` first. An invalid entry is **never** written: a malformed line would corrupt every later calibration read.
+3. `append` under the lock. Report the resolved path, or `NOT PERSISTED` plus the reason, in the report's Verdict Log section.
 
-The append must be atomic — use `>>` shell redirect or equivalent file-append semantics. Do NOT rewrite the entire file.
+Never hand-roll the append with `>>`. The shell redirect skips validation and the lock, which is how a torn line and an unsummable probability set both become possible.
 
 ---
 
@@ -119,16 +177,20 @@ Prior verdict (2025-12-15, 5 months ago): Buy at $190.20, target $250, Bull $310
 
 This forces the new verdict to reckon with the old one rather than starting fresh.
 
-### Periodic Calibration Review
+### Periodic Calibration Review — executable
 
-The user can ask: "What did the verdict log say 12 months ago for tickers I'm still analyzing?" The orchestrator should be able to:
+```bash
+# prices.json: {"AAPL": 231.4, "MSFT": 502.1}
+python3 scripts/finlib/calibration.py report --prices prices.json
+```
 
-1. Read the log
-2. Filter for verdicts ≥12 months ago
-3. Compute: weighted_expected_price vs current actual price
-4. Report calibration: was the framework systematically too bullish, too bearish, sector-biased?
+`calibration.py` reads the log, keeps only verdicts whose horizon is ≥⅓ elapsed, classifies each against its own recorded Bull/Bear targets, and compares realised frequency to mean assigned probability — overall and per archetype. Three honesty properties matter more than the numbers:
 
-This is not automated — it's a manual audit the orchestrator can run on request.
+- **Pre-v3 lines are reported `unscorable` with a reason**, not dropped. Dropping them would silently shrink the denominator and make a thin sample look thick.
+- **Unmatured and unpriced verdicts are listed separately**, so the reader can see the sample the conclusion rests on.
+- **Fewer than 10 matured verdicts → it refuses to conclude.** It prints the gap but explicitly declines to authorise revising the archetype priors. A 3-verdict sample is not calibration.
+
+Only once it reports a ≥10-verdict sample with a gap beyond ±10pp should the archetype priors in `scenario-probability-calibration.md` be revised.
 
 ---
 
@@ -147,7 +209,12 @@ The log is the minimum mechanism to convert one-shot analyses into a process wit
 
 ## Privacy and Storage Note
 
-The log lives in the local `memory/` directory and is not committed to git. It contains the user's investment views. If the user wishes to share or back up, they may copy the file; it should never be auto-committed.
+The log holds the user's investment views — sensitive personal data. Consequences of that:
+
+- **Opt-in only.** No directory is created on the user's behalf; `append` refuses instead (see File Location above).
+- **Never auto-committed.** The default locations are outside any repository. If a user opts into the project-local `./.stock-analysis/` form, that directory must be git-ignored — say so when creating it.
+- **The user controls the copy.** Backing up, sharing, or deleting the log is theirs to do; the skill never copies it elsewhere.
+- **Portable by construction.** Because the path is resolved rather than hardcoded, the same skill works on another machine or under another agent runtime by setting one environment variable.
 
 ---
 
@@ -156,14 +223,13 @@ The log lives in the local `memory/` directory and is not committed to git. It c
 If the log doesn't exist yet, create it on the first verdict with one line. Subsequent verdicts append. The file is human-readable JSON-Lines; the user can review it directly with `cat`, `tail`, or `jq`:
 
 ```bash
-# View latest 10 verdicts
-tail -10 ~/.claude/projects/-Users-john-awesome-skills/memory/stock-analysis-verdicts.jsonl | jq
+LOG=$(python3 scripts/finlib/verdictlog.py path | python3 -c 'import json,sys; print(json.load(sys.stdin)["path"])')
 
-# Get verdicts on a specific ticker
-grep '"ticker": "AAPL"' ~/.claude/projects/-Users-john-awesome-skills/memory/stock-analysis-verdicts.jsonl | jq
-
-# Count Buy vs Watch vs Sell verdicts
-grep -oE '"verdict": "[^"]*"' ~/.claude/projects/-Users-john-awesome-skills/memory/stock-analysis-verdicts.jsonl | sort | uniq -c
+python3 scripts/finlib/verdictlog.py read --limit 10 | jq          # latest 10, any ticker
+python3 scripts/finlib/verdictlog.py read --ticker AAPL | jq       # one ticker, chronological
+jq -r .verdict "$LOG" | sort | uniq -c                             # verdict distribution
 ```
+
+Prefer `verdictlog.py read` over `grep` on the raw file: it filters on the parsed `ticker` field (case-insensitively) and skips corrupt lines, where `grep '"ticker": "AAPL"'` depends on key order and whitespace that `json.dumps` is free to change.
 
 This deliberately uses JSON-Lines rather than a single JSON array so the file can be appended without rewriting, which prevents corruption and enables atomic writes.

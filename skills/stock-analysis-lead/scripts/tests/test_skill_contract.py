@@ -29,10 +29,24 @@ REPO_ROOT = SKILL_ROOT.parents[1]
 SKILLS_DIR = REPO_ROOT / "skills"
 AGENTS_DIR = REPO_ROOT / "outputexample" / "stock-analysis-lead" / "agents"
 
-# Raised 500 -> 540 for the P2/P3 additions (archetype Analytical-Addendum dispatch
-# wiring + the mandatory Variant Perception output block). Detail lives in the
-# reference files; SKILL.md only carries the minimal pointers and output contract.
-MAX_SKILL_LINES = 540
+# 500 -> 540: P2/P3 additions (archetype Analytical-Addendum dispatch wiring +
+# the mandatory Variant Perception output block).
+# 540 -> 640: the orchestration-hardening pass — the dispatch prompt now inlines
+# the Worker Findings Contract schema (it has to be self-contained, since a worker
+# agent does not read the lead's reference files), plus the triage tiers, the
+# dispatch state machine with its quorum table, the run-bundle gate, and Step
+# 5f-bis. Everything expandable lives in worker-contract.md and
+# dispatch-protocol.md; SKILL.md carries only pointers, the wire schema, and the
+# output contract.
+# 700 -> 510: the file grew to 666 lines while gaining the codified control plane,
+# so the render template moved to references/output-format.md, the artifact table
+# and manifest shape to data-acquisition-playbook.md (which already owned them),
+# the inline dispatch JSON to a required-key list, and sections 5c/5d were
+# compressed to the decisions the orchestrator makes rather than a restatement of
+# their reference files. Result: 500 lines. The ceiling is deliberately tight —
+# 10 lines of headroom, not 200, so the next addition has to justify itself or
+# move detail into a reference.
+MAX_SKILL_LINES = 510
 
 REQUIRED_REFERENCES = [
     "data-acquisition-playbook.md",
@@ -44,6 +58,9 @@ REQUIRED_REFERENCES = [
     "earnings-revision-momentum.md",
     "verdict-log-protocol.md",
     "scenario-probability-calibration.md",
+    "worker-contract.md",
+    "dispatch-protocol.md",
+    "output-format.md",
 ]
 
 REQUIRED_SECTIONS = [
@@ -255,6 +272,10 @@ def test_synthesis_step_has_required_subcomponents(skill_text: str) -> None:
         "Bear",
         "Cognitive-Bias",
         "Reverse-DCF",
+        # Deterministic gates: the synthesis must not be all judgment.
+        "worker_contract.py",
+        "runbundle.py",
+        "verdictlog.py",
     ):
         assert component in skill_text, f"synthesis missing component: {component}"
 
@@ -331,3 +352,35 @@ def test_non_us_refusal_message_present(skill_text: str) -> None:
 def test_verdict_options_present(skill_text: str) -> None:
     for verdict in ("Strong Buy", "Buy", "Watch", "Hold", "Trim", "Sell"):
         assert verdict in skill_text, f"verdict option missing: {verdict}"
+
+
+def test_trimming_did_not_drop_the_control_plane(skill_text: str) -> None:
+    """The file was cut from 666 to 500 lines by moving detail into references.
+    These are the wiring points a reader of SKILL.md alone must still find — if a
+    future trim removes one, the orchestrator stops running that gate."""
+    for anchor in (
+        "dispatch.py plan",            # triage is computed
+        "dispatch.py record",          # the state machine is enforced
+        "worker_contract.py validate", # replies are validated
+        "worker_contract.py consolidate",
+        "lint.py",                     # 口径 gate
+        "runbundle.py",                # both bundle stages
+        "--stage evidence",
+        "--stage publication",
+        "verdictlog.py validate",
+        "verdictlog.py append",
+        "report_audit.py",             # the report is audited for fidelity
+        "model_json_sha256",           # the digest requirement
+        "attempt<N>.md",               # retry evidence naming
+        "quorum",
+        "archetype_challenge",
+    ):
+        assert anchor in skill_text, f"the trim dropped a control-plane anchor: {anchor}"
+
+
+def test_every_reference_file_is_actually_loaded_somewhere(skill_text: str) -> None:
+    """A reference nothing tells the orchestrator to load is dead weight; a
+    reference the orchestrator needs but is never named is a silent gap."""
+    on_disk = {p.name for p in REFERENCES_DIR.glob("*.md")}
+    for name in sorted(on_disk):
+        assert name in skill_text, f"references/{name} is never mentioned in SKILL.md"

@@ -1,6 +1,6 @@
 ---
 name: stock-earnings-quality-review
-description: Review a US-listed company's earnings quality, cash-flow integrity, and operating leverage for an equity-research workup. Covers operating cash flow vs net income drift, free cash flow trajectory, capex character (maintenance vs expansion), equity issuance / shareholder-return yield, revenue-quality signals (receivables vs revenue growth, channel stuffing), gross-margin level and trend, operating leverage, and three-cost-rate hygiene (S&M, R&D, G&A). SaaS-specific: ARR/NRR/GRR/CAC payback/Magic Number. Trigger when analyzing financial statements at L1+L2+L3 of the seven-layer X-ray framework. Dispatched by stock-analysis-lead.
+description: Review a US-listed company's earnings quality, cash-flow integrity, and operating leverage for an equity-research workup. Covers operating cash flow vs net income drift, free cash flow trajectory, capex character (maintenance vs expansion), equity issuance / shareholder-return yield, revenue-quality signals (receivables vs revenue growth, channel stuffing), gross-margin level and trend, operating leverage, and three-cost-rate hygiene (S&M, R&D, G&A). SaaS-specific metrics — ARR/NRR/GRR/CAC payback/Magic Number. Trigger when analyzing financial statements at L1+L2+L3 of the seven-layer X-ray framework. Dispatched by stock-analysis-lead.
 allowed-tools: Read, Grep, Glob, WebSearch, WebFetch, Bash
 ---
 
@@ -124,6 +124,69 @@ Sector: <e.g., enterprise software>
 ### Summary
 
 One line: `N High / M Medium / K Low — most material: <EQ-NN short title>`.
+
+### Machine-Readable Findings Block (mandatory)
+
+End the reply with **exactly one** fenced block tagged `findings-json`, carrying
+**Worker Findings Contract v1** (full schema and error codes:
+`stock-analysis-lead/references/worker-contract.md`). The orchestrator synthesizes
+the verdict **from this block only** — anything stated in the Markdown above but
+omitted here does not reach the report. Everything above the fence is for the
+human reader.
+
+```findings-json
+{
+  "contract_version": "1",
+  "worker": "stock-earnings-quality-reviewer",
+  "prefix": "EQ",
+  "status": "OK",
+  "depth_mode": "<echo the dispatched depth>",
+  "archetype_applied": "<echo the dispatched archetype>",
+  "archetype_challenge": null,
+  "findings": [
+    {
+      "id": "EQ-NN",
+      "severity": "High|Medium|Low",
+      "title": "<= 80 chars",
+      "citation": {"source": "10-K", "locator": "<item/page/note>", "fiscal_period": "FY2025"},
+      "evidence": "direct quote <= 60 words, or a computed figure with its inputs",
+      "implication": "one sentence on what this means for the thesis",
+      "confidence": "first-hand|second-hand"
+    }
+  ],
+  "positives": [],
+  "data_gaps": [],
+  "checklist_coverage": {"items_total": 15, "items_checked": 0, "items_not_found": 0, "ids_not_checked": []},
+  "mandatory_checks_run": []
+}
+```
+
+Contract rules that fail validation if broken:
+
+- `status` is one of `OK` / `DEGRADED` / `SKIPPED` / `REFUSED`; any value other
+  than `OK` **requires** a `status_reason`. The gate returns `SKIPPED (...)` in
+  prose *and* `"status": "SKIPPED"` here.
+- Every finding ID must start with `EQ` — the prefix is the whole segment
+  before the first hyphen.
+- `citation` is an **object**, never a bare string; `locator` and `fiscal_period`
+  must be non-empty. A finding with no real citation is suppressed, not emitted.
+- `source: "aggregator"` forces `confidence: "second-hand"` — this is what makes
+  the first-hand data rule checkable rather than aspirational.
+- `checklist_coverage`: `items_checked + items_not_found` must reach
+  `items_total` (15), so "the checklist ran to completion" is verifiable.
+- `archetype_challenge`: `null` when the dispatched archetype fits. When the
+  evidence says it does not, file `{"proposed", "reason", "evidence"}` instead of
+  silently analyzing against thresholds you believe are wrong — this is the only
+  sanctioned way to disagree with the orchestrator's classification.
+- `mandatory_checks_run`: list the archetype-specific check IDs the dispatch
+  marked REQUIRED. Omitting one that was required fails validation.
+
+Self-check before replying:
+
+```bash
+python3 <path-to>/stock-analysis-lead/scripts/finlib/worker_contract.py \
+  validate --reply <this-reply>.md --expect-worker stock-earnings-quality-reviewer
+```
 
 ## No-Finding Case
 

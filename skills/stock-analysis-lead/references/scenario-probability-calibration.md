@@ -1,4 +1,6 @@
-# Scenario Probability Calibration
+# Scenario Probability Assignment (and the path to calibration)
+
+> **Naming discipline.** What this file specifies is an **auditable probability-assignment procedure**. It is not yet calibrated: the archetype figures below are judgment priors, and the buy thresholds in SKILL.md Step 5d have never been validated against outcomes. Calibration is what `scripts/finlib/calibration.py` produces once the verdict log holds enough matured verdicts — see § Calibration Loop. Until it reports a ≥10-verdict matured sample, describe any probability here as an *anchored assignment*, never as *empirically calibrated*.
 
 Load this during Step 5d (scenarios). Replaces the ad-hoc "Bull weight scales with Good-Company score" mapping in `scenario-framework.md` with an explicit, assumption-based, base-rate framework.
 
@@ -15,13 +17,13 @@ This file fixes that by:
 
 Each scenario must have its probability anchored to one of these reference points, NOT to the Good-Company score.
 
-### Anchor 1: Base Rate from Sector History
+### Anchor 1: Archetype Prior
 
 What is the historical frequency that a company in this archetype, at this growth stage, achieved the Bull-scenario trajectory?
 
 Approximate base rates by archetype. **These are uncalibrated judgment priors, not measured frequencies** — a directional starting point informed by industry/academic studies, to be revised by the Calibration Loop (below) as the verdict log accumulates real outcomes. Do not present a probability built on them as if it were empirically derived; cite them as "archetype prior," not "base rate observed in data":
 
-| Archetype | Bull Achievement Base Rate | Bear Realization Base Rate |
+| Archetype | Bull Achievement Prior | Bear Realization Prior |
 |---|---|---|
 | High-Growth SaaS | 15–25% (tail outcomes; most SaaS slows) | 20–30% |
 | Mature Cash Cow | 5–15% (growth surprises are rare in mature) | 10–20% |
@@ -37,11 +39,11 @@ Approximate base rates by archetype. **These are uncalibrated judgment priors, n
 
 For each Bull scenario assumption, ask: would it require multiple independent positive surprises to be true?
 
-- 1 independent assumption needed → relatively high Bull probability (close to base rate)
+- 1 independent assumption needed → relatively high Bull probability (close to the prior)
 - 2 independent assumptions → reduce probability by ~5pp from base
 - 3+ independent assumptions → further reduce by ~5pp per additional assumption
 
-Example: NVDA Bull case needs (a) AI capex stays high, (b) AI capex actually monetizes, (c) competitive entrants stay behind. Three independent assumptions → Bull probability is meaningfully below the hyperscaler-archetype base rate of 25–35%.
+Example: NVDA Bull case needs (a) AI capex stays high, (b) AI capex actually monetizes, (c) competitive entrants stay behind. Three independent assumptions → Bull probability is meaningfully below the hyperscaler-archetype prior of 25–35%.
 
 Mirror logic for Bear: more independent failure conditions required → lower Bear probability.
 
@@ -122,7 +124,7 @@ Systematic bias toward Bull (visible in verdict log over time as Bull > Base in 
 
 Target: Hyperscaler at trough valuation (e.g., Adobe 2026).
 
-**Step 1**: Archetype base rate Bull = 25% (Hyperscaler 25-35% range, but Adobe is mature-leaning, mid-range).
+**Step 1**: Archetype prior Bull = 25% (Hyperscaler 25-35% range, but Adobe is mature-leaning, mid-range).
 
 **Step 2**: Bull assumptions:
 1. AI monetization in Creative Cloud + Document Cloud realizes (one assumption)
@@ -141,15 +143,24 @@ The fact that we got to 30% Bull with three independent assumptions and a clearl
 
 ---
 
-## Calibration Loop
+## Calibration Loop — executable
 
-Every 10 verdicts, the user (or orchestrator on request) should review the verdict log and compute:
+**This loop was previously uncomputable from its own log.** It asks for "average Bull probability assigned"; the v2 verdict-log schema stored no probabilities at all. Schema v3 stores `prob_bull` / `prob_base` / `prob_bear` plus the `probability_anchors` breakdown, and `calibration.py` does the arithmetic:
 
-- Average Bull probability assigned: __%
-- Frequency of Bull-scenario validation 12 months later: __%
-- Gap (= over-confidence or under-confidence)
+```bash
+# prices.json: {"AAPL": 231.4, "MSFT": 502.1}
+python3 scripts/finlib/calibration.py report --prices prices.json
+```
 
-If the gap exceeds ±10pp, recalibrate the archetype base rates in this file. This is the explicit feedback loop the framework needs.
+It keeps only verdicts whose horizon is ≥⅓ elapsed, classifies each against **its own recorded** Bull/Bear targets (price ≥ bull → bull; ≤ bear → bear; else base), and reports mean assigned vs realised frequency — overall and per archetype.
+
+Three properties make the output honest rather than flattering:
+
+- **Pre-v3 entries are listed `unscorable` with a reason**, never dropped. Dropping them would shrink the denominator and make a thin sample look thick.
+- **Unmatured and unpriced verdicts are listed separately**, so the sample behind any number is visible.
+- **Below 10 matured verdicts it refuses to conclude.** It prints the gap and explicitly declines to authorise revising the priors below. A 3-verdict sample where every name happened to hit Bull produces a +75pp "gap" that means nothing.
+
+Only revise the archetype priors in the table above when the tool reports a ≥10-verdict matured sample with a gap beyond ±10pp. When you do, note the sample size and date alongside the revised number — a prior revised on 11 verdicts is still weak evidence, and the next reader needs to know that.
 
 ---
 
@@ -159,7 +170,7 @@ The orchestrator's report must include in the Scenario section:
 
 ```
 Bull probability assignment: 22%
-- Archetype base rate (Hyperscaler): 25%
+- Archetype prior (Hyperscaler): 25%
 - Independent assumptions required: 3 → adjustment -5pp → 20%
 - Disconfirming evidence cited: <specific>
 - Net assigned: 22% (rounded slightly above the assumption-adjustment floor)
