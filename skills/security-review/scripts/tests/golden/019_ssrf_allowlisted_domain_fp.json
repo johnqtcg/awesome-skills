@@ -10,5 +10,17 @@
   "coverage_rules": [
     "allowlist",
     "SSRF"
-  ]
+  ],
+  "suppressed_cwe": "CWE-918",
+  "suppressed_class": "SSRF",
+  "allowed_adjacent_cwe": [
+    "CWE-400",
+    "CWE-770",
+    "CWE-306",
+    "CWE-248",
+    "CWE-1088",
+    "CWE-200",
+    "CWE-209"
+  ],
+  "allowed_adjacent_note": "no timeout on http.Get, unbounded response copy, no rate limit, and error text echoed to the client are all real observations about this handler and are not the SSRF being tested. CWE-209 (error message revealing internal information) is justified by the fixture's own code: `http.Error(w, err.Error(), 500)` echoes the transport error — including internal hostnames from the partner map — straight to the client. A reviewer reporting it is right."
 }

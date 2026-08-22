@@ -28,7 +28,7 @@ the domain against its canonical question in `authorization-and-policy.md` §2 �
 | 7 | Concurrency & Shared-State Safety | Single-threaded event loop does **not** remove the risk: `await` between a check and its use is a TOCTOU window; module-level mutable caches are shared across requests; `worker_threads`/cluster share nothing but may race on external state | manual review |
 | 8 | Language-Specific Injection Sinks | Prototype pollution (`lodash.merge`/`Object.assign` on untrusted input → `Map` or null-prototype); ReDoS (unbounded regex on user input → `re2` or cap length first); SSRF via `fetch`/`axios` (see §SSRF); `vm`/`eval` on user input | `eslint-plugin-security` |
 | 9 | Static Scanner Posture | `eslint-plugin-security` and/or `semgrep` run and triaged; every `// eslint-disable-next-line security/*` carries a rationale | `eslint`, `semgrep` |
-| 10 | Dependency Vulnerability Posture | `npm audit --production`; `package-lock.json` committed and current. Prefer reachability evidence over raw advisory counts | `npm audit`, `snyk` |
+| 10 | Dependency Vulnerability Posture | `npm audit --omit=dev` (`--production` still works but npm warns and points here); `package-lock.json` committed and current. Prefer reachability evidence over raw advisory counts | `npm audit`, `snyk` |
 
 > Auth middleware order (`helmet` → `cors` → `rateLimit` → `auth` → routes, and never calling
 > `next()` after `res.send()`) and input validation (`zod`/`joi`/`express-validator`,
@@ -236,8 +236,9 @@ app.use(express.urlencoded({ extended: false, limit: '1mb' }));
 ## Automation Commands
 
 ```bash
-# Dependency audit
-npm audit --production
+# Dependency audit. `--production` is a deprecated alias: npm 10 answers it with
+# `npm warn config production Use --omit=dev instead.`
+npm audit --omit=dev
 
 # Secret sweep
 rg -n "(AKIA[0-9A-Z]{16}|-----BEGIN .* KEY-----|ghp_[A-Za-z0-9]{36}|xox[baprs]-|password\s*=|secret\s*=|token\s*=)" .

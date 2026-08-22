@@ -34,13 +34,47 @@ class GoldenReviewTests(unittest.TestCase):
         with open(GOLDEN_DIR / filename) as f:
             return json.load(f)
 
+    # Loaded for every review regardless of stack, so a rule living here is genuinely in scope.
+    ALWAYS_LOADED = ("scenario-checklists.md", "authorization-and-policy.md",
+                     "severity-calibration.md", "anti-examples.md", "security-review.md",
+                     "reference-index.md")
+    # The per-stack sink reference a review of that stack loads (reference-index.md § routing).
+    STACK_REFERENCE = {
+        "go": "go-secure-coding.md",
+        "nodejs": "lang-nodejs.md",
+        "java": "lang-java.md",
+        "python": "lang-python.md",
+    }
+
+    def _in_scope_text(self, fixture: dict) -> str:
+        """The documents a reviewer of THIS fixture's stack would actually have loaded.
+
+        Previously this checked the concatenation of every reference, so a Node fixture's
+        `prototype pollution` rule was satisfied by a mention in an unrelated file while
+        lang-nodejs.md spelled it `Prototype pollution` — the fixture claimed coverage the
+        reviewer of that stack would never have been shown. Scope the search instead."""
+        names = list(self.ALWAYS_LOADED)
+        names.append(self.STACK_REFERENCE[fixture.get("stack", "go")])
+        ref = fixture.get("reference", "")
+        if ref.startswith("references/"):
+            names.append(ref.split("/", 1)[1])
+        parts = [self.skill_text]
+        parts += [self.reference_texts[n] for n in names if n in self.reference_texts]
+        return "\n".join(parts)
+
     def _assert_coverage(self, fixture: dict) -> None:
-        """Every coverage_rule string must appear in skill + references."""
+        """Every coverage_rule must appear in the documents this fixture's stack loads."""
+        scoped = self._in_scope_text(fixture)
         for rule in fixture.get("coverage_rules", []):
-            self.assertIn(
-                rule,
-                self.all_text,
-                f"[{fixture['id']}] coverage rule missing: {rule!r}",
+            if rule in scoped:
+                continue
+            elsewhere = sorted(n for n, t in self.reference_texts.items() if rule in t)
+            self.fail(
+                f"[{fixture['id']}] coverage rule {rule!r} is not in the documents a "
+                f"{fixture.get('stack', 'go')} review loads"
+                + (f" — it only appears in {elsewhere}, which this stack never reads. "
+                   "Check the casing, or move the rule." if elsewhere
+                   else " — it appears in no document at all.")
             )
 
     def _assert_anti_example(self, fixture: dict) -> None:
@@ -221,6 +255,196 @@ class GoldenReviewTests(unittest.TestCase):
             lang_ref, r"\|\s*8\s*\|\s*Language-Specific Injection Sinks\s*\|",
             "fixture pins Domain 8; lang-python.md must name it canonically",
         )
+
+    # ------------------------------------------------------------------
+    # Node.js and Java: the two stacks the skill claimed to cover with no behavioural fixture
+    # ------------------------------------------------------------------
+
+    def test_022_nodejs_prototype_pollution(self) -> None:
+        f = self._load("022_nodejs_prototype_pollution.json")
+        self.assertTrue(f["expected_finding"])
+        self.assertEqual("P1", f["severity"],
+                         "prototype pollution reaching an authorization read is P1, not a nit")
+        self.assertEqual("nodejs", f["stack"])
+        self.assertEqual(8, f["expected_domain"])
+        self._assert_coverage(f)
+        self._assert_reference(f)
+        lang_ref = (REFERENCES_DIR / "lang-nodejs.md").read_text()
+        self.assertRegex(lang_ref, r"\|\s*8\s*\|\s*Language-Specific Injection Sinks\s*\|",
+                         "fixture pins Domain 8; lang-nodejs.md must name it canonically")
+
+    def test_023_nodejs_execfile_args_fp(self) -> None:
+        f = self._load("023_nodejs_execfile_args_fp.json")
+        self.assertFalse(f["expected_finding"])
+        self.assertEqual("nodejs", f["stack"])
+        self._assert_anti_example(f)
+        self._assert_coverage(f)
+        self._assert_reference(f)
+
+    def test_024_java_deserialization_rce(self) -> None:
+        f = self._load("024_java_deserialization_rce.json")
+        self.assertTrue(f["expected_finding"])
+        self.assertEqual("P0", f["severity"],
+                         "readObject on untrusted bytes is RCE via classpath gadgets")
+        self.assertEqual("java", f["stack"])
+        self.assertEqual(8, f["expected_domain"])
+        self._assert_coverage(f)
+        self._assert_reference(f)
+        lang_ref = (REFERENCES_DIR / "lang-java.md").read_text()
+        self.assertRegex(lang_ref, r"\|\s*8\s*\|\s*Language-Specific Injection Sinks\s*\|",
+                         "fixture pins Domain 8; lang-java.md must name it canonically")
+
+    def test_025_java_xxe_hardened_fp(self) -> None:
+        """Java XXE applies by default, which is what makes an already-hardened factory the
+        valuable false positive: the pattern match fires and the exploit does not."""
+        f = self._load("025_java_xxe_hardened_fp.json")
+        self.assertFalse(f["expected_finding"])
+        self.assertEqual("java", f["stack"])
+        self._assert_anti_example(f)
+        self._assert_coverage(f)
+        self._assert_reference(f)
+
+    # ------------------------------------------------------------------
+    # Python XML: the corrected version-gated guidance, in both polarities
+    # ------------------------------------------------------------------
+
+    def test_026_python_stdlib_xxe_fp(self) -> None:
+        """Guards the correction of two over-claims at once: stdlib XXE file read and stdlib
+        entity-amplification DoS. Both are false positives on a patched Expat."""
+        f = self._load("026_python_stdlib_xxe_fp.json")
+        self.assertFalse(f["expected_finding"])
+        self.assertEqual("python", f["stack"])
+        self._assert_anti_example(f)
+        self._assert_coverage(f)
+        self._assert_reference(f)
+        lang_ref = (REFERENCES_DIR / "lang-python.md").read_text()
+        self.assertRegex(lang_ref, r"(?i)Entity amplification[\s\S]{0,140}?\*\*No\*\*",
+                         "the FP fixture depends on the doc stating that entity amplification "
+                         "does not reach a build past the 2.4.0 gate")
+
+    def test_026_declares_the_version_its_verdict_depends_on(self) -> None:
+        """An FP fixture whose verdict is version-gated must show the version in the code, or it
+        is undecidable and a correct reviewer can legitimately disagree with the ground truth.
+
+        This is not hypothetical: without the pin, a live reviewer reported allocation
+        amplification (CVE-2025-59375, live below Expat 2.7.2) against the then-unbounded body —
+        a real finding, on a fixture asserting expected_finding=false."""
+        f = self._load("026_python_stdlib_xxe_fp.json")
+        code = f["code"]
+        self.assertIn("2.7.2", code,
+                      "the fixture must state the gate its 'no finding' verdict rests on")
+        self.assertRegex(code, r"(?i)expat[_ ]?2\.7\.[2-9]",
+                         "the pinned Expat must actually be at or past the CVE-2025-59375 fix")
+        self.assertRegex(code, r"MAX_BODY|len\(body\)",
+                         "the body must be bounded; an unbounded body leaves a genuine "
+                         "resource-exhaustion finding reachable regardless of Expat")
+
+    def test_python_fixture_code_parses(self) -> None:
+        """Fixture code is read as code by anyone reviewing this skill. A NameError-level slip
+        (the 026 body cap once raised HTTPException without importing it) undermines the fixture
+        it lives in."""
+        import ast
+
+        for path in sorted(GOLDEN_DIR.glob("*.json")):
+            fixture = json.loads(path.read_text(encoding="utf-8"))
+            if fixture.get("stack") != "python":
+                continue
+            with self.subTest(fixture=fixture["id"]):
+                try:
+                    tree = ast.parse(fixture["code"])
+                except SyntaxError as exc:
+                    self.fail(f"{fixture['id']} code does not parse: {exc}")
+                # Every bare name used as a call target should be imported or defined.
+                imported = {
+                    alias.asname or alias.name.split(".")[0]
+                    for node in ast.walk(tree)
+                    if isinstance(node, (ast.Import, ast.ImportFrom))
+                    for alias in node.names
+                }
+                assigned = {
+                    t.id for node in ast.walk(tree)
+                    if isinstance(node, ast.Assign)
+                    for t in node.targets if isinstance(t, ast.Name)
+                }
+                defined = {n.name for n in ast.walk(tree)
+                           if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))}
+                known = imported | assigned | defined | set(dir(__builtins__)) | {
+                    "self", "app", "list", "len", "dict"}
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+                        self.assertIn(
+                            node.func.id, known,
+                            f"{fixture['id']}: calls {node.func.id!r} which is never imported "
+                            f"or defined — the fixture would NameError",
+                        )
+
+    def test_027_python_lxml_iterparse_xxe(self) -> None:
+        """The other polarity: the one Python XML default that IS exploitable. A skill that
+        suppresses both polarities is as wrong as one that reports both."""
+        f = self._load("027_python_lxml_iterparse_xxe.json")
+        self.assertTrue(f["expected_finding"])
+        self.assertEqual("python", f["stack"])
+        self.assertEqual(8, f["expected_domain"])
+        self._assert_coverage(f)
+        self._assert_reference(f)
+        lang_ref = (REFERENCES_DIR / "lang-python.md").read_text()
+        self.assertIn("CVE-2026-41066", lang_ref)
+        self.assertIn("6.1.0", lang_ref, "the fix version is what makes the pin actionable")
+        self.assertIn("lxml==6.0.2", f["code"],
+                      "the fixture must show the pin, or the version gate is unresolvable "
+                      "from the code and the finding could only be graded `likely`")
+
+    def test_python_xml_fixtures_are_a_matched_pair(self) -> None:
+        """A single-polarity pair would let the skill pass by always suppressing (or always
+        reporting) Python XML. Both fixtures must exist and disagree."""
+        fp = self._load("026_python_stdlib_xxe_fp.json")
+        tp = self._load("027_python_lxml_iterparse_xxe.json")
+        self.assertEqual("xxe", fp["category"])
+        self.assertEqual("xxe", tp["category"])
+        self.assertNotEqual(fp["expected_finding"], tp["expected_finding"],
+                            "the XML pair must cover both polarities of the same category")
+
+    def test_each_fixture_binds_to_its_own_stack_reference(self) -> None:
+        """Scoping the coverage search to the loaded set is not enough on its own: a Node
+        fixture's rule can still be satisfied by an always-loaded file (reference-index.md
+        *mentions* prototype pollution) while the substantive rule in lang-nodejs.md is spelled
+        differently and never actually matched. Require at least one rule to land in the stack's
+        own sink table, which is where Domain 8 is decided.
+
+        Applies only to fixtures that pin `expected_domain` — those are the ones claiming to
+        exercise a Gate D domain. A fixture without one (IDOR, JWT, open redirect, container) is
+        a *scenario checklist* case whose rules correctly live in scenario-checklists.md, which
+        is why this is not a blanket rule."""
+        unbound = []
+        for path in sorted(GOLDEN_DIR.glob("*.json")):
+            fixture = json.loads(path.read_text(encoding="utf-8"))
+            rules = fixture.get("coverage_rules", [])
+            if not rules or "expected_domain" not in fixture:
+                continue
+            stack_ref = self.STACK_REFERENCE[fixture.get("stack", "go")]
+            text = self.reference_texts.get(stack_ref, "")
+            if not any(rule in text for rule in rules):
+                unbound.append(f"{fixture['id']} ({stack_ref}): {rules}")
+        self.assertEqual([], unbound,
+                         "no coverage rule lands in the stack's own sink reference, so these "
+                         f"fixtures do not test that stack's Domain 8 table: {unbound}")
+
+    def test_every_supported_stack_has_a_behavioural_fixture(self) -> None:
+        """The review that prompted these fixtures found 20 Go fixtures, 1 Python, 0 Node,
+        0 Java — while the frontmatter advertised all four stacks. Derived from disk so a newly
+        advertised stack cannot ship without one."""
+        advertised = {"go", "nodejs", "java", "python"}
+        seen = {}
+        for path in sorted(GOLDEN_DIR.glob("*.json")):
+            fixture = json.loads(path.read_text(encoding="utf-8"))
+            seen.setdefault(fixture.get("stack", "go"), set()).add(fixture["expected_finding"])
+        self.assertEqual(set(), advertised - set(seen),
+                         f"stacks advertised in the frontmatter with no golden fixture: "
+                         f"{sorted(advertised - set(seen))}")
+        both = {stack for stack, polarities in seen.items() if polarities == {True, False}}
+        self.assertEqual(set(), advertised - both,
+                         f"stacks with only one polarity — detection-only or suppression-only "
+                         f"coverage cannot measure over-reporting: {sorted(advertised - both)}")
 
     # ------------------------------------------------------------------
     # Fixture integrity

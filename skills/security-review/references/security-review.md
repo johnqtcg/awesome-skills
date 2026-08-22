@@ -68,6 +68,9 @@ Lookup table for the mandatory Standards Mapping (`SKILL.md § Standards Mapping
 | Weak TLS config | CWE-295 / CWE-327 | V9 |
 | Weak crypto / hash usage | CWE-327 / CWE-328 | V6 |
 | Race condition / TOCTOU | CWE-362 / CWE-367 | V11 |
+| Insecure deserialization | CWE-502 | V5.5.1 |
+| XXE / XML entity abuse | CWE-611 / CWE-776 | V5.5.2 |
+| Prototype pollution (JS) | CWE-1321 | V5 (chapter-level — 4.0.3 names no prototype-pollution requirement) |
 
 ---
 

@@ -15,7 +15,7 @@ comma-joined list; a domain is `FAIL` for the repo if it fails in any stack.
 | Go | `references/go-secure-coding.md` | `text/template`, `exec`, redirect, `filepath` traversal, Go XML exemptions |
 | Node.js / TypeScript | `references/lang-nodejs.md` | prototype pollution, ReDoS, SSRF, `vm`/`eval` |
 | Java / Spring | `references/lang-java.md` | Java deserialization, SpEL, XXE (applies, unlike Go) |
-| Python / FastAPI / Django | `references/lang-python.md` | `eval`/`pickle`, SSTI, XXE via stdlib parsers, `tarfile` traversal |
+| Python / FastAPI / Django | `references/lang-python.md` | `eval`/`pickle`, SSTI, `tarfile` traversal, and XML whose verdict is **version-gated** — stdlib XXE is a false positive, `lxml` `iterparse` below 6.1.0 is not |
 
 ## Loading Guide by Depth and Stack
 
@@ -40,8 +40,17 @@ For Python / FastAPI / Django code:
 → Load `references/lang-python.md` for `eval`/`pickle` misuse, SSTI, ORM safety gaps, async blocking risks, and dependency audit patterns.
 → Load `references/scenario-checklists.md` for the cross-language scenario checklist.
 
-For general or multi-language reviews:
-→ Load `references/scenario-checklists.md` only for the language-agnostic scenario checklist (~1,200 tokens).
+For multi-language reviews:
+→ Load `references/scenario-checklists.md` for the language-agnostic scenario checklist (~1,200
+tokens), **plus the `lang-*` / `go-secure-coding.md` reference for every stack you detected**.
+Gate D's Domain 8 is *language-specific sinks* by definition: `pickle` is not a Go sink and
+prototype pollution is not a Python one, so a multi-stack review that loads only the scenario
+checklist cannot evaluate Domain 8 for any of its stacks. Set `stack` to the comma-joined list
+and emit one coverage section per stack (`authorization-and-policy.md` §2).
+
+For a review with no detectable stack (design docs, IaC-only diffs, shell scripts):
+→ Load `references/scenario-checklists.md` only, and record in §9 Uncovered Risk List that
+Domain 8 was evaluated without a language sink table.
 
 When severity or confidence decisions feel ambiguous, or before publishing findings:
 → Load `references/severity-calibration.md` for confidence downgrade rules, severity scoring matrix, common finding patterns with calibrated severity levels, and CVSS estimation guidance.
@@ -60,6 +69,8 @@ The normative rule lives in `SKILL.md § Standards Mapping` (map each finding to
 
 | File | Purpose |
 |------|---------|
+| `references/authorization-and-policy.md` | Active-verification authorization gate, the canonical 10-domain definitions (§2), ASVS version pinning (§3), and when `pre-existing` still blocks (§5). Always loaded |
+| `references/report-schema.json` | JSON Schema (2020-12) for the § 7 machine-readable summary — the normative shape for CI consumers |
 | `references/go-secure-coding.md` | Gate B resource inventory + Gate D 10-domain deep reference (Go only, Standard/Deep) |
 | `references/scenario-checklists.md` | Full 11-scenario checklist with per-item details |
 | `references/severity-calibration.md` | Severity + confidence calibration rules and common finding patterns |

@@ -1,0 +1,29 @@
+{
+  "id": "GOLDEN-026",
+  "title": "Python XXE false positive — stdlib ElementTree does not resolve external entities",
+  "expected_finding": false,
+  "category": "xxe",
+  "stack": "python",
+  "code": "# python:3.13-slim is a FLOATING tag, not a pin — Debian repackages it over time, so the\n# FROM line alone never establishes a version. The verified: line below is the actual authority\n# for this fixture's verdict; re-run it against the image actually deployed, never trust FROM.\n#   Dockerfile: FROM python:3.13-slim\n#   verified:   python3 -c \"import pyexpat; print(pyexpat.EXPAT_VERSION)\" -> expat_2.7.3\n#   (>= 2.7.2 clears CVE-2025-59375 entity/allocation amplification, the mechanisms this fixture\n#    tests — it does NOT clear CVE-2026-45186 (CWE-407, quadratic attribute-name-collision DoS,\n#    needs Expat >= 2.8.1); see allowed_adjacent_cwe)\nimport xml.etree.ElementTree as ET\nfrom fastapi import FastAPI, HTTPException, Request\n\napp = FastAPI()\nMAX_BODY = 1 << 20  # 1 MiB\n\n@app.post(\"/invoices/import\")\nasync def import_invoice(request: Request):\n    body = await request.body()\n    if len(body) > MAX_BODY:\n        raise HTTPException(status_code=413, detail=\"payload too large\")\n    root = ET.fromstring(body)\n    return {\"lines\": len(root.findall(\"line\"))}",
+  "anti_example_patterns": [
+    "Sink is parameterized/safely encoded by framework guarantees"
+  ],
+  "coverage_rules": [
+    "XXE",
+    "defusedxml",
+    "undefined entity",
+    "2.7.2"
+  ],
+  "note": "Regression fixture for the corrected Python XML guidance. Two reflex findings are both wrong here: (1) 'XXE arbitrary file read' — Expat resolves no external entity without an ExternalEntityRefHandler, verified as ParseError: undefined entity; (2) 'billion laughs DoS' — Expat >= 2.4.0 caps the entity amplification factor at 100.0 and refuses the bomb. Both suppress under Rule 3. defusedxml remains a valid hardening suggestion, which must not be presented as a finding. Behaviour asserted by examples/python/xml_facts_test.py.\n\nThe Expat version and the body cap are load-bearing, not decoration. An earlier version of this fixture had neither, and a live reviewer correctly reported allocation amplification (CVE-2025-59375, live below Expat 2.7.2) against an unbounded body — a real finding the fixture had accidentally left reachable while asserting expected_finding=false. Without a readable version the verdict is undecidable, so the fixture declares it rather than leaving the reviewer to guess.\n\nOne CVE further: python:3.13-slim is a floating tag, and Expat 2.7.3 (>= 2.7.2) only clears the two mechanisms this fixture is actually testing (XXE, entity/allocation amplification). It does NOT clear CVE-2026-45186 (CWE-407, Expat >= 2.8.1) — a distinct quadratic-runtime DoS via attacker-controlled attribute names, which this endpoint's unbounded, attacker-supplied XML tags/attributes can reach. A reviewer who reports it is right, not over-reporting; that's why it is in allowed_adjacent_cwe rather than counted against the reviewer either way.",
+  "reference": "references/lang-python.md",
+  "suppressed_cwe": "CWE-611",
+  "suppressed_class": "XXE",
+  "allowed_adjacent_cwe": [
+    "CWE-306",
+    "CWE-400",
+    "CWE-248",
+    "CWE-20",
+    "CWE-407"
+  ],
+  "allowed_adjacent_note": "the endpoint is unauthenticated and returns a 500 on malformed XML. CWE-776 and CWE-770 are deliberately NOT allowed here: the fixture's Expat >= 2.7.2 and body cap clear those two mechanisms, so reporting either would be an over-report. CWE-407 IS allowed: Expat 2.7.3 predates 2.8.1's fix for CVE-2026-45186 (quadratic attribute-name-collision DoS), a different mechanism this build remains exposed to."
+}

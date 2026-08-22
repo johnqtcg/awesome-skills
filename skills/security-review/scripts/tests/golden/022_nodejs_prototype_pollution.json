@@ -1,0 +1,19 @@
+{
+  "id": "GOLDEN-022",
+  "title": "Node.js prototype pollution — recursive merge of req.body into an object",
+  "expected_finding": true,
+  "severity": "P1",
+  "expected_cwe": "CWE-1321",
+  "category": "prototype_pollution",
+  "stack": "nodejs",
+  "code": "const express = require('express');\nconst app = express();\napp.use(express.json());\n\nfunction merge(target, source) {\n  for (const key of Object.keys(source)) {\n    if (source[key] && typeof source[key] === 'object') {\n      target[key] = merge(target[key] || {}, source[key]);\n    } else {\n      target[key] = source[key];\n    }\n  }\n  return target;\n}\n\napp.post('/settings', (req, res) => {\n  const settings = merge({}, req.body);\n  res.json(settings);\n});",
+  "finding_pattern": "prototype pollution",
+  "expected_domain": 8,
+  "coverage_rules": [
+    "Prototype pollution",
+    "Language-Specific Injection Sinks",
+    "null-prototype"
+  ],
+  "note": "A POST body of {\"__proto__\": {\"isAdmin\": true}} walks into Object.prototype because the recursive merge never rejects __proto__/constructor/prototype keys. Every later `obj.isAdmin` read in the process then returns true, so this is an authorization-affecting P1 rather than a data-shape nit. Object.keys() does not enumerate inherited keys, but `__proto__` IS an own enumerable key on a JSON-parsed object, so it is reached.",
+  "reference": "references/lang-nodejs.md"
+}

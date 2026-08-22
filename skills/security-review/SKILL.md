@@ -1,7 +1,7 @@
 ---
 name: security-review
 description: Exploitability-first standalone security review of code changes, diffs, PRs, or services. Use when asked for a security review, security audit, vulnerability assessment, or pre-merge security check (安全审查/安全评审/漏洞排查) — covers auth, input, secrets, API, data, concurrency, container, third-party, and dependency risk across Go, Node.js/TypeScript, Java, and Python, with mandatory evidence, false-positive suppression, scope-based depth (Lite/Standard/Deep), and CWE/OWASP-mapped machine-readable output. NOT for general-purpose Go code review — use go-review-lead for that (it dispatches go-security-review as its security dimension); this skill is the deeper security-only process with mandatory gates and audit-grade output.
-allowed-tools: Read, Grep, Glob, Bash(git diff*), Bash(go vet*), Bash(go build*), Bash(go test -race*), Bash(gosec*), Bash(govulncheck*), Bash(semgrep*), Bash(npm audit*), Bash(curl*), Bash(mvn dependency:tree*), Bash(mvn org.owasp:dependency-check-maven:check*), Bash(mvn spotbugs:check*), Bash(pip-audit*), Bash(safety check*), Bash(bandit*)
+allowed-tools: Read, Grep, Glob, Bash(git diff*), Bash(go vet*), Bash(go build*), Bash(go test -race*), Bash(gosec*), Bash(govulncheck*), Bash(semgrep*), Bash(npm audit*), Bash(curl*), Bash(mvn dependency:tree*), Bash(mvn org.owasp:dependency-check-maven:check*), Bash(mvn spotbugs:check*), Bash(pip-audit*), Bash(safety scan*), Bash(bandit*)
 ---
 
 # Security Review
@@ -163,28 +163,29 @@ Rules:
 
 ## Mandatory Gate Definitions
 
-### Gate A: Constructor-Release Pairing (Mandatory)
+Gates A and B are **one question at two scopes**, not two scans: A runs on the diff at every
+depth, B widens it to the full resource taxonomy at Standard/Deep. Scan once, report once.
 
-For changed code and immediately related call paths, enumerate and verify pairings for every constructor/acquisition call:
+### Gate A: Constructor-Release Pairing (Mandatory, every depth)
+
+Scope: changed code and immediately related call paths.
 
 - Constructors/acquisition: `New*`, `Open*`, `Acquire*`, `Begin*`, `Dial*`, `Listen*`, `Create*`, `WithCancel/WithTimeout/WithDeadline`.
 - Required pairings: `Close`, `Release`, `Rollback/Commit`, `Stop`, `Cancel`, or explicit ownership transfer documented in code.
+- Output: a short pairing table in analysis notes.
+- Severity: a missing or ambiguous pairing is `P2` when an attacker can drive the leak repeatedly, `P3` behind an authenticated/rate-limited path, and reliability-only on a bounded one-shot path. Never grade it on the missing `Close()` alone — see `severity-calibration.md` §Governing Rule.
 
-Output requirement:
+### Gate B: Resource Inventory (Mandatory at Standard/Deep, every stack)
 
-- Include a short pairing table in analysis notes.
-- A missing or ambiguous pairing is `P2` when an attacker can drive the leak repeatedly, `P3` behind an authenticated/rate-limited path, and reliability-only on a bounded one-shot path. Never grade it on the missing `Close()` alone — see `severity-calibration.md` §Governing Rule.
+Extends Gate A's pairing table across Domain 2's full lifecycle half: DB
+rows/statements/transactions/sessions, connections, files, HTTP response bodies, listeners,
+background tasks/goroutines, timers, cancel functions, pipes. Only the release idiom differs by
+stack — Go `defer x.Close()`/`defer cancel()`, Node `finally`/stream cleanup and
+`client.release()`, Java try-with-resources, Python `with`.
 
-### Gate B: Resource Inventory (Mandatory, every stack)
-
-Scan all changed code for resource acquisition without a matching release — Domain 2's lifecycle
-half. Applies to every stack; only the idioms differ: Go `defer x.Close()`/`defer cancel()`,
-Node `finally`/stream cleanup and `client.release()`, Java try-with-resources, Python `with`.
-Typical resources: DB rows/statements/transactions/sessions, connections, files, HTTP response
-bodies, listeners, background tasks/goroutines, timers, cancel functions, pipes.
-
-Key checks: released on both success and error paths; no deferred release inside a loop;
-background tasks have a bounded lifecycle; every timeout paired with its cancel.
+Adds the four path-shape checks a call-site scan cannot see: released on **both** success and
+error paths; no deferred release inside a loop; background tasks have a bounded lifecycle; every
+timeout paired with its cancel.
 
 > **Reference**: `references/go-secure-coding.md` § Gate B has the full Go inventory table and
 > anti-patterns; the matching `lang-*.md` Domain 2 row carries the per-stack equivalents.
@@ -393,98 +394,16 @@ Return outputs in this order. Fields are graded MUST / SHOULD / MAY per review d
 | 8 | **Hardening suggestions** | MAY | SHOULD | MUST |
 | 9 | **Uncovered Risk List** | MUST | MUST | MUST |
 
-### 1) Findings (P0 -> P3)
+Section-by-section field detail: `references/output-contract.md`. Load it when writing the
+report. Two rules are restated here because getting them wrong invalidates the report rather
+than merely trimming it:
 
-Each finding includes: Title · Severity · Confidence (`confirmed/likely/suspected`) ·
-Mapping (`CWE` / version-pinned `ASVS`) · File/line · Exploit path · Impact ·
-Minimal reproducer · Recommended fix · Suggested regression/negative test ·
-Baseline status (`new/regressed/unchanged`) · Origin (`introduced | pre-existing | uncertain`).
-
-The reproducer is required for confirmed P0/P1, but may be **unexecuted instructions** when
-active verification is not authorized — label it as such; never fake execution.
-
-→ Fully worked finding (IDOR, all fields populated, unexecuted reproducer, 404-not-403 fix):
-`references/security-review.md` §One-Shot Finding Example.
-
-#### Finding Volume Cap
-
-P0/P1 findings are never dropped by volume cap — they are always fully reported. P2/P3 soft cap by depth:
-Lite ≤ 3, Standard ≤ 5, Deep ≤ 8 *detailed* findings. **Overflow goes to a `Condensed Findings`
-subsection of §1 — never to §9** — one line each (`ID — severity — title — file:line`), with
-`counts.overflow` set in the JSON.
-
-**§1 and §9 are disjoint.** §9 means *"scope I did not inspect"*; a confirmed P2 is the opposite.
-Filing findings there corrupts the section readers use to judge coverage. The cap limits
-**detail**, not disclosure. → `references/authorization-and-policy.md` §4.
-
-### 2) Security Domain Coverage (Required for every stack)
-
-Header must name the stack, e.g. `Security Domain Coverage — stack: nodejs`.
-
-- Domains 1..10 with `PASS/FAIL/N/A`
-- Applicability per domain (`Applicable` or `N/A` with reason)
-- One-line evidence per domain (deep evidence required only for `Applicable` domains)
-- Total `PASS` count and key failed domains
-
-### 3) Automation Evidence
-
-- Command list actually executed
-- Key outputs (short)
-- Tools skipped/unavailable and reason (including `N/A` applicability skips)
-
-### 4) Open questions / assumptions
-
-### 5) Risk Acceptance Register
-
-P0 findings MUST NOT be accepted without VP-level or equivalent sign-off; record the approver explicitly. P1 findings require tech-lead-level sign-off.
-
-For each accepted risk entry:
-
-- Finding ID
-- Reason for acceptance
-- Compensating controls
-- Approver (name and role)
-- Owner
-- Expiry/review date
-
-### 6) Remediation Plan
-
-- Immediate
-- Short-term
-- Backlog
-
-### 7) Machine-Readable Summary (JSON)
-
-Also output a compact JSON block for CI/inbox ingestion:
-
-```json
-{
-  "summary": { "pass": false, "score": "10/14", "baseline": "present" },
-  "counts": { "p0": 0, "p1": 1, "p2": 2, "p3": 1, "overflow": 0 },
-  "changes": { "new": 2, "regressed": 1, "unchanged": 1, "resolved": 0 },
-  "stack": "go",
-  "asvs_version": "4.0.3",
-  "active_verification": "not_permitted",
-  "security_domains": { "required": true, "total": 10, "pass": 7, "fail": 2, "na": 1 },
-  "findings": [
-    {
-      "id": "SEC-001", "severity": "P1", "confidence": "confirmed", "status": "new",
-      "origin": "introduced", "cwe": "CWE-639", "asvs": "ASVS 4.0.3 V4.1.2",
-      "file": "internal/handler/account.go:88"
-    }
-  ]
-}
-```
-
-`security_domains` uses the same key for every stack — a consumer must never branch on language
-to read the result (there is no `go_domains` key). `stack` may be a comma-joined list;
-`active_verification` mirrors the authorization gate so CI can tell whether findings were
-established statically or dynamically.
-→ Full field rules and multi-stack `per_stack` shape: `authorization-and-policy.md` §2.
-
-### 8) Hardening suggestions
-
-### 9) Uncovered Risk List (Mandatory)
+- **§1 caps detail, never disclosure.** P0/P1 findings are never dropped or folded into another
+  section; the P2/P3 soft cap limits how much is written about each, not whether it is reported.
+- **§7 `summary.pass` is computed, not judged**: `false` when `counts.p0 > 0` or
+  `counts.p1 > 0` or `security_domains.fail > 0`. A §5 Risk Acceptance Register entry does not
+  flip it back to `true`. Validate the block against `references/report-schema.json`; emit no
+  key the schema does not define.
 
 ## Load References Selectively / Bundled Assets
 → See `references/reference-index.md` for the loading guide by depth and stack, and the full

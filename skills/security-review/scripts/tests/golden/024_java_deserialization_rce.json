@@ -1,0 +1,18 @@
+{
+  "id": "GOLDEN-024",
+  "title": "Java RCE — ObjectInputStream.readObject on an attacker-supplied request body",
+  "expected_finding": true,
+  "severity": "P0",
+  "expected_cwe": "CWE-502",
+  "category": "deserialization",
+  "stack": "java",
+  "code": "@RestController\npublic class SessionController {\n\n    @PostMapping(\"/session/restore\")\n    public ResponseEntity<String> restore(@RequestBody byte[] body) throws Exception {\n        try (ObjectInputStream in = new ObjectInputStream(new ByteArrayInputStream(body))) {\n            SessionState state = (SessionState) in.readObject();\n            return ResponseEntity.ok(state.getUserId());\n        }\n    }\n}",
+  "finding_pattern": "deserialization",
+  "expected_domain": 8,
+  "coverage_rules": [
+    "ObjectInputStream.readObject` on untrusted input",
+    "Language-Specific Injection Sinks"
+  ],
+  "note": "The cast to SessionState happens AFTER readObject has already constructed the graph, so it is not a control: gadget chains on the classpath execute during deserialization. P0, and the fix is not a try-with-resources tweak (which the code already has) but refusing Java-native deserialization of untrusted bytes, or an ObjectInputFilter allowlist.",
+  "reference": "references/lang-java.md"
+}

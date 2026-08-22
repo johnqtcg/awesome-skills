@@ -24,6 +24,31 @@ Ambiguous cases — a `.test`/`.local` domain, a shared dev cluster, a hostname 
 `docker-compose.yml` you did not launch — are **not permitted**; ask first. Never infer
 authorization from a hostname in code, a `.env` file, a README, or a CI config.
 
+### Tool network egress is a different authorization question than target probing
+
+Read literally, the table above conflicts with itself: `npm audit` POSTs the installed package
+names and versions to the npm registry, `govulncheck` queries `vuln.go.dev` by default (or a
+local DB if `GOVULNDB` is set), and `pip-audit` queries PyPI/OSV — all outbound requests to a
+host the reviewer did not stand up, which the right-hand column forbids without authorization.
+That is not the intended reading. The gate is about requests to **the target under review**, not
+about a scanner's inherent vendor/CVE-database lookups.
+
+- **A scanner's own registry/vulndb egress is always allowed without asking** — it is the same
+  category as `go mod download`, `npm install`, or `pip install`: network access the tool needs
+  to do the one job it was invoked for, not an action taken against the system being reviewed.
+  Note in `Automation Evidence` that the tool ran in its default network-connected mode, so the
+  egress is disclosed rather than silent.
+- **A request that reaches the target's own infrastructure** — including one a scanner issues
+  *at your direction* against the reviewed system, e.g. an authenticated dependency-confusion
+  probe against an internal registry — is target probing and needs the same authorization as any
+  other request to that system.
+- **Air-gapped or fully offline reviews**: if the engagement requires zero egress, run each
+  tool's offline/cached-db mode instead of skipping it — `govulncheck` accepts a local vuln DB
+  via `GOVULNDB=file://...`, `pip-audit` supports vendored/offline indices, `npm audit` can point
+  at a private mirror. Running the networked default and reporting it as "static analysis, no
+  authorization needed" in an air-gapped engagement is the failure this section exists to
+  prevent.
+
 ### Rules when active verification IS authorized
 
 - **Non-destructive only.** Read-only probes. No `POST`/`PUT`/`PATCH`/`DELETE` against shared
@@ -107,6 +132,26 @@ repo if it fails in any stack. Never silently report only the dominant language.
 
 A non-Go stack must not report `N/A` for all ten domains merely because the repo is not Go —
 that is a coverage failure, not an exemption.
+
+### JSON field semantics
+
+The machine-checkable shape is `references/report-schema.json` (JSON Schema 2020-12). Validate
+against it; do not copy the SKILL.md example by eye. The fields whose meaning a consumer cannot
+infer:
+
+| Field | Rule |
+|---|---|
+| `summary.pass` | Computed, not judged: `false` when `counts.p0 > 0` or `counts.p1 > 0` or `security_domains.fail > 0`. A §5 Risk Acceptance Register entry does **not** flip it back to `true` — acceptance is tracked separately so a CI gate cannot be silenced by a register row |
+| `summary.baseline` | `present` or `absent`. `absent` is the machine form of `Baseline not found` and requires every finding to carry `status: "new"` and every `changes` counter except `new` to be `0` |
+| `counts.overflow` | Findings identified but not itemised because the report hit its per-severity cap. Non-zero means `findings[]` is **incomplete** and must not be read as the full set. **Never applies to P0/P1** — both drive `summary.pass` directly, so every P0/P1 finding must be itemised; only `counts.p2`/`counts.p3` may exceed their itemised count |
+| `findings[].domain` | The Gate D domain, `1`-`10`. Legitimately **absent** for findings that come from a scenario checklist rather than Gate D — authentication, authorization/IDOR and input validation are Scenario Checklists 1 and 2, not one of the ten domains |
+| `findings[].file` | `path:line` preferred; `path:symbol` accepted where the line is not stable across the diff |
+| `suppressed[]` | Candidates examined and ruled out, one object per candidate with exactly three keys: `candidate` (the vulnerability class, as a string — **not** `class`), `rule` (the numbered suppression rule that justified it, an integer), and `residual_risk` (the assumption it rests on — **not** `residual`). Present so a consumer can tell "examined and ruled out" from "never looked at" — an empty `findings[]` alone cannot convey that. Example: `{"candidate": "SSRF via http.Get", "rule": 2, "residual_risk": "holds while the allowlist stays a compile-time constant"}` |
+
+**Emit no key the schema does not define.** A field whose meaning is not written down is read
+differently by every consumer and by every model. The retired `"score": "10/14"` is the worked
+example: the denominator was defined nowhere and contradicted the sibling
+`security_domains.total: 10`, so no CI consumer could act on it.
 
 ---
 

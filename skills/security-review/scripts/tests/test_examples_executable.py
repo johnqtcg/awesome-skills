@@ -15,15 +15,21 @@ readers copy it. So the documented patterns are mirrored as real code under
                          depth cap).
   2. `examples/node`   — proves `safeTokenEqual` never throws on attacker-chosen lengths and
                          that the raw-buffer misuse genuinely raises RangeError.
-  3. Drift checks      — the docs must still teach what the probes prove, and must not
+  3. `examples/python` — proves every row of §Python XML: no stdlib XXE, bounded substitution
+                         does occur, a real amplification bomb is refused on Expat >= 2.4.0,
+                         lxml's ordinary parsers are safe since 5.0.0, and `iterparse` /
+                         `ETCompatXMLParser` are a live XXE below lxml 6.1.0 (CVE-2026-41066).
+  4. Drift checks      — the docs must still teach what the probes prove, and must not
                          reintroduce the retired advice.
 
-Toolchain-dependent tests skip cleanly when `go` / `node` are absent.
+Toolchain-dependent tests skip cleanly when `go` / `node` / `lxml` are absent.
 """
 
+import importlib.util
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -127,6 +133,55 @@ class NodeExampleTests(unittest.TestCase):
         self.assertEqual(
             0, proc.returncode,
             f"documented Node security examples failed:\n{proc.stdout[-4000:]}\n{proc.stderr[-2000:]}",
+        )
+
+
+class PythonExampleTests(unittest.TestCase):
+    """Execute the Python XML fact matrix.
+
+    Added after a review found two version-gated claims in `lang-python.md § Python XML` written
+    down as timeless facts: that stdlib entity expansion made amplification DoS "real" (Expat
+    >= 2.4.0 refuses the bomb), and that lxml resolved external entities and fetched network DTDs
+    by default (neither holds for the ordinary parsers since lxml 5.0.0). The matrix asserts each
+    row against the running interpreter, branching on library version."""
+
+    MATRIX = EXAMPLES / "python" / "xml_facts_test.py"
+
+    def test_python_xml_facts_pass(self) -> None:
+        self.assertTrue(self.MATRIX.is_file(), f"missing {self.MATRIX}")
+        try:
+            proc = subprocess.run(
+                [sys.executable, str(self.MATRIX)], cwd=self.MATRIX.parent,
+                capture_output=True, text=True, timeout=120, errors="replace",
+            )
+        except subprocess.TimeoutExpired:
+            self.fail("XML fact matrix exceeded 120s — an entity bomb is expanding unbounded, "
+                      "which is itself the finding lang-python.md claims cannot happen")
+        self.assertEqual(
+            0, proc.returncode,
+            "the documented Python XML behaviour no longer matches this interpreter; "
+            "re-measure before editing lang-python.md:\n"
+            f"{proc.stdout[-3000:]}\n{proc.stderr[-3000:]}",
+        )
+
+    @unittest.skipIf(importlib.util.find_spec("lxml") is None,
+                     "lxml not installed (optional): the lxml half of the XML matrix did not run")
+    def test_lxml_layer_actually_ran(self) -> None:
+        """Without lxml the CVE-2026-41066 rows are unverified. Surfaced as a skip so
+        run_regression.sh reports the gap instead of counting a partial run as full coverage."""
+        proc = subprocess.run(
+            [sys.executable, "-m", "unittest", "-v", "xml_facts_test.LxmlFacts"],
+            cwd=self.MATRIX.parent, capture_output=True, text=True, timeout=120, errors="replace",
+        )
+        self.assertEqual(0, proc.returncode, proc.stderr[-3000:])
+        # Read unittest's structured summary rather than grepping the body: the test names and
+        # docstrings themselves contain the word "skip".
+        ran = re.search(r"(?m)^Ran (\d+) test", proc.stderr or "")
+        self.assertIsNotNone(ran, f"could not read the lxml run summary:\n{proc.stderr[-1500:]}")
+        self.assertGreaterEqual(int(ran.group(1)), 5, "expected the full lxml row set to run")
+        self.assertNotRegex(
+            proc.stderr or "", r"(?m)^OK \(skipped=[1-9]",
+            "lxml rows skipped internally — the CVE-2026-41066 version gates are unverified",
         )
 
 
@@ -506,7 +561,7 @@ class UnifiedDomainNumberingTests(unittest.TestCase):
 
     def test_gate_b_covers_every_stack(self) -> None:
         skill = SKILL_MD.read_text(encoding="utf-8")
-        self.assertIn("Gate B: Resource Inventory (Mandatory, every stack)", skill)
+        self.assertRegex(skill, r"(?m)^#{2,4}\s*Gate B: Resource Inventory\s*\([^)]*every stack")
         for idiom in ("try-with-resources", "Python `with`", "finally"):
             self.assertIn(idiom, skill,
                           f"Gate B must name the non-Go release idiom: {idiom}")
@@ -527,11 +582,30 @@ class UnifiedDomainNumberingTests(unittest.TestCase):
         self.assertIn("disallow-doctype-decl", text,
                       "Java guidance must name the concrete hardening flag")
 
+    def test_automation_commands_are_not_deprecated_spellings(self) -> None:
+        """Automation commands rot with their ecosystems. Each entry here was verified against
+        the tool, not recalled: npm 10.9.3 answers `npm audit --production` with
+        `npm warn config production Use --omit=dev instead.`, and Safety 3.8.1's own quickstart
+        documents `safety scan`. A skill that prints a deprecated command teaches it."""
+        retired = {
+            r"npm audit\s+--production(?!\s*\`?\s*is)": "npm audit --omit=dev",
+            r"(?<!`)\bsafety check\b(?! is the legacy)": "safety scan",
+        }
+        for doc in _all_docs():
+            text = doc.read_text(encoding="utf-8")
+            for i, line in enumerate(text.splitlines(), 1):
+                if _is_cautionary(line) or "deprecated" in line.lower():
+                    continue  # a line warning against the old spelling is documentation
+                for pattern, replacement in retired.items():
+                    if re.search(pattern, line):
+                        self.fail(f"{doc.name}:{i} prints a deprecated command; use "
+                                  f"{replacement!r}:\n  {line.strip()}")
+
     def test_python_xml_is_split_by_attack_and_library(self) -> None:
         """A blanket "Python XXE applies" is a false-positive generator. Measured on CPython
         3.14 / Expat 2.7.1: an external SYSTEM entity yields `undefined entity` (no file read),
-        while internal entity expansion DOES occur. The guidance must distinguish them, and must
-        separate stdlib from lxml."""
+        while bounded internal substitution DOES occur. The guidance must distinguish them, and
+        must separate stdlib from lxml."""
         text = (REFERENCES / "lang-python.md").read_text(encoding="utf-8")
         # Ban the CLAIM, not one phrasing of it. The first version of this guard forbade only
         # the exact retired sentence, so the same error survived in the Domain 8 summary row
@@ -551,6 +625,51 @@ class UnifiedDomainNumberingTests(unittest.TestCase):
                         f"`undefined entity`):\n  {line.strip()}"
                     )
 
+    def test_python_xml_does_not_claim_amplification_dos_from_substitution(self) -> None:
+        """Second error of the same class as the XXE over-claim, found by a later review.
+
+        The section justified "amplification DoS is real" with a 3-level entity that expanded to
+        1 000 characters. That sits INSIDE Expat's tolerated window (factor <= 100.0, enforced
+        after 8 MiB of output), so it evidences substitution and nothing about DoS. Verified: a
+        real billion-laughs and a quadratic blowup are both refused on Expat >= 2.4.0. Ban the
+        inference, in any phrasing."""
+        text = (REFERENCES / "lang-python.md").read_text(encoding="utf-8")
+        for i, line in enumerate(text.splitlines(), 1):
+            # "expansion is performed, so amplification DoS is real" and paraphrases: an
+            # expansion-occurs premise used to conclude a live DoS, within one sentence.
+            if re.search(r"(?i)expan\w+[^.\n]{0,60}(so|therefore|hence|means)[^.\n]{0,40}"
+                         r"(DoS|amplification)[^.\n]{0,20}(is|are)[^.\n]{0,12}(real|live)", line):
+                self.fail(f"lang-python.md:{i} infers a live amplification DoS from the fact "
+                          f"that substitution occurs:\n  {line.strip()}")
+            # A bare instruction to report expansion DoS, without the version gate.
+            if re.search(r"(?i)\*\*Do\*\* report unbounded entity expansion", line):
+                self.fail(f"lang-python.md:{i} instructs reporting expansion DoS unconditionally; "
+                          f"Expat >= 2.4.0 refuses the bomb:\n  {line.strip()}")
+        # And the corrected facts must be present, keyed to the version that decides them.
+        self.assertRegex(text, r"(?i)amplification[\s\S]{0,400}?2\.4\.0",
+                         "must state the Expat version gate for amplification limiting")
+        self.assertIn("CVE-2026-41066", text,
+                      "must carry the one exploitable Python XML default: lxml iterparse / "
+                      "ETCompatXMLParser XXE below lxml 6.1.0")
+
+    def test_python_xml_lxml_defaults_are_version_gated(self) -> None:
+        """The section claimed lxml "resolves external entities and fetches network DTDs unless
+        configured otherwise". Verified false on lxml 6.0.2: the default parser raises
+        `Entity 'x' not defined`, and a network DTD is refused with `Attempt to load network
+        entity`. The safe default landed in lxml 5.0.0."""
+        text = (REFERENCES / "lang-python.md").read_text(encoding="utf-8")
+        for i, line in enumerate(text.splitlines(), 1):
+            if re.search(r"(?i)lxml[^.\n]{0,80}(resolves|fetch\w*)[^.\n]{0,60}"
+                         r"(external entit|network DTD)", line) and not re.search(
+                    r"(?i)not|\bno\b|false positive|until|unless given|below|resolve_entities=True",
+                    line):
+                self.fail(f"lang-python.md:{i} states lxml's retired default as current; the "
+                          f"ordinary parsers have been safe since 5.0.0:\n  {line.strip()}")
+        self.assertRegex(text, r"(?i)lxml[\s\S]{0,200}?5\.0\.0",
+                         "must name the lxml version where the safe default landed")
+        self.assertIn("no_network=True", text,
+                      "must state that network DTD fetching is off by default")
+
     def test_python_xml_guard_catches_paraphrases(self) -> None:
         """Anti-vacuity: the semantic guard must catch the summary-row wording, not just the
         original sentence."""
@@ -561,40 +680,67 @@ class UnifiedDomainNumberingTests(unittest.TestCase):
             r"(?i)stdlib[^.\n]{0,40}pars\w+[^.\n]{0,30}(honour|honor|process|resolve)[^.\n]{0,20}DTD",
             "semantic guard no longer detects the Domain 8 summary-row paraphrase",
         )
-        # And it must not fire on the corrected wording.
-        corrected = ("**XML** — use `defusedxml` for untrusted input; the live stdlib risk is "
-                     "*entity-expansion DoS*, **not** XXE file read")
+        # And it must not fire on the corrected wording. Kept in sync with the live Domain 8 row:
+        # the earlier version of this literal still said "the live stdlib risk is
+        # *entity-expansion DoS*", which the amplification-limit measurement retired.
+        corrected = ("**XML** — use `defusedxml` for untrusted input, but on a current build "
+                     "**neither** XXE file read **nor** expansion DoS reaches the stdlib "
+                     "parsers, and lxml's exposure is version-gated per call site")
         self.assertNotRegex(
             corrected,
             r"(?i)stdlib[^.\n]{0,40}pars\w+[^.\n]{0,30}(honour|honor|process|resolve)[^.\n]{0,20}DTD",
             "semantic guard false-positives on the corrected wording",
         )
 
-    def test_python_xml_version_boundary_is_not_asserted_from_memory(self) -> None:
-        """The reference claimed `< 2.4.x` as the risky Expat boundary — an unverified number
-        that moves as CPython bumps its bundled Expat. Point at the official doc instead."""
+    def test_python_xml_version_boundaries_are_sourced_not_remembered(self) -> None:
+        """The reference once claimed `< 2.4.x` as the risky Expat boundary with nothing behind
+        it. The fix is not "state no boundary" — a version gate is exactly what makes the rule
+        actionable — but "state it with its source and an executable check". So a boundary is
+        required here, and so is the citation and the probe that back it."""
         text = (REFERENCES / "lang-python.md").read_text(encoding="utf-8")
-        self.assertNotRegex(
-            text, r"(?i)Older Expat \(< 2\.\d",
-            "do not hard-code an Expat risk boundary; cite the official doc and record the "
-            "version actually checked",
-        )
         self.assertIn("docs.python.org/3/library/xml.html#xml-security", text)
+        self.assertIn("libexpat/libexpat", text,
+                      "the amplification-limit gate must cite libexpat's own changelog, not "
+                      "a remembered version number")
         self.assertIn("expat.version_info", text,
                       "must give the command that reports the version under review")
+        self.assertIn("e.LXML_VERSION", text,
+                      "must give the command that reports the lxml version under review")
+        self.assertIn("xml_facts_test.py", text,
+                      "the table must point at the executable matrix that verifies it")
         # External-entity XXE must be marked as NOT applying to the stdlib default.
         self.assertRegex(
             text, r"(?i)external entity[\s\S]{0,200}?\*\*No\*\*|undefined entity",
             "must state that stdlib Expat does not resolve external entities",
         )
-        # Internal expansion must still be reported as live.
+        # Bounded substitution must still be reported as happening — it is the true half of the
+        # retired claim, and dropping it would swing the guidance to the opposite error.
         self.assertRegex(
-            text, r"(?i)internal entity expansion[\s\S]{0,200}?\*\*Yes\*\*",
-            "must state that internal entity expansion DOES occur",
+            text, r"(?i)internal entity (substitution|expansion)[\s\S]{0,240}?\*\*Yes\*\*",
+            "must state that bounded internal entity substitution DOES occur",
         )
-        # Version/build dependence and the lxml carve-out.
+        # ...and it must be separated from the DoS verdicts. There are TWO of those, with
+        # different gates: entity amplification (capped since Expat 2.4.0) and allocation
+        # amplification (CVE-2025-59375, only since 2.7.2). A single merged "amplification DoS"
+        # row is what let the file mark a 2.7.1 build safe while it was still exposed.
+        self.assertRegex(
+            text, r"(?i)Entity amplification[^|]*\|[^|]*\*\*No\*\*",
+            "the entity-amplification row must be stated separately and marked not-applying "
+            "past the 2.4.0 gate",
+        )
+        self.assertRegex(
+            text, r"(?i)Allocation amplification[^|]*\|[^|]*\*\*Yes\*\*",
+            "the allocation-amplification row (CVE-2025-59375) must be stated separately and "
+            "marked as applying below the 2.7.2 gate",
+        )
+        self.assertRegex(
+            text, r"(?i)review rule is Expat\s*(>=|≥)\s*2\.7\.2",
+            "the conservative rule a reviewer applies must be 2.7.2, matching the Python docs",
+        )
+        for cve in ("CVE-2025-59375", "CVE-2023-52426", "CVE-2024-28757"):
+            self.assertIn(cve, text, f"the gate for {cve} must be named, not implied")
         self.assertRegex(text, r"(?i)expat", "must name Expat, since behaviour is version-dependent")
-        self.assertIn("lxml", text, "must carve out lxml, where XXE does apply")
+        self.assertIn("lxml", text, "must carve out lxml, whose gates differ from the stdlib's")
         self.assertIn("defusedxml", text)
 
 
@@ -634,10 +780,19 @@ class RunnerFailsClosedTests(unittest.TestCase):
     def test_runner_accounts_for_the_skippable_layers(self) -> None:
         """Each layer that can silently vanish must be named in the skip accounting."""
         text = self.RUNNER.read_text(encoding="utf-8")
-        for probe in ("command -v go", "command -v node",
+        for probe in ("command -v go", "command -v node", "import lxml", "import jsonschema",
                       "SECURITY_REVIEW_EVAL_CMD", "SKILL_CREATOR_VALIDATOR"):
             self.assertIn(probe, text,
                           f"runner must account for a possible skip of: {probe}")
+
+    def test_runner_attributes_the_schema_skip_once(self) -> None:
+        """Same defect as the live-eval double-report: the jsonschema gap was announced both by
+        the per-suite skip count and by a separate toolchain probe."""
+        text = self.RUNNER.read_text(encoding="utf-8")
+        self.assertEqual(
+            1, len(re.findall(r"note_skip \"jsonschema cross-check", text)),
+            "the jsonschema gap must be reported exactly once",
+        )
 
     def test_runner_counts_skips_structurally_not_by_grepping(self) -> None:
         """Grepping the whole log for "skipped|SKIP" matched this suite's own docstrings and

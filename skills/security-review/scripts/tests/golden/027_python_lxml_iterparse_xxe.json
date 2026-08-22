@@ -1,0 +1,18 @@
+{
+  "id": "GOLDEN-027",
+  "title": "Python XXE — lxml iterparse resolves external entities below lxml 6.1 (CVE-2026-41066)",
+  "expected_finding": true,
+  "severity": "P1",
+  "category": "xxe",
+  "stack": "python",
+  "code": "# requirements.txt pins: lxml==6.0.2\nfrom lxml import etree\nfrom fastapi import FastAPI, UploadFile\n\napp = FastAPI()\n\n@app.post(\"/feeds/ingest\")\nasync def ingest(upload: UploadFile):\n    items = []\n    for _event, element in etree.iterparse(upload.file, events=(\"end\",), tag=\"item\"):\n        items.append(element.findtext(\"title\"))\n        element.clear()\n    return {\"items\": items}",
+  "finding_pattern": "XXE",
+  "expected_domain": 8,
+  "coverage_rules": [
+    "iterparse",
+    "CVE-2026-41066",
+    "Language-Specific Injection Sinks"
+  ],
+  "note": "The counterpart to GOLDEN-026, and the reason the Python XML guidance is version-gated rather than blanket. lxml's ordinary parsers have defaulted to resolve_entities='internal' since 5.0.0, but iterparse and ETCompatXMLParser kept resolve_entities=True until 6.1.0 (CVE-2026-41066). With the pin visible in requirements.txt this is confirmed, not likely. Verified live on lxml 6.0.2 by examples/python/xml_facts_test.py.",
+  "reference": "references/lang-python.md"
+}

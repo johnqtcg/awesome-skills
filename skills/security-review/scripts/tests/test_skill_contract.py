@@ -32,6 +32,11 @@ class SecurityReviewContractTests(unittest.TestCase):
         for ref_file in REFERENCES_DIR.glob("*.md"):
             cls.reference_texts[ref_file.name] = ref_file.read_text()
         cls.all_text = cls.skill_text + "\n".join(cls.reference_texts.values())
+        # The normative report contract spans two files since § Output Contract's field detail
+        # was split into references/output-contract.md: SKILL.md keeps the depth matrix (which
+        # drives execution) and the reference carries §1-§9. Tests about the contract must read
+        # both, or an extraction looks like a deletion.
+        cls.contract_text = cls.skill_text + "\n" + cls.reference_texts["output-contract.md"]
 
     # ------------------------------------------------------------------
     # Frontmatter
@@ -105,9 +110,41 @@ class SecurityReviewContractTests(unittest.TestCase):
 
     def test_gate_b_resource_inventory(self) -> None:
         """Gate B is stack-independent — it was "Go Resource Inventory" while Gate D had already
-        become all-stack, which left the 15-step prose contradicting the domain table."""
-        self.assertIn("Gate B: Resource Inventory (Mandatory, every stack)", self.skill_text)
+        become all-stack, which left the 15-step prose contradicting the domain table.
+
+        Asserted semantically rather than as an exact heading string: the earlier version pinned
+        the literal `(Mandatory, every stack)` parenthetical, so clarifying *which depths* Gate B
+        is mandatory at broke the test without anything being wrong."""
+        self.assertRegex(
+            self.skill_text,
+            r"(?m)^#{2,4}\s*Gate B: Resource Inventory\s*\(([^)]*)\)",
+            "Gate B must keep its heading and a mandatory/scope parenthetical",
+        )
+        heading = re.search(r"(?m)^#{2,4}\s*Gate B: Resource Inventory\s*\(([^)]*)\)",
+                            self.skill_text).group(1)
+        self.assertIn("Mandatory", heading, "Gate B must be marked mandatory")
+        self.assertIn("every stack", heading, "Gate B must stay stack-independent")
         self.assertNotIn("Go Resource Inventory", self.skill_text)
+
+    def test_gate_b_depth_scope_agrees_with_depth_selection(self) -> None:
+        """Gate B's heading now names the depths it applies at. That claim must not contradict
+        the depth table or the Quick Reference, which is how the A/B overlap became invisible in
+        the first place: two sections describing the same scan with no stated relationship."""
+        heading = re.search(r"(?m)^#{2,4}\s*Gate B: Resource Inventory\s*\(([^)]*)\)",
+                            self.skill_text).group(1)
+        if "Standard" in heading or "Deep" in heading:
+            self.assertRegex(self.skill_text, r"skip Gate B",
+                             "the heading says Gate B is Standard/Deep-only, so the fast-scan "
+                             "path must say Gate B is skipped")
+            lite_row = [l for l in self.skill_text.splitlines()
+                        if "**Lite**" in l and "Gate A" in l]
+            self.assertTrue(lite_row, "the depth table must have a Lite row listing its gates")
+            self.assertNotIn("Gate B", lite_row[0],
+                             "Lite must not list Gate B while the heading excludes it")
+        # And the relationship between A and B must be stated, not left implicit.
+        self.assertRegex(self.skill_text, r"(?i)Gates A and B are",
+                         "state how Gate A and Gate B relate; otherwise they read as two "
+                         "copies of the same acquire/release scan")
 
     def test_gate_b_references_detail(self) -> None:
         self.assertIn("references/go-secure-coding.md", self.skill_text)
@@ -235,6 +272,7 @@ class SecurityReviewContractTests(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_output_contract_sections(self) -> None:
+        """Spans SKILL.md + references/output-contract.md — see setUpClass.contract_text."""
         for section in (
             "### 1) Findings",
             "### 2) Security Domain Coverage",
@@ -246,7 +284,7 @@ class SecurityReviewContractTests(unittest.TestCase):
             "### 8) Hardening suggestions",
             "### 9) Uncovered Risk List",
         ):
-            self.assertIn(section, self.skill_text, f"output section {section!r} missing")
+            self.assertIn(section, self.contract_text, f"output section {section!r} missing")
 
     def test_finding_example_exists(self) -> None:
         """The worked example lives in references (progressive disclosure); SKILL.md must
@@ -257,11 +295,12 @@ class SecurityReviewContractTests(unittest.TestCase):
         self.assertIn("Regression test", ref)
         self.assertIn("NOT executed", ref, "the example reproducer must be labelled unexecuted")
         self.assertIn("127.0.0.1", ref, "the example must target loopback, not a real host")
-        self.assertIn("One-Shot Finding Example", self.skill_text,
-                      "SKILL.md must still route the reader to the worked example")
+        self.assertIn("One-Shot Finding Example", self.contract_text,
+                      "the report contract must still route the reader to the worked example; "
+                      "the pointer moved to output-contract.md with § 1 Findings")
 
     def test_json_summary_schema(self) -> None:
-        json_match = re.search(r"```json\n(\{.*?\})\n```", self.skill_text, re.DOTALL)
+        json_match = re.search(r"```json\n(\{.*?\})\n```", self.contract_text, re.DOTALL)
         self.assertIsNotNone(json_match, "JSON summary block not found")
         data = json.loads(json_match.group(1))
         self.assertIn("summary", data)
@@ -279,7 +318,7 @@ class SecurityReviewContractTests(unittest.TestCase):
 
     def test_asvs_mappings_are_version_pinned(self) -> None:
         """A bare `V4` does not identify a requirement: ASVS 5.0.0 renumbered 4.x chapters."""
-        json_match = re.search(r"```json\n(\{.*?\})\n```", self.skill_text, re.DOTALL)
+        json_match = re.search(r"```json\n(\{.*?\})\n```", self.contract_text, re.DOTALL)
         data = json.loads(json_match.group(1))
         for finding in data["findings"]:
             self.assertRegex(
@@ -288,8 +327,8 @@ class SecurityReviewContractTests(unittest.TestCase):
             )
 
     def test_risk_acceptance_requires_approval(self) -> None:
-        self.assertIn("VP-level", self.skill_text)
-        self.assertIn("tech-lead-level", self.skill_text)
+        self.assertIn("VP-level", self.contract_text)
+        self.assertIn("tech-lead-level", self.contract_text)
 
     # ------------------------------------------------------------------
     # Automation gate
@@ -307,6 +346,31 @@ class SecurityReviewContractTests(unittest.TestCase):
         self.assertIn("Tool Interpretation Rules", self.skill_text)
         for tool in ("go test -race", "gosec", "govulncheck"):
             self.assertIn(tool, self.skill_text)
+
+    def test_suppressed_array_field_names_are_stated_not_paraphrased(self) -> None:
+        """Reported hole, found by a live eval run: every other row of the JSON field-semantics
+        table backticks the exact field name, but the `suppressed[]` row described its three
+        sub-fields only in prose ("the vulnerability class", "the residual risk") — a live
+        model consistently wrote `suppressed[].class` and `suppressed[].residual`, neither of
+        which the schema defines, and every occurrence failed schema validation. The docs must
+        name `candidate` and `residual_risk` explicitly, not just describe what they mean."""
+        policy = self.reference_texts["authorization-and-policy.md"]
+        self.assertIn("`candidate`", policy)
+        self.assertIn("`residual_risk`", policy)
+        self.assertIn("not** `class`", policy)
+        self.assertIn("not** `residual`", policy)
+
+    def test_scanner_egress_is_distinguished_from_target_probing(self) -> None:
+        """Reported hole: the authorization table lists `govulncheck`/`npm audit`/`pip-audit`
+        as always-allowed local static scanners while also forbidding 'any request to a host
+        you did not stand up' — but those scanners reach vuln.go.dev / the npm registry / PyPI
+        by default. Without a clarification, a literal reading of the two rules contradicts
+        itself."""
+        policy = self.reference_texts["authorization-and-policy.md"]
+        self.assertIn("different authorization question", policy)
+        for tool_egress in ("npm audit", "vuln.go.dev", "PyPI"):
+            self.assertIn(tool_egress, policy)
+        self.assertIn("air-gapped", policy.lower())
 
     # ------------------------------------------------------------------
     # Standards mapping
@@ -369,11 +433,11 @@ class SecurityReviewContractTests(unittest.TestCase):
     # ------------------------------------------------------------------
 
     def test_finding_volume_cap_documented(self) -> None:
-        self.assertIn("Finding Volume Cap", self.skill_text)
-        self.assertIn("P0/P1", self.skill_text)
-        self.assertIn("P0/P1 findings are never dropped by volume cap", self.skill_text)
+        self.assertIn("Finding Volume Cap", self.contract_text)
+        self.assertIn("P0/P1", self.contract_text)
+        self.assertIn("P0/P1 findings are never dropped by volume cap", self.contract_text)
         for depth_cap in ("Lite ≤ 3", "Standard ≤ 5", "Deep ≤ 8"):
-            self.assertIn(depth_cap, self.skill_text, f"Volume cap for {depth_cap!r} missing")
+            self.assertIn(depth_cap, self.contract_text, f"Volume cap for {depth_cap!r} missing")
 
     # ------------------------------------------------------------------
     # Issue 6: Change Origin Classification
@@ -486,14 +550,26 @@ class TestCoverageDocAccuracy(unittest.TestCase):
         self.assertEqual(actual, declared,
                          f"COVERAGE.md says {declared} fixtures; disk has {actual}")
 
+    # COVERAGE.md label -> test module. Kept in one place because two copies of this mapping
+    # (one per assertion below) drifted apart the moment a fifth module was added.
+    LAYER_LABELS = {
+        "Contract tests": "test_skill_contract.py",
+        "Golden-fixture tests": "test_golden_reviews.py",
+        "Executable-example tests": "test_examples_executable.py",
+        "Forward-eval tests": "test_forward_eval.py",
+        "Report-schema tests": "test_report_schema.py",
+    }
+
+    def test_every_test_module_is_accounted_for(self) -> None:
+        """Derived from disk: a new test module must be declared in COVERAGE.md, or the totals
+        below would silently exclude it and still agree with each other."""
+        on_disk = {p.name for p in self.TESTS.glob("test_*.py")}
+        self.assertEqual(on_disk, set(self.LAYER_LABELS.values()),
+                         f"unaccounted test modules: {on_disk - set(self.LAYER_LABELS.values())}")
+
     def test_declared_test_counts_match_disk(self) -> None:
         text = self.COVERAGE.read_text(encoding="utf-8")
-        for label, module in (
-            ("Contract tests", "test_skill_contract.py"),
-            ("Golden-fixture tests", "test_golden_reviews.py"),
-            ("Executable-example tests", "test_examples_executable.py"),
-            ("Forward-eval tests", "test_forward_eval.py"),
-        ):
+        for label, module in self.LAYER_LABELS.items():
             with self.subTest(module=module):
                 declared = self._declared(text, label)
                 self.assertIsNotNone(declared, f"COVERAGE.md must declare '{label}'")
@@ -503,9 +579,7 @@ class TestCoverageDocAccuracy(unittest.TestCase):
 
     def test_total_is_the_sum(self) -> None:
         text = self.COVERAGE.read_text(encoding="utf-8")
-        parts = sum(self._count_tests(self.TESTS / m) for m in (
-            "test_skill_contract.py", "test_golden_reviews.py",
-            "test_examples_executable.py", "test_forward_eval.py"))
+        parts = sum(self._count_tests(self.TESTS / m) for m in self.LAYER_LABELS.values())
         self.assertEqual(parts, self._declared(text, "Total tests"),
                          "COVERAGE.md 'Total tests' must equal the sum of the layers")
 
@@ -513,6 +587,25 @@ class TestCoverageDocAccuracy(unittest.TestCase):
         text = self.COVERAGE.read_text(encoding="utf-8")
         self.assertIn("test_forward_eval.py", text)
         self.assertIn("forward_eval/README.md", text)
+
+    def test_nested_xml_test_count_is_accurate(self) -> None:
+        """Reported hole: the prose said `xml_facts_test.py` adds 11 more tests and pytest
+        collects N total, while five tests were added to that file without either number being
+        updated — a hand-typed count with no test behind it, the exact failure mode this whole
+        class exists to catch for the five layer modules."""
+        text = self.COVERAGE.read_text(encoding="utf-8")
+        nested = self.TESTS / "examples" / "python" / "xml_facts_test.py"
+        actual_nested = self._count_tests(nested)
+        m = re.search(r"xml_facts_test\.py` adds (\d+) more:", text)
+        self.assertIsNotNone(m, "COVERAGE.md must state how many tests xml_facts_test.py adds")
+        self.assertEqual(actual_nested, int(m.group(1)),
+                         f"COVERAGE.md says {m.group(1)}, xml_facts_test.py defines {actual_nested}")
+        total = sum(self._count_tests(self.TESTS / mod) for mod in self.LAYER_LABELS.values())
+        m2 = re.search(r"collects it directly and reports (\d+)\.", text)
+        self.assertIsNotNone(m2, "COVERAGE.md must state pytest's direct collection count")
+        self.assertEqual(total + actual_nested, int(m2.group(1)),
+                         "COVERAGE.md's pytest-collection number disagrees with layer total + "
+                         "nested xml_facts_test.py count")
 
 
 class TestLanguageReferenceNavigation(unittest.TestCase):

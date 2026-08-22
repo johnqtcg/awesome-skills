@@ -1,0 +1,306 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "security-review/references/report-schema.json",
+  "title": "security-review machine-readable summary (§7)",
+  "description": "The CI-ingestible block emitted by SKILL.md § 7. A consumer must be able to read this without branching on language or parsing prose. Every field is either enumerated or given a computation rule; the invariants JSON Schema cannot express are listed under x-invariants and enforced generically, against any report, by scripts/report_validator.py's validate_report() — the single function scripts/tests/test_report_schema.py and scripts/tests/test_forward_eval.py's grader both call.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "counts",
+    "stack",
+    "asvs_version",
+    "active_verification",
+    "security_domains",
+    "findings"
+  ],
+  "x-invariants": [
+    "security_domains.pass + security_domains.fail + security_domains.na == security_domains.total",
+    "summary.baseline == 'absent' implies changes.regressed == changes.unchanged == changes.resolved == 0 and every finding has status 'new'",
+    "len(findings) + counts.overflow == counts.p0 + counts.p1 + counts.p2 + counts.p3 — findings[] is short ONLY by the number declared in overflow. A report claiming 4 findings, overflow 0, and listing 1 is inconsistent, and a consumer cannot tell whether the other 3 were dropped or never existed.",
+    "counts.p0 and counts.p1 must equal, exactly, the number of findings[] with that severity — overflow may never apply to P0/P1, since summary.pass is computed directly from these two counts; counts.p2 and counts.p3 must each be >= the number of findings[] with that severity (they may legitimately exceed it, via overflow, but never fall short of what is itemised)",
+    "stack containing more than one comma-separated value requires per_stack, keyed by each declared stack name — otherwise a consumer cannot tell which stack a domain failure belongs to; per_stack must not contain an entry for a stack that is not declared in stack",
+    "changes.new + changes.regressed + changes.unchanged == len(findings) + counts.overflow — the same reconciliation as the counts invariant, one field over; `resolved` is excluded because a resolved finding is not reported",
+    "changes.new, changes.regressed, and changes.unchanged must each be >= the number of findings[] with that status — a declared count may not fall short of what is itemised",
+    "every per_stack[*] entry's pass + fail + na must equal security_domains.total — each stack evaluates the same fixed domain set",
+    "per_stack[*].failing_domains, when present, must have length == that stack's fail and no duplicates",
+    "every per_stack[*] entry in a multi-stack report (stack has more than one comma-separated value) MUST provide failing_domains — this is not optional-but-recommended: a count-only per_stack falls back to a lower bound that cannot tell 'two stacks failing the same domain' from 'two stacks failing different domains', so leaving the field out cannot be allowed to silently downgrade the check",
+    "security_domains.fail must equal the size of the UNION of every per_stack[*].failing_domains (not the max, and not the sum — a domain failing in two stacks is one failing domain, not two)",
+    "suppressed[*].rule must be one of the numbered rules under SKILL.md's § False-Positive Suppression Rules"
+  ],
+  "properties": {
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pass", "baseline"],
+      "properties": {
+        "pass": {
+          "type": "boolean",
+          "description": "Gate verdict, computed — not judged. false when counts.p0 > 0 OR counts.p1 > 0 OR security_domains.fail > 0; true otherwise. Both directions are enforced: a clean report may not claim false, and a report with an open P0/P1 or a failing domain may not claim true. An entry in the § 5 Risk Acceptance Register does NOT flip this back to true: acceptance is tracked separately so a CI gate cannot be silenced by a register row."
+        },
+        "baseline": {
+          "enum": ["present", "absent"],
+          "description": "Whether a prior review artifact was available for the new/regressed/unchanged/resolved diff. 'absent' is the machine form of SKILL.md's 'Baseline not found'."
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["p0", "p1", "p2", "p3"],
+      "description": "Reported findings per severity. P0/P1 drive summary.pass.",
+      "properties": {
+        "p0": { "type": "integer", "minimum": 0, "description": "Count of P0 findings." },
+        "p1": { "type": "integer", "minimum": 0, "description": "Count of P1 findings." },
+        "p2": { "type": "integer", "minimum": 0, "description": "Count of P2 findings." },
+        "p3": { "type": "integer", "minimum": 0, "description": "Count of P3 findings." },
+        "overflow": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "Findings identified but not itemised in findings[] because the report hit its per-severity cap. A non-zero value means findings[] is incomplete and must not be read as the full set. Overflow must never apply to P0 or P1: every P0/P1 finding must be itemised in findings[], because summary.pass is computed directly from counts.p0/counts.p1 — hiding one in overflow would make that computed guarantee fiction. Only counts.p2/counts.p3 may exceed their itemised count."
+        }
+      }
+    },
+    "changes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["new", "regressed", "unchanged", "resolved"],
+      "description": "Required when summary.baseline is 'present'.",
+      "properties": {
+        "new": { "type": "integer", "minimum": 0, "description": "Not present in baseline." },
+        "regressed": { "type": "integer", "minimum": 0, "description": "Existed before and severity or confidence worsened (SKILL.md § Baseline Diff Mode). Not 'previously resolved and back' — that is a `new` finding against the current baseline." },
+        "unchanged": { "type": "integer", "minimum": 0, "description": "Present in baseline and still open." },
+        "resolved": { "type": "integer", "minimum": 0, "description": "Removed since baseline." }
+      }
+    },
+    "stack": {
+      "type": "string",
+      "pattern": "^(go|nodejs|java|python)(,(go|nodejs|java|python))*$",
+      "description": "Detected stack, or a comma-joined list for a multi-stack repo. Ordering is not significant."
+    },
+    "asvs_version": {
+      "enum": ["4.0.3", "5.0.0"],
+      "description": "One version per report — never mixed. 5.0.0 renumbered 4.x chapters, so a bare requirement ID is ambiguous without this."
+    },
+    "active_verification": {
+      "enum": ["permitted", "not_permitted"],
+      "description": "Machine form of the authorization gate's 'Active verification: permitted | NOT permitted' line. 'not_permitted' means every finding was established statically and no reproducer was executed."
+    },
+    "security_domains": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "total", "pass", "fail", "na"],
+      "description": "The same key for every stack — a consumer must never branch on language to read this. The retired `go_domains` key must not appear.",
+      "properties": {
+        "required": {
+          "type": "boolean",
+          "description": "Whether Gate D coverage was mandatory at this review depth."
+        },
+        "total": {
+          "const": 10,
+          "description": "The domain set is stack-independent and fixed at 10."
+        },
+        "pass": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Domains evaluated and clean." },
+        "fail": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Domains with at least one finding. Any value > 0 forces summary.pass false." },
+        "na": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Domains not applicable to this change, each justified in the coverage table. A non-Go stack must not mark all ten N/A." }
+      }
+    },
+    "per_stack": {
+      "type": "object",
+      "description": "Multi-stack repos only: one entry per detected stack, keyed by stack name. A domain is FAIL for the repo if it fails in any stack.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["pass", "fail", "na"],
+        "properties": {
+          "pass": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Domains clean in this stack." },
+          "fail": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Domains failing in this stack." },
+          "na": { "type": "integer", "minimum": 0, "maximum": 10, "description": "Domains not applicable in this stack." },
+          "failing_domains": {
+            "type": "array",
+            "items": { "type": "integer", "minimum": 1, "maximum": 10 },
+            "description": "Which of the 10 domains (by number) failed in this stack. Length must equal `fail`, no duplicates. Not in this object's own `required` array (a single-stack report has no use for it), but scripts/report_validator.py's invariants MANDATE it on every entry whenever `stack` is multi-stack — omitting it does not silently fall back to a merely-weaker check, it is itself a validation error, because a fail-count-only per_stack cannot distinguish two stacks failing the SAME domain from two stacks failing DIFFERENT domains (1 failing domain overall vs. 2)."
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "severity", "confidence", "status", "origin", "cwe", "asvs", "file"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^SEC-[0-9]{3,}$",
+            "description": "Report-local identifier, referenced by the Risk Acceptance Register and the remediation plan."
+          },
+          "severity": { "enum": ["P0", "P1", "P2", "P3"] },
+          "confidence": { "enum": ["confirmed", "likely", "suspected"] },
+          "status": {
+            "enum": ["new", "regressed", "unchanged"],
+            "description": "Baseline status of a REPORTED finding (SKILL.md § Output Contract: `new/regressed/unchanged`). `resolved` is deliberately absent: a resolved finding is no longer a finding, so it is counted in changes.resolved and does not appear in findings[]."
+          },
+          "origin": { "enum": ["introduced", "pre-existing", "uncertain"] },
+          "cwe": {
+            "type": "string",
+            "pattern": "^CWE-[0-9]+$",
+            "description": "Single primary CWE. Use the most specific one that fits, not a parent category."
+          },
+          "asvs": {
+            "type": "string",
+            "pattern": "^(ASVS [0-9]+\\.[0-9]+\\.[0-9]+ V[0-9]+(\\.[0-9]+){0,2}( \\(chapter-level\\))?|Mapping: TBD.*)$",
+            "description": "Fully qualified: version, chapter, section, requirement. 'Mapping: TBD <reason>' is permitted; a plausible-but-wrong requirement ID is not."
+          },
+          "domain": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10,
+            "description": "Gate D domain this finding belongs to. Omitted — legitimately — when the finding comes from a scenario checklist rather than Gate D: authentication, authorization/IDOR and input validation are Scenario Checklists 1 and 2, not one of the ten domains."
+          },
+          "file": {
+            "type": "string",
+            "pattern": "^.+:([0-9]+|[A-Za-z_][A-Za-z0-9_.]*)$",
+            "description": "The anchor a reviewer clicks: 'path:line' preferred; 'path:symbol' accepted where the line number is not stable across the diff."
+          }
+        }
+      }
+    },
+    "suppressed": {
+      "type": "array",
+      "description": "Candidates considered and deliberately not reported. Present so a consumer can distinguish 'nothing was looked at' from 'this was examined and ruled out' — the difference an empty findings[] alone cannot convey.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["candidate", "rule", "residual_risk"],
+        "properties": {
+          "candidate": {
+            "type": "string",
+            "description": "The vulnerability class that was considered, e.g. 'SSRF via http.Get'."
+          },
+          "rule": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Which numbered rule from SKILL.md § False-Positive Suppression Rules justified it. A bare 'looks fine' is not a suppression."
+          },
+          "residual_risk": {
+            "type": "string",
+            "description": "The assumption the suppression rests on, and what would invalidate it. Mandated by § False-Positive Suppression Rules ('explain blocking control and residual risk')."
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "title": "pass is computed, not judged: any open P0 forces false",
+      "if": {
+        "required": ["counts"],
+        "properties": {
+          "counts": { "required": ["p0"], "properties": { "p0": { "exclusiveMinimum": 0 } } }
+        }
+      },
+      "then": {
+        "properties": { "summary": { "properties": { "pass": { "const": false } } } }
+      }
+    },
+    {
+      "title": "any open P1 forces false",
+      "if": {
+        "required": ["counts"],
+        "properties": {
+          "counts": { "required": ["p1"], "properties": { "p1": { "exclusiveMinimum": 0 } } }
+        }
+      },
+      "then": {
+        "properties": { "summary": { "properties": { "pass": { "const": false } } } }
+      }
+    },
+    {
+      "title": "any FAILing security domain forces false",
+      "if": {
+        "required": ["security_domains"],
+        "properties": {
+          "security_domains": {
+            "required": ["fail"],
+            "properties": { "fail": { "exclusiveMinimum": 0 } }
+          }
+        }
+      },
+      "then": {
+        "properties": { "summary": { "properties": { "pass": { "const": false } } } }
+      }
+    },
+    {
+      "title": "the converse: a clean report may not claim pass false",
+      "description": "Without this the rule is one-directional and a report can fail its own gate for no stated reason, which is indistinguishable from a bug in the producer.",
+      "if": {
+        "required": ["counts", "security_domains"],
+        "properties": {
+          "counts": {
+            "required": ["p0", "p1"],
+            "properties": { "p0": { "const": 0 }, "p1": { "const": 0 } }
+          },
+          "security_domains": {
+            "required": ["fail"],
+            "properties": { "fail": { "const": 0 } }
+          }
+        }
+      },
+      "then": {
+        "properties": { "summary": { "properties": { "pass": { "const": true } } } }
+      }
+    },
+    {
+      "title": "ASVS version must not be mixed: 4.0.3 declared",
+      "description": "SKILL.md mandates one version per report. A top-level 5.0.0 with 4.0.3 requirement IDs (or vice versa) makes every mapping ambiguous, which is the exact failure the version pinning exists to prevent.",
+      "if": {
+        "required": ["asvs_version"],
+        "properties": { "asvs_version": { "const": "4.0.3" } }
+      },
+      "then": {
+        "properties": {
+          "findings": {
+            "items": {
+              "properties": {
+                "asvs": { "pattern": "^(ASVS 4\\.0\\.3 |Mapping: TBD)" }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "ASVS version must not be mixed: 5.0.0 declared",
+      "if": {
+        "required": ["asvs_version"],
+        "properties": { "asvs_version": { "const": "5.0.0" } }
+      },
+      "then": {
+        "properties": {
+          "findings": {
+            "items": {
+              "properties": {
+                "asvs": { "pattern": "^(ASVS 5\\.0\\.0 |Mapping: TBD)" }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "title": "a baseline diff requires a baseline",
+      "if": {
+        "required": ["summary"],
+        "properties": {
+          "summary": {
+            "required": ["baseline"],
+            "properties": { "baseline": { "const": "present" } }
+          }
+        }
+      },
+      "then": { "required": ["changes"] }
+    }
+  ]
+}

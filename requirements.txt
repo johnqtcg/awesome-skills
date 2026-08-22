@@ -1,5 +1,11 @@
 pytest>=8,<9
 pyyaml>=6,<7
+# Optional, both for skills/security-review. `lxml` lets the Python XML fact matrix verify
+# lxml's version-gated entity-resolution defaults (CVE-2026-41066); `jsonschema` cross-checks
+# the bundled stdlib validator for references/report-schema.json against a real implementation.
+# Both degrade to an accounted-for skip rather than a silent pass.
+lxml>=5,<7
+jsonschema>=4,<5
 reportlab>=4,<5
 python-docx>=1.1,<2
 opencc-python-reimplemented>=0.1.7,<1

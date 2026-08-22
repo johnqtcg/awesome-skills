@@ -1,0 +1,29 @@
+{
+  "id": "GOLDEN-023",
+  "title": "Node.js command-injection false positive — execFile with an argument array",
+  "expected_finding": false,
+  "category": "injection",
+  "stack": "nodejs",
+  "code": "const { execFile } = require('child_process');\n\n// Renders a user-supplied hostname unreachable to a shell: execFile does not spawn one,\n// and every argument is a separate argv entry.\nfunction pingHost(host, cb) {\n  if (!/^[a-zA-Z0-9.-]{1,253}$/.test(host)) return cb(new Error('invalid host'));\n  execFile('/sbin/ping', ['-c', '3', host], { timeout: 5000 }, (err, stdout) => {\n    if (err) return cb(err);\n    cb(null, stdout);\n  });\n}\n\nmodule.exports = { pingHost };",
+  "anti_example_patterns": [
+    "Sink is parameterized/safely encoded by framework guarantees"
+  ],
+  "coverage_rules": [
+    "execFile` with args array",
+    "execFile with separate args"
+  ],
+  "note": "The shape that triggers a reflex 'command injection' report: user input reaching a process spawn. It is not exploitable — execFile bypasses the shell entirely, args are passed as argv, and the host is allowlisted by regex first. Suppression Rule 3. Residual risk is that a later edit swaps execFile for exec, which is what the note must say.",
+  "reference": "references/lang-nodejs.md",
+  "suppressed_cwe": "CWE-78",
+  "suppressed_class": "command injection",
+  "allowed_adjacent_cwe": [
+    "CWE-88",
+    "CWE-400",
+    "CWE-770",
+    "CWE-306",
+    "CWE-1333",
+    "CWE-918",
+    "CWE-209"
+  ],
+  "allowed_adjacent_note": "argument injection via a leading dash (CWE-88) is a different and legitimate finding; so is unbounded concurrent process spawning. CWE-918 is justified: `pingHost` sends ICMP to a caller-supplied hostname, so an attacker can probe internal hosts and infer topology from the timing/output even though no shell is involved. The fixture tests command injection; internal-host probing is a genuinely different and real finding in the same snippet, and Run 3 flagged it before this list did."
+}

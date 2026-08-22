@@ -52,8 +52,11 @@ run_suite() {
   n="$(sed -nE 's/^OK \(.*skipped=([0-9]+).*\)$/\1/p' "${log}" | tail -1)"
   if [[ -n "${n}" && "${n}" -gt 0 ]]; then
     # Attribute the known cause instead of emitting a second, vaguer line for the same gap.
+    # Each known cause is claimed here and NOT repeated in the toolchain probes below.
     if [[ "${label}" == "forward eval" && -z "${SECURITY_REVIEW_EVAL_CMD:-}" ]]; then
       note_skip "live model forward-eval not configured (${n} test; set SECURITY_REVIEW_EVAL_CMD)"
+    elif [[ "${label}" == "report schema" ]] && ! python3 -c "import jsonschema" >/dev/null 2>&1; then
+      note_skip "jsonschema cross-check of the report schema (${n} test; pip install jsonschema)"
     else
       note_skip "${label}: ${n} test(s) skipped (see [3/3] output)"
     fi
@@ -63,12 +66,19 @@ run_suite() {
 run_suite "test_golden_reviews.py"       "golden fixtures"
 run_suite "test_forward_eval.py"         "forward eval"
 run_suite "test_examples_executable.py"  "executable examples"
+run_suite "test_report_schema.py"        "report schema"
 echo ""
 
 # Toolchain absence is reported separately: without these, whole verification layers vanish
 # and the per-suite skip count above is what surfaces it.
 command -v go   >/dev/null 2>&1 || note_skip "Go example verification (go not installed)"
 command -v node >/dev/null 2>&1 || note_skip "Node example verification (node not installed)"
+# The stdlib half of the Python XML matrix always runs; the lxml half carries the
+# CVE-2026-41066 version gates and vanishes silently without the package.
+python3 -c "import lxml" >/dev/null 2>&1 || \
+  note_skip "lxml XML-fact verification (pip install lxml; CVE-2026-41066 gates unverified)"
+# The `jsonschema` cross-check is attributed inside run_suite "report schema" above, so it is
+# deliberately not probed again here — one gap, one line.
 
 echo "=== verdict ==="
 if [[ ${#SKIPS[@]} -eq 0 ]]; then

@@ -1,0 +1,28 @@
+{
+  "id": "GOLDEN-025",
+  "title": "Java XXE false positive — DocumentBuilderFactory already hardened",
+  "expected_finding": false,
+  "category": "xxe",
+  "stack": "java",
+  "code": "public final class InvoiceParser {\n\n    private static DocumentBuilderFactory hardenedFactory()\n            throws ParserConfigurationException {\n        DocumentBuilderFactory dbf = DocumentBuilderFactory.newInstance();\n        dbf.setFeature(\"http://apache.org/xml/features/disallow-doctype-decl\", true);\n        dbf.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);\n        dbf.setXIncludeAware(false);\n        dbf.setExpandEntityReferences(false);\n        return dbf;\n    }\n\n    public Document parse(InputStream untrusted) throws Exception {\n        return hardenedFactory().newDocumentBuilder().parse(untrusted);\n    }\n}",
+  "anti_example_patterns": [
+    "Sink is parameterized/safely encoded by framework guarantees"
+  ],
+  "coverage_rules": [
+    "disallow-doctype-decl",
+    "XXE"
+  ],
+  "note": "Java XXE genuinely applies by default, which is exactly why a hardened factory is the high-value false positive: a reviewer who pattern-matches on 'DocumentBuilderFactory + untrusted InputStream' reports it anyway. disallow-doctype-decl=true rejects the DOCTYPE outright, which subsumes the other flags. Suppression Rule 3.",
+  "reference": "references/lang-java.md",
+  "suppressed_cwe": "CWE-611",
+  "suppressed_class": "XXE",
+  "allowed_adjacent_cwe": [
+    "CWE-400",
+    "CWE-770",
+    "CWE-776",
+    "CWE-405",
+    "CWE-20",
+    "CWE-674"
+  ],
+  "allowed_adjacent_note": "a size cap on the InputStream is absent; a very large well-formed document is a real resource concern that DOCTYPE refusal does not address. CWE-674 (uncontrolled recursion) is justified: `disallow-doctype-decl` refuses a DOCTYPE but does nothing about deeply nested *elements*, which can still exhaust the parser stack. The hardening closes entity attacks, not structural depth."
+}
