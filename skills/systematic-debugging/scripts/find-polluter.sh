@@ -2,6 +2,15 @@
 # Find which test introduces an unwanted file/state artifact.
 # Usage: ./scripts/find-polluter.sh <file_or_dir_to_check> <test_pattern> [runner]
 # Example: ./scripts/find-polluter.sh '.git' './src/**/*.test.ts' 'npm test'
+#
+# Exit codes:
+#   0  no polluter found, and every matched test executed cleanly
+#   1  polluter found
+#   2  the pollution artifact already existed before (or appeared outside) any tracked run
+#   3  no test files matched the given pattern
+#   4  no polluter found, but at least one test run failed to execute (nonzero
+#      exit from the runner itself) — the result is INCOMPLETE, not a clean pass;
+#      treat this differently from 0 in any script/CI that consumes this output
 
 set -euo pipefail
 
@@ -56,6 +65,7 @@ echo "Found $TOTAL test files"
 echo ""
 
 COUNT=0
+FAILED_RUNS=0
 for TEST_FILE in "${TEST_FILES[@]}"; do
   COUNT=$((COUNT + 1))
 
@@ -65,7 +75,12 @@ for TEST_FILE in "${TEST_FILES[@]}"; do
   fi
 
   echo "[$COUNT/$TOTAL] Testing: $TEST_FILE"
-  "${RUNNER[@]}" "$TEST_FILE" >/dev/null 2>&1 || true
+  RUNNER_EXIT=0
+  "${RUNNER[@]}" "$TEST_FILE" >/dev/null 2>&1 || RUNNER_EXIT=$?
+  if [[ $RUNNER_EXIT -ne 0 ]]; then
+    FAILED_RUNS=$((FAILED_RUNS + 1))
+    echo "  (warning: runner exited non-zero for $TEST_FILE — pollution check for this file may be unreliable, it may not have run at all)"
+  fi
 
   if [[ -e "$POLLUTION_CHECK" ]]; then
     echo ""
@@ -84,5 +99,9 @@ for TEST_FILE in "${TEST_FILES[@]}"; do
 done
 
 echo ""
+if [[ $FAILED_RUNS -gt 0 ]]; then
+  echo "INCOMPLETE: no polluter found, but $FAILED_RUNS/$TOTAL test run(s) failed to execute cleanly — this is NOT a confirmed-clean result. Re-run the runner directly on those files to confirm they actually ran, then re-run this script."
+  exit 4
+fi
 echo "No polluter found: all matched tests left '$POLLUTION_CHECK' untouched."
 exit 0

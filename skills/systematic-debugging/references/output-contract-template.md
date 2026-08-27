@@ -18,6 +18,7 @@ Use this structure for every debugging report so reviewers can verify root-cause
 ## 1. Triage
 
 - Severity: `P0|P1|P2`
+- Mode: `diagnose-only|diagnose-and-fix|P0-incident` (see `references/scope-and-severity.md`)
 - Bug type: `logic|race|perf|environment|dependency|build|config|other`
 - User impact: `<one line>`
 - Mitigation status (P0 only): `<what was mitigated and when>`
@@ -110,10 +111,12 @@ If no permanent fix is proposed yet, say so explicitly and explain what evidence
 - Not run in this environment:
 - Why anything was skipped:
 
-Verification should prove:
+For diagnose-and-fix and P0 permanent-fix reports, verification should prove:
 - the original symptom is gone
 - the intended failing scenario is now covered
 - adjacent regressions were considered
+
+For **diagnose-only** reports (no fix implemented — see `references/scope-and-severity.md`), "the symptom is gone" cannot apply; verification instead should prove the root-cause explanation itself is correct: a minimal repro, trace, or targeted experiment demonstrates the mechanism, not just narrates it.
 
 ## 8. Residual Risk and Follow-ups
 
@@ -149,14 +152,16 @@ Also include:
 ## PASS/FAIL Rules
 
 The report is PASS only when all of these hold:
-- Critical tier has no FAIL
+- Critical tier has no FAIL (C1-C5; N/A is not a FAIL when the N/A conditions in `references/scope-and-severity.md` genuinely apply)
 - Standard score is at least `4/6`
 - Hygiene score is at least `3/4`
 - sections 1-9 are present in order
 
-The report is FAIL when any of these occur:
-- fix proposed before root cause evidence
-- no hypothesis log despite non-trivial investigation
-- root cause is a symptom, not a source
-- verification is asserted without commands or exact checks
-- multi-component issue lacks boundary evidence
+The five bullets below are exactly the five Critical criteria (C1-C5) restated as symptoms — they are **not** a second, separate rule layered on top of the Standard/Hygiene tiers, and they are **not** offset by a good Standard/Hygiene score. Any one of them, by itself, makes the report FAIL regardless of every other number:
+- fix proposed before the evidence its declared mode/severity requires (fails C1; not applicable — N/A — in diagnose-only mode, since no fix was requested)
+- no hypothesis log despite non-trivial investigation, and not legitimately N/A under the P2-collapsed-hypothesis rule (fails C4)
+- root cause is a symptom, not a source (fails C2)
+- root cause lacks concrete evidence, or a multi-component issue's failing hop lacks boundary evidence specifically (fails C3)
+- a command, profile, trace, or verification is claimed to have run when it didn't (fails C5 — Reporting Integrity)
+
+A report can still fail on Standard/Hygiene alone even with a clean Critical tier — e.g. thin-but-honest verification (S4) or missing owner/ETA (H3) — but that is a Standard/Hygiene fail, not one of the five above.

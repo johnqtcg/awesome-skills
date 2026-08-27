@@ -5,8 +5,8 @@
   "severity": "P1",
   "bug_type": "other",
   "skill_rules_that_must_fire": [
-    "After 3 rejected hypotheses",
-    "If 3+ Fixes Failed: Question Architecture",
+    "Rejected hypotheses are cheap and normal",
+    "If 3+ Fix Attempts Failed: Question the Architecture",
     "S6",
     "Residual Risk and Follow-ups"
   ],

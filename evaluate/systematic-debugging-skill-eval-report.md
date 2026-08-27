@@ -4,6 +4,8 @@
 > Evaluation date: 2026-03-11
 > Subject: `systematic-debugging`
 
+> **Staleness notice (2026-08-27):** this evaluation was run against a 296-line, 3-scenario predecessor of `SKILL.md` (see §5.1's size table). On 2026-08-27 the skill was substantially restructured — mode split (diagnose-only / diagnose-and-fix / P0), N/A scoring rules, safety/authorization gates, and several factual corrections; see `rationale/systematic-debugging/design.md` §11. The 8.76/10 score below should not be read as representative of the current `SKILL.md`. A fresh live evaluation against the current file, using the same with/without-skill subagent methodology (§2), is recommended as a follow-up rather than assumed.
+
 ---
 
 `systematic-debugging` is a debugging skill that emphasizes "find root cause first, then fix", suitable for test failures, production anomalies, intermittent issues, performance regressions, and third-party integration failures. Its core goal is to avoid guesswork-based patching. Its three main strengths are: breaking the debugging process into clear phases and requiring investigation before proposing permanent fixes; emphasizing explicit hypotheses, evidence collection, and complete investigation steps so debug reports are more verifiable and less speculative; and built-in severity triage that supports stopping the bleed in urgent failures while insisting on returning to root-cause analysis afterward.

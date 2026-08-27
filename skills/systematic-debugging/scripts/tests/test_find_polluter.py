@@ -87,6 +87,81 @@ class FindPolluterTests(unittest.TestCase):
             self.assertEqual(2, cp.returncode)
             self.assertIn("already exists before running tests", cp.stdout)
 
+    def test_runner_failure_is_surfaced_not_swallowed(self):
+        """A runner that can't even execute the test must not read as 'ran clean' —
+        neither in the human-readable text nor in the machine-readable exit code."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write(root / "a.test.ts", "ok")
+            self._write(root / "b.test.ts", "ok")
+            runner = self._make_runner(root, "exit 127")
+            env = os.environ.copy()
+            env["TEST_RUNNER"] = str(runner)
+            cp = subprocess.run(
+                [str(SCRIPT), ".polluted", "./*.test.ts"],
+                cwd=root,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(4, cp.returncode, "must not exit 0 (success) when every run failed to execute")
+            self.assertIn("warning: runner exited non-zero for", cp.stdout)
+            self.assertIn("a.test.ts", cp.stdout)
+            self.assertIn("b.test.ts", cp.stdout)
+            self.assertIn("INCOMPLETE", cp.stdout)
+
+    def test_partial_runner_failure_also_returns_incomplete_code(self):
+        """Even one failed-to-execute run out of many taints the whole scan's guarantee."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write(root / "a.test.ts", "ok")
+            self._write(root / "b.test.ts", "ok")
+            self._write(root / "c.test.ts", "ok")
+            runner = self._make_runner(
+                root,
+                textwrap.dedent(
+                    """
+                    test_file="$1"
+                    if [[ "$test_file" == *"b.test.ts" ]]; then
+                      exit 127
+                    fi
+                    """
+                ).strip(),
+            )
+            env = os.environ.copy()
+            env["TEST_RUNNER"] = str(runner)
+            cp = subprocess.run(
+                [str(SCRIPT), ".polluted", "./*.test.ts"],
+                cwd=root,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(4, cp.returncode)
+            self.assertIn("1/3", cp.stdout)
+
+    def test_clean_suite_with_no_failures_has_no_caveat(self):
+        """The plain 'no polluter found' message stays uncluttered when every run executed."""
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self._write(root / "a.test.ts", "ok")
+            runner = self._make_runner(root, "# no pollution")
+            env = os.environ.copy()
+            env["TEST_RUNNER"] = str(runner)
+            cp = subprocess.run(
+                [str(SCRIPT), ".polluted", "./*.test.ts"],
+                cwd=root,
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(0, cp.returncode)
+            self.assertNotIn("results may be incomplete", cp.stdout)
+            self.assertNotIn("warning:", cp.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

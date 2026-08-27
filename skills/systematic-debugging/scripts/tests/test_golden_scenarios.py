@@ -95,7 +95,7 @@ class TestGolden008ArchitectureQuestion(GoldenScenarioMixin, unittest.TestCase):
     fixture_name = "008_three_failed_fixes_question_architecture.json"
 
     def test_architecture_escalation_rule_exists(self) -> None:
-        self.assertIn("If 3+ Fixes Failed: Question Architecture", ALL_CONTENT)
+        self.assertIn("If 3+ Fix Attempts Failed: Question the Architecture", ALL_CONTENT)
 
 
 class TestGolden009BlockedIncident(GoldenScenarioMixin, unittest.TestCase):

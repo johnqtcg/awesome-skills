@@ -8,7 +8,7 @@
     "P0 Protocol: Mitigate First, Investigate Second",
     "Not run in this environment",
     "Investigation status",
-    "fix proposed before root cause evidence"
+    "fix proposed before the evidence its declared mode/severity requires"
   ],
   "expected_references": [
     "output-contract-template.md",
