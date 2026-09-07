@@ -9,6 +9,7 @@
 - [2. Quantitative entry points](#2-quantitative-entry-points)
 - [3. Avoid hotspots at table-creation time (official guidance, lowest cost)](#3-avoid-hotspots-at-table-creation-time-official-guidance-lowest-cost)
 - [4. The full cost of a salt / bucket scheme](#4-the-full-cost-of-a-salt--bucket-scheme)
+  - [4.1 Why "introduce a partition key" cannot break up a single-row hotspot on its own](#41-why-introduce-a-partition-key-cannot-break-up-a-single-row-hotspot-on-its-own)
 - [5. Bulk-update hotspots (a common variant of `single_row`)](#5-bulk-update-hotspots-a-common-variant-of-single_row)
 - [6. Output contract](#6-output-contract)
 
@@ -49,7 +50,7 @@ Decision entry point: Step 1's `access_patterns.read_hot_single_key` together wi
 | Hotspot type | Read/write | Quantitative signature | Typical treatment |
 |---|---|---|---|
 | `read_hot_row` | read | Extremely high `read_qps` on a single row, extremely low `write_qps`; in the audit view, `total_row_count` is high while `return_rows` is tiny | **Duplicated table**, application cache, rate limiting; **do not add partitions/buckets** |
-| `single_row` | write | High update QPS on a single row, visible lock waits (`event` shows row-lock waits, `retry_cnt` is elevated) | Business-level splitting, incremental sharding, async aggregation; explicit transactions committed as early as possible, defer updates to the commit point; introduce a partition-key dimension to turn single-row contention into multi-row contention |
+| `single_row` | write | High update QPS on a single row, visible lock waits (`event` shows row-lock waits, `retry_cnt` is elevated) | **Add a dimension to the primary key so one row becomes N rows** (counter sharding, or splitting by a real business dimension), *then* fold that column into the partition key to spread those N rows across Tablets — **the order cannot be reversed: partitioning alone cannot break up a single row, see §4.1**; pair with async aggregation, explicit transactions committed early, updates deferred to the commit point |
 | `single_partition` | write | `top1_key_share` is clearly higher than `1/partition_count` | salt/bucket column + query-side fan-out; or change the partition key |
 | `range_tail` | write | Writes concentrated on the newest RANGE partition | RANGE + HASH subpartition combination, pre-created partitions |
 | `leader_skew` | read+write | One OBServer's CPU/network usage is disproportionately high; the audit view is clearly unbalanced when aggregated by `svr_ip` | Primary Zone, load balancing, table group `SCOPE` (see `tablegroup.md` §3) |
@@ -103,7 +104,9 @@ CREATE TABLE user_order (
 
 ## 4. The full cost of a salt / bucket scheme
 
-When introducing a bucket column to break up a **write** hotspot (`single_partition`),
+When introducing a bucket / shard column to break up a **write** hotspot — both the
+`single_partition` case (changing the partition key) and the `single_row` case
+(counter sharding, which **is** a salt scheme and carries the same four costs) —
 you must also provide:
 
 1. How the write side chooses a bucket (random / hash / round-robin), and whether that
@@ -116,6 +119,88 @@ you must also provide:
 
 Saying only "add a salt to spread it out" without these four items is an incomplete
 proposal.
+
+### 4.1 Why "introduce a partition key" cannot break up a single-row hotspot on its own
+
+A common wrong causal chain is "give the table a partition key and single-row contention becomes
+multi-row contention." **That is backwards.**
+
+**Partitioning operates at row granularity.** It decides *which Tablet a row lives in*; it cannot
+split one row into several. So for a hotspot on `goods_id = 3678`: whether you write
+`HASH(goods_id) PARTITIONS 16` or a 100-way LIST, that row still lands in exactly **one** partition
+and the same single row lock still serialises every update. This is the same argument as the
+opening line of this file — "partition a 100-row config table 16 ways and the hot row is still that
+one row" — and **it holds identically on the write side.**
+
+What actually works is **changing the data model so there are more rows**; partitioning is only the
+second, flattening step:
+
+```
+Step 1 (decisive) : add a dimension to the primary key → 1 row becomes N rows → row-lock contention drops to 1/N
+Step 2 (optional) : fold that column into the partition key → N rows land on N Tablets → also flattens Tablet/log-level contention
+```
+
+**Shape A — the hot row is one business entity's own counter** (stock, balance, like count). The only
+option is to invent a sharding dimension.
+
+```sql
+-- Before: one row; every decrement queues on its lock
+CREATE TABLE goods_stock (
+    goods_id NUMBER PRIMARY KEY,
+    stock    NUMBER
+);
+-- data: (3678, 1000)
+
+-- After: the same product becomes N rows
+CREATE TABLE goods_stock (
+    goods_id NUMBER,
+    shard_no NUMBER,                       -- the invented sharding dimension
+    stock    NUMBER,
+    PRIMARY KEY (goods_id, shard_no)       -- <- THIS is what turns 1 row into N
+)
+PARTITION BY HASH (goods_id, shard_no) PARTITIONS 16;   -- <- step 2: spread the N rows
+-- data: (3678,0,100) (3678,1,100) ... (3678,9,100)
+```
+
+```sql
+-- Write: land on a random shard; row-lock contention drops to 1/10
+UPDATE goods_stock SET stock = stock - 1
+ WHERE goods_id = 3678 AND shard_no = MOD(:rand, 10) AND stock > 0;
+
+-- Read: must aggregate (this is the concrete form of §4 item 2's fan-out cost)
+SELECT SUM(stock) FROM goods_stock WHERE goods_id = 3678;
+```
+
+Shape A carries a **correctness cost that must appear in the design**: after sharding, one shard can
+reach zero while others still hold stock, so a decrement fails even though the product is not sold
+out. State the handling (retry against another shard, or periodic shard rebalancing) — otherwise this
+is a business bug, not a performance optimisation.
+
+**Shape B — the hot row is one row shared by many business entities** (a global counter or rollup
+row). Here the "introduced dimension" is a **real business dimension**, no invented shard column is
+needed, and the cost is far lower.
+
+```sql
+-- Before: every merchant updates the same row
+CREATE TABLE daily_stat (biz_date DATE PRIMARY KEY, total NUMBER);
+
+-- After: split by merchant; 1 row becomes N rows
+CREATE TABLE daily_stat (
+    merchant_code VARCHAR2(100),
+    biz_date      DATE,
+    total         NUMBER,
+    PRIMARY KEY (merchant_code, biz_date)
+) PARTITION BY HASH (merchant_code) PARTITIONS 16;
+```
+
+Shape B needs aggregation only for a global total; querying one merchant is *more* precise than
+before. **Prefer B over A whenever possible.** The test: ask "does this row represent one entity, or
+several entities merged together?" — merged means B is available.
+
+**Single-node note**: step 2 buys much less on a single node — row-lock contention is already down to
+1/N from step 1, and partitioning then only reduces Tablet/memtable contention, with no cross-node
+distribution to gain. So on a single-node deployment **step 1 is nearly all of the benefit**; do not
+skip it because the partitioning change looks like work.
 
 ## 5. Bulk-update hotspots (a common variant of `single_row`)
 

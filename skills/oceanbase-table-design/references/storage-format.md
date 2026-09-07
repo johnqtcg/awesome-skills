@@ -6,6 +6,7 @@
 
 - [1. The Real Semantics of the Three Column Group Syntaxes (the Easiest Place to Get Wrong)](#1-the-real-semantics-of-the-three-column-group-syntaxes-the-easiest-place-to-get-wrong)
   - [1.1 "Omitting Column Group Means Row Store" Does Not Hold](#11-omitting-column-group-means-row-store-does-not-hold)
+  - [1.2 The format is not frozen at `CREATE TABLE` — conversion is an `ALTER`](#12-the-format-is-not-frozen-at-create-table--conversion-is-an-alter)
 - [2. Storage Format Decision: Two Independent Axes, Not a Single Mutually-Exclusive Chain](#2-storage-format-decision-two-independent-axes-not-a-single-mutually-exclusive-chain)
   - [Axis 2: Deployment Overlay (Decide First, Highest Priority)](#axis-2-deployment-overlay-decide-first-highest-priority)
   - [Axis 1: In-Table Format (Mutually Exclusive, Take the First Match)](#axis-1-in-table-format-mutually-exclusive-take-the-first-match)
@@ -71,6 +72,34 @@ CREATE TABLE fact_sales (...)
   PARTITION BY RANGE COLUMNS(stat_date) (...)     -- partition option comes in the middle
   WITH COLUMN GROUP(each column);                 -- column group comes last
 ```
+
+### 1.2 The format is not frozen at `CREATE TABLE` — conversion is an `ALTER`
+
+Easy to assume otherwise, and the assumption leads to the wrong sequencing advice. Oracle mode supports converting
+between all three in-table formats after the fact:
+
+| From → to | Statement |
+|---|---|
+| row → columnstore | `ALTER TABLE t ADD COLUMN GROUP(each column);` |
+| row → row-column redundant | `ALTER TABLE t ADD COLUMN GROUP(all columns, each column);` |
+| redundant → columnstore | `ALTER TABLE t DROP COLUMN GROUP(all columns);` |
+| redundant → row | `ALTER TABLE t DROP COLUMN GROUP(each column);` |
+
+Note the semantics: the clause **declares the target set of column groups**, it does not append to what is there.
+
+Two consequences for how the Agent should sequence a design:
+
+- **For a large initial load, prefer "create as row store → load → build indexes → convert".** Writing a second
+  physical copy during a bulk import is pure overhead, and it compounds with the index-build guidance in
+  `sources.md` § Indexing large tables. Recommend the conversion as a separate step rather than folding it into
+  `CREATE TABLE`.
+- **It also side-steps an unverified clause-ordering question.** The official plain-`CREATE TABLE` example carrying
+  `WITH COLUMN GROUP` has no partition clause, so "partition clause followed by `WITH COLUMN GROUP`" has no official
+  example even though the clause order is documented (`doc-gaps.md` §7-3). Converting by `ALTER` avoids the question
+  entirely.
+
+Conversion cost is **not documented** — for a large table this writes an entire additional physical copy, so treat
+duration and lock behaviour as `unverified` and require a timed test before scheduling it.
 
 ## 2. Storage Format Decision: Two Independent Axes, Not a Single Mutually-Exclusive Chain
 
@@ -180,6 +209,13 @@ This is the correct answer for "low-frequency full-table aggregation" scenarios 
 
 Preconditions (all must be satisfied):
 
+- **The deployment must be able to host an additional replica.** A columnstore replica *is* an extra replica, so a
+  single-replica / single-node deployment has nowhere to put one — this is a structural blocker, and it should be
+  checked **first**, before the version and ODP items below, because no amount of version upgrading fixes it.
+  When it fails, Axis 2 resolves to `none` and `unmet_isolation_warning` is mandatory: TP and AP will contend for
+  the same replica's CPU and I/O. On a **shared cluster** add that CPU is isolated per tenant but **disk I/O at the
+  OBServer level is not**, so an AP scan degrades neighbouring tenants too — that is usually a bigger practical risk
+  than the storage overhead of whichever Axis-1 format gets chosen instead.
 - OceanBase Database ≥ **V4.3.3**
 - OBProxy ≥ **V4.3.2**
 - **Deploy a separate OBProxy (ODP) cluster** dedicated to accessing the columnstore replica

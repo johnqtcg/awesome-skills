@@ -17,6 +17,10 @@
   - [5.1 "Every table must have a primary key" vs. "a primary-key-less columnstore table is recommended for ETL scenarios"](#51-every-table-must-have-a-primary-key-vs-a-primary-key-less-columnstore-table-is-recommended-for-etl-scenarios)
   - [5.2 Auto-increment column type: "must be BIGINT, INT prohibited" vs. "INT is acceptable under specific conditions"](#52-auto-increment-column-type-must-be-bigint-int-prohibited-vs-int-is-acceptable-under-specific-conditions)
   - [5.3 Whether the Oracle-mode primary key must include the partition key](#53-whether-the-oracle-mode-primary-key-must-include-the-partition-key)
+- [7. Places where the official partition-lifecycle pages are internally inconsistent](#7-places-where-the-official-partition-lifecycle-pages-are-internally-inconsistent)
+  - [7.1 The drop-partition page's exclusion list says "Truncate"](#71-the-drop-partition-pages-exclusion-list-says-truncate)
+  - [7.2 The hidden config appears on only one mode's page](#72-the-hidden-config-appears-on-only-one-modes-page)
+  - [7.3 `WITH COLUMN GROUP` on a plain `CREATE TABLE`](#73-with-column-group-on-a-plain-create-table)
 - [6. Usage rules](#6-usage-rules)
 
 <!-- /toc -->
@@ -222,6 +226,39 @@ See `capability-matrix.md` §5-5: "Database Development Best Practices," in its 
 "for a partitioned table or an Oracle heap table, the primary key need not include the partition key," which runs
 opposite to the MySQL-mode subset rule. The evidence is insufficient to conclude → **keep as `unverified`**,
 Oracle-mode design still follows the stricter MySQL three-branch rule.
+
+## 7. Places where the official partition-lifecycle pages are internally inconsistent
+
+Recorded so the next reader does not have to re-derive them, and because each one is a reason a claim must be
+**measured** rather than read off the page.
+
+### 7.1 The drop-partition page's exclusion list says "Truncate"
+
+The Oracle-mode *删除分区* page describes the `UPDATE GLOBAL INDEXES` lazy-maintenance optimisation and then lists
+the cases that cannot trigger it — but the first bullet reads *"此时对二级分区执行 **Truncate** 操作"*, on a page
+whose entire subject is `DROP`. It looks copied from the *Truncate 分区* page without adaptation.
+
+Two readings: (a) a copy-paste slip, so the exclusion applies to `DROP` as well; (b) read literally, the drop page
+never states an exclusion for `DROP` at all. **Do not pick a side in a design.** For a LIST/RANGE first level both
+readings give the same answer (not excluded either way); for a HASH first level the readings diverge, so any design
+that would rely on reading (b) must prove it by measurement on the target version.
+
+### 7.2 The hidden config appears on only one mode's page
+
+`_ob_enable_truncate_partition_preserve_global_index` (tenant-level; documented as **True** by default on newly
+created tenants and **False** on upgraded ones, controlling whether partition DDL leaves global indexes valid)
+is documented **only on the MySQL-mode drop-partition page**. The Oracle-mode page does not mention it, and neither
+page states how it composes with the Oracle-mode exclusion list. Since an upgraded tenant defaults to the unsafe
+value, a design must not assume the safe one → always read the parameter and measure.
+
+### 7.3 `WITH COLUMN GROUP` on a plain `CREATE TABLE`
+
+The Oracle-mode V4.5.0 BNF places `table_column_group_option` only in the `CREATE TABLE … AS SELECT` production,
+which reads as if a plain `CREATE TABLE` cannot carry it. The official *创建表* page contradicts this with a working
+plain example (`CREATE TABLE tbl1_cg (col1 NUMBER PRIMARY KEY, col2 VARCHAR2(50)) WITH COLUMN GROUP(all columns);`),
+so **the BNF omission is the error and the clause is usable**. Still unverified: the same clause *after a partition
+clause* — documented clause order says `table option → partition option → column group`, but no official example
+shows the combination. `storage-format.md` §1.2 gives the `ALTER` route that avoids depending on it.
 
 ## 6. Usage rules
 

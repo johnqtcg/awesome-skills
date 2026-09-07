@@ -6,11 +6,15 @@
 
 - [1. Partition Key vs. Primary Key/Unique Key: **Conditional Rule**, Not "Must Have a Primary Key"](#1-partition-key-vs-primary-keyunique-key-conditional-rule-not-must-have-a-primary-key)
   - [1.1 L0 Hard Constraints (Truly Non-Negotiable)](#11-l0-hard-constraints-truly-non-negotiable)
+  - [1.1.1 Why a partition key that is in the primary key can never be nullable](#111-why-a-partition-key-that-is-in-the-primary-key-can-never-be-nullable)
   - [1.2 L1 Recommendation: Risk Warning for Primary-Key-less Tables (a Warning, Not a Rejection)](#12-l1-recommendation-risk-warning-for-primary-key-less-tables-a-warning-not-a-rejection)
   - [1.3 Global Uniqueness for Partitioned Tables](#13-global-uniqueness-for-partitioned-tables)
   - [1.4 Output Contract](#14-output-contract)
 - [2. Local Index vs. Global Index](#2-local-index-vs-global-index)
   - [2.1 Global Indexes Are Not Forbidden — They Are a Cost Decision](#21-global-indexes-are-not-forbidden--they-are-a-cost-decision)
+  - [2.3 Oracle-mode `CREATE INDEX`: four facts that change designs](#23-oracle-mode-create-index-four-facts-that-change-designs)
+  - [2.4 Quantifying the local-index fan-out (so the choice is arithmetic, not vibes)](#24-quantifying-the-local-index-fan-out-so-the-choice-is-arithmetic-not-vibes)
+  - [2.5 The exception that breaks the amortisation: TOP-N, paging, global ordering](#25-the-exception-that-breaks-the-amortisation-top-n-paging-global-ordering)
   - [2.2 Interaction with Partition Operations](#22-interaction-with-partition-operations)
 - [3. Primary Key Design: Separate Constraints from Optimization](#3-primary-key-design-separate-constraints-from-optimization)
 - [4. The Extra Cost of Using an Auto-Increment Column as the Partition Key](#4-the-extra-cost-of-using-an-auto-increment-column-as-the-partition-key)
@@ -38,6 +42,28 @@ Therefore: you **cannot** treat "a partitioned table must have a primary key, an
 2. When there is no primary key but there is a unique key: partition key ⊆ that unique key (must hold for **every** unique key).
 3. **Automatic partition splitting (`SIZE`) is a stricter exception**: it requires a primary key, and the partition key must be a **prefix of the primary key**; primary-key-less tables are not supported.
 4. If a unique constraint does not include all partition key columns → a local unique index **cannot be implemented**; it must be upgraded to a global unique index, explicitly taking on the distributed-transaction cost at write time. The Agent must perform this upgrade and record the cost in warnings — **must not generate it silently**.
+
+### 1.1.1 Why a partition key that is in the primary key can never be nullable
+
+Two official statements decide this, and conflating them is a common error:
+
+> 唯一约束不允许约束包含的列的值有重复值，但是**可以有多个 `NULL` 值**。
+> 主键约束是 **`NOT NULL` 约束和唯一约束的组合**。
+
+So it is the **NOT NULL half**, not the uniqueness half, that rejects a NULL — and NOT NULL applies **per column**:
+in a composite primary key, any one column being NULL is rejected regardless of the others. Declaring the columns
+in a `PRIMARY KEY` implicitly makes them all NOT NULL even if the DDL omits the keyword.
+
+The reason the standard defines it this way is visible in the first quote: because a unique constraint permits
+multiple NULLs, `(t1, NULL, 5)` and `(t1, NULL, 5)` would **both** be accepted under a mere unique index — the
+comparison yields UNKNOWN, not equal. NULL would defeat the very uniqueness the key exists to provide.
+
+Design consequence to surface whenever the partition key comes from a nullable source column: making it a partition
+key forces it into the primary key, which forces `NOT NULL`, which turns every NULL arriving from upstream into a
+**write failure**. For a CDC-fed target that is not a per-row rejection but a **stalled pipeline**. The fix belongs
+upstream (constrain the source) or in the ingest layer (map NULL to a reserved sentinel value); a column-level
+`DEFAULT` does **not** help, because it applies only when the column is omitted from the INSERT, not when NULL is
+supplied explicitly — and CDC supplies every column.
 
 ### 1.2 L1 Recommendation: Risk Warning for Primary-Key-less Tables (a Warning, Not a Rejection)
 
@@ -111,6 +137,85 @@ index_decision:
   must_benchmark: true | false
   sla_reference:               # Rejecting the design is only allowed when the SLA is clearly unmet
 ```
+
+### 2.3 Oracle-mode `CREATE INDEX`: four facts that change designs
+
+The standalone `CREATE INDEX` grammar is **not** in the CREATE TABLE BNF mirror, and four of its properties are
+routinely assumed wrong.
+
+```
+CREATE [UNIQUE] INDEX indexname ON tblname (index_col_name, ...) [index_type] [index_options]
+index_option: GLOBAL | LOCAL | COMMENT 'string' | COMPRESSION | BLOCK_SIZE
+            | STORING(column_list) | VISIBLE | INVISIBLE
+index_col_name: colname [(length)] [ASC | DESC]
+```
+
+1. **The default is `GLOBAL`, not `LOCAL`.** Omitting the keyword silently creates a global index. On a table whose
+   design depends on having no global index (`partitioning.md` §4.1), this is a live footgun: any later
+   `CREATE INDEX … ON t(col);` re-arms the archival problem. **Always write the keyword explicitly**, and on such a
+   table make "all indexes are LOCAL" a standing check, not a one-time review item:
+   ```sql
+   SELECT INDEX_NAME, INDEX_TYPE, UNIQUENESS, STATUS FROM USER_INDEXES WHERE TABLE_NAME = '…';
+   ```
+2. **`DESC` on an index column is not supported.** Official: *"You can add `ASC` … `DESC` (descending order) is not
+   supported."* Oracle DDL carrying `col DESC` must be rewritten ascending; `ORDER BY col DESC` is then served by a
+   reverse index scan. Verify with `EXPLAIN` that no extra sort operator appears.
+3. **There is no partition clause.** A global index is therefore a **single, non-partitioned index object**. Two
+   consequences: its `STATUS` is a property of the whole object (so invalidation is table-wide — see
+   `partitioning.md` §4.1), and a large one concentrates into very few Tablets, which is a compaction/hotspot concern
+   in its own right. Especially bad on a **monotonically increasing key** (a timestamp): 100% of that index's writes
+   land at the tail of one Tablet. For time columns, prefer LOCAL for this reason alone.
+4. **`STORING(cols)` is available** for covering-index style redundancy — the cheap alternative to widening the index
+   key when the goal is only to avoid a back-table read.
+
+### 2.4 Quantifying the local-index fan-out (so the choice is arithmetic, not vibes)
+
+"Local index needs the partition key or it fans out" is true but unactionable. The cost has an exact shape.
+
+For a query returning **R** rows, over **N** candidate partitions after pruning:
+
+| | index seeks | index entries read | back-table reads |
+|---|---|---|---|
+| GLOBAL | **1** | R | R |
+| LOCAL | **N** | R | R |
+
+The last two columns are identical — the same R entries must be read and the same R base rows fetched either way,
+and in both cases the base access is random with respect to the base table's physical order. **So LOCAL's extra cost
+is exactly (N−1) index seeks, and that cost is per query, independent of R.**
+
+Consequences:
+
+- **Point lookup (R≈1): the fan-out is the entire cost.** N=200 means ~200× the work of a global index. This is why
+  point-lookup paths that omit the partition key push toward GLOBAL.
+- **Bulk scan (R large): the fan-out amortises away.** As a rule of thumb, the overhead falls under ~10% once
+  **R ≳ 667 × N** (derived from a 0.2 ms per-partition seek and ~3 µs per row — both L2 empirical, re-measure).
+- **N is not always "all partitions".** Every predicate that prunes a level divides N. A composite
+  `HASH(key) / RANGE(time)` table queried with a one-month range drops from `buckets × months` to `buckets`. This is
+  usually the difference between LOCAL being unusable and being optimal, so compute N for the *actual* predicates
+  rather than the worst case.
+- **Parallelism changes latency, not total work.** With DOP > 1 the N seeks overlap, so wall-clock improves while
+  CPU/IO stays N×. Judge throughput and capacity from the total; judge user-visible latency from the parallel figure.
+  Do not quote one number for both.
+
+### 2.5 The exception that breaks the amortisation: TOP-N, paging, global ordering
+
+§2.4 assumes the R rows are actually consumed. Three shapes look like scans but are not:
+
+- `ORDER BY col DESC FETCH FIRST n ROWS ONLY`
+- `OFFSET m ROWS FETCH NEXT n ROWS ONLY`
+- any global ordering on a non-partition-key column
+
+On a local index these cannot stop early. Each partition's index is sorted only **within itself**, so a globally
+ordered result requires an N-way merge: every stream must be opened, and none can be skipped, even though the answer
+is 20 rows. A global index is one globally ordered structure — scan 20 entries and stop.
+
+**Route TOP-N / paging / global-sort paths to GLOBAL even though they "look like" scans.**
+
+One important sub-case where the merge is *not* costly: if the filter also confines the rows to a single partition
+(e.g. an account whose rows all hash to one bucket), only one stream carries data and the merge degenerates. And when
+the ordering column is the RANGE subpartition key, partition boundaries already supply the global order, so an
+ordered partition scan can stop after the first bucket. Both are plan-shape claims — confirm with `EXPLAIN` before
+relying on them.
 
 ### 2.2 Interaction with Partition Operations
 

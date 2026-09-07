@@ -83,7 +83,7 @@ Rule tiers govern "is this a good design"; confirmation tiers govern "is this sy
 
 ### L1 Default Recommendations (examples)
 
-Point lookups should hit a single partition; time-series data prefers RANGE plus a lifecycle policy; prefer a local index over a global one; archival tables default to local indexes only; LIST partitioning defaults to a `DEFAULT` catch-all.
+Point lookups should hit a single partition; time-series data prefers RANGE plus a lifecycle policy; prefer a local index over a global one; on an archival table that choice follows the first-level partition type (`partitioning.md` §4.1); a LIST `DEFAULT` catch-all fits only a closed value set -- it blocks `ADD PARTITION` forever.
 
 ### L2 Thresholds to Be Verified (**must never** be phrased as "mandatory, otherwise the design fails")
 
@@ -188,9 +188,9 @@ Avoid an auto-increment column as the partition key (inserts cannot route → cr
 
 Choose per `references/tablegroup.md` §1: **duplicated table / aligned-partition Table Group / redundant denormalization / global index**.
 
-- Small dictionary/dimension table that cannot share a partition key → **duplicated table, `DUPLICATE_SCOPE = 'cluster'`**. Never invent a fake partition key to join a table group.
-- Two large tables that naturally share a partition key → Table Group; pick `SHARDING` and `SCOPE` per §2/§3.
-- **`SHARDING = 'NONE'` risk branches by version** (`tablegroup.md` §2.1): **< V4.4.2 BP1** it means "all partitions concentrated on a single node" → assess single-node capacity for the group's total volume; **>= V4.4.2 BP1** that semantics **has been removed** -- `NONE` only means partitions are not co-located across tables, and placement follows `SCOPE`. At >= BP1 do **not** claim NONE concentrates partitions on one node; the risk moves to `SCOPE = SERVER` (all Leaders on one node, hurting load balancing).
+- Small dictionary/dimension table with no shared partition key → **duplicated table, `DUPLICATE_SCOPE = 'cluster'`**. Never invent a fake partition key to join a table group.
+- Two large tables that naturally share a partition key → Table Group; pick `SHARDING` / `SCOPE` per §2/§3.
+- **`SHARDING = 'NONE'` risk branches at V4.4.2 BP1** (`tablegroup.md` §2.1): **below** it, `NONE` also means all partitions concentrated on a single node → assess that node's capacity; **at or above**, that semantics is gone -- `NONE` only means partitions are not co-located across tables, placement follows `SCOPE`, and the risk moves to `SCOPE = SERVER` (all Leaders on one node).
 
 Output the `physical_layout` and `table_group` contracts (`tablegroup.md` §1, §5).
 
@@ -198,7 +198,7 @@ Output the `physical_layout` and `table_group` contracts (`tablegroup.md` §1, �
 
 - Partition key is prunable → local index (its Tablets are forced onto the main table's node -- the physical basis for that).
 - Query omits the partition key, or cross-partition uniqueness is needed → a global index is legal. Decide with the `index_decision` contract; **do not just say "global indexes are banned because they slow writes."**
-- A global index on an archival table (rolled off by partition) needs its rebuild cost flagged (`partitioning.md` §4.1).
+- **Archival table + global index turns on the first-level type**: RANGE/INTERVAL/LIST keep lazy maintenance (`UPDATE GLOBAL INDEXES` mandatory); **HASH is excluded** -- carry no global index, or change the type (`partitioning.md` §4.1). `CREATE INDEX` **defaults to GLOBAL**.
 
 **Local/global does not cover every case.** For the shapes below a regular index cannot be used at all (the fallback is a full scan) -- go to [`references/special-indexes.md`](references/special-indexes.md) and output the `special_index` contract:
 
@@ -207,7 +207,7 @@ Output the `physical_layout` and `table_group` contracts (`tablegroup.md` §1, �
 | `MEMBER OF()` / `JSON_CONTAINS()` / `JSON_OVERLAPS()` | JSON multi-value | On an **existing table**, the sys tenant must enable `_enable_add_fulltext_index_to_existing_table` |
 | Fuzzy search on large text, relevance ranking | Full-text | The `WITH PARSER` tokenizer -- **Chinese must not use `SPACE`** |
 
-Both track column changes (write amplification) and are mutually exclusive with automatic splitting (full-text unsupported; JSON multi-value undocumented → `unverified`). With no triggering predicate output `special_index: not_applicable` -- do not add an index for appearances.
+Both track column changes (write amplification) and are mutually exclusive with automatic splitting. With no triggering predicate output `special_index: not_applicable`.
 
 ### Step 7: Hotspot Classification (classify first, then propose a solution)
 
@@ -222,11 +222,11 @@ Quantitative signatures, remedies, design-time avoidance and the `hotspot` contr
 
 ### Step 8: Partition Lifecycle and Automatic Partitioning
 
-Prefer built-in capabilities, but **the primary DDL may only use C1**. `partitioning.md` §4 has the primary/candidate table per target: Oracle uses `INTERVAL`, MySQL at V4.5.0 uses `DYNAMIC_PARTITION_POLICY`, MySQL below that pre-builds RANGE partitions plus an ops script. **Never both in one primary DDL.** Partition granularity must align with the archival cycle. For automatic splitting run `automatic_partition_check` (`partitioning.md` §3.4): the `SIZE` threshold comes from the tenant item `auto_split_tablet_size` and needs `enable_auto_split` on -- **writing `SIZE` in the DDL does not by itself enable splitting.**
+Prefer built-in capabilities, but **the primary DDL may only use C1**. `partitioning.md` §4 has the primary/candidate table per target: Oracle uses `INTERVAL` -- **first-level only** (§4.2), so a composite table keyed on something else cannot use it; MySQL at V4.5.0 uses `DYNAMIC_PARTITION_POLICY`, MySQL below that pre-builds RANGE partitions plus an ops script. **Never both in one primary DDL.** Partition granularity must align with the archival cycle. For automatic splitting run `automatic_partition_check` (`partitioning.md` §3.4): the `SIZE` threshold comes from the tenant item `auto_split_tablet_size` and needs `enable_auto_split` on -- **writing `SIZE` in the DDL does not by itself enable splitting.**
 
 ### Step 9: Storage Format (a single decision tree)
 
-Follow `references/storage-format.md` §2: **two independent axes**, not one exclusive chain. **Decide axis 2 first** (does physical isolation need a columnstore replica), then axis 1 (the table's format). Put isolation last in a chain and a workload that needs it never reaches that branch.
+Follow `references/storage-format.md` §2: **two independent axes**, not one exclusive chain. **Decide axis 2 first** (does physical isolation need a columnstore replica), then axis 1 (the table's format) -- put isolation last and a workload needing it never reaches that branch.
 
 Six traps live in `storage-format.md`; read the listed section before committing to a format:
 
@@ -234,12 +234,12 @@ Six traps live in `storage-format.md`; read the listed section before committing
 - **Pure AP** is `each column`; `all columns, each column` is row-column redundancy (approximately 2x storage), same-table HTAP only -- §2
 - **Low-frequency narrow aggregation** is row storage + `SKIP_INDEX(MIN_MAX, SUM)`, neither columnstore nor "no solution" -- §3
 - **HTAP has four tiers**, and the two index-level ones are C3 (`candidate_ddl` only). Omit them and light-AP workloads get pushed to approximately 2x redundancy -- §2.1
-- **A columnstore replica** is deployment topology, orthogonal to axis 1, and **eventually consistent** -- unusable by a `strong_consistency` query -- §4
+- **A columnstore replica** is deployment topology, **eventually consistent** (unusable by a `strong_consistency` query), and needs a spare replica slot -- a single-replica deployment cannot host one -- §4
 - **`isolation_required` unmet** → emit `unmet_isolation_warning`, never a silent same-table fallback -- §2
 
 Also determine queuing-table status and table organization (`ORGANIZATION`, MySQL only, defaults to `default_table_organization`).
 
-**The five `TABLE_MODE` values are not an increasing scale**: everything except `NORMAL` is a queuing table, and the axis is **how aggressively a minor compaction triggers a major compaction**. Trade off query-latency sensitivity against compaction cost; default to `QUEUING` absent measured data and leave escalation to a V5 benchmark (L2 -- never "EXTREME is mandatory"). The root fix is time-based partitioning plus `TRUNCATE`/`DROP PARTITION` instead of bulk `DELETE` (`storage-format.md` §5).
+**The five `TABLE_MODE` values are not an increasing scale**: everything except `NORMAL` is a queuing table, and the axis is **how aggressively a minor compaction triggers a major compaction**. Default to `QUEUING` absent measured data; leave escalation to a V5 benchmark (L2 -- never "EXTREME is mandatory"). The root fix is time-based partitioning plus `TRUNCATE`/`DROP PARTITION` instead of bulk `DELETE` (`storage-format.md` §5).
 
 ### Step 10: Capacity Estimation
 
@@ -253,16 +253,16 @@ Compute with `scripts/estimate_tablets.py`; when the database is reachable, `GV$
 
 ### Step 11: DDL Generation
 
-Base the syntax on the BNF mirrors, **but read `doc-gaps.md` first** -- its corrections (LIST enumeration, `AUTO_INCREMENT_MODE`, `NOCACHE` by mode) take priority over the mirror.
+Base the syntax on the BNF mirrors, **but read `doc-gaps.md` first** -- its corrections take priority over the mirror.
 
-Hard syntax requirements: clause order `table option` → `partition option` → `column group`; RANGE `VALUES LESS THAN` strictly increasing; LIST uses `VALUES IN (...)` in MySQL and `VALUES (...)` in Oracle, with a `DEFAULT` catch-all by default; HASH takes an integer in MySQL and a column list in Oracle.
+Hard syntax requirements: clause order `table option` → `partition option` → `column group`; RANGE `VALUES LESS THAN` strictly increasing; LIST uses `VALUES IN (...)` in MySQL and `VALUES (...)` in Oracle -- a `DEFAULT` catch-all only when the value set is closed (`partitioning.md` §5.2); HASH takes an integer in MySQL and a column list in Oracle.
 
-**Auto-increment columns must pass the compatibility-mode gate first** (L0 item 11). The per-mode comparison table is `doc-gaps.md` §2.3.1 -- read it before writing the clause. The four facts that decide the DDL:
+**Auto-increment columns must pass the compatibility-mode gate first** (L0 item 11). Per-mode table: `doc-gaps.md` §2.3.1. The four facts that decide the DDL:
 
-- **MySQL**: column attribute `AUTO_INCREMENT` (defaults to `bigint`); `AUTO_INCREMENT_MODE = 'NOORDER'` is available when strict monotonicity is not required and the deployment is multi-node/multi-partition, or is ordered with all Leaders on one node -- **no TPS threshold, and the table need not be partitioned**.
+- **MySQL**: column attribute `AUTO_INCREMENT` (defaults to `bigint`); `AUTO_INCREMENT_MODE = 'NOORDER'` applies when strict monotonicity is not required -- **no TPS threshold, and the table need not be partitioned**.
 - **Oracle**: `GENERATED [BY DEFAULT | ALWAYS] AS IDENTITY`, or `CREATE SEQUENCE` for cross-table numbering.
-- **Gaps** under NOORDER must always be flagged; their size comes from `AUTO_INCREMENT_CACHE_SIZE` (default 1000000), shrunk by lowering that **integer**. There is no MySQL keyword that disables caching -- `NOCACHE` is Oracle sequence syntax.
-- Official sources disagree on whether INT is absolutely forbidden -- resolve per `doc-gaps.md` §5.2. Upstream of all of it: avoid an auto-increment primary key; prefer a composite key or a distributed ID.
+- **Gaps** under NOORDER must always be flagged; their size comes from `AUTO_INCREMENT_CACHE_SIZE`, an **integer**. There is no MySQL keyword that disables caching -- `NOCACHE` is Oracle sequence syntax.
+- Sources disagree on whether INT is forbidden -- resolve per `doc-gaps.md` §5.2. Upstream: avoid an auto-increment primary key; prefer a composite key or a distributed ID.
 
 ### Step 12: Self-Check and Output
 
@@ -349,12 +349,13 @@ Must not:
 
 - Silently default the compatibility mode or version
 - Substitute qualitative descriptions for quantitative inputs, or fabricate QPS / share values
+- **Assume an archived table's global index is safe without checking the first-level partition type** (`partitioning.md` §4.1), or omit `UPDATE GLOBAL INDEXES` from a drop/truncate
 - Output only SQL, skipping the reasoning
 - Use an L2 empirical threshold to judge a design a "failure"
-- **Treat an L1-B blocker as though it were L0** -- refusing legal DDL, or calling a design infeasible, when the server would have accepted the statement
-- Output an uncalibrated numeric cost score, or treat reasoning as a substitute for `EXPLAIN`
+- **Treat an L1-B blocker as though it were L0** -- refusing legal DDL when the server would have accepted the statement
+- Output an uncalibrated cost score, or treat reasoning as a substitute for `EXPLAIN`
 - **Put C2/C3 unconfirmed capabilities in the primary DDL** -- tagging `unverified` does not make it compliant; move it to `candidate_ddl`
-- Use both INTERVAL and `DYNAMIC_PARTITION_POLICY` in one primary DDL
+- Use both INTERVAL and `DYNAMIC_PARTITION_POLICY` on one table -- officially mutually exclusive (`partitioning.md` §4.2)
 - **Write `AUTO_INCREMENT` / `AUTO_INCREMENT_MODE` / `auto_increment_cache_size` in Oracle-mode DDL**
 - **Write `NOCACHE` in MySQL-mode DDL, or recommend it as the MySQL way to suppress auto-increment gaps** -- it is an Oracle `CREATE SEQUENCE` clause; MySQL takes an integer `AUTO_INCREMENT_CACHE_SIZE`
 - Treat a tenant default as fixed when asserting a table's actual form

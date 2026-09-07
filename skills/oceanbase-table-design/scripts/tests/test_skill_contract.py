@@ -1123,7 +1123,54 @@ class UncoveredRulePinsTests(unittest.TestCase):
 
     def test_global_index_on_archival_table_flags_rebuild(self):
         self.assertIn("global index rebuild", ref("indexes.md"))
-        self.assertIn("global-index-rebuild", ref("partitioning.md"))
+        # Pin the substance, not a hyphenated phrase: the rule that actually decides a
+        # design is that the lazy-maintenance path is *excluded* for a HASH first level,
+        # so "archived table + global index" is conditional on the partition type rather
+        # than a blanket ban. An earlier version of this test asserted the literal string
+        # "global-index-rebuild", which meant rewording the rule -- even to make it more
+        # correct -- turned the suite red while a genuine weakening would have passed.
+        p = ref("partitioning.md")
+        self.assertIn("UPDATE GLOBAL INDEXES", p,
+                      "partitioning.md must state that the keyword is required on "
+                      "drop/truncate, otherwise the index is left unusable")
+        self.assertRegex(p, r"(?is)first-level.{0,80}HASH|HASH.{0,80}first[- ]level",
+                         "partitioning.md must name the HASH first-level exclusion, "
+                         "which is what decides LIST-vs-HASH for an archived table")
+        self.assertIn("blast radius", p,
+                      "partitioning.md must contrast a global index's table-wide "
+                      "invalidation with a local index's per-subpartition scope")
+
+    def test_partition_operation_one_way_doors_documented(self):
+        """MAXVALUE / DEFAULT / templated subpartitions / no ADD VALUES.
+
+        Each is legal to write and impossible to undo without rebuilding the table, so
+        they must be decided before CREATE TABLE. Assert each independently -- one
+        surviving mention must not vouch for the other three.
+        """
+        p = ref("partitioning.md")
+        for needle, why in (
+            ("MAXVALUE", "a MAXVALUE last RANGE partition blocks future ADD PARTITION"),
+            ("DEFAULT", "a DEFAULT last LIST partition blocks future ADD PARTITION"),
+            ("non-templated", "ADD SUBPARTITION requires a non-templated table"),
+            ("ADD VALUES", "there is no way to add a value to an existing LIST partition"),
+        ):
+            self.assertIn(needle, p, why)
+
+    def test_create_index_defaults_to_global(self):
+        """The single easiest way to silently re-arm the archival problem."""
+        i = ref("indexes.md")
+        self.assertRegex(i, r"(?is)default is `?GLOBAL|defaults? to `?GLOBAL",
+                         "indexes.md must state that omitting GLOBAL/LOCAL yields a "
+                         "GLOBAL index, not a LOCAL one")
+
+    def test_local_index_fanout_is_quantified(self):
+        """'Needs the partition key or it fans out' is unactionable without the shape."""
+        i = ref("indexes.md")
+        self.assertIn("(N−1) index seeks", i,
+                      "indexes.md must give the exact extra cost of a local index")
+        self.assertRegex(i, r"(?is)TOP-N|FETCH FIRST",
+                         "indexes.md must record the TOP-N/paging exception, where the "
+                         "fan-out cannot be amortised because the merge cannot stop early")
 
     def test_autoinc_partition_key_costs_cross_node_txn(self):
         self.assertIn("cross-node transactions", ref("indexes.md"))

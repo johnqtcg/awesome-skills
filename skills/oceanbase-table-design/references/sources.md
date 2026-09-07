@@ -21,6 +21,36 @@ there.
 - [Columnstore replicas](https://en.oceanbase.com/docs/common-oceanbase-database-10000000001719945)
 - [Auto-increment columns](https://en.oceanbase.com/docs/common-oceanbase-database-10000000000829618)
 
+## Partition lifecycle (Oracle mode, standalone V4.4.2 LTS)
+
+These pages carry the rules in `partitioning.md` §4.1 / §5 — the global-index interaction, the
+per-combination support matrix, the one-way doors, and the INTERVAL restrictions. They are cited
+individually because several of the statements exist on **only one** of them, and because two of
+them contradict each other in a way recorded in `doc-gaps.md` §7.
+
+- [Create a partitioned table](https://www.oceanbase.com/docs/common-oceanbase-database-standalone-1000000006077662)
+  — INTERVAL restrictions (first-level only, key type allowlist, mutual exclusion with
+  `DYNAMIC_PARTITION_POLICY`); `DEFAULT` / `MAXVALUE` blocking `ADD PARTITION`
+- [Drop a partition](https://www.oceanbase.com/docs/common-oceanbase-database-standalone-1000000006077656)
+  — `UPDATE GLOBAL INDEXES` rule, lazy-maintenance exclusions, drop support matrix
+- [Truncate a partition](https://www.oceanbase.com/docs/common-oceanbase-database-standalone-1000000006077663)
+  — same rule restated for TRUNCATE, truncate support matrix
+- [Add a partition](https://en.oceanbase.com/docs/common-oceanbase-database-10000000001717062)
+  (V4.3.3) — `ADD SUBPARTITION` requires a non-templated table; add support matrix; adding a
+  RANGE/LIST partition does not affect indexes
+- [Modify partition rules](https://www.oceanbase.com/docs/common-oceanbase-database-standalone-1000000006077657)
+  — repartitioning and RANGE↔INTERVAL only; **no `MODIFY PARTITION … ADD VALUES`**
+- [Column constraints](https://www.oceanbase.com/docs/common-oceanbase-database-standalone-1000000006077652)
+  — primary key = NOT NULL + unique; unique permits multiple NULLs (`indexes.md` §1.1.1)
+- [Modify a table](https://www.oceanbase.com/docs/common-oceanbase-database-cn-1000000000641844)
+  (V4.3.0) — row/columnstore conversion via `ALTER TABLE ADD/DROP COLUMN GROUP`
+- [ALTER TABLE](https://en.oceanbase.com/docs/common-oceanbase-database-10000000001106227)
+  (V4.2.1) — `DESC` not supported on index columns; the `ALTER TABLE` production list
+
+> Version caveat: these are V4.4.2 / V4.3.5 / V4.3.3 / V4.3.0 / V4.2.1 pages while this skill's
+> syntax baseline is V4.5.0. Directionally reliable, but a design that hinges on one of them
+> should confirm on the actual target version.
+
 ## Best practices
 
 These are the source of this skill's tenant-default gating (§2.1), the four-tier HTAP
