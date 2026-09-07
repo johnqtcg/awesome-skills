@@ -18,10 +18,6 @@
   "expected_scope_source": "canonical",
   "expected_subject_valid": true,
   "expected_timeout_seconds": 120,
-  "skill_rules_that_must_fire": [
-    ">= 3 commits with the same scope",
-    "use it only if the scope matches staged paths"
-  ],
   "reference_files": [
     "SKILL.md"
   ]

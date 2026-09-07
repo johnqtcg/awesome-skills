@@ -132,20 +132,20 @@ This is a deliberate tradeoff with three benefits:
 | Load on demand | Only the gate for the current ecosystem gets loaded |
 | Independent maintenance | Each language gate can evolve without touching the main workflow |
 
-More importantly, the decision of *which gate to run* is not left to the model's judgment. The skill provides deterministic rules: check the extension distribution of staged files, break ties using the ecosystem marker file closest to the repository root. The goal is not cleverness — it is reproducibility.
+More importantly, the decision of *which gate to run* is not left to the model's judgment. The skill provides deterministic rules: check the extension distribution of staged files, count staged files per ecosystem — deletions included, since a removed file still changes what compiles — and run every detected gate, largest first. The goal is not cleverness — it is reproducibility.
 
 ### 4.6 Message Generation Is Strictly Constrained
 
 The skill enforces two hard constraints on the commit message:
 
-- Total subject length must be ≤ 50 characters.
+- Total subject length must fit the repository's own limit, defaulting to ≤ 50 characters when the repository declares none.
 - A scope may only appear if it has already been established in the commit history — otherwise, omit it entirely.
 
 Each constraint addresses a distinct common failure:
 
 | Constraint | Problem it solves |
 |------------|-------------------|
-| ≤ 50 characters | Prevents the subject from becoming a compressed summary paragraph |
+| ≤ 50 characters by default | Prevents the subject from becoming a compressed summary paragraph, while still deferring to a commitlint/`CONTRIBUTING` limit when the repository sets one |
 | No invented scopes | Prevents messages that look structured but actually introduce incorrect taxonomy |
 
 The no-invented-scope rule deserves emphasis. Many tools encourage the model to always fill in a scope. `git-commit` requires the model to mine scope frequency from recent history before deciding whether to use one at all. This is a deliberate rejection of fake-structured output.
@@ -154,6 +154,243 @@ The April 2026 revision tightens this further in two places:
 
 - **Bootstrap scope only for young repositories**: if the repository has fewer than 10 conventional commits total, the skill may infer a scope from the deepest stable staged directory after stripping generic path segments such as `src`, `pkg`, `internal`, `service`, `services`, `module`, `package`, `component`, and `testdata`. This fixes the "new repo can never establish a scope" failure mode without allowing free-form scope invention in mature repositories.
 - **Executable subject guard**: the skill now requires a shell-level length and trailing-period check before `git commit` runs. The 50-character limit is therefore enforced by a concrete command path, not by model self-discipline alone.
+
+The September 2026 revision came out of an external review that reproduced four
+defects in the shipped scripts. Each fix is pinned by a test that fails against
+the previous version:
+
+- **Deletions reach the ecosystem detector.** `--diff-filter=d` excluded them, so
+  removing an imported `helper.py` alongside a JavaScript edit selected only the
+  Node gate — while the Python package no longer imported. A deletion is the
+  change most likely to break a build, so it must select its gate.
+- **Reads fail closed.** `git diff | awk` reports awk's exit status, so a failed
+  git read produced empty output and exit 0 from both the secret scanner and the
+  ecosystem detector — indistinguishable from "no secrets" and "no ecosystem".
+  Both now check each read and exit 2, because *unknown* is not *none*.
+- **Keyed secrets are recognised in every serialisation.** The old pattern
+  required a literal lowercase key followed by `=`, so `"password": "x"` in JSON
+  and `PASSWORD =` in a properties file were invisible — and, being undetected,
+  were also printed verbatim in the context lines around a neighbouring finding.
+  Matching is now case-insensitive over `:` and `=`, and context lines are masked
+  by the same rule. The residual risk (a short unkeyed literal) is documented in
+  SKILL.md rather than covered by a promise the code cannot keep.
+- **Timeout escalates past TERM.** GNU `timeout` without `--kill-after` returns
+  124 while a TERM-ignoring command keeps running — the coreutils manual
+  demonstrates exactly this. The enforcer now probes for `-k` and passes it, so
+  a timeout means the process group is genuinely dead. GNU reports 137 in that
+  case, which SKILL.md now documents alongside 124.
+
+The same revision moved scope resolution out of prose and into
+`scripts/resolve-scope.sh`. The rules were purely mechanical — count, threshold,
+strip, match — yet leaving them as prose forced the golden tests to re-derive
+them in Python, so those tests only ever proved that one implementation agreed
+with another. Driving the shipped script against real repositories replaced that
+tautology. The move also allowed a rule the prose could not express cleanly: a
+canonical scope is adopted only when **no second canonical scope** appears in the
+staged set, so a commit spanning `auth/` and `billing/` is left unscoped instead
+of being labelled with whichever scope is more frequent.
+
+A second review round in September 2026 found that the first round had fixed the
+reported instances rather than the underlying classes. Four more defects, all
+reproduced before being accepted:
+
+- **Paths were read in git's display form.** `--name-only` honours
+  `core.quotePath`, so `源码/配置.py` arrived as `"\346\272\220…"`. The extension
+  parsed as `py"`, `*.pem` stopped matching, and a stage of CJK-named sources
+  detected no ecosystem at all — silently skipping the gate. All three scripts now
+  read `-z` (raw, NUL-separated) and the patch stream runs under
+  `-c core.quotePath=false`, so a finding is labelled with a path `git show` can
+  actually open. Never hand a matcher the string git escaped for a terminal.
+- **Only the git stage was checked.** The first round checked git's exit status
+  but left the classifier unchecked, so a broken `awk` still exited 0 having
+  printed nothing — the exact shape of a clean scan. `set -o pipefail` plus a
+  status check on every pipeline means each failing stage now reports itself.
+  *Could not tell* is not *nothing found*.
+- **Detection and redaction were conflated.** One function decided both whether a
+  line was a finding and where to cut it, so the 20+ character blob rule could
+  only run as a fallback: `SESSION=<40 chars> password = x` cut at `password` and
+  printed the session token in full, on the finding line itself. These are now
+  two decisions — the blob rule never creates a finding, but always constrains
+  the cut.
+- **The timeout silently degraded.** A `timeout` without `--kill-after` was used
+  anyway, behind a warning, and the perl watcher below it was unreachable.
+  Reporting a timeout that the tool cannot deliver tells the caller the process
+  group is dead while the gate may still hold locks and ports. An ineligible tool
+  is now skipped, the search continues, and if nothing on the host can force-kill
+  the enforcer exits 2 rather than run with a guarantee weaker than it reports.
+  A test that previously *required* the degraded run had its expectation changed.
+
+The pattern across both rounds is the same: a fail-open is rarely one line. It is
+a stage that cannot distinguish "nothing" from "could not tell", and the fix has
+to cover every stage that can produce that ambiguity, not the one that was
+demonstrated.
+
+A third round in September 2026 found a defect the second round had *introduced*.
+`set -o pipefail` was added to make stage failures visible; the context extractor
+stops at `NR > n + 2`; the writer was a pipe. Each choice is correct alone. Together
+they produce a false block that only appears past the pipe buffer: the writer is
+still writing when the reader leaves, takes SIGPIPE, exits 141, and a COMPLETED
+context render is reported as a scanner failure. Clean at three lines, exit 2 at
+twenty thousand — so every small fixture in the suite missed it, including the ones
+written specifically for the pipefail fix.
+
+The fix is not to relax the check. The context stage is now fed by process
+substitution, which keeps the early exit (context is rendered once per finding, so
+a full scan each time would be O(findings x lines)) while structurally excluding the
+writer from the status, so `if !` again measures exactly the thing it names: whether
+awk failed. A here-string would also work, but can spill to a temp file on bash
+before 5.1, and this script must run where TMPDIR is not writable.
+
+Two things generalise from it:
+
+- **Single-point coverage does not find interaction defects.** Every individual
+  choice here had a test. The failure lived in their combination, and was gated on
+  a property no fixture varied — size. The suite now asserts small and large blobs
+  agree *in one test*, so a regression cannot hide behind a passing small case.
+- **A stage-failure check must be attributable.** A mutation deleting the context
+  error check survived, because the shim used to test it broke every awk, so an
+  earlier stage supplied the exit 2 on its own. The shim now fails exactly one
+  invocation, and the test asserts the failing stage names *itself*.
+
+The same round closed two verification gaps rather than adding rules.
+`scripts/run_portability_matrix.sh` re-runs the suite once per available awk and
+reports absent implementations as UNVERIFIED, exiting non-zero if nothing could be
+exercised — an empty matrix is not a green one. That mattered immediately: twelve
+credential patterns are length-anchored by regex intervals (`AKIA[0-9A-Z]{16}`,
+the 20+ blob rule), and an awk without interval support treats `{16}` as literal
+braces, matches nothing, and prints a confident clean result. `secret-scan.sh` now
+probes that capability — both the literal and the runtime-compiled form it uses —
+and refuses to run rather than degrade silently. A real-`gitleaks` contract test
+runs where the binary exists and is reported as a visible skip where it does not,
+because the alternative is a shim-only proof quietly counted as coverage.
+
+Finally, a whole-workflow test executes §1 through §7 in order against one repo and
+asserts a real commit lands. It does not prove the agent *decides* correctly — no
+agent is in the loop — but it caught something no unit test could: SKILL.md's own
+§7 report command printed a deleted CJK path as `"\346\272\220…"`, unreadable to
+the user and not a path `git add --` accepts. The path-escaping class had been fixed
+in all three scripts and missed in the documented commands beside them.
+
+The fourth round in September 2026 answered the standing evidence objection
+rather than adding rules, and the evidence immediately changed the design.
+
+Five environments were exercised with the shipped scripts, using ephemeral
+containers so nothing was installed on the host:
+
+| Environment | awk | intervals | force-kill | Full suite |
+|-------------|-----|-----------|------------|------------|
+| macOS 15.6 | BSD awk 20200816 | yes | perl watcher | pass |
+| Debian 12 | mawk 1.3.4 20200120 | **no** | GNU `timeout -k` | pass, 36 skipped |
+| Debian 12 + gawk | GNU Awk 5.2.1 | yes | GNU `timeout -k` | pass |
+| Ubuntu 24.04 | mawk 1.3.4 20240123 | yes | GNU `timeout -k` | pass |
+| Alpine 3.24 | BusyBox awk | yes | BusyBox `timeout -k`, **no perl** | pass |
+
+Three findings came out of it that no amount of single-host testing would have
+produced:
+
+- **Debian 12's default awk cannot match the patterns.** `mawk 1.3.4 20200120`
+  has no regex interval support, so `AKIA[0-9A-Z]{16}` and eleven siblings match
+  nothing. The capability probe added this round refuses to run there instead of
+  printing a confident clean result. Ubuntu 24.04's `mawk 1.3.4 20240123` — the
+  same nominal version — does support intervals, which is why a version
+  comparison would have been the wrong test and a behavioural probe is the right
+  one.
+- **BusyBox `timeout` does not implement the 124 convention at all.** It reports
+  the child's signal death: 143 for a plain expiry, 137 with `-k`. The previous
+  round had documented "124 or 137", which was simply wrong on Alpine. The
+  enforcer now runs the tool as a child rather than `exec`ing it and normalises a
+  signal death at or past the deadline to 124, keying on elapsed time — the one
+  piece of evidence no implementation can disagree about. Callers went from two
+  codes to one, so the contract got *shorter* by being made correct.
+- **A suite can be wrong about its own applicability.** On interval-less Debian
+  the first run produced 31 failures. The script was behaving correctly; the
+  tests assumed a capable awk. They now gate on the capability and skip with a
+  reason that names the awk and the fix, so an operator on Debian reads
+  "unsupported awk" instead of "broken skill". Installing gawk lifts the gate and
+  all 172 run — proving it is a capability gate, not a blanket disable.
+
+A real `gitleaks` was also exercised for the first time, and corrected two
+things. The exit-code design was confirmed from the binary's own `--help`
+("default 1") and behaviour (`--exit-code 10` yields 10) — but v8.18.4 has no
+`git` subcommand at all and exits 1 for every invocation, which the script
+already failed closed on and now explains in its error message. It also
+invalidated one of this repository's own test fixtures: gitleaks **allowlists**
+`AKIAIOSFODNN7EXAMPLE`, AWS's documentation key, and reports "no leaks found" for
+it. A test built on that fixture proves nothing about the real scanner.
+
+Two verification gaps remain, and are now addressed by tooling rather than by
+assertion. `scripts/run_cross_env_probe.sh` needs only bash, git and awk, so it
+runs where python does not — which is most minimal images, and was why every
+non-macOS row had been missing. `scripts/eval/` probes the one thing no
+deterministic suite can reach: whether an agent following the instruction picks
+the right *branch* when authorisation is ambiguous, a change mixes intents, or a
+tool reports an abnormal result. Its README states plainly that it grades a
+stated decision in plan mode, is non-deterministic, reports per-repetition rather
+than averaging, and treats a missing answer as INCOMPLETE rather than as a score.
+
+Finally, the instruction was shortened. `SKILL.md` had accumulated the reasoning
+behind each contract inline, which an agent re-reads on every invocation and
+which duplicated the design documents. The measured evidence moved to
+`references/design-evidence.md`, loaded only when maintaining the skill, and the
+guard against regrowth is a **character** budget rather than a line count —
+because the bloat had arrived as long sentences inside existing bullets, moving
+the line count not at all.
+
+The fifth round, September 2026, fixed two regressions the fourth round had
+introduced, and then found a third defect in the evaluation harness that
+invalidated part of the fourth round's own recorded evidence.
+
+**A failing container was summarised as a pass.** The matrix ran
+`if docker run … | sed 's/^/    /'`, so the `if` tested *sed*. A container
+exiting 42 produced "all 2 exercised implementation(s) pass" and exit 0. In full
+mode a second pipeline, `pytest … | tail -3`, hid a failing suite the same way.
+Both now capture the status before formatting. Deliberately not `set -o pipefail`
+for the whole file: other pipelines there end in `head -1`, whose early exit
+would then be reported as a failure — the same trap round three fell into.
+
+**Cancellation stopped reaching the gate.** Normalising the timeout code replaced
+`exec tool` with a supervisor that launched the tool in the background and
+`wait`ed. While it was `exec`, a signal to the executor hit the tool directly;
+the supervisor forwarded nothing. Measured: SIGTERM to the executor returned 143
+at once while the gate ran on and wrote its side effect two seconds later. The
+supervisor now runs the tool in its own process group (`set -m`), forwards
+INT/TERM/HUP to that **group**, waits for the group to empty, escalates to KILL,
+and only then exits.
+
+Two attempts at asserting that were wrong before one was right, and the wrong
+ones are the more instructive:
+
+- Asserting "no side effect at all after cancellation" passed by luck. Graceful
+  termination sends TERM first *so that* a gate may clean up, and a shell gate
+  finishes the statement it was on. The assertion was really a race on how far
+  the gate got. It now asserts the guarantee the design actually makes: the gate
+  is dead before the executor exits, and nothing new appears afterwards.
+- Asserting the group kill makes cancellation *prompt* failed on correct code.
+  With a tool that ignores TERM and a shell gate that survives it, the group form
+  is no faster than the pid form; both wait out the grace window. What the group
+  form buys is that the **escalation reaches the whole tree at all** — a pid-only
+  escalation leaves such a gate running forever. Mutation testing is what forced
+  that distinction: reverting only the forward survived, and only reverting the
+  escalation as well was caught.
+
+**The eval's skill arm had been running with no skill.** `SKILL_DIR` came from
+`$0`, so copying the runner elsewhere to point it at a subset of scenarios moved
+that path; `SKILL.md` did not exist, and the arm labelled `skill` was a second
+control arm. Four recorded cells were void and had been reported as wins. It is
+worth being precise about why it was caught at all: one nested run *said* the
+file was missing and refused to substitute another `SKILL.md` it could have
+found. Had it silently guessed, the numbers would have looked fine.
+
+The runner now refuses to start without `SKILL.md` (exit 2), stamps the skill
+path, line count and hash into every transcript so validity is auditable per
+cell rather than inferred from prose, and takes `EVAL_SKILL_DIR` /
+`EVAL_SCEN_DIR` so nobody needs to copy it. The void results were deleted rather
+than annotated, and the standing summary of the eval is now "no measured
+decision benefit" — six paired cells that *both* arms pass cannot demonstrate
+one. Scenario 10 is the single case known to separate the arms, and only after
+its grader was tightened from length alone to format **and** length: a base
+answer of `Add reconciliation matcher stub` fits in fifty characters and is not
+Conventional Commits at all.
 
 ### 4.6.1 Timeout Overrides Are Explicit
 
@@ -278,4 +515,5 @@ Review quarterly; review immediately if the `git-commit` skill undergoes signifi
 - `skills/git-commit/references/quality-gate-python.md`
 - `skills/git-commit/references/quality-gate-java.md`
 - `skills/git-commit/references/quality-gate-rust.md`
+- `skills/git-commit/scripts/resolve-scope.sh`
 - `evaluate/git-commit-skill-eval-report.md`

@@ -24,10 +24,6 @@
   "expected_scope_source": "omitted",
   "expected_subject_valid": true,
   "expected_timeout_seconds": 120,
-  "skill_rules_that_must_fire": [
-    "the repo already has `>= 10` conventional commits without a canonical match, omit scope",
-    "Never invent a scope"
-  ],
   "reference_files": [
     "SKILL.md"
   ]

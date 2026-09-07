@@ -7,9 +7,33 @@
 # stage touching only go.mod / package.json / Cargo.toml / pyproject.toml /
 # pom.xml still selects its gate. The count only orders the gates — it never
 # drops a minority ecosystem (5 Go files + 1 TS file → both "go" and "node").
+#
+# DELETIONS COUNT. Removing a file is exactly the change most likely to break
+# the build for its ecosystem (a deleted helper.py breaks every importer), so
+# unlike secret-scan.sh — which reads blob content and must skip deletions —
+# this detector must see them. `--no-renames` makes a rename report both the
+# old and the new path, so `foo.py -> foo.txt` still selects the python gate.
+#
+# Fail-closed, because EMPTY output is this script's signal for "no ecosystem
+# detected", which §4 turns into "quality gate: not detected". Any stage that
+# fails — the git read or the awk that classifies — must therefore exit 2:
+# "could not tell" is not "none". `pipefail` makes a failing awk visible; without
+# it the shell reports only the last command's status.
 set -u
+set -o pipefail
 
-git diff --cached --name-only --diff-filter=d | awk '
+# `-z` gives raw, NUL-separated paths. Plain --name-only is DISPLAY output: with
+# the default core.quotePath, a non-ASCII path arrives as "\346\272\220…" and the
+# extension parses as `py"` — so a stage of 配置.py detected nothing at all and
+# skipped the gate. Never classify a path that git escaped for a terminal.
+# Residual: `tr` turns a path containing a literal newline into two entries.
+# That over-reports (an extra bogus path), which is the safe direction here.
+if ! staged=$(git diff --cached -z --name-only --no-renames 2>/dev/null | tr '\0' '\n'); then
+  echo "detect-ecosystems: could not read staged paths — ecosystems are UNKNOWN, not none" >&2
+  exit 2
+fi
+
+if ! printf '%s\n' "$staged" | awk '
   {
     base = $0; sub(/.*\//, "", base)
     if (base == "go.mod" || base == "go.sum" ||
@@ -41,4 +65,7 @@ git diff --cached --name-only --diff-filter=d | awk '
     else if (ext == "rs")                                      count["rust"]++
   }
   END { for (e in count) printf "%d %s\n", count[e], e }
-' | sort -rn | awk '{ print $2 }'
+' | sort -rn | awk '{ print $2 }'; then
+  echo "detect-ecosystems: classification failed — ecosystems are UNKNOWN, not none" >&2
+  exit 2
+fi

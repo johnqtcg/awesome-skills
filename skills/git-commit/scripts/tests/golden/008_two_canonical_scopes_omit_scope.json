@@ -1,0 +1,27 @@
+{
+  "id": "008",
+  "description": "A stage spanning TWO canonical scopes is a mixed commit: the scope must be omitted, not resolved to whichever scope is more frequent. This is the case that distinguishes 'scope matches some staged path' from 'scope is not contradicted by another canonical scope' — under the weaker rule this fixture would be labelled auth and quietly mislabel the billing half.",
+  "scenario_type": "two_canonical_scopes",
+  "history": [
+    "01aa01a feat(auth): add refresh endpoint",
+    "02aa02a fix(auth): handle expired token",
+    "03aa03a test(auth): add refresh race case",
+    "04aa04a feat(billing): add invoice sync",
+    "05aa05a fix(billing): correct proration",
+    "06aa06a test(billing): add sync regression"
+  ],
+  "staged_paths": [
+    "src/auth/refresh.go",
+    "src/billing/invoice.go"
+  ],
+  "commit_type": "refactor",
+  "proposed_subject": "share retry helper",
+  "expected_scope": null,
+  "expected_scope_source": "omitted",
+  "expected_subject_valid": true,
+  "expected_timeout_seconds": 120,
+  "reference_files": [
+    "SKILL.md",
+    "scripts/resolve-scope.sh"
+  ]
+}

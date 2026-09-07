@@ -33,6 +33,117 @@
 ### 2.1 Scenario Definitions
 
 Regression addendum: the original 3 evaluated scenarios remain unchanged for comparability. The current repository version adds 7 deterministic golden fixtures that specifically cover commit-message generation failure modes that the original matrix did not isolate well: new-repo scope bootstrap, mixed-root scope omission, executable 50-character guarding, and timeout override precedence.
+Regression addendum (September 2026): the scenario results above are the record of
+Round-2 addendum (September 2026): a second review round found that round 1 had
+Round-3 addendum (September 2026): round 3 found a false-block defect that round 2
+Round-4 addendum (September 2026): the standing objection was evidence scope, not
+Round-5 addendum (September 2026): three defects, two of them regressions from
+round 4, one of them invalidating round 4's own eval evidence.
+(1) `if docker run … | sed` made the matrix test *sed*, so a container exiting 42
+was summarised as "all exercised implementations pass" with exit 0; a second
+`pytest … | tail` hid failing suites in full mode. Both now capture status before
+formatting. (2) Normalising the timeout code replaced `exec` with a supervisor
+that forwarded nothing: SIGTERM to the executor returned 143 while the gate ran
+on and wrote its side effect 2s later. Cancellation now goes to the tool's own
+process group, waits for it to empty, escalates to KILL, then exits.
+(3) **The eval's skill arm had been running with no skill loaded** — `SKILL_DIR`
+came from `$0`, so copying the runner voided it while keeping the `skill` label.
+Four cells reported earlier as wins were void; they are deleted, not annotated.
+
+The eval now refuses to start without `SKILL.md`, stamps skill path/lines/hash
+into every transcript so validity is auditable per cell, and takes
+`EVAL_SKILL_DIR`/`EVAL_SCEN_DIR`. **Standing eval summary: no measured decision
+benefit.** Where both arms have valid data (scenarios 01–06) they agree, so those
+cells are evidence about the scenarios, not the skill. Scenario 10 is the one
+known discriminator, and only after its grader was tightened from length alone to
+format and length.
+
+Six fault-injection mutations now cover these fixes and all are killed. Two
+survived first and are worth recording: an assertion that cancellation produces
+"no side effect at all" passed by luck (graceful TERM exists so a gate *may*
+clean up), and an assertion that the group kill makes cancellation *prompt*
+failed on correct code — what the group form actually buys is that the escalation
+reaches the whole tree. Suite: 191 pass / 5 skip on macOS, Ubuntu 24.04 and
+Alpine; 160 pass / 36 skip on interval-less Debian 12.
+rules, so this round produced evidence — and the evidence changed the design
+twice. Five environments were exercised with the shipped scripts via ephemeral
+containers: macOS 15.6 (BSD awk), Debian 12 (mawk 1.3.4 20200120), Debian 12 +
+gawk 5.2.1, Ubuntu 24.04 (mawk 1.3.4 20240123) and Alpine 3.24 (BusyBox awk, no
+perl). Two facts only a real matrix could surface: **Debian 12's default awk has
+no regex interval support**, so twelve credential patterns match nothing there and
+the capability probe must refuse rather than report clean; and **BusyBox
+`timeout` does not implement the 124 convention at all** (143 plain, 137 with
+`-k`), making the previous "124 or 137" contract wrong on Alpine. The enforcer now
+normalises on elapsed time to a single code, so the contract became shorter by
+becoming correct. A real gitleaks was exercised for the first time: it confirmed
+the exit-code design from the binary's own `--help`, showed v8.18.4 has no `git`
+subcommand (correctly failed closed), and invalidated one of this repository's own
+fixtures — gitleaks allowlists `AKIAIOSFODNN7EXAMPLE`, so tests needing the real
+scanner to fire must use a non-allowlisted value.
+
+The suite itself was wrong about its applicability: on interval-less Debian it
+produced 31 failures while the script behaved correctly. Tests now gate on the
+capability and skip with a reason naming the awk and the fix; installing gawk
+lifts the gate and all 172 run.
+
+`scripts/eval/` adds decision-branch probes — the one thing no deterministic
+suite reaches. Its README states the limits plainly: it grades a stated decision
+in plan mode, is non-deterministic, reports per repetition instead of averaging,
+carries a no-skill control arm, and treats a missing answer as INCOMPLETE rather
+than as a score. **Still unverified:** Windows/WSL, `original-awk`, gitleaks on
+macOS, and execution-fidelity (as opposed to branch selection) under an agent.
+The scenario results earlier in this report predate all four rounds and were not
+re-run.
+had *introduced* — pipefail plus an early-exiting context extractor plus a pipe
+writer produce SIGPIPE (exit 141) on any blob past the pipe buffer, so a completed
+context render was reported as a scanner failure. Clean at 3 lines, exit 2 at 20k;
+every small fixture missed it, including the ones written for the pipefail fix.
+Also fixed: SKILL.md's own §7 report command escaped a deleted CJK path
+(`"\346\272\220…"`), which the path-escaping fix had covered in all three scripts
+and missed in the documented commands.
+
+Decision-probe result (2026-09-07, 1 repetition): skill arm 6/6 — notably STOP when the secret gate exits 2, and ASK for a real-looking key under `testdata/`. The control arm covers only scenarios 01-02, which the base model also gets right; **04-06 therefore have no control data and their wins are unattributed**, and one repetition shows reachability, not reliability.
+
+Verification scope was extended and, where it could not be, made explicit:
+`scripts/run_portability_matrix.sh` re-runs the suite per available awk and exits
+non-zero if nothing was exercised (an empty matrix is not a green one); a real
+`gitleaks` contract test runs where the binary exists and is a *visible* skip where
+it does not (`run_regression.sh -rs`); and a whole-workflow test executes §1-§7 in
+order and asserts a real commit lands. That last one is what caught the §7 defect.
+
+**Honest limits of the current evidence.** This host has one awk (BSD 20200816,
+intervals supported), no GNU coreutils `timeout`, and no gitleaks — so the GNU
+`--kill-after` branch is proven by argv assertion against a shim rather than the
+real binary, the interval-refusal path is proven by shim rather than a real
+interval-less awk, and 5 of 6 awk rows are UNVERIFIED. The runner reports all of
+this rather than implying coverage. The scenario results above still predate every
+round and were not re-run.
+fixed the reported *instances* rather than the underlying *classes*. Four further
+defects were reproduced and fixed: paths read in git's escaped display form
+(`core.quotePath`), so CJK-named sources selected no gate and `*.pem` stopped
+matching; stage-failure checking that covered only the git read, so a broken
+classifier still exited 0 with no output; a redaction rule that let a long token
+preceding a sensitive key print in full on the finding line; and a timeout that
+silently degraded to a tool unable to force-kill. Verification moved from
+"did the new tests fail against the old code" to **mutation testing** — each
+fixed defect is reintroduced one at a time and the suite must catch it. That
+found one fix (pipefail in the secret scanner) whose test passed either way; the
+assertion was tightened to require every failed stage to report itself. The
+scenario results above still predate all of this and were not re-run.
+the original A/B evaluation and are left unchanged. **Those scenarios were not
+re-run** after the September 2026 hardening round, so no score in this report
+reflects it. That round acted on an external review which reproduced four script
+defects — deletions excluded from ecosystem detection, git read failures exiting 0
+with empty output (fail-open) in both the secret scanner and the ecosystem
+detector, JSON/uppercase keyed secrets neither detected nor masked in context
+lines, and a GNU `timeout` branch with no `--kill-after` — plus two test-quality
+defects: a SKILL.md line *floor* that penalised concision, and golden fixtures
+whose expected scope was produced by the test file's own Python re-implementation
+of the rules. Scope resolution now lives in `scripts/resolve-scope.sh` and the
+golden fixtures drive that script against real git repositories; the file
+inventory in §1 predates it. 35 of the current 145 tests fail against the
+pre-hardening scripts, which is the evidence that they pin the defects rather
+than merely raising the count.
 
 | # | Scenario | Repo Type | Core Challenge | Expected Outcome |
 |---|----------|-----------|----------------|------------------|

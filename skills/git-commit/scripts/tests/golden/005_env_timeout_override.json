@@ -17,10 +17,6 @@
     "QUALITY_GATE_TIMEOUT_SECONDS": "600"
   },
   "expected_timeout_seconds": 600,
-  "skill_rules_that_must_fire": [
-    "QUALITY_GATE_TIMEOUT_SECONDS",
-    "report the chosen timeout before running long tests"
-  ],
   "reference_files": [
     "SKILL.md"
   ]

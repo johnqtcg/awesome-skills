@@ -2,7 +2,7 @@
 name: git-commit
 description: Safely create a git commit by validating repository state, staging intended changes, scanning for secrets/conflicts, generating a Conventional Commits message (repository convention first, else an English Angular default) from the staged diff, and committing without amend.
 disable-model-invocation: true
-allowed-tools: Read, Grep, Bash(git add*), Bash(git commit*), Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git stash*), Bash(git rev-parse*), Bash(git show*), Bash(go list*), Bash(go build*), Bash(go vet*), Bash(go test*), Bash(golangci-lint*), Bash(pytest*), Bash(ruff check*), Bash(flake8*), Bash(mypy*), Bash(pyright*), Bash(cargo check*), Bash(cargo clippy*), Bash(cargo test*), Bash(mvn test*), Bash(./gradlew*), Bash(npm*), Bash(yarn*), Bash(pnpm*), Bash(bun*), Bash(deno*), Bash(npx nx*), Bash(npx turbo*), Bash(npx lerna*), Bash(make test*), Bash(make check*), Bash(make*), Bash(git config --get*), Bash(gitleaks*), Bash(bash *secret-scan.sh*), Bash(bash *stash-guard.sh*), Bash(bash *run-gate.sh*), Bash(bash *detect-ecosystems.sh*)
+allowed-tools: Read, Grep, Bash(git add*), Bash(git commit*), Bash(git status*), Bash(git diff*), Bash(git log*), Bash(git stash*), Bash(git rev-parse*), Bash(git show*), Bash(go list*), Bash(go build*), Bash(go vet*), Bash(go test*), Bash(golangci-lint*), Bash(pytest*), Bash(ruff check*), Bash(flake8*), Bash(mypy*), Bash(pyright*), Bash(cargo check*), Bash(cargo clippy*), Bash(cargo test*), Bash(mvn test*), Bash(./gradlew*), Bash(npm*), Bash(yarn*), Bash(pnpm*), Bash(bun*), Bash(deno*), Bash(npx nx*), Bash(npx turbo*), Bash(npx lerna*), Bash(make test*), Bash(make check*), Bash(make*), Bash(git config --get*), Bash(gitleaks*), Bash(bash *secret-scan.sh*), Bash(bash *stash-guard.sh*), Bash(bash *run-gate.sh*), Bash(bash *detect-ecosystems.sh*), Bash(bash *resolve-scope.sh*)
 metadata:
   short-description: Safely commit staged changes with an Angular-style message
 ---
@@ -11,11 +11,13 @@ metadata:
 
 Create a commit from the current working tree with safety gates first, then generate a concise Angular-style message in English.
 
+Maintaining this skill (not needed to run it): `references/design-evidence.md` records the measured evidence behind every contract below and the verified environment matrix; `scripts/run_cross_env_probe.sh`, `scripts/run_portability_matrix.sh` and `scripts/eval/` re-derive it.
+
 ## Hard Rules
 
 - Never commit with unresolved conflicts.
 - Never commit secrets, credentials, keys, or `.env` sensitive values.
-- **Subject line must be <= 50 characters total** (including `type(scope): `).
+- **Subject line must fit the repo's limit — default `<= 50 chars` total** (including `type(scope): `). A commitlint/`CONTRIBUTING` limit discovered in §5 replaces that default; the §6 guard enforces whichever applies. There is no separate absolute 50.
 - Do not use `--amend` unless explicitly requested. If already pushed, warn about force push.
 - If any safety gate fails, stop and report clearly.
 - One commit = one logical change. Do not mix unrelated fixes, features, or formatting.
@@ -27,7 +29,7 @@ Bundled scripts are always invoked as `bash "<path-to-skill>/scripts/<name>.sh"`
 ### 1. Preflight
 ```bash
 git rev-parse --is-inside-work-tree                 # must print "true"
-git status --short
+git -c core.quotePath=false status --short           # quotePath=false: see the raw path
 BRANCH=$(git rev-parse --abbrev-ref HEAD)            # "HEAD" means detached (allowed)
 
 # In-progress operation? Worktree-safe: resolve real paths, never read .git/ directly.
@@ -36,7 +38,7 @@ for state in rebase-merge rebase-apply MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD; 
 done
 
 # Unresolved conflicts: this diff exits 0 regardless, so act on OUTPUT, not exit code.
-git diff --name-only --diff-filter=U
+git -c core.quotePath=false diff --name-only --diff-filter=U
 ```
 STOP (hard block — report which one and what to resolve) if any of these hold:
 - `--is-inside-work-tree` did not print `true`;
@@ -47,10 +49,10 @@ A detached `HEAD` is not a stop condition — proceed and note it in the report.
 
 ### 2. Staging
 
-- **Snapshot what is already staged first**: `git diff --cached --name-only`. If files are already staged that the user did not ask to commit, STOP and ask — commit them together, keep them staged for later, or split. Never silently fold pre-staged files into this commit.
+- **Snapshot what is already staged first**: `git -c core.quotePath=false diff --cached --name-only`. If files are already staged that the user did not ask to commit, STOP and ask — commit them together, keep them staged for later, or split. Never silently fold pre-staged files into this commit.
 - If the user names exact files, stage those only with `git add -- <paths>` (the `--` keeps a path that starts with `-` from being parsed as an option).
-- If the user says "commit my changes", start from `git status --short`.
-- Count changed paths. **If > 8 files, always list the full file set and ask for confirmation** before staging anything.
+- If the user says "commit my changes", start from `git -c core.quotePath=false status --short`. **Use `-c core.quotePath=false` on any git command whose paths you show the user or pass back to git**: the default escapes non-ASCII paths to `"\346\272\220…"`, unreadable and not a path `git add --` accepts.
+- Count changed paths. **If > 8 files, list the full file set and confirm before staging** — unless the user already authorized that exact set (named the files, said "commit all of these", or confirmed it earlier in this session). The prompt resolves scope ambiguity; it is not a second ask for a question already answered.
 - If `<= 8` files, read the diffs and split by logical intent. If one file mixes intents, use `git add -p`.
 - Stage task-related untracked files only when they clearly belong to the same change.
 - If unstaged or untracked changes remain after staging, the quality gate MUST run through the isolation wrapper (§4) so it sees exactly the staged snapshot and your changes are restored on **every** exit path.
@@ -62,10 +64,12 @@ A detached `HEAD` is not a stop condition — proceed and note it in the report.
 ```bash
 bash "<path-to-skill>/scripts/secret-scan.sh"
 ```
-It prefers the repo's `gitleaks` when the binary is installed (current `gitleaks git --pre-commit --staged` form, pinned to `--exit-code 10` because the default exit 1 is ambiguous between findings and execution errors) and always runs a built-in regex fallback over **added** staged lines only — removing a secret is never blocked. Exit code: **0 = scan completed** (clean, or findings printed for triage — "no secret" is never misread as a gate failure); **2 = the scanner itself failed** (fail-closed: treat as a gate failure, never as clean). Output lines:
+Uses the repo's `gitleaks` when installed, and always runs a built-in regex fallback over **added** staged lines only — removing a secret is never blocked. Exit code: **0 = the scan completed** (clean, or findings printed for triage — "no secret" is never a gate failure); **2 = it could not complete**, and every stage that failed names itself. Treat 2 as a gate failure, never as clean. Output lines:
 
-- `SECRET_CANDIDATE: <file>:<line>: <redacted>` — real source line numbers; the secret value is never printed, only the first 4 matched chars survive redaction.
-- `CONTEXT: <file>:<line>: <text>` — 2 lines around each candidate (long token-ish runs masked too).
+- `SECRET_CANDIDATE: <file>:<line>: <redacted>` — real source line numbers, cut at the match so only its first 4 chars survive.
+- `CONTEXT: <file>:<line>: <text>` — 2 lines around each candidate, cut by the same rule.
+
+A line is **reported** when it holds a known credential shape, or a sensitive key name followed by `:` or `=` (case-insensitive). It is **cut** at the earliest of those *or* any 20+ char token-ish run. **Residual risk: a short literal not attached to a sensitive key still prints** — context is a triage aid, not a sanitiser; do not paste it into a public channel.
 - `ALLOWLISTED: …` — matched a glob in the **committed** `.commit-secret-allowlist` (`HEAD` version; a staged-but-uncommitted allowlist is ignored).
 - `SENSITIVE_FILE: <path>` — staged filename that is key material by name (`.env`, `id_rsa`, `*.pem`, …).
 - `SCANNER_ERROR: …` — gitleaks misconfiguration or crash (script exits 2); the regex fallback still ran but is NOT equivalent coverage — fix the scanner or get explicit user sign-off.
@@ -87,13 +91,14 @@ Detect ecosystems — extensions **and** dependency-manifest markers, so staging
 ```bash
 bash "<path-to-skill>/scripts/detect-ecosystems.sh"   # one per line, most staged files first
 ```
+Deletions count. **Empty output = none; exit 2 = unknown** — never treat exit 2 as "nothing to gate".
 
 - `go` → load `references/quality-gate-go.md`; `node` → `references/quality-gate-node.md`; `python` → `references/quality-gate-python.md`; `java` → `references/quality-gate-java.md`; `rust` → `references/quality-gate-rust.md`
 - **Run the gate for EVERY detected ecosystem**, largest first — a 5-Go-file + 1-TS-file stage runs both the Go and the Node gates (scope each gate to its own files where the reference allows). Never skip a minority ecosystem.
 - The marker list is not exhaustive. Detector prints nothing but the stage clearly belongs to an ecosystem (an unlisted marker such as an uncommon lockfile) → pick that gate by judgment and say so in the report; otherwise try `make test` / `make check`, else report `quality gate: not detected`.
 - Makefile wrappers take precedence over raw ecosystem commands.
 - If a check fails, stop and report it. The user may explicitly skip; report `quality gate: skipped by user`.
-- **Timeout (enforced, not advisory)**: default **120 seconds** per gate command (each `run-gate.sh` invocation bounds one command). If the repo wrapper or environment exposes `COMMIT_TEST_TIMEOUT`, `QUALITY_GATE_TIMEOUT_SECONDS`, or `SKILL_QUALITY_GATE_TIMEOUT_SECONDS`, use that override and report the chosen timeout before running long tests. Run every gate command through the enforcer — exit `124` means the gate timed out with its whole process tree killed (report it; do not commit). A zero timeout and a host with no timeout tooling are both rejected (exit 2) — never unbounded:
+- **Timeout (enforced, not advisory)**: default **120 seconds** per gate command (each invocation bounds one command). If the repo wrapper or environment sets `COMMIT_TEST_TIMEOUT`, `QUALITY_GATE_TIMEOUT_SECONDS`, or `SKILL_QUALITY_GATE_TIMEOUT_SECONDS`, use it and report the chosen timeout before running long tests. **Exit `124` = timed out** (one code on every host); **exit 2 = the timeout could not be enforced**, so no gate ran. Both block the commit.
   ```bash
   bash "<path-to-skill>/scripts/run-gate.sh" [-t <repo-wrapper-seconds>] <gate command>
   ```
@@ -101,7 +106,7 @@ bash "<path-to-skill>/scripts/detect-ecosystems.sh"   # one per line, most stage
   ```bash
   bash "<path-to-skill>/scripts/stash-guard.sh" bash "<path-to-skill>/scripts/run-gate.sh" make test
   ```
-  Its exit code is the gate's. On a restore conflict or stash-OID mismatch it aborts non-zero and preserves the exact stash (`git stash apply --index <OID>`) — the data is never lost, but the worktree may hold a **partial** restore: follow the printed recovery instructions, never assume a clean tree. It also fails closed on both isolation edges: unstashable state (dirty submodule content) → exit 2 **without running the gate**; tracked-file/index drift while the gate ran (concurrent edits, formatter side-effects) → keeps the stash and refuses the destructive reset.
+  Its exit code is the gate's. Every non-zero path **preserves the stash** and prints recovery instructions (`git stash apply --index <OID>`) — data is never lost, but a restore conflict can leave a **partial** worktree, so follow the instructions rather than assume a clean tree. It fails closed on both isolation edges: unstashable state (dirty submodule content) → exit 2 **without running the gate**; tracked-file drift while the gate ran → keeps the stash, refuses the reset.
 
 ### 5. Compose commit message
 
@@ -111,15 +116,14 @@ bash "<path-to-skill>/scripts/detect-ecosystems.sh"   # one per line, most stage
 - If a convention is found, adopt its type set, language, and subject length in place of the Angular / English / 50-char defaults. If none is found, use the defaults.
 - Carry the discovered subject-length limit into the §6 guard as `SUBJECT_MAX` (default 50) so the executable check enforces the repo's actual limit, not a hardcoded 50.
 
-Scope discovery:
+Scope discovery — these rules are mechanical, so run them rather than re-deriving them:
 ```bash
-git log --oneline -50 | grep -oE '^[0-9a-f]+ [a-z]+(\([a-z0-9_-]+\))?:' | sed 's/^[0-9a-f]* //' | sort | uniq -c | sort -rn
+bash "<path-to-skill>/scripts/resolve-scope.sh"   # SCOPE: <name>|(none) + SCOPE_SOURCE:
 ```
-
-- **>= 3 commits with the same scope**: canonical; use it only if the scope matches staged paths.
-- If the repo has **fewer than 10 conventional commits total**, bootstrap scope from staged paths: strip generic directories such as `src`, `lib`, `pkg`, `cmd`, `internal`, `app`, `apps`, `service`, `services`, `module`, `modules`, `package`, `packages`, `component`, `components`, `test`, `tests`, and `testdata`; if one stable directory remains across all staged files, use that directory name.
-- If multiple candidate directories remain, staged files span mixed roots, or the repo already has `>= 10` conventional commits without a canonical match, omit scope.
-- Never invent a scope from filenames, issue text, or mixed roots.
+- `canonical` — a scope used **>= 3 times in the last 50 commits** that matches a staged path and is **not contradicted by a second canonical scope**. A stage spanning two known scopes is a mixed commit: scope is omitted, never resolved to whichever is more frequent. A staged path matching no canonical scope (`CHANGELOG.md`) does not block.
+- `bootstrap` — **fewer than 10 conventional commits total**, so the convention is not established; the scope comes from the staged directories with generic containers (`src`, `pkg`, `internal`, `services`, `tests`, …) stripped, and only when one stable directory remains.
+- `omitted` — use `<type>: <subject>`. Exit 2 = the repo could not be read: omit the scope and say so.
+- Never invent a scope from filenames or issue text. If the answer looks wrong for this change, omit — do not substitute your own.
 - Format is `<type>(<scope>): <subject>` or `<type>: <subject>`; for a breaking change use `<type>!:` and/or a `BREAKING CHANGE: <what>` footer.
 - Subject must be imperative, no trailing period, and <= 50 chars (or the repo's discovered limit); body explains **why** and wraps at 72 chars.
 - Add required trailers when repo policy or the user asks: `Signed-off-by:` (`git commit -s`), `Co-authored-by:`, and issue refs (`Closes #123`).
@@ -163,7 +167,7 @@ Hook awareness:
 ```bash
 git rev-parse --short HEAD
 git show -s --format='%h %s' HEAD          # hash + subject
-git show --name-status --format= HEAD      # changed files (NOT --no-patch: it disables --name-status)
+git -c core.quotePath=false show --name-status --format= HEAD   # changed files (NOT --no-patch: it disables --name-status)
 ```
 Report the hash, final subject, changed files summary, and quality gate status.
 

@@ -16,10 +16,6 @@
   "expected_scope_source": "canonical",
   "expected_subject_valid": false,
   "expected_timeout_seconds": 120,
-  "skill_rules_that_must_fire": [
-    "subject too long (${#SUBJECT}/$SUBJECT_MAX)",
-    "subject must not end with ."
-  ],
   "reference_files": [
     "SKILL.md"
   ]

@@ -19,10 +19,6 @@
   },
   "makefile_timeout": "900",
   "expected_timeout_seconds": 900,
-  "skill_rules_that_must_fire": [
-    "repo wrapper or environment exposes `COMMIT_TEST_TIMEOUT`",
-    "use that override"
-  ],
   "reference_files": [
     "SKILL.md"
   ]
