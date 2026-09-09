@@ -97,6 +97,10 @@ class RepositoryFixture(unittest.TestCase):
                     "claim_type": "code_fact",
                     "confidence": "high",
                     "analysis": "The repository compares the token with ok.",
+                    "support_review": {
+                        "stance": "supports",
+                        "rationale": "the pinned excerpt is the comparison the claim names",
+                    },
                     "evidence": [{"kind": "code", "id": evidence_id}],
                 }
             ]
@@ -118,6 +122,10 @@ class RepositoryFixture(unittest.TestCase):
                     "claim_type": "runtime_behavior",
                     "confidence": "high",
                     "analysis": "The authentication check passes its test.",
+                    "support_review": {
+                        "stance": "supports",
+                        "rationale": "the receipt covers this finding and every cited code id",
+                    },
                     "evidence": (
                         [{"kind": "code", "id": evidence_id} for evidence_id in code_ids]
                         + [{"kind": "test", "id": evidence_id} for evidence_id in test_ids]

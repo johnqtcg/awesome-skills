@@ -1,0 +1,8 @@
+Confirmed verbatim from the live official PostgreSQL documentation. This is a well-established PostgreSQL behavior: `CREATE INDEX CONCURRENTLY` cannot run inside a transaction block (unlike a regular `CREATE INDEX`), because it needs to perform multiple internal transaction phases (catalog entry, table scans, waiting on other transactions) that aren't possible while already inside an explicit `BEGIN`/`COMMIT` block. Attempting it raises the error `ERROR: CREATE INDEX CONCURRENTLY cannot run inside a transaction block`. This also applies to related commands like `DROP INDEX CONCURRENTLY`, `REINDEX CONCURRENTLY`, and `REFRESH MATERIALIZED VIEW CONCURRENTLY`, and is why migration frameworks (Rails, Django, Flyway, etc.) require disabling the transaction wrapper for migrations that use it.
+
+VERDICT: YES
+
+SOURCES:
+- https://www.postgresql.org/docs/current/sql-createindex.html ||| Another difference is that a regular CREATE INDEX command can be performed within a transaction block, but CREATE INDEX CONCURRENTLY cannot.
+- https://migrationpilot.dev/blog/create-index-concurrently-postgresql ||| CREATE INDEX CONCURRENTLY cannot run inside a transaction block.
+- https://www.alexstoica.com/blog/create-index-concurrently-locks ||| Cannot Run Inside a Transaction Block: CREATE INDEX CONCURRENTLY must be run outside of an explicit transaction ( BEGIN / COMMIT ).

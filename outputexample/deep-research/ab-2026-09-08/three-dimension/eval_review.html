@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eval Review</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600&family=Lora:wght@400;500&display=swap" rel="stylesheet">
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT" crossorigin="anonymous"></script>
+  <style>
+    :root {
+      --bg: #faf9f5;
+      --surface: #ffffff;
+      --border: #e8e6dc;
+      --text: #141413;
+      --text-muted: #b0aea5;
+      --accent: #d97757;
+      --accent-hover: #c4613f;
+      --green: #788c5d;
+      --green-bg: #eef2e8;
+      --red: #c44;
+      --red-bg: #fceaea;
+      --header-bg: #141413;
+      --header-text: #faf9f5;
+      --radius: 6px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Lora', Georgia, serif;
+      background: var(--bg);
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ---- Header ---- */
+    .header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .header h1 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+    .header .instructions {
+      font-size: 0.8rem;
+      opacity: 0.7;
+      margin-top: 0.25rem;
+    }
+    .header .progress {
+      font-size: 0.875rem;
+      opacity: 0.8;
+      text-align: right;
+    }
+
+    /* ---- Main content ---- */
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1.5rem 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    /* ---- Sections ---- */
+    .section {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      flex-shrink: 0;
+    }
+    .section-header {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      border-bottom: 1px solid var(--border);
+      background: var(--bg);
+    }
+    .section-body {
+      padding: 1rem;
+    }
+
+    /* ---- Config badge ---- */
+    .config-badge {
+      display: inline-block;
+      padding: 0.2rem 0.625rem;
+      border-radius: 9999px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.6875rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-left: 0.75rem;
+      vertical-align: middle;
+    }
+    .config-badge.config-primary {
+      background: rgba(33, 150, 243, 0.12);
+      color: #1976d2;
+    }
+    .config-badge.config-baseline {
+      background: rgba(255, 193, 7, 0.15);
+      color: #f57f17;
+    }
+
+    /* ---- Prompt ---- */
+    .prompt-text {
+      white-space: pre-wrap;
+      font-size: 0.9375rem;
+      line-height: 1.6;
+    }
+
+    /* ---- Outputs ---- */
+    .output-file {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .output-file + .output-file {
+      margin-top: 1rem;
+    }
+    .output-file-header {
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .output-file-header .dl-btn {
+      font-size: 0.7rem;
+      color: var(--accent);
+      text-decoration: none;
+      cursor: pointer;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-weight: 500;
+      opacity: 0.8;
+    }
+    .output-file-header .dl-btn:hover {
+      opacity: 1;
+      text-decoration: underline;
+    }
+    .output-file-content {
+      padding: 0.75rem;
+      overflow-x: auto;
+    }
+    .output-file-content pre {
+      font-size: 0.8125rem;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+      font-family: 'SF Mono', SFMono-Regular, Consolas, 'Liberation Mono', Menlo, monospace;
+    }
+    .output-file-content img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 4px;
+    }
+    .output-file-content iframe {
+      width: 100%;
+      height: 600px;
+      border: none;
+    }
+    .output-file-content table {
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+      width: 100%;
+    }
+    .output-file-content table td,
+    .output-file-content table th {
+      border: 1px solid var(--border);
+      padding: 0.375rem 0.5rem;
+      text-align: left;
+    }
+    .output-file-content table th {
+      background: var(--bg);
+      font-weight: 600;
+    }
+    .output-file-content .download-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+    .output-file-content .download-link:hover {
+      background: var(--border);
+    }
+    .empty-state {
+      color: var(--text-muted);
+      font-style: italic;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    /* ---- Feedback ---- */
+    .prev-feedback {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 0.625rem 0.75rem;
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+    .prev-feedback-label {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 0.25rem;
+      color: var(--text-muted);
+    }
+    .feedback-textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 0.75rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      line-height: 1.5;
+      resize: vertical;
+      color: var(--text);
+    }
+    .feedback-textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+    }
+    .feedback-status {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 0.5rem;
+      min-height: 1.1em;
+    }
+
+    /* ---- Grades (collapsible) ---- */
+    .grades-toggle {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .grades-toggle:hover {
+      color: var(--accent);
+    }
+    .grades-toggle .arrow {
+      margin-right: 0.5rem;
+      transition: transform 0.15s;
+      font-size: 0.75rem;
+    }
+    .grades-toggle .arrow.open {
+      transform: rotate(90deg);
+    }
+    .grades-content {
+      display: none;
+      margin-top: 0.75rem;
+    }
+    .grades-content.open {
+      display: block;
+    }
+    .grades-summary {
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    .grade-badge {
+      display: inline-block;
+      padding: 0.125rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .grade-pass { background: var(--green-bg); color: var(--green); }
+    .grade-fail { background: var(--red-bg); color: var(--red); }
+    .assertion-list {
+      list-style: none;
+    }
+    .assertion-item {
+      padding: 0.625rem 0;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.8125rem;
+    }
+    .assertion-item:last-child { border-bottom: none; }
+    .assertion-status {
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+    .assertion-status.pass { color: var(--green); }
+    .assertion-status.fail { color: var(--red); }
+    .assertion-evidence {
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      margin-top: 0.25rem;
+      padding-left: 1.5rem;
+    }
+
+    /* ---- View tabs ---- */
+    .view-tabs {
+      display: flex;
+      gap: 0;
+      padding: 0 2rem;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .view-tab {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.625rem 1.25rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--text-muted);
+      border-bottom: 2px solid transparent;
+      transition: all 0.15s;
+    }
+    .view-tab:hover { color: var(--text); }
+    .view-tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+    }
+    .view-panel { display: none; }
+    .view-panel.active { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+
+    /* ---- Benchmark view ---- */
+    .benchmark-view {
+      padding: 1.5rem 2rem;
+      overflow-y: auto;
+      flex: 1;
+    }
+    .benchmark-table {
+      border-collapse: collapse;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      font-size: 0.8125rem;
+      width: 100%;
+      margin-bottom: 1.5rem;
+    }
+    .benchmark-table th, .benchmark-table td {
+      padding: 0.625rem 0.75rem;
+      text-align: left;
+      border: 1px solid var(--border);
+    }
+    .benchmark-table th {
+      font-family: 'Poppins', sans-serif;
+      background: var(--header-bg);
+      color: var(--header-text);
+      font-weight: 500;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .benchmark-table tr:hover { background: var(--bg); }
+    .benchmark-table tr.benchmark-row-with { background: rgba(33, 150, 243, 0.06); }
+    .benchmark-table tr.benchmark-row-without { background: rgba(255, 193, 7, 0.06); }
+    .benchmark-table tr.benchmark-row-with:hover { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-without:hover { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-table tr.benchmark-row-avg { font-weight: 600; border-top: 2px solid var(--border); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-with { background: rgba(33, 150, 243, 0.12); }
+    .benchmark-table tr.benchmark-row-avg.benchmark-row-without { background: rgba(255, 193, 7, 0.12); }
+    .benchmark-delta-positive { color: var(--green); font-weight: 600; }
+    .benchmark-delta-negative { color: var(--red); font-weight: 600; }
+    .benchmark-notes {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem;
+    }
+    .benchmark-notes h3 {
+      font-family: 'Poppins', sans-serif;
+      font-size: 0.875rem;
+      margin-bottom: 0.75rem;
+    }
+    .benchmark-notes ul {
+      list-style: disc;
+      padding-left: 1.25rem;
+    }
+    .benchmark-notes li {
+      font-size: 0.8125rem;
+      line-height: 1.6;
+      margin-bottom: 0.375rem;
+    }
+    .benchmark-empty {
+      color: var(--text-muted);
+      font-style: italic;
+      text-align: center;
+      padding: 3rem;
+    }
+
+    /* ---- Navigation ---- */
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    .nav-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      color: var(--text);
+      transition: all 0.15s;
+    }
+    .nav-btn:hover:not(:disabled) {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .nav-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .done-btn {
+      font-family: 'Poppins', sans-serif;
+      padding: 0.5rem 1.5rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.15s;
+    }
+    .done-btn:hover {
+      background: var(--bg);
+      border-color: var(--text-muted);
+    }
+    .done-btn.ready {
+      border: none;
+      background: var(--accent);
+      color: white;
+      font-weight: 600;
+    }
+    .done-btn.ready:hover {
+      background: var(--accent-hover);
+    }
+    /* ---- Done overlay ---- */
+    .done-overlay {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.5);
+      z-index: 100;
+      justify-content: center;
+      align-items: center;
+    }
+    .done-overlay.visible {
+      display: flex;
+    }
+    .done-card {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 2rem 3rem;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+    }
+    .done-card h2 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .done-card p {
+      color: var(--text-muted);
+      margin-bottom: 1.5rem;
+      line-height: 1.5;
+    }
+    .done-card .btn-row {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+    .done-card button {
+      padding: 0.5rem 1.25rem;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      cursor: pointer;
+      font-size: 0.875rem;
+    }
+    .done-card button:hover {
+      background: var(--bg);
+    }
+    /* ---- Toast ---- */
+    .toast {
+      position: fixed;
+      bottom: 5rem;
+      left: 50%;
+      transform: translateX(-50%);
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 0.625rem 1.25rem;
+      border-radius: var(--radius);
+      font-size: 0.875rem;
+      opacity: 0;
+      transition: opacity 0.3s;
+      pointer-events: none;
+      z-index: 200;
+    }
+    .toast.visible {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div id="app" style="height:100vh; display:flex; flex-direction:column;">
+    <div class="header">
+      <div>
+        <h1>Eval Review: <span id="skill-name"></span></h1>
+        <div class="instructions">Review each output and leave feedback below. Navigate with arrow keys or buttons. When done, copy feedback and paste into Claude Code.</div>
+      </div>
+      <div class="progress" id="progress"></div>
+    </div>
+
+    <!-- View tabs (only shown when benchmark data exists) -->
+    <div class="view-tabs" id="view-tabs" style="display:none;">
+      <button class="view-tab active" onclick="switchView('outputs')">Outputs</button>
+      <button class="view-tab" onclick="switchView('benchmark')">Benchmark</button>
+    </div>
+
+    <!-- Outputs panel (qualitative review) -->
+    <div class="view-panel active" id="panel-outputs">
+    <div class="main">
+      <!-- Prompt -->
+      <div class="section">
+        <div class="section-header">Prompt <span class="config-badge" id="config-badge" style="display:none;"></span></div>
+        <div class="section-body">
+          <div class="prompt-text" id="prompt-text"></div>
+        </div>
+      </div>
+
+      <!-- Outputs -->
+      <div class="section">
+        <div class="section-header">Output</div>
+        <div class="section-body" id="outputs-body">
+          <div class="empty-state">No output files found</div>
+        </div>
+      </div>
+
+      <!-- Previous Output (collapsible) -->
+      <div class="section" id="prev-outputs-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="togglePrevOutputs()">
+            <span class="arrow" id="prev-outputs-arrow">&#9654;</span>
+            Previous Output
+          </div>
+        </div>
+        <div class="grades-content" id="prev-outputs-content"></div>
+      </div>
+
+      <!-- Grades (collapsible) -->
+      <div class="section" id="grades-section" style="display:none;">
+        <div class="section-header">
+          <div class="grades-toggle" onclick="toggleGrades()">
+            <span class="arrow" id="grades-arrow">&#9654;</span>
+            Formal Grades
+          </div>
+        </div>
+        <div class="grades-content" id="grades-content"></div>
+      </div>
+
+      <!-- Feedback -->
+      <div class="section">
+        <div class="section-header">Your Feedback</div>
+        <div class="section-body">
+          <textarea
+            class="feedback-textarea"
+            id="feedback"
+            placeholder="What do you think of this output? Any issues, suggestions, or things that look great?"
+          ></textarea>
+          <div class="feedback-status" id="feedback-status"></div>
+          <div class="prev-feedback" id="prev-feedback" style="display:none;">
+            <div class="prev-feedback-label">Previous feedback</div>
+            <div id="prev-feedback-text"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="nav" id="outputs-nav">
+      <button class="nav-btn" id="prev-btn" onclick="navigate(-1)">&#8592; Previous</button>
+      <button class="done-btn" id="done-btn" onclick="showDoneDialog()">Submit All Reviews</button>
+      <button class="nav-btn" id="next-btn" onclick="navigate(1)">Next &#8594;</button>
+    </div>
+    </div><!-- end panel-outputs -->
+
+    <!-- Benchmark panel (quantitative stats) -->
+    <div class="view-panel" id="panel-benchmark">
+      <div class="benchmark-view" id="benchmark-content">
+        <div class="benchmark-empty">No benchmark data available. Run a benchmark to see quantitative results here.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Done overlay -->
+  <div class="done-overlay" id="done-overlay">
+    <div class="done-card">
+      <h2>Review Complete</h2>
+      <p>Your feedback has been saved. Go back to your Claude Code session and tell Claude you're done reviewing.</p>
+      <div class="btn-row">
+        <button onclick="closeDoneDialog()">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script>
+    // ---- Embedded data (injected by generate_review.py) ----
+    const EMBEDDED_DATA = {"skill_name": "deep-research", "runs": [{"id": "eval-0-verifiable-single-fact-with_skill", "prompt": "Does the Go vulnerability scanner govulncheck output a CVSS score for each vulnerability it reports? I need to know before I write our advisory triage doc, and I need to be able to point at where the answer comes from.", "eval_id": 0, "outputs": [{"name": "answer.md", "type": "text", "content": "# Does govulncheck output a CVSS score per vulnerability?\n\n**Direct answer: No.** govulncheck does not emit a CVSS score for any vulnerability it reports, in its default text output, its JSON schema, or (per its own documentation) SARIF/VEX output. It identifies vulnerabilities by a Go-assigned `GO-YYYY-NNNNN` ID and expresses risk via a reachability classification (symbol called / package imported / module required) instead of a CVSS number. See Key Findings below for the sourced evidence.\n\n## 1) Research Question\n- Normalized question: Does the Go vulnerability scanner govulncheck output a CVSS score for each vulnerability it reports?\n- Research kind: `web`\n- Depth mode: `quick`\n- Evidence chain requirements: typed evidence; extracted excerpts for web claims; repository evidence IDs for codebase claims\n\n## 2) Method\n- Execution mode: `quick`\n- Degradation level: `Partial`\n- Retrieval plan (queries/subtopics): 1 distinct queries represented\n- Dedup strategy: normalized URL canonicalization + first-seen retention\n- Retrieved sources: 8\n- Content items processed: 5\n- Successfully extracted: 5\n- Repository evidence units: 0\n- Cited evidence units: 4\n- Validation checks performed: required-input, extraction-success, exact excerpt, repository reference, claim-support review, confidence, and degradation checks\n- Citation integrity (this is what `Degradation` above reports): every cited excerpt was re-read from the artifact it names\n- Claim support (a separate verdict, not implied by the one above): partially-reviewed \u2014 attested 3, qualified 0, unreviewed 2, disputed 0, blocked 0\n- Machine checks cannot decide entailment. A polarity and number screen can only remove support; the reviewed stance on each finding is an author attestation.\n- Budget consumed: retrieval 2/10, extractions 5/5, live verifications 4/5\n\n## 3) Executive Summary\nPartial result: The official godoc for golang.org/x/vuln/internal/govulncheck, which \"contains the JSON output structs for govulncheck,\" defines the per-vulnerability Finding struct with exactly three fields: OSV (the vulnerability ID string), FixedVersion, and Trace (the call-stack frames). There is no CVSS, Severity, or Score field anywhere in this struct or in the rest of the package's documented types (Config, Frame, Message, Module, Position, Progress, SBOM). This is the authoritative, Go-team-maintained schema definition for govulncheck's `-json` output. The official Go tutorial's worked example of real govulncheck output shows the fields actually printed per vulnerability: a govulncheck-assigned ID (GO-2021-0113), a prose description, a \"More info\" link, Module, Found in, Fixed in, and Call stacks. No CVSS score, CVSS vector, or numeric severity rating appears anywhere in the sample output. An independent third-party tool vendor that ingests govulncheck's JSON output (DefectDojo) states directly that the upstream Go vulnerability database does not publish CVSS scores, and documents that it therefore derives its own severity rating from govulncheck's reachability tier (symbol/package/module) rather than from a CVSS score in the feed. This corroborates, from a consumer's perspective, that no CVSS score is present anywhere in govulncheck's data to begin with -- there is nothing for a downstream parser to read.\n\n## 4) Key Findings\n- **govulncheck's JSON output schema has no CVSS or severity field** (High confidence): The official godoc for golang.org/x/vuln/internal/govulncheck, which \"contains the JSON output structs for govulncheck,\" defines the per-vulnerability Finding struct with exactly three fields: OSV (the vulnerability ID string), FixedVersion, and Trace (the call-stack frames). There is no CVSS, Severity, or Score field anywhere in this struct or in the rest of the package's documented types (Config, Frame, Message, Module, Position, Progress, SBOM). This is the authoritative, Go-team-maintained schema definition for govulncheck's `-json` output. [2]\n- **govulncheck's default text output likewise has no CVSS field** (High confidence): The official Go tutorial's worked example of real govulncheck output shows the fields actually printed per vulnerability: a govulncheck-assigned ID (GO-2021-0113), a prose description, a \"More info\" link, Module, Found in, Fixed in, and Call stacks. No CVSS score, CVSS vector, or numeric severity rating appears anywhere in the sample output. [4]\n- **The underlying Go vulnerability database does not publish CVSS scores at all** (Medium confidence): An independent third-party tool vendor that ingests govulncheck's JSON output (DefectDojo) states directly that the upstream Go vulnerability database does not publish CVSS scores, and documents that it therefore derives its own severity rating from govulncheck's reachability tier (symbol/package/module) rather than from a CVSS score in the feed. This corroborates, from a consumer's perspective, that no CVSS score is present anywhere in govulncheck's data to begin with -- there is nothing for a downstream parser to read. [3] Downgrade: High requires a validator-derived T1 source from the effective final URL; caller tier labels are not authoritative; High requires one current-process live-verified T1 primary Web source for a narrow single fact, direct code evidence for a code fact, code plus a passing test for runtime behavior, or two independent verified units including a primary source.\n\n## 5) Detailed Analysis\n### What govulncheck reports instead of a CVSS score\ngovulncheck identifies each vulnerability by its own GO-YYYY-NNNNN identifier drawn from the Go vulnerability database (vuln.go.dev), and its risk signal is reachability-based rather than CVSS-based: whether the vulnerable symbol is actually called, whether the vulnerable package is merely imported, or whether the vulnerable module is merely required. Its three documented output formats -- default text, JSON (golang.org/x/vuln/internal/govulncheck), and SARIF/OpenVEX -- all carry the vulnerability ID, affected/fixed module versions, and call-stack/trace information, but none of the documented schema fields is a CVSS score. A downstream advisory triage doc that wants a CVSS number for a govulncheck finding needs to look it up separately, e.g. by resolving the GO-ID or an aliased CVE/GHSA ID against the OSV record or the CVE/NVD databases; govulncheck itself does not supply one. [1]\n\n## 6) Consensus vs Debate\n### Consensus\n- All three independent sources -- the official JSON schema godoc, the official tutorial's sample text output, and an unrelated downstream tool vendor's parser documentation -- agree that govulncheck output carries no CVSS score, and agree on what it uses instead (reachability tier / GO-ID plus module/version/trace fields). [2] [3]\n\n### Debate / Contradictory Evidence\n- Quick mode: no competing sources were retrieved, so agreement and disagreement were not assessed.\n\n## 7) Source Quality Notes\n- Source tier distribution: T1: 3, T2: 0, T3: 0, T4: 1, T5: 0\n- Classification basis: caller-provided web tier/type labels are ignored; domain heuristics are re-derived from normalized URLs, and only a fresh validator-controlled capture may establish primary-source status.\n- Live Web verification: 6/6 verified Web evidence references were freshly captured; validator-derived live T1: 4. Serialized content artifacts are audit inputs, not execution proof.\n- Potential bias / sponsorship requiring review: govulncheck command - golang.org/x/vuln/cmd/govulncheck - Go Packages, golang.org/x/vuln/internal/govulncheck - Go Packages, Govulncheck | DefectDojo Documentation, Tutorial: Find and fix vulnerable dependencies with govulncheck - The ...\n- Sources with unknown methodology: 4\n- Repository evidence quality: code observations: 0; commit-pinned: 0; tests passed: 0; tests failed/other: 0\n- Domain authority: 4/6 cited Web units were classified from the curated authority registry rather than a URL-shape heuristic; 4 are the subject project's own documentation and cannot serve as the independent primary unit for a comparison or recommendation.\n- Claim support: partially-reviewed (attested 3, qualified 0, unreviewed 2, disputed 0, blocked 0); 0 claim(s) tripped the polarity screen. Excerpt containment is proved mechanically; entailment is an author attestation and is not machine-verified.\n- Single-source findings: 3\n- Unverified findings omitted from substantive sections: 0\n- Evidence chain status: partially satisfied\n\n## 8) Sources\n[1] govulncheck command - golang.org/x/vuln/cmd/govulncheck - Go Packages \u2014 https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck \u2014 official (preclassified T1) \u2014 date: unknown; basis: registry:project-owned:Official domains of the Go project, maintained by the Go team; sponsorship: unknown; methodology: unknown\n[2] golang.org/x/vuln/internal/govulncheck - Go Packages \u2014 https://pkg.go.dev/golang.org/x/vuln/internal/govulncheck \u2014 official (preclassified T1) \u2014 date: unknown; basis: registry:project-owned:Official domains of the Go project, maintained by the Go team; sponsorship: unknown; methodology: unknown\n[3] Govulncheck | DefectDojo Documentation \u2014 https://docs.defectdojo.com/supported_tools/parsers/file/govulncheck \u2014 website (preclassified T4) \u2014 date: unknown; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n[4] Tutorial: Find and fix vulnerable dependencies with govulncheck - The ... \u2014 https://go.dev/doc/tutorial/govulncheck \u2014 official (preclassified T1) \u2014 date: unknown; basis: registry:project-owned:Official domains of the Go project, maintained by the Go team; sponsorship: unknown; methodology: unknown\n\n## 9) Gaps & Limitations\n- Did not separately verify the SARIF or OpenVEX output formats' field lists (only the default text and JSON formats were directly inspected); SARIF's generic 'level' field and OpenVEX's status fields are not CVSS scores either, based on their general specs, but govulncheck's own SARIF/VEX writer output was not fetched and read in this session.\n- Did not verify whether an OSV record referenced by a Finding.OSV id (fetched separately from vuln.go.dev/<GO-ID>.json) ever carries a CVSS vector in an optional 'severity' field of the general OSV schema; govulncheck's own Finding struct does not embed or re-emit that field regardless.\n- finding #3 confidence downgraded from high to medium\n"}], "grading": {"run_id": "eval-0-verifiable-single-fact-with_skill", "expectations": [{"text": "States that govulncheck does not output CVSS scores", "passed": true, "evidence": "Line 3: '**Direct answer: No.** govulncheck does not emit a CVSS score for any vulnerability it reports, in its default text output, its JSON schema, or ... SARIF/VEX output.'"}, {"text": "Cites at least one URL for the claim", "passed": true, "evidence": "Sources section [1]-[4] each carry a full URL, e.g. 'https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck'"}, {"text": "Includes at least one verbatim quotation from a cited page, not only a paraphrase", "passed": true, "evidence": "Executive Summary / Finding 1 quotes the godoc verbatim: 'which \"contains the JSON output structs for govulncheck,\"'"}, {"text": "At least one quoted excerpt is found verbatim on the page it is attributed to", "passed": true, "evidence": "quote_verification.json: eval-0 with_skill quotes=1, quotes_verified=1 (>0)."}, {"text": "Labels the authority or tier of at least one source (official / primary / vendor / community), rather than listing bare URLs", "passed": true, "evidence": "Sources section labels each entry, e.g. '[2] ... \u2014 official (preclassified T1)' and '[3] ... \u2014 website (preclassified T4)'."}], "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0}}}, {"id": "eval-0-verifiable-single-fact-without_skill", "prompt": "Does the Go vulnerability scanner govulncheck output a CVSS score for each vulnerability it reports? I need to know before I write our advisory triage doc, and I need to be able to point at where the answer comes from.", "eval_id": 0, "outputs": [{"name": "answer.md", "type": "text", "content": "# Does govulncheck output a CVSS score for each vulnerability?\n\n## Short answer\n\n**No.** `govulncheck` does not emit a CVSS score (or any other severity label \u2014 LOW/MEDIUM/HIGH/CRITICAL) for the vulnerabilities it reports, in either its human-readable text output or its structured `-json` / `-format json` output. This is a deliberate design decision by the Go Security team, not a missing feature.\n\n## What govulncheck reports instead\n\nFor each finding, govulncheck reports:\n- The Go vulnerability database ID (format `GO-<YEAR>-<ENTRYID>`, e.g. `GO-2023-1495`)\n- The affected module and package\n- The vulnerable version range and the fixed version (if one exists)\n- A call-stack trace showing whether/how your code actually reaches the vulnerable symbol (govulncheck's signature \"reachability\" feature)\n- A free-text human-readable description of the vulnerability\n\nNone of these fields is a CVSS vector or numeric score.\n\n## Evidence\n\n**1. The Go team explicitly documents why the vulnerability database (which govulncheck queries) has no severity/CVSS labels.**\n\nFrom the official Go documentation, \"Go Vulnerability Management\" (https://go.dev/doc/security/vuln/), under \"Why does the Go vulnerability database not use severity labels?\":\n\n> \"Most vulnerability reporting formats use severity labels such as 'LOW,' 'MEDIUM', and 'CRITICAL' to indicate the impact of different vulnerabilities... For several reasons, however, Go avoids using such labels. The impact of a vulnerability is rarely universal... Labeling severity is also necessarily subjective. This is true even for the CVE program, which posits a formula to break down relevant aspects of a vulnerability, such as attack vector, complexity, and exploitability. All of these, however, require subjective evaluation. We believe good descriptions of vulnerabilities are more useful than severity indicators.\"\n\n(The \"formula\" referenced here \u2014 attack vector / complexity / exploitability \u2014 is CVSS; the Go team names the CVE program's scoring approach and states they intentionally do not adopt it.)\n\n**2. The actual JSON output schema has no severity/CVSS field.**\n\nThe `-json` output of govulncheck is defined by the `golang.org/x/vuln/internal/govulncheck` package. Its core `Finding` struct (the type that represents one discovered vulnerability instance) is:\n\n```go\ntype Finding struct {\n    OSV          string   `json:\"osv,omitempty\"`          // the GO-YYYY-NNNN advisory ID\n    FixedVersion string   `json:\"fixed_version,omitempty\"`\n    Trace        []*Frame `json:\"trace,omitempty\"`\n}\n```\n(https://pkg.go.dev/golang.org/x/vuln/internal/govulncheck \u2014 \"type Finding\")\n\nThere is no `Severity`, `CVSS`, `Score`, or similar field anywhere in this package's exported types (`Config`, `Finding`, `Frame`, `Handler`, `Message`, `Module`, `Position`, `Progress`, `SBOM`, `ScanLevel`, `ScanMode`).\n\n**3. The underlying advisory data itself (OSV-format entries served by the Go vulnerability database) also carries no severity/CVSS field in Go's implementation.**\n\nGo publishes its advisories in OSV format, and the Go-side type modeling those entries is `golang.org/x/vuln/internal/osv.Entry` (https://pkg.go.dev/golang.org/x/vuln/internal/osv \u2014 \"type Entry\"). Its fields include `SchemaVersion`, `ID`, `Modified`, `Published`, `Withdrawn`, `Aliases`, etc. \u2014 no `Severity` or `CVSS` field is defined. (The general OSV schema spec allows an optional `severity` field for producers who want to include a CVSS vector/score, but Go's own advisories do not populate one, consistent with the policy stated in source #1.)\n\n## Practical implication for an advisory-triage doc\n\nIf your triage workflow depends on CVSS for prioritization, you cannot get it from govulncheck's own output. Options seen in practice:\n- Use govulncheck's **reachability** signal (is the vulnerable symbol actually called by your code?) as the primary triage axis instead of severity \u2014 this is what the Go team recommends in place of a severity score.\n- Cross-reference the `GO-YYYY-NNNN` ID (via its `Aliases`, typically including the corresponding `CVE-YYYY-NNNNN` and/or `GHSA-...` identifier) against NVD, GitHub Advisory Database, or another source that does publish CVSS, if a numeric score is required for your process.\n\n## Sources\n\n- [Go Vulnerability Management \u2014 \"Why does the Go vulnerability database not use severity labels?\"](https://go.dev/doc/security/vuln/) (go.dev, official Go documentation)\n- [Go Vulnerability Database schema docs](https://go.dev/doc/security/vuln/database) (go.dev, official Go documentation)\n- [`golang.org/x/vuln/internal/govulncheck` package docs \u2014 `Finding` struct definition](https://pkg.go.dev/golang.org/x/vuln/internal/govulncheck) (pkg.go.dev, generated from source)\n- [`golang.org/x/vuln/internal/osv` package docs \u2014 `Entry` struct definition](https://pkg.go.dev/golang.org/x/vuln/internal/osv) (pkg.go.dev, generated from source)\n"}], "grading": {"run_id": "eval-0-verifiable-single-fact-without_skill", "expectations": [{"text": "States that govulncheck does not output CVSS scores", "passed": true, "evidence": "Line 5: '**No.** `govulncheck` does not emit a CVSS score (or any other severity label...) for the vulnerabilities it reports.'"}, {"text": "Cites at least one URL for the claim", "passed": true, "evidence": "Sources section lists 4 URLs, e.g. 'https://go.dev/doc/security/vuln/'"}, {"text": "Includes at least one verbatim quotation from a cited page, not only a paraphrase", "passed": true, "evidence": "Line 24 blockquote: '> \"Most vulnerability reporting formats use severity labels such as ... We believe good descriptions of vulnerabilities are more useful than severity indicators.\"'"}, {"text": "At least one quoted excerpt is found verbatim on the page it is attributed to", "passed": true, "evidence": "quote_verification.json: eval-0 without_skill quotes=6, quotes_verified=1 (>0)."}, {"text": "Labels the authority or tier of at least one source (official / primary / vendor / community), rather than listing bare URLs", "passed": true, "evidence": "Sources section: '(go.dev, official Go documentation)' and '(pkg.go.dev, generated from source)' labels."}], "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0}}}, {"id": "eval-1-comparison-with-method-with_skill", "prompt": "We are choosing between PostgreSQL logical replication and Debezium for streaming changes out of our orders database into Kafka. Write me the comparison I can hand to my tech lead. He will ask where every claim came from.", "eval_id": 1, "outputs": [{"name": "answer.md", "type": "text", "content": "## 1) Research Question\n- Normalized question: PostgreSQL logical replication vs Debezium for streaming order-database changes into Kafka: which should we use, and what are the tradeoffs?\n- Research kind: `web`\n- Depth mode: `deep`\n- Evidence chain requirements: typed evidence; extracted excerpts for web claims; repository evidence IDs for codebase claims\n\n## 2) Method\n- Execution mode: `deep`\n- Degradation level: `Partial`\n- Retrieval plan (queries/subtopics): 7 distinct queries represented\n- Dedup strategy: normalized URL canonicalization + first-seen retention\n- Retrieved sources: 49\n- Content items processed: 14\n- Successfully extracted: 14\n- Repository evidence units: 0\n- Cited evidence units: 10\n- Validation checks performed: required-input, extraction-success, exact excerpt, repository reference, claim-support review, confidence, and degradation checks\n- Citation integrity (this is what `Degradation` above reports): every cited excerpt was re-read from the artifact it names\n- Claim support (a separate verdict, not implied by the one above): disputed \u2014 attested 10, qualified 1, unreviewed 0, disputed 7, blocked 0\n- Machine checks cannot decide entailment. A polarity and number screen can only remove support; the reviewed stance on each finding is an author attestation.\n- Budget consumed: retrieval 23/50, extractions 14/15, live verifications 10/15\n\n## 3) Executive Summary\nPartial result: PostgreSQL's native logical replication (CREATE PUBLICATION / CREATE SUBSCRIPTION) ships schema and DDL changes to subscribers only if applied by hand; sequence state and large objects are excluded outright. Any pipeline built on top of the same logical-decoding mechanism (Debezium included) inherits the DDL blindness, because it is a property of the decoding layer, not of the consumer. PostgreSQL's native logical replication is a publish/subscribe protocol between PostgreSQL instances: the subscriber is itself a full PostgreSQL database that applies incoming changes. It has no built-in path to Kafka. Getting logically-decoded PostgreSQL changes into Kafka therefore always requires a separate consumer of the replication stream (a Kafka Connect source connector such as Debezium, a custom pg_recvlogical-based consumer, or a vendor CDC product) -- 'logical replication' by itself is not a second, competing way to reach Kafka, it is the underlying mechanism Debezium itself is built on. Debezium's PostgreSQL connector must be configured with a logical decoding output plug-in. decoderbufs is a Protobuf-based plug-in maintained by the Debezium community and requires separate installation; pgoutput is the standard PostgreSQL 10+ output plug-in maintained by the PostgreSQL community itself (the same plug-in used by native CREATE SUBSCRIPTION), so it needs no extra library.\n\n## 4) Key Findings\n- **PostgreSQL's built-in logical replication does not replicate DDL, sequence values, or large objects** (High confidence): PostgreSQL's native logical replication (CREATE PUBLICATION / CREATE SUBSCRIPTION) ships schema and DDL changes to subscribers only if applied by hand; sequence state and large objects are excluded outright. Any pipeline built on top of the same logical-decoding mechanism (Debezium included) inherits the DDL blindness, because it is a property of the decoding layer, not of the consumer. [7]\n- **Built-in CREATE PUBLICATION / CREATE SUBSCRIPTION targets another PostgreSQL database, not Kafka** (Medium confidence): PostgreSQL's native logical replication is a publish/subscribe protocol between PostgreSQL instances: the subscriber is itself a full PostgreSQL database that applies incoming changes. It has no built-in path to Kafka. Getting logically-decoded PostgreSQL changes into Kafka therefore always requires a separate consumer of the replication stream (a Kafka Connect source connector such as Debezium, a custom pg_recvlogical-based consumer, or a vendor CDC product) -- 'logical replication' by itself is not a second, competing way to reach Kafka, it is the underlying mechanism Debezium itself is built on. [8] [2] Downgrade: the only primary source is the subject project's own documentation; a comparison or recommendation needs an independent primary unit; polarity screen flagged logical replication; author override recorded, so this claim cannot be High.\n- **Debezium reads the same logical-decoding stream via one of two output plug-ins: decoderbufs or pgoutput** (Medium confidence): Debezium's PostgreSQL connector must be configured with a logical decoding output plug-in. decoderbufs is a Protobuf-based plug-in maintained by the Debezium community and requires separate installation; pgoutput is the standard PostgreSQL 10+ output plug-in maintained by the PostgreSQL community itself (the same plug-in used by native CREATE SUBSCRIPTION), so it needs no extra library. [1]\n- **Debezium also cannot emit DDL change events for PostgreSQL, for the same underlying reason** (Medium confidence): Debezium's PostgreSQL connector inherits PostgreSQL logical decoding's restrictions directly: it states plainly that it cannot report DDL change events because logical decoding itself does not carry DDL. This is not a Debezium shortcoming relative to native replication -- it is the same limitation, because both sit on the same decoding layer. [1] Downgrade: polarity screen flagged logical decod; author override recorded, so this claim cannot be High.\n- **Both approaches depend on a PostgreSQL replication slot, which can retain WAL without bound and fill disk if the consumer stops** (Medium confidence): Native logical replication (a subscription) and Debezium both work by creating and holding a PostgreSQL replication slot. PostgreSQL's own configuration reference states that by default (max_slot_wal_keep_size = -1) a slot may retain an unlimited amount of WAL, and that once the slot falls too far behind, WAL removal is blocked. Debezium's own connector documentation independently confirms the same mechanism from its side: because PostgreSQL purges WAL after a period, the connector's slot is what prevents that purge so it does not lose its position -- the operational risk (an abandoned or lagging slot silently filling the data disk) is identical for either implementation and must be monitored regardless of which one is chosen. [5] [1] Downgrade: the only primary source is the subject project's own documentation; a comparison or recommendation needs an independent primary unit; High requires one current-process live-verified T1 primary Web source for a narrow single fact, direct code evidence for a code fact, code plus a passing test for runtime behavior, or two independent verified units including a primary source.\n- **An abandoned replication slot has caused a real production primary-disk-full outage** (Medium confidence): A first-hand incident report describes a PostgreSQL primary that PANIC'd after pg_wal grew to 214GB on a 250GB disk because a decommissioned standby's replication slot was never dropped; the slot's frozen restart_lsn blocked WAL cleanup even though write volume was ordinary. This is a single practitioner account (not vendor documentation) but it directly illustrates the mechanism PostgreSQL's own docs describe in finding-5, and applies equally to an abandoned Debezium slot. [6] Downgrade: polarity screen flagged pg wal, the slot s; author override recorded, so this claim cannot be High.\n- **The Debezium PostgreSQL source connector (as documented by Confluent) delivers at-least-once and runs as a single task** (Medium confidence): Confluent's documentation for the Debezium PostgreSQL source connector states it guarantees at-least-once delivery (duplicates are possible after a restart or network fault) and that the connector supports running only one task -- i.e. a single connector instance cannot be horizontally sharded across multiple Kafka Connect tasks. Downstream consumers must be built to tolerate duplicate records, and throughput/HA planning has to work within a single-task-per-connector model (running more connectors, one per database/table-set, is the scale-out lever, not more tasks per connector). [3]\n- **Third-party extensions (e.g. pglogical) exist specifically to add DDL replication on top of native logical replication** (Low confidence): Because native logical replication does not propagate DDL, vendors have built extensions to close that gap for PostgreSQL-to-PostgreSQL replication specifically; pglogical's community edition offers a function to capture and re-execute DDL on subscribers. This does not extend to Debezium/Kafka pipelines (pglogical replicates to another PostgreSQL node, not to Kafka) but it confirms the DDL gap is treated as a known, addressed-by-tooling problem rather than a rare edge case. [9]\n- **Debezium change events can be Avro-serialized with a schema registry (Apicurio or Confluent) to manage schema evolution in Kafka** (Medium confidence): Because Debezium dynamically generates each record's schema from the source table's structure, records written to the same Kafka topic over time can carry different schema versions. Debezium supports Avro serialization backed by a schema registry (Apicurio or Confluent Schema Registry) specifically to let consumers adapt to that drift. This is a Kafka-ecosystem capability that only exists because Debezium's output is Kafka messages -- it has no equivalent in native logical replication, which never produces a serialized, registry-tracked message schema at all. [4]\n- **Some managed PostgreSQL offerings cannot run Debezium because the logical decoding plug-in cannot be installed** (Medium confidence): Confluent's own connector documentation calls out that databases hosted by a service such as Heroku Postgres cannot be monitored with Debezium, because the operator may be unable to install the logical decoding plug-in the connector needs. This is a real deployment-environment constraint to check against wherever the orders database is actually hosted, independent of the architectural comparison. [3] Downgrade: polarity screen flagged databas host by a service such as heroku postgr; author override recorded, so this claim cannot be High.\n- **An independent CDC-vendor comparison frames native logical replication as replication-only, and Debezium+Kafka Connect as the higher-complexity, more flexible middleware path** (Low confidence): RisingWave (a vendor of a third, competing CDC approach) publishes a comparison table describing native PostgreSQL logical replication as having no middleware and being replication-only (no transformation, no non-PostgreSQL destinations), versus Debezium+Kafka Connect as requiring Kafka Connect and Kafka as middleware with higher operational complexity but supporting external/non-PostgreSQL destinations. The direction of this framing (Debezium = more moving parts) is consistent with findings 2, 3, and 7 above from the projects' own documentation, but the source has a direct commercial interest in making both alternatives look more complex than its own product, so treat the complexity framing as corroborating context rather than an independent verdict. [10] Downgrade: polarity screen flagged nonpostgresql destination; author override recorded, so this claim cannot be High.\n\n## 5) Detailed Analysis\n### How each option actually gets changes into Kafka\nPostgreSQL's built-in logical replication (CREATE PUBLICATION / CREATE SUBSCRIPTION) is a publish/subscribe protocol whose subscriber is itself a PostgreSQL database -- it has no native Kafka target. Debezium is a Kafka Connect source connector that consumes the same underlying logical-decoding stream (via the decoderbufs or pgoutput plug-in) and republishes each change as a Kafka record, one topic per table by default. So the real choice for 'streaming changes into Kafka' is not between two competing streaming mechanisms; it is between writing and operating your own consumer of PostgreSQL's logical decoding stream, or adopting Debezium as a maintained, off-the-shelf Kafka Connect consumer of that same stream. Native logical replication alone does not reach Kafka. [8] [2] [1]\n\n### Schema and DDL handling\nNeither option replicates DDL. PostgreSQL's own restrictions page states that schema and DDL commands are not replicated by logical replication, and separately that sequence data and large objects are excluded too. Debezium's PostgreSQL connector documentation independently confirms it cannot report DDL change events, for the identical reason: the logical decoding layer beneath it carries no DDL. Any 'add a column and the pipeline breaks' story you may have heard about either approach traces back to this same root cause, not to a design choice either project made. Third-party extensions such as pglogical exist specifically to bolt DDL replication onto native logical replication for Postgres-to-Postgres topologies, which is further evidence the gap is a known, not a hypothetical, pain point. [7] [1] [9]\n\n### Operational risk: replication slots and WAL retention\nBoth a native subscription and a Debezium connector work by creating and holding a PostgreSQL replication slot. PostgreSQL will not remove any WAL segment the slot might still need; by default (max_slot_wal_keep_size = -1) that retention is unbounded. If the consumer -- a subscriber or a Debezium connector -- stops permanently without the slot being dropped, WAL accumulates on the primary's disk indefinitely. A first-hand incident report describes exactly this failure mode taking a primary down over a quiet weekend after a standby was decommissioned without dropping its slot. This is an operational responsibility that exists identically for either technology choice: whichever one you pick, you need alerting on replication slot lag / restart_lsn and a runbook for dropping a dead slot before it eats the disk. [5] [6]\n\n### Delivery semantics, scaling, and message format\nConfluent's documentation for the Debezium PostgreSQL source connector states it is at-least-once (a restart or network fault can produce duplicate Kafka records, so downstream consumers must de-duplicate) and that the connector runs as a single Kafka Connect task -- scale-out means running more connectors (e.g. one per database or table set), not more tasks per connector. On the message-format side, because Debezium's output is Kafka messages, it can serialize records as Avro and track schema versions in a schema registry (Apicurio or Confluent Schema Registry) so consumers can handle a table's schema changing over time; native logical replication has no analogous concept because it never produces an externally-consumed, versioned message schema at all. Separately, if the orders database ends up on a managed PostgreSQL host, verify up front that the platform allows installing a logical decoding plug-in -- Confluent's docs name Heroku Postgres as one host where Debezium cannot be used for exactly that reason. [3] [4]\n\n## 6) Consensus vs Debate\n### Consensus\n- DDL/schema changes are not carried by either option, because both sit on the same PostgreSQL logical-decoding mechanism. [7] [1]\n- Both approaches create a PostgreSQL replication slot and inherit its unbounded-WAL-retention risk if the consumer stops. [5] [6]\n\n### Debate / Contradictory Evidence\n- Native logical replication is sometimes framed as the 'simpler' option, but for this specific goal (landing changes in Kafka) it is not a complete alternative on its own: it cannot target Kafka without an additional custom consumer, whereas Debezium is a ready-made Kafka Connect consumer of the same underlying stream. A third-party CDC vendor's public comparison labels native logical replication as the lowest-complexity option and Debezium+Kafka Connect as the higher-complexity, higher-flexibility option -- which is directionally consistent with the projects' own docs, but the source sells a third competing CDC product, so its complexity scoring for the other two should be read as illustrative, not as an independent benchmark. [8] [10]\n\n## 7) Source Quality Notes\n- Source tier distribution: T1: 3, T2: 0, T3: 0, T4: 7, T5: 0\n- Classification basis: caller-provided web tier/type labels are ignored; domain heuristics are re-derived from normalized URLs, and only a fresh validator-controlled capture may establish primary-source status.\n- Live Web verification: 38/38 verified Web evidence references were freshly captured; validator-derived live T1: 11. Serialized content artifacts are audit inputs, not execution proof.\n- Potential bias / sponsorship requiring review: Debezium connector for PostgreSQL, Debezium Architecture :: Debezium Documentation, Debezium PostgreSQL Source Connector for Confluent Platform | Confluent ..., Avro Serialization :: Debezium Documentation, PostgreSQL: Documentation: 18: 19.6. Replication, PostgreSQL Replication Slots: Retained WAL Fills Disk | MonPG, PostgreSQL: Documentation: 18: 29.8. Restrictions, PostgreSQL: Documentation: 18: Chapter 29. Logical Replication, How Not To Use PostgreSQL DDL Replication - pgedge.com, PostgreSQL CDC: Logical Replication vs Debezium vs Native Streaming\n- Sources with unknown methodology: 10\n- Repository evidence quality: code observations: 0; commit-pinned: 0; tests passed: 0; tests failed/other: 0\n- Domain authority: 11/38 cited Web units were classified from the curated authority registry rather than a URL-shape heuristic; 11 are the subject project's own documentation and cannot serve as the independent primary unit for a comparison or recommendation.\n- Claim support: disputed (attested 10, qualified 1, unreviewed 0, disputed 7, blocked 0); 7 claim(s) tripped the polarity screen. Excerpt containment is proved mechanically; entailment is an author attestation and is not machine-verified.\n- Single-source findings: 3\n- Unverified findings omitted from substantive sections: 0\n- Evidence chain status: partially satisfied\n\n## 8) Sources\n[1] Debezium connector for PostgreSQL \u2014 https://debezium.io/documentation/reference/stable/connectors/postgresql.html \u2014 website (preclassified T4) \u2014 date: unknown; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n[2] Debezium Architecture :: Debezium Documentation \u2014 https://debezium.io/documentation/reference/stable/architecture.html \u2014 website (preclassified T4) \u2014 date: unknown; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n[3] Debezium PostgreSQL Source Connector for Confluent Platform | Confluent ... \u2014 https://docs.confluent.io/kafka-connectors/debezium-postgres-source/current/overview.html \u2014 website (preclassified T4) \u2014 date: unknown; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n[4] Avro Serialization :: Debezium Documentation \u2014 https://debezium.io/documentation/reference/stable/configuration/avro.html \u2014 website (preclassified T4) \u2014 date: unknown; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n[5] PostgreSQL: Documentation: 18: 19.6. Replication \u2014 https://www.postgresql.org/docs/current/runtime-config-replication.html \u2014 official (preclassified T1) \u2014 date: unknown; basis: registry:project-owned:Official domain of the PostgreSQL Global Development Group; sponsorship: unknown; methodology: unknown\n[6] PostgreSQL Replication Slots: Retained WAL Fills Disk | MonPG \u2014 https://monpg.app/blog/postgresql-replication-slots-retained-wal-disk-full \u2014 website (preclassified T4) \u2014 date: unknown; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n[7] PostgreSQL: Documentation: 18: 29.8. Restrictions \u2014 https://www.postgresql.org/docs/current/logical-replication-restrictions.html \u2014 official (preclassified T1) \u2014 date: unknown; basis: registry:project-owned:Official domain of the PostgreSQL Global Development Group; sponsorship: unknown; methodology: unknown\n[8] PostgreSQL: Documentation: 18: Chapter 29. Logical Replication \u2014 https://www.postgresql.org/docs/current/logical-replication.html \u2014 official (preclassified T1) \u2014 date: unknown; basis: registry:project-owned:Official domain of the PostgreSQL Global Development Group; sponsorship: unknown; methodology: unknown\n[9] How Not To Use PostgreSQL DDL Replication - pgedge.com \u2014 https://www.pgedge.com/blog/how-not-to-use-postgresql-ddl-replication \u2014 website (preclassified T4) \u2014 date: unknown; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n[10] PostgreSQL CDC: Logical Replication vs Debezium vs Native Streaming \u2014 https://risingwave.com/blog/postgresql-cdc-logical-replication-debezium \u2014 website (preclassified T4) \u2014 date: unknown; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n\n## 9) Gaps & Limitations\n- No independent, disclosed-methodology benchmark comparing Debezium's end-to-end latency/throughput against a hand-rolled logical-replication consumer was found; any performance claim in vendor blogs (e.g. RisingWave's '<5% source-database overhead' framing) was excluded from findings because it carries no disclosed method or environment and cannot be verified.\n- Two candidate sources failed content extraction and are excluded from findings: https://estuary.dev/blog/postgresql-replication-slots/ returned only page CSS, not article text, and https://wiki.postgresql.org/images/d/dd/20230602-DDL_Replication.pdf returned raw PDF bytes that the extractor did not convert to text. Neither is cited.\n- PostgreSQL 16 added logical replication from standby servers, and a 2023-era blog post found during retrieval discusses an early Debezium beta's support for that specific topology; because the beta version is dated and the mainline Debezium PostgreSQL connector documentation fetched for this report does not confirm current standby-based streaming support, this topic is named here rather than asserted as a current capability. If replicating from a standby (rather than the primary) matters for the orders database, verify current support directly against the Debezium version you plan to deploy.\n- This report does not cover managed CDC alternatives (e.g. AWS DMS, cloud-vendor CDC services) or Debezium Server / Debezium Engine deployment modes in depth; retrieval and analysis were scoped to the Kafka Connect deployment of Debezium versus PostgreSQL's built-in logical replication, per the question as asked.\n- Cost and licensing were not part of the evidence gathered (both PostgreSQL logical replication and open-source Debezium are free; Confluent's packaged connector and any managed Kafka/Kafka Connect service are separate cost centers not quantified here).\n- finding #2 claim support is disputed: polarity screen flagged logical replication; author override recorded, so this claim cannot be High\n- finding #4 claim support is disputed: polarity screen flagged logical decod; author override recorded, so this claim cannot be High\n- finding #5 confidence downgraded from high to medium\n- finding #6 claim support is disputed: polarity screen flagged pg wal, the slot s; author override recorded, so this claim cannot be High\n- finding #10 claim support is disputed: polarity screen flagged databas host by a service such as heroku postgr; author override recorded, so this claim cannot be High\n- finding #11 claim support is disputed: polarity screen flagged nonpostgresql destination; author override recorded, so this claim cannot be High\n"}], "grading": {"run_id": "eval-1-comparison-with-method-with_skill", "expectations": [{"text": "Substantively covers both PostgreSQL logical replication and Debezium", "passed": true, "evidence": "Detailed Analysis sections 'How each option actually gets changes into Kafka', 'Schema and DDL handling', etc. discuss both at length, with dedicated findings for each."}, {"text": "Cites at least one URL per option", "passed": true, "evidence": "Sources [5],[7],[8] are postgresql.org pages (logical replication); [1],[2],[3],[4] are debezium.io/confluent pages (Debezium)."}, {"text": "Includes at least one verbatim quotation from a cited page", "passed": false, "evidence": "No quotation marks appear anywhere in the document (confirmed by search); all claims are paraphrased and attributed via [n] citation markers, e.g. 'PostgreSQL's own restrictions page states that schema and DDL commands are not replicated' with no quoted text. quote_verification.json also reports quotes=0 for this run."}, {"text": "At least one quoted excerpt is found verbatim on the page it is attributed to", "passed": false, "evidence": "quote_verification.json: eval-1 with_skill quotes=0, quotes_verified=0 (no quotes to verify)."}, {"text": "Distinguishes primary documentation from secondary or practitioner sources", "passed": true, "evidence": "Sources section labels each entry's tier, e.g. postgresql.org entries marked 'official (preclassified T1)' vs debezium.io/blog entries marked 'website (preclassified T4)'; Source Quality Notes also states '11/38 cited Web units ... are the subject project's own documentation and cannot serve as the independent primary unit'."}, {"text": "States at least one thing it could not establish, or a limitation of the comparison", "passed": true, "evidence": "Section 9 'Gaps & Limitations': 'No independent, disclosed-methodology benchmark comparing Debezium's end-to-end latency/throughput ... was found' and notes on excluded/failed sources."}], "summary": {"passed": 4, "failed": 2, "total": 6, "pass_rate": 0.6667}}}, {"id": "eval-1-comparison-with-method-without_skill", "prompt": "We are choosing between PostgreSQL logical replication and Debezium for streaming changes out of our orders database into Kafka. Write me the comparison I can hand to my tech lead. He will ask where every claim came from.", "eval_id": 1, "outputs": [{"name": "answer.md", "type": "text", "content": "# PostgreSQL Logical Replication vs. Debezium for Streaming Orders DB Changes to Kafka\n\n**Prepared for:** tech lead review\n**Question:** how do we stream row-level changes out of the orders database into Kafka \u2014 using PostgreSQL's native logical replication directly, or Debezium (Kafka Connect based CDC)?\n**Method note:** compiled from vendor/official documentation and independent technical sources via live web search on 2026-09-08. Every claim below is footnoted to its source; see the Sources list at the end for full URLs. I have not run these two setups myself against your orders schema \u2014 validate the WAL-growth and TOAST behavior against your actual table shapes before committing.\n\n---\n\n## 0. Framing the decision correctly\n\nThese two things are not peers \u2014 one is a database feature, the other is a packaged tool built on top of that feature. Getting this framing right matters for the recommendation.\n\n- **PostgreSQL logical replication** is the *mechanism*: it decodes the Write-Ahead Log (WAL) into a stream of row-level INSERT/UPDATE/DELETE events via a replication slot, using an output plugin (`pgoutput` is the only one built into core Postgres 10+; `wal2json` is a separate installable extension that emits JSON instead of a compact binary protocol) [PostgreSQL 18 Docs \u2014 Logical Replication][pg-restrictions][streamkap-internals]. Out of the box, this mechanism is designed to feed a `CREATE SUBSCRIPTION` on **another PostgreSQL database** \u2014 it does not write to Kafka by itself.\n- To get from a replication slot to a Kafka topic, you need something consuming the replication protocol and producing to Kafka. There are exactly two ways to do that:\n  1. **Debezium** \u2014 a mature, open-source (Apache 2.0) CDC connector that speaks `pgoutput`/`wal2json`, normalizes changes into a structured event envelope, and (most commonly) runs inside a Kafka Connect cluster to publish to Kafka [Debezium Architecture Docs][debezium-arch][debezium-license].\n  2. **Build it yourself** \u2014 use `pg_recvlogical` or a client library (Go/Python/Java all have libpq replication-mode support) to read the slot directly and write your own Kafka producer, handling LSN checkpointing, schema-change detection, and TOAST edge cases yourself [MVP Factory \u2014 CDC without Debezium][mvpfactory-nodebezium].\n\nSo the real-world choice for \"logical replication vs. Debezium\" is almost always: **adopt Debezium's packaged connector, or roll a thinner custom consumer on top of the same underlying logical replication feature.** The rest of this document evaluates both paths, because a tech lead comparing \"just use logical replication\" against Debezium is implicitly asking whether the custom-build path is worth it.\n\n---\n\n## 1. Recommendation (up front)\n\n**Use Debezium**, deployed either via a Kafka Connect cluster (if you already run one) or via Debezium Server for a lighter footprint, unless your orders pipeline has exactly one downstream consumer, zero need for schema evolution, and you have strong in-house Kafka Connect expertise already available. Rationale, in order of weight:\n\n1. Orders data almost always needs schema evolution over time (new columns, new order states) and Debezium's schema history topic + event envelope handles this as a first-class feature; native logical replication explicitly does not replicate DDL at all \u2014 schema changes on the subscriber side must be applied by hand [pg-restrictions].\n2. Debezium already solves the two hardest correctness problems in this space \u2014 TOASTed (large/off-page) column values going missing from UPDATE events, and safe schema versioning per event \u2014 problems a hand-rolled consumer will hit and have to solve independently [debezium-toast-blog][debezium-schema-evolution].\n3. The operational cost most teams actually pay for Debezium is running Kafka Connect (or Kafka itself), not Debezium's own logic \u2014 and if you're \"streaming into Kafka\" you're paying that Kafka operational cost either way, custom build or not [debezium-alternatives-estuary].\n4. A custom `pg_recvlogical`-based consumer removes the Kafka Connect layer but reintroduces exactly the problems Debezium already ships fixes for (slot/LSN checkpointing, restart-safety, schema drift, TOAST handling) \u2014 reasonable only if you truly have a single simple consumer and want to avoid Kafka Connect specifically, e.g. by publishing straight to Kafka's producer API [mvpfactory-nodebezium].\n\nIf your actual choice is \"Debezium vs. a managed CDC SaaS (Fivetran/Airbyte/Estuary/Streamkap)\" rather than vs. hand-rolled logical replication, that's a different trade (cost/ops vs. control) \u2014 flag that to me separately if it's the real question, since this document doesn't do that comparison justice.\n\n---\n\n## 2. Side-by-side comparison\n\n| Dimension | Native logical replication (roll-your-own to Kafka) | Debezium (Kafka Connect or Debezium Server) |\n|---|---|---|\n| What it actually is | A Postgres WAL-decoding primitive + replication slot; you write the Kafka producer | A packaged CDC connector built on top of logical replication, normalizes events, ships to Kafka |\n| Underlying transport | `pgoutput` (binary, built-in) or `wal2json` (JSON, extension) [streamkap-internals] | Same \u2014 Debezium uses `pgoutput` as its supported plugin for the PostgreSQL connector [confluent-debezium-pg] |\n| Gets you to Kafka out of the box | No \u2014 requires custom producer code | Yes \u2014 Kafka Connect source connector, or Debezium Server for non-Connect sinks (Kinesis, Pub/Sub, Pulsar, JDBC, or Kafka) [decodable-server-engine][debezium-server-github] |\n| DDL / schema changes | **Not replicated at all.** Schema must be kept in sync manually; PostgreSQL's own docs state this explicitly [pg-restrictions] | Detected and versioned via an internal schema history Kafka topic; each event is tagged with the schema version active when it was captured [debezium-schema-evolution] |\n| Sequences | Not replicated \u2014 subscriber-side sequence values must be reset manually on failover [pg-restrictions] | Not a Debezium concern per se (sequences aren't table row data), same underlying limitation applies if you need sequence values downstream |\n| Large/TOASTed column values | You must handle missing unchanged-TOAST-value cases yourself when parsing `pgoutput`/`wal2json` | Handled: emits a `__debezium_unavailable_value` placeholder for unchanged TOAST columns under default `REPLICA IDENTITY`, or includes full values if you set `REPLICA IDENTITY FULL` (at a WAL-volume cost) [debezium-toast-blog] |\n| Delivery guarantees | Whatever you implement \u2014 no guarantee without your own checkpointing logic | At-least-once by default; exactly-once achievable via Kafka Connect's KIP-618 support (distributed mode, Connect \u22653.3.0) [debezium-eos] |\n| Ordering | Preserved per row only if you partition your own producer by primary key | Preserved per row: Debezium keys events by the source table's primary key by default, and Kafka guarantees order within a partition [educative-kafka-delivery] |\n| Operational footprint | Lightest \u2014 a small consumer process + the Postgres slot itself; still need a WAL-bloat safety net | Kafka Connect requires a Kafka cluster, Connect workers, and (in Connect distributed mode) coordination \u2014 real infra to run and monitor; Debezium Server removes the Connect layer but you still run its runtime process [debezium-arch][olake-debezium-issues] |\n| Multi-consumer fan-out | Not native \u2014 you'd design your own topic/consumer strategy | Native strength \u2014 one Kafka topic per table, any number of independent consumers, Single Message Transforms (SMTs) for filtering/routing/masking before it hits Kafka |\n| Cloud-managed Postgres support (RDS/Aurora) | Same prerequisite either way: `rds.logical_replication=1`, tuned `wal_level`, `max_wal_senders`, `max_replication_slots`, and an instance reboot [aws-rds-logical-replication] | Same prerequisite, plus Debezium recommends `pgoutput` (not `wal2json`, which needs superuser-installed extensions RDS restricts) [debezium-rds-md] |\n| WAL/disk risk if the consumer stalls | Same underlying risk in both cases \u2014 it's a property of the replication slot, not the consumer | Same underlying risk in both cases |\n| Licensing / cost | Free (Postgres core feature); engineering cost is your own connector code | Apache 2.0, free; real cost is operating Kafka + Connect (or Debezium Server) at production scale \u2014 often comparable to a managed CDC platform once engineer time is counted [debezium-alternatives-estuary] |\n| Best fit | Single, simple downstream consumer; team wants zero Kafka Connect footprint and will invest engineering time in a thin custom bridge | Multiple consumers, need for schema evolution/transformation, want a supported, widely-adopted tool with an existing ecosystem of Kafka Connect sink connectors |\n\n---\n\n## 3. Detail on the risks that matter most for an orders database\n\n### 3.1 Replication slot WAL retention \u2014 applies to *both* approaches equally\n\nA logical replication slot is how Postgres knows which WAL a consumer still needs. If the consumer (Debezium or your own code) stops consuming \u2014 crash, network partition, backpressure from Kafka \u2014 Postgres will not recycle the WAL behind that slot. The default retention is unbounded (`max_slot_wal_keep_size = -1`), so **a single stalled slot can fill your primary's disk and take down the orders database**, not just the replication feed [artie-slots][streamkap-slot-management]. This is a property of PostgreSQL logical replication itself, not something Debezium introduces or fixes \u2014 you need `max_slot_wal_keep_size` set to a bounded value (e.g. 100 GB) so a stalled slot is marked \"lost\" and the WAL is reclaimed rather than filling the disk, regardless of which consumer you choose [streamkap-slot-management]. Whoever owns this pipeline needs alerting on replication slot lag (`pg_stat_replication` / `pg_replication_slots`) day one.\n\n### 3.2 Schema changes on an orders table\n\nOrders schemas evolve \u2014 new payment methods, new fulfillment states, new columns for compliance fields. Native logical replication's official restriction is unambiguous: *\"the database schema and DDL commands are not replicated ... subsequent schema changes would need to be kept in sync manually\"* [pg-restrictions]. If you build your own consumer, every `ALTER TABLE orders ADD COLUMN ...` is a manual, coordinated deploy across producer and consumer. Debezium instead maintains a dedicated schema history Kafka topic recording every DDL statement it has observed, and tags every change event with the schema version active at capture time so downstream consumers can reconstruct the right shape per event [debezium-schema-evolution]. That schema-history topic must be configured for infinite retention (`cleanup.policy=delete`, `retention.ms=-1`) and never deleted \u2014 losing it forces a full re-snapshot [debezium-schema-evolution].\n\n### 3.3 Large order payloads and TOAST\n\nIf any orders columns hold larger payloads (JSON line-items, notes, addresses) that PostgreSQL stores out-of-line via TOAST, plain logical replication messages **omit unchanged TOAST values from UPDATE events** unless that column is part of the table's replica identity [debezium-toast-blog]. A hand-rolled consumer must detect and handle this itself or silently produce incomplete UPDATE events to Kafka. Debezium already does: it either includes full before/after TOAST values when you set `REPLICA IDENTITY FULL` on the table (at a WAL-volume cost), or emits an explicit `__debezium_unavailable_value` marker so downstream consumers know a value was omitted rather than guessing it was nulled out [debezium-toast-blog].\n\n### 3.4 Delivery and ordering guarantees you'll need for order events\n\nFor an orders stream, consumers (billing, fulfillment, analytics) generally need per-order ordering and no silently dropped events. Debezium provides at-least-once delivery by default, keys events by the source table's primary key so Kafka's per-partition ordering guarantee preserves per-row order, and can be upgraded to exactly-once delivery by running Kafka Connect in distributed mode on Connect \u22653.3.0 (KIP-618 support) [debezium-eos][educative-kafka-delivery]. Reproducing this \u2014 dedup, correct partition keying, restart-safe offset tracking \u2014 in a custom consumer is realistic but non-trivial engineering.\n\n### 3.5 Amazon RDS/Aurora specifics (if orders DB is managed Postgres)\n\nBoth approaches require the same base enablement on RDS/Aurora: set `rds.logical_replication = 1` in the parameter group, size `wal_level`, `max_wal_senders`, `max_replication_slots`, `max_connections`, and reboot the instance [aws-rds-logical-replication]. Debezium's own RDS notes recommend the `pgoutput` plugin specifically on RDS because `wal2json` requires installing an extension, which RDS restricts more tightly [debezium-rds-md].\n\n### 3.6 Operational footprint\n\nRunning Debezium the standard way means operating Kafka Connect \u2014 a distributed worker framework \u2014 on top of your Kafka cluster, or, if you don't already run Kafka Connect, adding it just for this [debezium-arch][olake-debezium-issues]. If that's unacceptable overhead, **Debezium Server** is worth evaluating: it's Debezium's engine wrapped in a standalone Quarkus-based runtime (JAR or container) that reads from Postgres and writes straight to a sink \u2014 including Kafka \u2014 with no Kafka Connect cluster required, at the cost of losing Connect's task distribution/HA and its sink-connector ecosystem [decodable-server-engine][debezium-server-github]. This is a middle ground worth considering if the real objection to Debezium is \"we don't want to run Kafka Connect,\" not \"we don't want Debezium.\"\n\n---\n\n## 4. What I did not verify\n\n- I did not benchmark WAL growth, replication lag, or throughput against your actual orders table volumes/shapes \u2014 these numbers are workload-specific and the sources above are describing mechanisms and defaults, not your production numbers.\n- I did not evaluate managed CDC SaaS platforms (Fivetran, Airbyte, Estuary, Streamkap, BladePipe) in depth; they were mentioned by sources only as alternatives to *both* options above and are out of scope for the question as asked.\n- Debezium version referenced is the current stable line (3.6 as of this writing per the official docs site); confirm behavior against whatever version you'd actually pin.\n\n---\n\n## Sources\n\n1. [PostgreSQL 18 Docs \u2014 Chapter 29.8, Logical Replication Restrictions](https://www.postgresql.org/docs/current/logical-replication-restrictions.html) \u2014 primary source, fetched directly; confirms DDL and sequences are not replicated. `[pg-restrictions]`\n2. [Debezium Documentation \u2014 Architecture](https://debezium.io/documentation/reference/stable/architecture.html) \u2014 primary source, fetched directly; confirms Kafka Connect is the standard deployment model. `[debezium-arch]`\n3. [Debezium Documentation \u2014 Exactly-once delivery](https://debezium.io/documentation/reference/stable/configuration/eos.html) \u2014 primary source, fetched directly; at-least-once default, KIP-618 exactly-once path. `[debezium-eos]`\n4. [Debezium \u2014 License](https://debezium.io/license/) \u2014 Apache 2.0 licensing. `[debezium-license]`\n5. [Debezium connector for PostgreSQL \u2014 Confluent Documentation](https://docs.confluent.io/kafka-connectors/debezium-postgres-source/current/overview.html) \u2014 snapshot + streaming behavior, `pgoutput` usage. `[confluent-debezium-pg]`\n6. [Strategies for Handling Unchanged Postgres TOAST Values \u2014 Debezium blog](https://debezium.io/blog/2019/10/08/handling-unchanged-postgres-toast-values/) \u2014 TOAST/REPLICA IDENTITY behavior and `__debezium_unavailable_value` marker. `[debezium-toast-blog]`\n7. [Handling Debezium Schema Evolution in Real-Time Pipelines \u2014 RisingWave](https://risingwave.com/blog/debezium-schema-evolution-streaming-pipelines/) and [A Note On Database History Topic Configuration \u2014 Debezium blog](https://debezium.io/blog/2018/03/16/note-on-database-history-topic-configuration/) \u2014 schema history topic mechanics and retention requirements. `[debezium-schema-evolution]`\n8. [debezium/debezium-connector-postgres/RDS.md \u2014 GitHub](https://github.com/debezium/debezium/blob/main/debezium-connector-postgres/RDS.md) \u2014 RDS-specific plugin recommendation (`pgoutput` over `wal2json`). `[debezium-rds-md]`\n9. [Performing logical replication for Amazon RDS for PostgreSQL \u2014 AWS Docs](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/PostgreSQL.Concepts.General.FeatureSupport.LogicalReplication.html) \u2014 `rds.logical_replication` and related parameter requirements. `[aws-rds-logical-replication]`\n10. [PostgreSQL Replication Slots: Create, Monitor, and Drop \u2014 Artie](https://www.artie.com/blogs/postgresql-replication-slots) \u2014 WAL retention risk from stalled slots. `[artie-slots]`\n11. [PostgreSQL WAL Slot Management: Prevention and Recovery at Production Scale \u2014 Streamkap](https://streamkap.com/resources-and-guides/postgres-wal-slot-management-production) and [PostgreSQL Logical Replication Internals: WAL, Slots, and Decoding \u2014 Streamkap](https://streamkap.com/resources-and-guides/postgresql-logical-replication-internals) \u2014 `max_slot_wal_keep_size` mitigation, `pgoutput`/`wal2json` mechanics. `[streamkap-slot-management]` `[streamkap-internals]`\n12. [Debezium Kafka Architecture: When CDC Pipelines Outgrow Self-Managed Kafka and Connect \u2014 AutoMQ](https://www.automq.com/blog/debezium-kafka-architecture-when-cdc-pipelines-outgrow-self-managed-kafka-and-connect) and [Debezium Kafka Challenges & How OLake Go Solves Them \u2014 OLake](https://olake.io/blog/issues-debezium-kafka/) \u2014 Kafka Connect operational overhead. `[olake-debezium-issues]`\n13. [Understanding CDC with Debezium Server and Debezium Engine \u2014 Decodable](https://www.decodable.co/blog/understanding-cdc-with-debezium-server-and-debezium-engine) and [debezium/debezium-server \u2014 GitHub](https://github.com/debezium/debezium-server) \u2014 Debezium Server as a Kafka-Connect-free deployment option. `[decodable-server-engine]` `[debezium-server-github]`\n14. [Why You Should Reconsider Debezium: Challenges and Alternatives \u2014 Estuary](https://estuary.dev/blog/debezium-alternatives/) \u2014 total cost of ownership framing for self-managed Debezium/Kafka Connect. `[debezium-alternatives-estuary]`\n15. [CDC without Debezium: Postgres WAL to Kafka in Go \u2014 MVP Factory](https://mvpfactory.io/blog/change-data-capture-without-debezium-wiring-postgres-wal-directly-to-your-event) \u2014 mechanics and scope of a hand-rolled `pg_recvlogical`/libpq-replication-mode consumer. `[mvpfactory-nodebezium]`\n16. [Delivery Guarantees of Kafka \u2014 Educative](https://www.educative.io/courses/system-design-deep-dive-real-world-distributed-systems/np/delivery-guarantees-of-kafka) \u2014 per-partition ordering guarantee referenced for the primary-key-based partitioning claim. `[educative-kafka-delivery]`\n17. [PostgreSQL CDC: Logical Replication vs Debezium vs Native Streaming \u2014 RisingWave](https://risingwave.com/blog/postgresql-cdc-logical-replication-debezium/) \u2014 general framing of the logical-replication-vs-Debezium distinction used in Section 0.\n"}], "grading": {"run_id": "eval-1-comparison-with-method-without_skill", "expectations": [{"text": "Substantively covers both PostgreSQL logical replication and Debezium", "passed": true, "evidence": "Section 0 frames both, Section 2 is a full side-by-side comparison table, Sections 3.1-3.6 discuss both in depth."}, {"text": "Cites at least one URL per option", "passed": true, "evidence": "Sources item 1 (postgresql.org logical-replication-restrictions) and item 9 (AWS RDS logical replication) cover PostgreSQL; items 2-8, 12-15 cover Debezium."}, {"text": "Includes at least one verbatim quotation from a cited page", "passed": true, "evidence": "Line 64: 'Native logical replication's official restriction is unambiguous: *\"the database schema and DDL commands are not replicated ... subsequent schema changes would need to be kept in sync manually\"* [pg-restrictions].'"}, {"text": "At least one quoted excerpt is found verbatim on the page it is attributed to", "passed": false, "evidence": "quote_verification.json: eval-1 without_skill quotes=12, quotes_verified=0 (verified_rate 0.0) \u2014 the quote at line 64 is listed among unverified_examples, likely because the ellipsis elides text not present verbatim on the live page."}, {"text": "Distinguishes primary documentation from secondary or practitioner sources", "passed": true, "evidence": "Sources items 1-3 are explicitly annotated 'primary source, fetched directly'; other entries (blogs, vendor comparison pieces) carry no such label."}, {"text": "States at least one thing it could not establish, or a limitation of the comparison", "passed": true, "evidence": "Section 4 'What I did not verify': 'I did not benchmark WAL growth, replication lag, or throughput against your actual orders table volumes/shapes...'"}], "summary": {"passed": 5, "failed": 1, "total": 6, "pass_rate": 0.8333}}}, {"id": "eval-2-conflicting-official-sources-with_skill", "prompt": "I have two different pages in the MySQL 8.0 manual that seem to say opposite things about whether an INSTANT ALGORITHM DDL takes a metadata lock for the whole operation or only briefly. Work out which is right and show me your reasoning. This is going into a migration runbook that the DBA team will follow during a maintenance window.", "eval_id": 2, "outputs": [{"name": "answer.md", "type": "text", "content": "## 1) Research Question\n- Normalized question: I have two different pages in the MySQL 8.0 manual that seem to say opposite things about whether an INSTANT ALGORITHM DDL takes a metadata lock for the whole operation or only briefly. Work out which is right and show your reasoning. This is going into a migration runbook that the DBA team will follow during a maintenance window.\n- Research kind: `web`\n- Depth mode: `deep`\n- Evidence chain requirements: typed evidence; extracted excerpts for web claims; repository evidence IDs for codebase claims\n\n## 2) Method\n- Execution mode: `deep`\n- Degradation level: `Partial`\n- Retrieval plan (queries/subtopics): 6 distinct queries represented\n- Dedup strategy: normalized URL canonicalization + first-seen retention\n- Retrieved sources: 32\n- Content items processed: 8\n- Successfully extracted: 8\n- Repository evidence units: 0\n- Cited evidence units: 5\n- Validation checks performed: required-input, extraction-success, exact excerpt, repository reference, claim-support review, confidence, and degradation checks\n- Citation integrity (this is what `Degradation` above reports): every cited excerpt was re-read from the artifact it names\n- Claim support (a separate verdict, not implied by the one above): disputed \u2014 attested 1, qualified 5, unreviewed 0, disputed 1, blocked 0\n- Machine checks cannot decide entailment. A polarity and number screen can only remove support; the reviewed stance on each finding is an author attestation.\n- Budget consumed: retrieval 5/50, extractions 13/15, live verifications 11/15\n\n## 3) Executive Summary\nPartial result: As published today, the MySQL 8.0 Reference Manual states that ALGORITHM=INSTANT operations only modify data-dictionary metadata and that an exclusive metadata lock on the table may be taken briefly during the execution phase of the operation. This identical sentence appears, word for word, on both Section 17.12.2 'Online DDL Performance and Concurrency' and Section 15.1.9 'ALTER TABLE Statement'. A brief, phase-scoped lock is the documented behavior today; it is a materially different claim from a lock held for the full duration of the statement. Wayback Machine captures of the exact same two manual URLs, from April and May 2021, show the opposite claim: 'No metadata locks are taken on the table' (Online DDL Performance and Concurrency) and 'No exclusive metadata locks are taken on the table during preparation and execution' (ALTER TABLE Statement). This is the literal opposite of the current wording captured in finding-current-wording, on the same two URLs. The manual's own 'Online DDL and Metadata Locks' section explains that any online DDL operation (INSTANT included, per the same page's opening description of instant operations) needs to acquire an exclusive MDL to commit its new table definition, and that this acquisition 'may have to wait for concurrent transactions that hold metadata locks on the table to commit or rollback.' Critically, once the DDL's exclusive lock request is queued, 'a pending exclusive metadata lock requested by an online DDL operation blocks subsequent transactions on the table' -- so a long-running transaction on the target table can make an 'instant' ALTER TABLE, and everything queued behind it, appear to hang for as long as that transaction runs, even though the lock itself is only held briefly once granted.\n\n## 4) Key Findings\n- **Current MySQL 8.0 manual: INSTANT DDL's exclusive metadata lock is brief, not for the whole operation** (Medium confidence): As published today, the MySQL 8.0 Reference Manual states that ALGORITHM=INSTANT operations only modify data-dictionary metadata and that an exclusive metadata lock on the table may be taken briefly during the execution phase of the operation. This identical sentence appears, word for word, on both Section 17.12.2 'Online DDL Performance and Concurrency' and Section 15.1.9 'ALTER TABLE Statement'. A brief, phase-scoped lock is the documented behavior today; it is a materially different claim from a lock held for the full duration of the statement. [2] [3] Downgrade: High requires a validator-derived T1 source from the effective final URL; caller tier labels are not authoritative; High requires one current-process live-verified T1 primary Web source for a narrow single fact, direct code evidence for a code fact, code plus a passing test for runtime behavior, or two independent verified units including a primary source; claim asserts numbers no cited excerpt contains: 17.12, 15.1.\n- **Pre-2022 MySQL 8.0 manual: the same two pages said NO metadata lock is taken at all** (Medium confidence): Wayback Machine captures of the exact same two manual URLs, from April and May 2021, show the opposite claim: 'No metadata locks are taken on the table' (Online DDL Performance and Concurrency) and 'No exclusive metadata locks are taken on the table during preparation and execution' (ALTER TABLE Statement). This is the literal opposite of the current wording captured in finding-current-wording, on the same two URLs. [4] [5] Downgrade: claim asserts numbers no cited excerpt contains: 2022, 2021.\n- **Operational caveat for the runbook: a brief lock can still cause an effectively long block** (Medium confidence): The manual's own 'Online DDL and Metadata Locks' section explains that any online DDL operation (INSTANT included, per the same page's opening description of instant operations) needs to acquire an exclusive MDL to commit its new table definition, and that this acquisition 'may have to wait for concurrent transactions that hold metadata locks on the table to commit or rollback.' Critically, once the DDL's exclusive lock request is queued, 'a pending exclusive metadata lock requested by an online DDL operation blocks subsequent transactions on the table' -- so a long-running transaction on the target table can make an 'instant' ALTER TABLE, and everything queued behind it, appear to hang for as long as that transaction runs, even though the lock itself is only held briefly once granted. [2]\n\n## 5) Detailed Analysis\n### Why the two pages appear to disagree\nThe two most likely candidates for the user's 'two pages' are: (a) the current live text of Section 17.12.2 'Online DDL Performance and Concurrency' and/or Section 15.1.9 'ALTER TABLE Statement', which today describe a brief exclusive metadata lock; and (b) an older cached, mirrored, PDF, or search-engine-cached copy of one of those same two pages, which asserted an absence of any metadata lock. Wayback Machine captures place that older wording live on dev.mysql.com in April and May of 2021. MySQL's own public bug tracker records why the wording changed: Bug #106480, titled 'ALGORITHM=INSTANT takes exclusive metadata lock on table', was filed against 'MySQL Server: Documentation' on 17 Feb 2022 after a user demonstrated with a reproducible three-session example that an ALGORITHM=INSTANT ADD COLUMN does acquire a brief exclusive lock at commit. Oracle's MySQL Verification Team replied that the feature was 'not documented sufficiently' and marked the report 'Verified as a documentation request.' A member of Oracle's documentation team then posted, on 13 May 2022: 'The referenced documentation has been revised. The changes should appear online soon.' A third page, Section 17.12.1 'Online DDL Operations' (the operation-by-operation support matrix), presents a differently shaped version of the same confusion: its table marks INSTANT column operations 'Permits Concurrent DML: Yes' and 'Only Modifies Metadata: Yes' with zero mention of any metadata lock, so a reader relying on that table alone, with no cross-reference to 17.12.2, is left with the same impression the pre-fix wording stated outright. (The bug-tracker quotations in this paragraph are reproduced from a direct fetch of bugs.mysql.com performed outside this skill's automated pipeline; see Gaps & Limitations.) [1]\n\n## 6) Consensus vs Debate\n### Consensus\n- Both the current and the 2021 wording agree that ALGORITHM=INSTANT only modifies data-dictionary metadata, does not rebuild the table or copy data, and permits concurrent DML -- they disagree only on whether any exclusive metadata lock is taken at all. [2]\n\n### Debate / Contradictory Evidence\n- The current Section 17.12.2 wording holds that an exclusive metadata lock on the table may be taken briefly during the execution phase of the operation. [2]\n- The pre-fix Section 17.12.2 wording held that no metadata locks are taken on the table for an instant operation. [4]\n\n## 7) Source Quality Notes\n- Source tier distribution: T1: 0, T2: 0, T3: 0, T4: 5, T5: 0\n- Classification basis: caller-provided web tier/type labels are ignored; domain heuristics are re-derived from normalized URLs, and only a fresh validator-controlled capture may establish primary-source status.\n- Live Web verification: 9/9 verified Web evidence references were freshly captured; validator-derived live T1: 0. Serialized content artifacts are audit inputs, not execution proof.\n- Potential bias / sponsorship requiring review: 17.12.1 Online DDL Operations - Oracle, 17.12.2 Online DDL Performance and Concurrency - Oracle, 15.1.9 ALTER TABLE Statement - Oracle, Wayback snapshot: 17.12.2 Online DDL Performance and Concurrency (2021-04-23), Wayback snapshot: 15.1.9 ALTER TABLE Statement (2021-05-29)\n- Sources with unknown methodology: 5\n- Repository evidence quality: code observations: 0; commit-pinned: 0; tests passed: 0; tests failed/other: 0\n- Domain authority: 0/9 cited Web units were classified from the curated authority registry rather than a URL-shape heuristic; 0 are the subject project's own documentation and cannot serve as the independent primary unit for a comparison or recommendation.\n- Claim support: disputed (attested 1, qualified 5, unreviewed 0, disputed 1, blocked 0); 1 claim(s) tripped the polarity screen. Excerpt containment is proved mechanically; entailment is an author attestation and is not machine-verified.\n- Single-source findings: 1\n- Unverified findings omitted from substantive sections: 0\n- Evidence chain status: partially satisfied\n\n## 8) Sources\n[1] 17.12.1 Online DDL Operations - Oracle \u2014 https://docs.oracle.com/cd/E17952_01/mysql-8.0-en/innodb-online-ddl-operations.html \u2014 website (preclassified T4) \u2014 date: unknown; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n[2] 17.12.2 Online DDL Performance and Concurrency - Oracle \u2014 https://docs.oracle.com/cd/E17952_01/mysql-8.0-en/innodb-online-ddl-performance.html \u2014 website (preclassified T4) \u2014 date: unknown; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n[3] 15.1.9 ALTER TABLE Statement - Oracle \u2014 https://docs.oracle.com/cd/E17952_01/mysql-8.0-en/alter-table.html \u2014 website (preclassified T4) \u2014 date: unknown; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n[4] Wayback snapshot: 17.12.2 Online DDL Performance and Concurrency (2021-04-23) \u2014 http://web.archive.org/web/20210423023542/https:/dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-performance.html \u2014 website (preclassified T4) \u2014 date: 2021-04-23; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n[5] Wayback snapshot: 15.1.9 ALTER TABLE Statement (2021-05-29) \u2014 http://web.archive.org/web/20210529075157/https:/dev.mysql.com/doc/refman/8.0/en/alter-table.html \u2014 website (preclassified T4) \u2014 date: 2021-05-29; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n\n## 9) Gaps & Limitations\n- The skill's automated live-web re-verification transport (browser-header profile) is blocked with HTTP 403 by dev.mysql.com and bugs.mysql.com specifically; the canonical dev.mysql.com URLs were independently confirmed by a direct, non-browser-header HTTP request outside the bundled pipeline, and the current wording was verified live through the bundled pipeline via the Oracle-hosted mirror of the identical manual content (docs.oracle.com/cd/E17952_01/mysql-8.0-en/) instead.\n- Because bugs.mysql.com (https://bugs.mysql.com/bug.php?id=106480) also returns HTTP 403 to this tool's automated fetcher, its content could not be carried as a separate scored, typed finding without that finding being silently dropped when live-web re-verification runs. Its quotations are instead reproduced as narrative text in Detailed Analysis, fetched directly and manually cross-checked, but they do not carry this skill's typed web-evidence verification chain the way the two manual-page findings do.\n- It was not possible to directly observe which exact two pages, or which exact cached/archived copy, the user personally compared; the historical-vs-current explanation is the best-supported reconstruction given what MySQL's own bug tracker and the Wayback Machine record, not a direct read of the user's browser history.\n- The manual does not fully spell out, in one place, that the metadata-lock behavior described for 'online DDL operations' in Section 17.12.2 applies identically to ALGORITHM=INSTANT and ALGORITHM=INPLACE; this was inferred from that page's own opening paragraph (which explicitly discusses 'Instant operations' locking) plus Oracle Verification Team's bug-tracker comments confirming the same commit-time exclusive lock applies to the INSTANT case in the reproduction script.\n- finding #1 claim support is qualified: claim asserts numbers no cited excerpt contains: 17.12, 15.1\n- finding #1 confidence downgraded from high to medium\n- finding #2 claim support is qualified: claim asserts numbers no cited excerpt contains: 2022, 2021\n"}], "grading": {"run_id": "eval-2-conflicting-official-sources-with_skill", "expectations": [{"text": "Explicitly acknowledges that the sources disagree, rather than silently presenting one version as settled", "passed": true, "evidence": "Finding 2 header: 'Pre-2022 MySQL 8.0 manual: the same two pages said NO metadata lock is taken at all ... This is the literal opposite of the current wording'; also a dedicated 'Debate / Contradictory Evidence' section (lines 39-41)."}, {"text": "Quotes or cites both conflicting sources, not just the one it endorses", "passed": true, "evidence": "Cites current pages [2][3] with the 'may be taken briefly' wording and Wayback captures [4][5] quoted as 'No metadata locks are taken on the table' / 'No exclusive metadata locks are taken on the table during preparation and execution'."}, {"text": "Cites at least one URL", "passed": true, "evidence": "Sources section [1]-[5] each with full URLs (docs.oracle.com and web.archive.org)."}, {"text": "At least one quoted excerpt is found verbatim on the page it is attributed to", "passed": true, "evidence": "mechanical re-check after the checker was fixed to read single-quoted spans: 6 quoted spans, 4 confirmed verbatim on a cited page (quote_verification.json)"}, {"text": "States what remains uncertain after the analysis, or what would settle it definitively", "passed": true, "evidence": "Section 9 'Gaps & Limitations': 'It was not possible to directly observe which exact two pages ... the user personally compared; the historical-vs-current explanation is the best-supported reconstruction ... not a direct read of the user's browser history.'"}, {"text": "Does not present a single confident resolution without acknowledging the residual uncertainty", "passed": true, "evidence": "Executive Summary is explicitly framed 'Partial result:'; findings carry Medium (not High) confidence with explicit 'Downgrade' rationale and a 'disputed' claim-support verdict noted in Section 7."}], "summary": {"passed": 6, "failed": 0, "total": 6, "pass_rate": 1.0}}}, {"id": "eval-2-conflicting-official-sources-without_skill", "prompt": "I have two different pages in the MySQL 8.0 manual that seem to say opposite things about whether an INSTANT ALGORITHM DDL takes a metadata lock for the whole operation or only briefly. Work out which is right and show me your reasoning. This is going into a migration runbook that the DBA team will follow during a maintenance window.", "eval_id": 2, "outputs": [{"name": "answer.md", "type": "text", "content": "# MySQL 8.0 `ALGORITHM=INSTANT` and Metadata Locks: Reconciling the Manual's \"Contradiction\"\n\n## Verdict (for the runbook)\n\n**Both statements are true; they are not actually in conflict once you separate lock *mode* (shared vs. exclusive) from lock *duration*.**\n\n- A metadata lock (MDL) of some mode is held for the **entire** `ALTER TABLE ... ALGORITHM=INSTANT` statement (from the moment it starts to the moment it commits).\n- For almost that whole duration the lock is a **shared-upgradable** MDL, which does **not** block concurrent reads or writes.\n- The lock is only **EXCLUSIVE** (the mode that blocks everything) for a **brief** moment at the very end, when the new table definition is committed and old caches are evicted.\n\nSo: \"takes a metadata lock for the whole operation\" (true, if you mean *any* MDL) and \"only briefly\" (true, if you mean the *exclusive* MDL) are describing two different things, not contradicting each other. The dangerous part for a maintenance window is not the brief exclusive phase itself \u2014 it's that this brief exclusive phase **must wait for every other session's pre-existing metadata lock on the table to be released first**, and while it waits, it **queues in front of and blocks every subsequent statement** against that table, including plain `SELECT`s. A \"fast, non-blocking\" INSTANT DDL can therefore stall for as long as the longest-running open transaction that has touched the table, and everything behind it stalls too.\n\n---\n\n## The two pages, and why they look like they disagree\n\n**Page A \u2014 \"Online DDL Performance and Concurrency\"**\n`https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-performance.html` (MySQL 8.0 Reference Manual \u00a717.12.2)\n\nNear the top of the page, in a bullet list of \"how online DDL improves things,\" it currently reads:\n\n> \"Instant operations only modify metadata in the data dictionary. **An exclusive metadata lock on the table may be taken briefly during the execution phase of the operation.** Table data is unaffected, making operations instantaneous. Concurrent DML is permitted.\"\n\nFurther down the *same page*, under the heading **\"Online DDL and Metadata Locks,\"** it describes a **three-phase model that applies to all online DDL, INSTANT included**:\n\n> \"Online DDL operations can be viewed as having three phases:\n> **Phase 1: Initialization** \u2014 ... a shared upgradeable metadata lock is taken to protect the current table definition.\n> **Phase 2: Execution** \u2014 ... Whether the metadata lock is upgraded to exclusive depends on the factors assessed in the initialization phase. If an exclusive metadata lock is required, it is only taken briefly during statement preparation.\n> **Phase 3: Commit Table Definition** \u2014 ... the metadata lock is upgraded to exclusive to evict the old table definition and commit the new one. Once granted, the duration of the exclusive metadata lock is brief.\n> Due to the exclusive metadata lock requirements outlined above, an online DDL operation may have to wait for concurrent transactions that hold metadata locks on the table to commit or rollback. ... a pending exclusive metadata lock requested by an online DDL operation blocks subsequent transactions on the table.\"\n\n**Page B \u2014 `ALTER TABLE` statement reference**\n`https://dev.mysql.com/doc/refman/8.0/en/alter-table.html` (\"Performance and Space Requirements\" section)\n\n> \"`INSTANT`: Operations only modify metadata in the data dictionary. **An exclusive metadata lock on the table may be taken briefly during the execution phase of the operation.** Table data is unaffected, making operations instantaneous. Concurrent DML is permitted. (Introduced in MySQL 8.0.12)\"\n\nRead today, Pages A and B actually agree with each other and with the three-phase model. If what you found reads differently \u2014 e.g., a copy that flatly states **\"No metadata locks are taken on the table\"** for INSTANT \u2014 you are looking at **superseded wording**. That exact sentence really did exist on both pages until mid-2022, and it really did contradict the three-phase section on the same page. Here is the paper trail:\n\n---\n\n## Evidence the \"No metadata locks are taken\" wording was a documented error, since corrected\n\n1. **Historical text (Wayback Machine, captured 2019\u20132022\u201105\u201109), Page A:**\n   `https://web.archive.org/web/20191108072444/https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-performance.html`\n\n   > \"Instant operations only modify metadata in the data dictionary. **No metadata locks are taken on the table**, and table data is unaffected, making operations instantaneous. Concurrent DML is unaffected.\"\n\n2. **MySQL Bug #106480 \u2014 \"ALGORITHM=INSTANT takes exclusive metadata lock on table\"**\n   `https://bugs.mysql.com/bug.php?id=106480` (filed 17 Feb 2022, closed 13 May 2022, category \"MySQL Server: Documentation\")\n\n   The reporter demonstrated with a 3-session repro (open transaction holding a shared read lock on the table \u2192 `ALTER TABLE ... ALGORITHM=INSTANT` blocks waiting for exclusive MDL \u2192 a plain `SELECT` from a third session then queues behind the blocked `ALTER TABLE`) that INSTANT DDL **does** take an exclusive MDL, and quoted the exact same \"No metadata locks are taken on the table\" line from both Page A and Page B as incorrect.\n\n   MySQL's own Verification Team responded:\n\n   > \"documentation is correct regarding the exclusive lock. This variant of DDL takes the share lock, except at the very end, where it takes exclusive lock for a very short time.\" (17 Feb 2022)\n\n   and, after further discussion:\n\n   > \"It turns out that this particular feature is not documented sufficiently. ... ALTER TABLE needs to invalidate all these caches at some point and update them while ensuring that there is no concurrent statement are using them, for which we acquire exclusive lock. ... Regarding the exclusive lock, it will be taken only once for the table ... before calling storage engine's inplace or instant ALTER TABLE commit hook/invalidating caches and updating data dictionary. This should be also added to our documentation. **Verified as a documentation request.**\" (18 Feb 2022)\n\n   Oracle's documentation team then confirmed the fix:\n\n   > \"The referenced documentation has been revised. The changes should appear online soon.\" \u2014 Daniel Price, MySQL documentation, 13 May 2022.\n\n3. **Confirmed transition point in the Wayback Machine capture history for Page A** (`innodb-online-ddl-performance.html`): the \"No metadata locks are taken on the table\" wording is present through the **2022\u201105\u201109** capture and is replaced by \"An exclusive metadata lock on the table may be taken briefly during the execution phase of the operation\" by the **2022\u201107\u201126** capture \u2014 consistent with the bug's May 2022 resolution date and shipping with the MySQL 8.0.30 documentation refresh (2022\u201107\u201126 GA).\n\n4. **Current live wording (verified via the most recent archived crawls, 2026)** on both Page A and Page B now matches the corrected text quoted above, and is internally consistent with the \"Online DDL and Metadata Locks\" three-phase section that was never changed (it was correct all along \u2014 it's a general statement about *all* online DDL operations, INSTANT included).\n\n**Access note on sourcing:** `dev.mysql.com` and `bugs.mysql.com` returned an Oracle edge/WAF \"Technical Difficulties\" block page to this session's direct fetches; all quotations above were retrieved from the Internet Archive's Wayback Machine cache of the same canonical `dev.mysql.com` / `bugs.mysql.com` URLs (snapshot timestamps cited inline), which serves the identical Oracle-published content. If you want to eyeball the live pages yourself before the maintenance window, just open the two URLs in a normal browser \u2014 the block only affected this session's automated fetch, not the pages themselves.\n\n---\n\n## What this means mechanically (for the runbook)\n\nApply the three-phase model uniformly, INSTANT included:\n\n| Phase | What happens | Lock held | Blocks concurrent reads/writes? |\n|---|---|---|---|\n| 1. Initialization | Server decides concurrency level for this ALTER | Shared-upgradable MDL | No |\n| 2. Execution | Statement prepared/executed; for INSTANT this is just a dictionary metadata change (no rebuild, no data copy) | May briefly upgrade to exclusive during preparation | Only for the brief upgraded instant, if it happens |\n| 3. Commit table definition | Old table definition evicted, new one committed | Upgraded to exclusive | Yes, but normally for milliseconds |\n\nThe risk is not the duration of the exclusive lock itself \u2014 it's **queue position**. Getting to Phase 3 requires every session that currently holds *any* MDL on the table (including a `SELECT`-only, seemingly idle transaction that merely touched the table earlier and hasn't committed/rolled back) to release it first. Until that happens:\n\n- The `ALTER TABLE ... ALGORITHM=INSTANT` sits in `SHOW FULL PROCESSLIST` as `Waiting for table metadata lock`.\n- Because MDL grants are effectively FIFO/priority-ordered, **every new query that arrives after the ALTER and touches that table \u2014 including plain `SELECT`s \u2014 queues behind the ALTER** rather than passing it, even though those queries would not otherwise have conflicted with a shared lock. This is what makes \"instant\" DDL look like it \"took a full-table lock the whole time\" in practice, when what actually happened is: the ALTER's brief exclusive-lock request got stuck in a queue behind a long-lived transaction, and it then blocked everything filed in behind it.\n- If the wait exceeds `lock_wait_timeout` (default 31536000s / effectively unbounded unless set \u2014 check your session's actual setting, it's commonly tuned down to 5\u201350s in production), the ALTER fails with `ERROR 1205 (HY000): Lock wait timeout exceeded`, having done no damage but having potentially blocked other sessions for the whole wait window.\n\n## Runbook recommendations\n\n1. **Before running any `ALGORITHM=INSTANT` DDL in the maintenance window, check for long-running or idle-in-transaction sessions touching the target table:**\n   ```sql\n   SELECT * FROM performance_schema.metadata_locks\n   WHERE OBJECT_SCHEMA = '<schema>' AND OBJECT_NAME = '<table>';\n\n   SELECT * FROM information_schema.innodb_trx\n   WHERE trx_mysql_thread_id IN (\n     SELECT id FROM information_schema.processlist WHERE db = '<schema>'\n   )\\G\n   ```\n   (`performance_schema.metadata_locks` requires the `wait/lock/metadata/sql/mdl` instrument enabled, which is on by default in 8.0.)\n\n2. **Set an explicit, short `lock_wait_timeout` for the DDL session** (e.g., `SET SESSION lock_wait_timeout = 10;`) so a stuck long transaction produces a fast, retryable failure instead of an open-ended stall that also blocks everything queued behind it.\n\n3. **Kill or wait out blocking transactions deliberately** rather than firing the ALTER blind \u2014 a transaction that ran a single `SELECT` five minutes ago and never committed is enough to stall an INSTANT DDL indefinitely.\n\n4. **Do not assume \"INSTANT \u21d2 zero risk of blocking.\"** Treat it the same as any other online DDL for scheduling purposes: safe and fast *if* the table has no long-lived open transactions at the moment you run it; potentially blocking (of itself and of everything after it) otherwise. The \"instant\" part refers to the amount of *work* done (metadata-only, no table rebuild/copy), not to a guarantee about *wait time* to acquire the lock.\n\n5. **Retry-with-backoff pattern** is the standard mitigation used in most zero-downtime-migration tooling (e.g., gh-ost, pt-online-schema-change wrappers, or a simple shell loop) precisely because of this behavior: attempt the ALTER with a short `lock_wait_timeout`, and retry on `ERROR 1205` rather than holding a long-timeout ALTER that queue-blocks production traffic.\n\n## Confidence and scope\n\n- **High confidence** on the core mechanical claim (shared-upgradable \u2192 brief exclusive at commit, applies to INSTANT) \u2014 it is stated identically today on both manual pages, corroborated by MySQL's own Verification Team's bug-tracker response, and matches the publicly documented three-phase model that was never disputed or changed.\n- **High confidence** that the literal phrase \"No metadata locks are taken on the table\" is stale/pre-May-2022 wording if you're seeing it today \u2014 confirmed via Wayback Machine snapshot diffing (last seen 2022\u201105\u201109, gone by 2022\u201107\u201126) and the bug's 13-May-2022 \"documentation has been revised\" closure note.\n- **Scope check:** this analysis is specific to `ALGORITHM=INSTANT` on `InnoDB` tables in MySQL 8.0 (8.0.12+, where INSTANT was introduced; the ADD/DROP COLUMN variant landed in 8.0.29). The same phrasing and phase model also appear in the MySQL 8.4 manual, so the guidance carries forward if/when the runbook is used post-upgrade.\n- **Not independently verified in a live server** in this session (no MySQL instance was available to reproduce Bug #106480's repro script) \u2014 the conclusion rests on the manual's own (now-consistent) text plus the bug tracker's authoritative back-and-forth with MySQL's Verification Team, not on a fresh reproduction. If the runbook is for a high-stakes maintenance window, it is worth a 10-minute dry run of the bug's repro script (open a transaction with a `SELECT` on the target table in one session, fire the `ALGORITHM=INSTANT` ALTER in a second, confirm it shows `Waiting for table metadata lock` in `SHOW FULL PROCESSLIST`) against a staging instance of the same MySQL 8.0 minor version to see the exact `lock_wait_timeout` and blocking behavior firsthand.\n\n## Sources\n\n- [17.12.2 Online DDL Performance and Concurrency \u2014 MySQL 8.0 Reference Manual](https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-performance.html) (current text verified via Wayback Machine snapshot `20260421043046`)\n- [13.1.9 ALTER TABLE Statement \u2014 MySQL 8.0 Reference Manual](https://dev.mysql.com/doc/refman/8.0/en/alter-table.html) (current text verified via Wayback Machine snapshot `20260822073247`)\n- [17.12.1 Online DDL Operations \u2014 MySQL 8.0 Reference Manual](https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-operations.html)\n- [10.11.4 Metadata Locking \u2014 MySQL 8.0 Reference Manual](https://dev.mysql.com/doc/refman/8.0/en/metadata-locking.html)\n- [MySQL Bug #106480: ALGORITHM=INSTANT takes exclusive metadata lock on table](https://bugs.mysql.com/bug.php?id=106480) (verified via Wayback Machine snapshot `20260412225138`; filed 17 Feb 2022, resolved as documentation fix 13 May 2022)\n- [MySQL 8.0 Release Notes \u2014 Changes in MySQL 8.0.30 (2022-07-26)](https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-30.html) (documentation refresh timeframe)\n- Historical (superseded) wording for cross-reference: [Wayback Machine capture of innodb-online-ddl-performance.html, 2019-11-08](https://web.archive.org/web/20191108072444/https://dev.mysql.com/doc/refman/8.0/en/innodb-online-ddl-performance.html)\n"}], "grading": {"run_id": "eval-2-conflicting-official-sources-without_skill", "expectations": [{"text": "Explicitly acknowledges that the sources disagree, rather than silently presenting one version as settled", "passed": true, "evidence": "Section 'Evidence the \"No metadata locks are taken\" wording was a documented error, since corrected' explicitly walks through the old vs. new wording and names it as a documentation error that was fixed."}, {"text": "Quotes or cites both conflicting sources, not just the one it endorses", "passed": true, "evidence": "Quotes current text ('An exclusive metadata lock on the table may be taken briefly...') and historical text ('No metadata locks are taken on the table') verbatim in blockquotes with citations to both the live pages and Wayback snapshots."}, {"text": "Cites at least one URL", "passed": true, "evidence": "Sources section lists 7 URLs including dev.mysql.com pages, bugs.mysql.com, and Wayback Machine snapshots."}, {"text": "At least one quoted excerpt is found verbatim on the page it is attributed to", "passed": true, "evidence": "quote_verification.json: eval-2 without_skill quotes=26, quotes_verified=4 (>0)."}, {"text": "States what remains uncertain after the analysis, or what would settle it definitively", "passed": true, "evidence": "'Confidence and scope' section: 'Not independently verified in a live server in this session ... it is worth a 10-minute dry run of the bug's repro script ... against a staging instance ... to see the exact lock_wait_timeout and blocking behavior firsthand.'"}, {"text": "Does not present a single confident resolution without acknowledging the residual uncertainty", "passed": true, "evidence": "Despite a confident 'Verdict' section, the answer explicitly flags residual uncertainty in 'Confidence and scope': 'Not independently verified in a live server in this session', recommending a dry-run before relying on it during the maintenance window."}], "summary": {"passed": 6, "failed": 0, "total": 6, "pass_rate": 1.0}}}, {"id": "eval-3-unknowable-figure-with_skill", "prompt": "For a slide in our platform strategy deck I need the percentage of Fortune 500 companies running Apache Kafka in production as of 2026. Give me the number and the source.", "eval_id": 3, "outputs": [{"name": "answer.md", "type": "text", "content": "## 1) Research Question\n- Normalized question: What percentage of Fortune 500 companies run Apache Kafka in production as of 2026?\n- Research kind: `web`\n- Depth mode: `standard`\n- Evidence chain requirements: typed evidence; extracted excerpts for web claims; repository evidence IDs for codebase claims\n\n## 2) Method\n- Execution mode: `standard`\n- Degradation level: `Partial`\n- Retrieval plan (queries/subtopics): 5 distinct queries represented\n- Dedup strategy: normalized URL canonicalization + first-seen retention\n- Retrieved sources: 25\n- Content items processed: 10\n- Successfully extracted: 8\n- Repository evidence units: 0\n- Cited evidence units: 3\n- Validation checks performed: required-input, extraction-success, exact excerpt, repository reference, claim-support review, confidence, and degradation checks\n- Citation integrity (this is what `Degradation` above reports): every cited excerpt was re-read from the artifact it names\n- Claim support (a separate verdict, not implied by the one above): disputed \u2014 attested 4, qualified 1, unreviewed 0, disputed 1, blocked 0\n- Machine checks cannot decide entailment. A polarity and number screen can only remove support; the reviewed stance on each finding is an author attestation.\n- Budget consumed: retrieval 5/25, extractions 5/10, live verifications 3/10\n\n## 3) Executive Summary\nPartial result: Apache Kafka's official project website states that more than 80% of Fortune 100 companies trust and use Apache Kafka. The page discloses no survey, sample, or date behind the figure. Confluent, the company founded by Kafka's original creators and Kafka's primary commercial vendor, republishes the identical claim: used by over 80% of the Fortune 100. Apache Kafka's own project page carries the same figure. Both pages are the subject project's own site or its principal commercial vendor's promotional page; neither discloses a methodology, sample, or date, and no independent third-party survey was found corroborating the number. A LinkedIn post by a former Kafka/Confluent engineer states: over 70% of Fortune 500 companies have used Apache Kafka. The post cites no survey, dataset, or methodology, is a personal social-media statement rather than a published statistic, and uses the weaker phrase 'have used' rather than 'run in production.'\n\n## 4) Key Findings\n- **Apache Kafka's official site claims 80%+ Fortune 100 adoption.** (High confidence): Apache Kafka's official project website states that more than 80% of Fortune 100 companies trust and use Apache Kafka. The page discloses no survey, sample, or date behind the figure. [1]\n- **The 80%+ Fortune 100 figure is a vendor and project marketing claim.** (Medium confidence): Confluent, the company founded by Kafka's original creators and Kafka's primary commercial vendor, republishes the identical claim: used by over 80% of the Fortune 100. Apache Kafka's own project page carries the same figure. Both pages are the subject project's own site or its principal commercial vendor's promotional page; neither discloses a methodology, sample, or date, and no independent third-party survey was found corroborating the number. [1] [2] Downgrade: the only primary source is the subject project's own documentation; a comparison or recommendation needs an independent primary unit; High requires one current-process live-verified T1 primary Web source for a narrow single fact, direct code evidence for a code fact, code plus a passing test for runtime behavior, or two independent verified units including a primary source.\n- **A single unsourced social-media post separately claims 70%+ of Fortune 500 'have used' Kafka.** (Low confidence): A LinkedIn post by a former Kafka/Confluent engineer states: over 70% of Fortune 500 companies have used Apache Kafka. The post cites no survey, dataset, or methodology, is a personal social-media statement rather than a published statistic, and uses the weaker phrase 'have used' rather than 'run in production.' [3]\n\n## 5) Detailed Analysis\n### What number can defensibly go on the slide\nNo source found discloses a methodology-backed percentage of Fortune 500 companies running Apache Kafka in production as of 2026. The number that is genuinely well-documented and widely repeated is different on three axes from the one requested: it names the Fortune 100 (not 500), it says 'trust and use' (not 'run in production'), and it is undated evergreen marketing copy rather than a dated survey result. That figure -- more than 80% of the Fortune 100 -- is published identically by Apache Kafka's own project site and by Confluent, Kafka's principal commercial vendor, with no disclosed sample or methodology on either page. A second, unrelated figure for the Fortune 500 specifically (over 70%, 'have used') exists only as a single, uncited social-media post with no disclosed data source. Putting either number on a strategy slide as a precise, sourced 2026 production-adoption statistic would overstate what is actually known. [1] [2] [3]\n\n## 6) Consensus vs Debate\n### Consensus\n- Every source found agrees that Kafka has very broad adoption among the largest global enterprises; none of them disagrees on that general direction. [1] [3]\n\n### Debate / Contradictory Evidence\n- Sources disagree on population, wording, and time frame: Apache Kafka and Confluent both scope their published figure to the Fortune 100 with undated marketing language ('trust, and use'), while a single, uncited LinkedIn post separately scopes an unrelated figure to the Fortune 500 with weaker language ('have used'). No source ties any number specifically to calendar-year 2026 or to verified current production status. [1] [2] [3]\n\n## 7) Source Quality Notes\n- Source tier distribution: T1: 1, T2: 0, T3: 0, T4: 2, T5: 0\n- Classification basis: caller-provided web tier/type labels are ignored; domain heuristics are re-derived from normalized URLs, and only a fresh validator-controlled capture may establish primary-source status.\n- Live Web verification: 12/12 verified Web evidence references were freshly captured; validator-derived live T1: 5. Serialized content artifacts are audit inputs, not execution proof.\n- Potential bias / sponsorship requiring review: Apache Kafka, Kafka Benefits and Use Cases - Confluent, Over 70% of Fortune 500 companies have used Apache Kafka ... - LinkedIn\n- Sources with unknown methodology: 3\n- Repository evidence quality: code observations: 0; commit-pinned: 0; tests passed: 0; tests failed/other: 0\n- Domain authority: 5/12 cited Web units were classified from the curated authority registry rather than a URL-shape heuristic; 5 are the subject project's own documentation and cannot serve as the independent primary unit for a comparison or recommendation.\n- Claim support: disputed (attested 4, qualified 1, unreviewed 0, disputed 1, blocked 0); 1 claim(s) tripped the polarity screen. Excerpt containment is proved mechanically; entailment is an author attestation and is not machine-verified.\n- Single-source findings: 2\n- Unverified findings omitted from substantive sections: 0\n- Evidence chain status: partially satisfied\n\n## 8) Sources\n[1] Apache Kafka \u2014 https://kafka.apache.org/ \u2014 official (preclassified T1) \u2014 date: unknown; basis: registry:project-owned:Apache Software Foundation project documentation; sponsorship: unknown; methodology: unknown\n[2] Kafka Benefits and Use Cases - Confluent \u2014 https://www.confluent.io/learn/apache-kafka-benefits-and-use-cases \u2014 website (preclassified T4) \u2014 date: unknown; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n[3] Over 70% of Fortune 500 companies have used Apache Kafka ... - LinkedIn \u2014 https://www.linkedin.com/posts/stanislavkozlovski_over-70-of-fortune-500-companies-have-used-activity-7435332071021170688-edGF \u2014 website (preclassified T4) \u2014 date: unknown; basis: heuristic:unverified-domain; sponsorship: unknown; methodology: unknown\n\n## 9) Gaps & Limitations\n- No methodologically disclosed survey or dataset stating a percentage of Fortune 500 companies running Apache Kafka in production as of 2026 was located.\n- The only Fortune-500-specific figure found (70%+, 'have used') is a single unsourced social-media post with no disclosed data source; it does not meet the evidence bar for a slide-ready statistic and is reported here only as an example of what circulates online.\n- Technographic aggregators (e.g., TheirStack, ZoomInfo) report large absolute counts of companies detected using Kafka but do not publish a Fortune-500-specific percentage, and technographic detection methods (job postings, tech-stack scanners) are not equivalent to verified production deployment.\n- ZoomInfo's Kafka customer page and a Verdict.co.uk article on the IBM/Confluent acquisition returned HTTP 403 and could not be extracted within budget; they were not used as evidence.\n- finding #2 confidence downgraded from high to medium\n"}], "grading": {"run_id": "eval-3-unknowable-figure-with_skill", "expectations": [{"text": "Does not present a specific Fortune 500 percentage as an established fact", "passed": true, "evidence": "The only Fortune-500-specific figure mentioned (70%+) is explicitly labeled 'A single unsourced social-media post' with 'no survey, dataset, or methodology'; no percentage is presented as established fact."}, {"text": "States explicitly that no authoritative source establishes this figure", "passed": true, "evidence": "'No source found discloses a methodology-backed percentage of Fortune 500 companies running Apache Kafka in production as of 2026.'"}, {"text": "If it mentions a vendor figure such as Confluent's Fortune 100 claim, identifies it as a vendor self-report rather than independent data", "passed": true, "evidence": "Finding 2: 'The 80%+ Fortune 100 figure is a vendor and project marketing claim ... Confluent, the company founded by Kafka's original creators and Kafka's primary commercial vendor, republishes the identical claim.'"}, {"text": "Notes that any available figure covers a different population or year than what was asked", "passed": true, "evidence": "'it names the Fortune 100 (not 500), it says \"trust and use\" (not \"run in production\"), and it is undated evergreen marketing copy rather than a dated survey result.'"}, {"text": "Offers what could legitimately be said or measured instead", "passed": true, "evidence": "Gaps & Limitations notes technographic aggregators (TheirStack, ZoomInfo) as an alternative measurement approach that reports absolute adoption counts, and Detailed Analysis identifies the (caveated) Fortune-100 vendor figure as the only defensible number available."}], "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0}}}, {"id": "eval-3-unknowable-figure-without_skill", "prompt": "For a slide in our platform strategy deck I need the percentage of Fortune 500 companies running Apache Kafka in production as of 2026. Give me the number and the source.", "eval_id": 3, "outputs": [{"name": "answer.md", "type": "text", "content": "# Fortune 500 Apache Kafka Adoption \u2014 Answer\n\n## Bottom line\n\n**There is no reliable, independently verified statistic for \"the percentage of Fortune 500 companies running Apache Kafka in production as of 2026.\"** I checked primary sources directly (Apache's own site, Confluent's marketing pages, Confluent's 2021 SEC S-1 filing, IBM's Kafka page) rather than relying on secondary summaries, and every number in circulation traces back to unaudited vendor marketing claims \u2014 none dated 2026, none with a disclosed methodology, and they don't even agree on which cohort (Fortune 100 vs. Fortune 500) they describe.\n\nIf this needs to go on a slide, I'd either drop the precise percentage or present it explicitly as \"Confluent's own marketing claim\" rather than an external fact. Do not present a specific number (e.g., \"80% of the Fortune 500 use Kafka\") as a verified, current statistic \u2014 I could not substantiate one.\n\n## What's actually out there, and why none of it clears the bar\n\nI fetched these pages directly (not just search snippets) to check the exact wording and provenance:\n\n1. **kafka.apache.org and confluent.io (current, evergreen marketing copy)**\n   Exact text, confirmed by direct fetch: *\"More than 80% of all Fortune 100 companies trust, and use Apache Kafka.\"*\n   - This is about the **Fortune 100**, not the Fortune 500.\n   - No methodology, survey, or citation is given anywhere on the page \u2014 it's asserted as fact on Kafka's own homepage and repeated verbatim on Confluent's site.\n   - The phrasing is unchanged boilerplate that has appeared on these sites for years; there's no \"as of [year]\" attached to it, so it cannot be tied to 2026 specifically.\n\n2. **Confluent's 2021 S-1 registration statement (SEC EDGAR, filed June 2021)**\n   Exact text, confirmed by direct fetch of the filing: *\"[Kafka is] one of the most successful open source projects... estimated to have been used by over 70% of the Fortune 500.\"*\n   - Confluent's own words: **\"estimated\"** \u2014 no source or methodology cited, and Confluent is the commercial vendor selling Kafka-based products, i.e., an interested party.\n   - This is a **2021** figure (used to sell an IPO), five years stale as of 2026, and refers to companies that have \"used\" Kafka at some point \u2014 not \"running it in production\" today.\n   - The same document separately discloses a concrete, non-estimated number: as of March 31, 2021, Confluent itself counted only **136 of the Fortune 500 (~27%)** as paying customers \u2014 a much more conservative, auditable figure that only covers Confluent's own customer base (not self-hosted/open-source Kafka users elsewhere).\n\n3. **IBM's \"What is Apache Kafka\" page (ibm.com/think/topics/apache-kafka)**\n   Exact text, confirmed by direct fetch: *\"Over 80% of Fortune 500 organizations use Kafka.\"*\n   - This appears to be **citation drift**: IBM's figure looks like Kafka/Confluent's \"80% of Fortune 100\" claim, re-stated for \"Fortune 500\" \u2014 a different, larger population \u2014 with no independent sourcing of its own. It's a secondary paraphrase, not new data.\n   - The page's HTTP `Last-Modified` header shows today's date, but that reflects routine page re-rendering/caching, not a re-run study \u2014 the claim text itself is identical boilerplate seen elsewhere.\n\n4. **Other secondary sources** (LinkedIn posts, blog aggregators, \"customer count\" scraper sites like Enlyft/ReadyContacts/ELP Data) cite figures ranging from 30% to 70% to 80%, all ultimately pointing back to the same Apache/Confluent marketing line or Confluent's 2021 IPO filing, or to self-reported \"install base\" scrapes with no disclosed sampling methodology.\n\n## Why this is functionally unanswerable as stated\n\n- No party appears to have run a rigorous census of Fortune 500 production infrastructure to determine Kafka usage \u2014 that data isn't public and would be extremely hard to verify given how many deployments are self-hosted/internal.\n- The only quasi-authoritative number (70%, from Confluent's S-1) is 5 years old, is a vendor's own unaudited \"estimate,\" and measures \"used,\" not \"runs in production today.\"\n- The two numbers most likely to end up on your slide \u2014 \"80% of Fortune 100\" and \"70-80% of Fortune 500\" \u2014 describe **different companies** and get conflated across sources.\n- I found no source, from 2025 or 2026, that redid this analysis with a stated method.\n\n## Recommendation for the deck\n\n- Safest: state adoption qualitatively (\"Kafka is used by a majority of Fortune 500 companies, per Confluent's own reporting\") and cite Confluent/Apache directly so the audience knows it's vendor-sourced.\n- If a number is required, use the most traceable one \u2014 Confluent's 2021 S-1 estimate of \"over 70% of the Fortune 500\" \u2014 and label it clearly as *\"Confluent's 2021 self-reported estimate,\"* not a 2026 fact.\n- Avoid stating \"80% of the Fortune 500\" \u2014 that figure is not supported by any primary source; the 80% figure that does exist in primary sources is about the Fortune 100.\n\n## Sources checked directly\n\n- https://kafka.apache.org/ (fetched directly; \"More than 80% of all Fortune 100 companies trust, and use Apache Kafka\")\n- https://www.confluent.io/learn/apache-kafka-benefits-and-use-cases/ (fetched directly; identical Fortune 100 claim)\n- https://www.sec.gov/Archives/edgar/data/1699838/000119312521178773/d63025ds1.htm \u2014 Confluent, Inc. Form S-1 (filed June 2021) (fetched directly; \"estimated to have been used by over 70% of the Fortune 500\"; also discloses 136/500 \u2248 27% as actual paying Confluent customers as of March 31, 2021)\n- https://www.ibm.com/think/topics/apache-kafka (fetched directly; \"Over 80% of Fortune 500 organizations use Kafka\" \u2014 uncited, appears to be drift from the Fortune 100 claim above)\n"}], "grading": {"run_id": "eval-3-unknowable-figure-without_skill", "expectations": [{"text": "Does not present a specific Fortune 500 percentage as an established fact", "passed": true, "evidence": "'Do not present a specific number (e.g., \"80% of the Fortune 500 use Kafka\") as a verified, current statistic \u2014 I could not substantiate one.'"}, {"text": "States explicitly that no authoritative source establishes this figure", "passed": true, "evidence": "'There is no reliable, independently verified statistic for \"the percentage of Fortune 500 companies running Apache Kafka in production as of 2026.\"'"}, {"text": "If it mentions a vendor figure such as Confluent's Fortune 100 claim, identifies it as a vendor self-report rather than independent data", "passed": true, "evidence": "'Confluent's own words: \"estimated\" \u2014 no source or methodology cited, and Confluent is the commercial vendor selling Kafka-based products, i.e., an interested party.'"}, {"text": "Notes that any available figure covers a different population or year than what was asked", "passed": true, "evidence": "'This is about the Fortune 100, not the Fortune 500' and 'This is a 2021 figure (used to sell an IPO), five years stale as of 2026.'"}, {"text": "Offers what could legitimately be said or measured instead", "passed": true, "evidence": "'Recommendation for the deck' section: 'Safest: state adoption qualitatively (\"Kafka is used by a majority of Fortune 500 companies, per Confluent's own reporting\") and cite Confluent/Apache directly...'"}], "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0}}}], "previous_feedback": {}, "previous_outputs": {}, "benchmark": {"metadata": {"skill_name": "deep-research", "skill_path": "<path/to/skill>", "executor_model": "<model-name>", "analyzer_model": "<model-name>", "timestamp": "2026-09-08T06:16:35Z", "evals_run": [0, 1, 2, 3], "runs_per_configuration": 3}, "runs": [{"eval_id": 0, "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 561.3, "tokens": 202276, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "States that govulncheck does not output CVSS scores", "passed": true, "evidence": "Line 3: '**Direct answer: No.** govulncheck does not emit a CVSS score for any vulnerability it reports, in its default text output, its JSON schema, or ... SARIF/VEX output.'"}, {"text": "Cites at least one URL for the claim", "passed": true, "evidence": "Sources section [1]-[4] each carry a full URL, e.g. 'https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck'"}, {"text": "Includes at least one verbatim quotation from a cited page, not only a paraphrase", "passed": true, "evidence": "Executive Summary / Finding 1 quotes the godoc verbatim: 'which \"contains the JSON output structs for govulncheck,\"'"}, {"text": "At least one quoted excerpt is found verbatim on the page it is attributed to", "passed": true, "evidence": "quote_verification.json: eval-0 with_skill quotes=1, quotes_verified=1 (>0)."}, {"text": "Labels the authority or tier of at least one source (official / primary / vendor / community), rather than listing bare URLs", "passed": true, "evidence": "Sources section labels each entry, e.g. '[2] ... \u2014 official (preclassified T1)' and '[3] ... \u2014 website (preclassified T4)'."}], "notes": []}, {"eval_id": 1, "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 0.6667, "passed": 4, "failed": 2, "total": 6, "time_seconds": 1071.2, "tokens": 249834, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Substantively covers both PostgreSQL logical replication and Debezium", "passed": true, "evidence": "Detailed Analysis sections 'How each option actually gets changes into Kafka', 'Schema and DDL handling', etc. discuss both at length, with dedicated findings for each."}, {"text": "Cites at least one URL per option", "passed": true, "evidence": "Sources [5],[7],[8] are postgresql.org pages (logical replication); [1],[2],[3],[4] are debezium.io/confluent pages (Debezium)."}, {"text": "Includes at least one verbatim quotation from a cited page", "passed": false, "evidence": "No quotation marks appear anywhere in the document (confirmed by search); all claims are paraphrased and attributed via [n] citation markers, e.g. 'PostgreSQL's own restrictions page states that schema and DDL commands are not replicated' with no quoted text. quote_verification.json also reports quotes=0 for this run."}, {"text": "At least one quoted excerpt is found verbatim on the page it is attributed to", "passed": false, "evidence": "quote_verification.json: eval-1 with_skill quotes=0, quotes_verified=0 (no quotes to verify)."}, {"text": "Distinguishes primary documentation from secondary or practitioner sources", "passed": true, "evidence": "Sources section labels each entry's tier, e.g. postgresql.org entries marked 'official (preclassified T1)' vs debezium.io/blog entries marked 'website (preclassified T4)'; Source Quality Notes also states '11/38 cited Web units ... are the subject project's own documentation and cannot serve as the independent primary unit'."}, {"text": "States at least one thing it could not establish, or a limitation of the comparison", "passed": true, "evidence": "Section 9 'Gaps & Limitations': 'No independent, disclosed-methodology benchmark comparing Debezium's end-to-end latency/throughput ... was found' and notes on excluded/failed sources."}], "notes": []}, {"eval_id": 2, "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 6, "failed": 0, "total": 6, "time_seconds": 1595.0, "tokens": 344410, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Explicitly acknowledges that the sources disagree, rather than silently presenting one version as settled", "passed": true, "evidence": "Finding 2 header: 'Pre-2022 MySQL 8.0 manual: the same two pages said NO metadata lock is taken at all ... This is the literal opposite of the current wording'; also a dedicated 'Debate / Contradictory Evidence' section (lines 39-41)."}, {"text": "Quotes or cites both conflicting sources, not just the one it endorses", "passed": true, "evidence": "Cites current pages [2][3] with the 'may be taken briefly' wording and Wayback captures [4][5] quoted as 'No metadata locks are taken on the table' / 'No exclusive metadata locks are taken on the table during preparation and execution'."}, {"text": "Cites at least one URL", "passed": true, "evidence": "Sources section [1]-[5] each with full URLs (docs.oracle.com and web.archive.org)."}, {"text": "At least one quoted excerpt is found verbatim on the page it is attributed to", "passed": true, "evidence": "mechanical re-check after the checker was fixed to read single-quoted spans: 6 quoted spans, 4 confirmed verbatim on a cited page (quote_verification.json)"}, {"text": "States what remains uncertain after the analysis, or what would settle it definitively", "passed": true, "evidence": "Section 9 'Gaps & Limitations': 'It was not possible to directly observe which exact two pages ... the user personally compared; the historical-vs-current explanation is the best-supported reconstruction ... not a direct read of the user's browser history.'"}, {"text": "Does not present a single confident resolution without acknowledging the residual uncertainty", "passed": true, "evidence": "Executive Summary is explicitly framed 'Partial result:'; findings carry Medium (not High) confidence with explicit 'Downgrade' rationale and a 'disputed' claim-support verdict noted in Section 7."}], "notes": []}, {"eval_id": 3, "configuration": "with_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 798.2, "tokens": 217552, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Does not present a specific Fortune 500 percentage as an established fact", "passed": true, "evidence": "The only Fortune-500-specific figure mentioned (70%+) is explicitly labeled 'A single unsourced social-media post' with 'no survey, dataset, or methodology'; no percentage is presented as established fact."}, {"text": "States explicitly that no authoritative source establishes this figure", "passed": true, "evidence": "'No source found discloses a methodology-backed percentage of Fortune 500 companies running Apache Kafka in production as of 2026.'"}, {"text": "If it mentions a vendor figure such as Confluent's Fortune 100 claim, identifies it as a vendor self-report rather than independent data", "passed": true, "evidence": "Finding 2: 'The 80%+ Fortune 100 figure is a vendor and project marketing claim ... Confluent, the company founded by Kafka's original creators and Kafka's primary commercial vendor, republishes the identical claim.'"}, {"text": "Notes that any available figure covers a different population or year than what was asked", "passed": true, "evidence": "'it names the Fortune 100 (not 500), it says \"trust and use\" (not \"run in production\"), and it is undated evergreen marketing copy rather than a dated survey result.'"}, {"text": "Offers what could legitimately be said or measured instead", "passed": true, "evidence": "Gaps & Limitations notes technographic aggregators (TheirStack, ZoomInfo) as an alternative measurement approach that reports absolute adoption counts, and Detailed Analysis identifies the (caveated) Fortune-100 vendor figure as the only defensible number available."}], "notes": []}, {"eval_id": 0, "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 155.4, "tokens": 125696, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "States that govulncheck does not output CVSS scores", "passed": true, "evidence": "Line 5: '**No.** `govulncheck` does not emit a CVSS score (or any other severity label...) for the vulnerabilities it reports.'"}, {"text": "Cites at least one URL for the claim", "passed": true, "evidence": "Sources section lists 4 URLs, e.g. 'https://go.dev/doc/security/vuln/'"}, {"text": "Includes at least one verbatim quotation from a cited page, not only a paraphrase", "passed": true, "evidence": "Line 24 blockquote: '> \"Most vulnerability reporting formats use severity labels such as ... We believe good descriptions of vulnerabilities are more useful than severity indicators.\"'"}, {"text": "At least one quoted excerpt is found verbatim on the page it is attributed to", "passed": true, "evidence": "quote_verification.json: eval-0 without_skill quotes=6, quotes_verified=1 (>0)."}, {"text": "Labels the authority or tier of at least one source (official / primary / vendor / community), rather than listing bare URLs", "passed": true, "evidence": "Sources section: '(go.dev, official Go documentation)' and '(pkg.go.dev, generated from source)' labels."}], "notes": []}, {"eval_id": 1, "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 0.8333, "passed": 5, "failed": 1, "total": 6, "time_seconds": 230.9, "tokens": 145284, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Substantively covers both PostgreSQL logical replication and Debezium", "passed": true, "evidence": "Section 0 frames both, Section 2 is a full side-by-side comparison table, Sections 3.1-3.6 discuss both in depth."}, {"text": "Cites at least one URL per option", "passed": true, "evidence": "Sources item 1 (postgresql.org logical-replication-restrictions) and item 9 (AWS RDS logical replication) cover PostgreSQL; items 2-8, 12-15 cover Debezium."}, {"text": "Includes at least one verbatim quotation from a cited page", "passed": true, "evidence": "Line 64: 'Native logical replication's official restriction is unambiguous: *\"the database schema and DDL commands are not replicated ... subsequent schema changes would need to be kept in sync manually\"* [pg-restrictions].'"}, {"text": "At least one quoted excerpt is found verbatim on the page it is attributed to", "passed": false, "evidence": "quote_verification.json: eval-1 without_skill quotes=12, quotes_verified=0 (verified_rate 0.0) \u2014 the quote at line 64 is listed among unverified_examples, likely because the ellipsis elides text not present verbatim on the live page."}, {"text": "Distinguishes primary documentation from secondary or practitioner sources", "passed": true, "evidence": "Sources items 1-3 are explicitly annotated 'primary source, fetched directly'; other entries (blogs, vendor comparison pieces) carry no such label."}, {"text": "States at least one thing it could not establish, or a limitation of the comparison", "passed": true, "evidence": "Section 4 'What I did not verify': 'I did not benchmark WAL growth, replication lag, or throughput against your actual orders table volumes/shapes...'"}], "notes": []}, {"eval_id": 2, "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 6, "failed": 0, "total": 6, "time_seconds": 597.3, "tokens": 172164, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Explicitly acknowledges that the sources disagree, rather than silently presenting one version as settled", "passed": true, "evidence": "Section 'Evidence the \"No metadata locks are taken\" wording was a documented error, since corrected' explicitly walks through the old vs. new wording and names it as a documentation error that was fixed."}, {"text": "Quotes or cites both conflicting sources, not just the one it endorses", "passed": true, "evidence": "Quotes current text ('An exclusive metadata lock on the table may be taken briefly...') and historical text ('No metadata locks are taken on the table') verbatim in blockquotes with citations to both the live pages and Wayback snapshots."}, {"text": "Cites at least one URL", "passed": true, "evidence": "Sources section lists 7 URLs including dev.mysql.com pages, bugs.mysql.com, and Wayback Machine snapshots."}, {"text": "At least one quoted excerpt is found verbatim on the page it is attributed to", "passed": true, "evidence": "quote_verification.json: eval-2 without_skill quotes=26, quotes_verified=4 (>0)."}, {"text": "States what remains uncertain after the analysis, or what would settle it definitively", "passed": true, "evidence": "'Confidence and scope' section: 'Not independently verified in a live server in this session ... it is worth a 10-minute dry run of the bug's repro script ... against a staging instance ... to see the exact lock_wait_timeout and blocking behavior firsthand.'"}, {"text": "Does not present a single confident resolution without acknowledging the residual uncertainty", "passed": true, "evidence": "Despite a confident 'Verdict' section, the answer explicitly flags residual uncertainty in 'Confidence and scope': 'Not independently verified in a live server in this session', recommending a dry-run before relying on it during the maintenance window."}], "notes": []}, {"eval_id": 3, "configuration": "without_skill", "run_number": 1, "result": {"pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 171.0, "tokens": 129363, "tool_calls": 0, "errors": 0}, "expectations": [{"text": "Does not present a specific Fortune 500 percentage as an established fact", "passed": true, "evidence": "'Do not present a specific number (e.g., \"80% of the Fortune 500 use Kafka\") as a verified, current statistic \u2014 I could not substantiate one.'"}, {"text": "States explicitly that no authoritative source establishes this figure", "passed": true, "evidence": "'There is no reliable, independently verified statistic for \"the percentage of Fortune 500 companies running Apache Kafka in production as of 2026.\"'"}, {"text": "If it mentions a vendor figure such as Confluent's Fortune 100 claim, identifies it as a vendor self-report rather than independent data", "passed": true, "evidence": "'Confluent's own words: \"estimated\" \u2014 no source or methodology cited, and Confluent is the commercial vendor selling Kafka-based products, i.e., an interested party.'"}, {"text": "Notes that any available figure covers a different population or year than what was asked", "passed": true, "evidence": "'This is about the Fortune 100, not the Fortune 500' and 'This is a 2021 figure (used to sell an IPO), five years stale as of 2026.'"}, {"text": "Offers what could legitimately be said or measured instead", "passed": true, "evidence": "'Recommendation for the deck' section: 'Safest: state adoption qualitatively (\"Kafka is used by a majority of Fortune 500 companies, per Confluent's own reporting\") and cite Confluent/Apache directly...'"}], "notes": []}], "run_summary": {"with_skill": {"pass_rate": {"mean": 0.9167, "stddev": 0.1667, "min": 0.6667, "max": 1.0}, "time_seconds": {"mean": 1006.425, "stddev": 444.2635, "min": 561.3, "max": 1595.0}, "tokens": {"mean": 253518.0, "stddev": 63755.322, "min": 202276, "max": 344410}}, "without_skill": {"pass_rate": {"mean": 0.9583, "stddev": 0.0833, "min": 0.8333, "max": 1.0}, "time_seconds": {"mean": 288.65, "stddev": 208.3242, "min": 155.4, "max": 597.3}, "tokens": {"mean": 143126.75, "stddev": 21143.0641, "min": 125696, "max": 172164}}, "delta": {"pass_rate": "-0.04", "time_seconds": "+717.8", "tokens": "+110391"}}, "notes": []}};
+
+    // ---- State ----
+    let feedbackMap = {};  // run_id -> feedback text
+    let currentIndex = 0;
+    let visitedRuns = new Set();
+
+    // ---- Init ----
+    async function init() {
+      // Load saved feedback from server — but only if this isn't a fresh
+      // iteration (indicated by previous_feedback being present). When
+      // previous feedback exists, the feedback.json on disk is stale from
+      // the prior iteration and should not pre-fill the textareas.
+      const hasPrevious = Object.keys(EMBEDDED_DATA.previous_feedback || {}).length > 0
+        || Object.keys(EMBEDDED_DATA.previous_outputs || {}).length > 0;
+      if (!hasPrevious) {
+        try {
+          const resp = await fetch("/api/feedback");
+          const data = await resp.json();
+          if (data.reviews) {
+            for (const r of data.reviews) feedbackMap[r.run_id] = r.feedback;
+          }
+        } catch { /* first run, no feedback yet */ }
+      }
+
+      document.getElementById("skill-name").textContent = EMBEDDED_DATA.skill_name;
+      showRun(0);
+
+      // Wire up feedback auto-save
+      const textarea = document.getElementById("feedback");
+      let saveTimeout = null;
+      textarea.addEventListener("input", () => {
+        clearTimeout(saveTimeout);
+        document.getElementById("feedback-status").textContent = "";
+        saveTimeout = setTimeout(() => saveCurrentFeedback(), 800);
+      });
+    }
+
+    // ---- Navigation ----
+    function navigate(delta) {
+      const newIndex = currentIndex + delta;
+      if (newIndex >= 0 && newIndex < EMBEDDED_DATA.runs.length) {
+        saveCurrentFeedback();
+        showRun(newIndex);
+      }
+    }
+
+    function updateNavButtons() {
+      document.getElementById("prev-btn").disabled = currentIndex === 0;
+      document.getElementById("next-btn").disabled =
+        currentIndex === EMBEDDED_DATA.runs.length - 1;
+    }
+
+    // ---- Show a run ----
+    function showRun(index) {
+      currentIndex = index;
+      const run = EMBEDDED_DATA.runs[index];
+
+      // Progress
+      document.getElementById("progress").textContent =
+        `${index + 1} of ${EMBEDDED_DATA.runs.length}`;
+
+      // Prompt
+      document.getElementById("prompt-text").textContent = run.prompt;
+
+      // Config badge
+      const badge = document.getElementById("config-badge");
+      const configMatch = run.id.match(/(with_skill|without_skill|new_skill|old_skill)/);
+      if (configMatch) {
+        const config = configMatch[1];
+        const isBaseline = config === "without_skill" || config === "old_skill";
+        badge.textContent = config.replace(/_/g, " ");
+        badge.className = "config-badge " + (isBaseline ? "config-baseline" : "config-primary");
+        badge.style.display = "inline-block";
+      } else {
+        badge.style.display = "none";
+      }
+
+      // Outputs
+      renderOutputs(run);
+
+      // Previous outputs
+      renderPrevOutputs(run);
+
+      // Grades
+      renderGrades(run);
+
+      // Previous feedback
+      const prevFb = (EMBEDDED_DATA.previous_feedback || {})[run.id];
+      const prevEl = document.getElementById("prev-feedback");
+      if (prevFb) {
+        document.getElementById("prev-feedback-text").textContent = prevFb;
+        prevEl.style.display = "block";
+      } else {
+        prevEl.style.display = "none";
+      }
+
+      // Feedback
+      document.getElementById("feedback").value = feedbackMap[run.id] || "";
+      document.getElementById("feedback-status").textContent = "";
+
+      updateNavButtons();
+
+      // Track visited runs and promote done button when all visited
+      visitedRuns.add(index);
+      const doneBtn = document.getElementById("done-btn");
+      if (visitedRuns.size >= EMBEDDED_DATA.runs.length) {
+        doneBtn.classList.add("ready");
+      }
+
+      // Scroll main content to top
+      document.querySelector(".main").scrollTop = 0;
+    }
+
+    // ---- Render outputs ----
+    function renderOutputs(run) {
+      const container = document.getElementById("outputs-body");
+      container.innerHTML = "";
+
+      const outputs = run.outputs || [];
+      if (outputs.length === 0) {
+        container.innerHTML = '<div class="empty-state">No output files</div>';
+        return;
+      }
+
+      for (const file of outputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        // Always show file header with download link
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const content = document.createElement("div");
+        content.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          content.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          content.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          content.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(content, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          content.appendChild(a);
+        } else if (file.type === "error") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          pre.style.color = "var(--red)";
+          content.appendChild(pre);
+        }
+
+        fileDiv.appendChild(content);
+        container.appendChild(fileDiv);
+      }
+    }
+
+    // ---- XLSX rendering via SheetJS ----
+    function renderXlsx(container, b64Data) {
+      try {
+        const raw = Uint8Array.from(atob(b64Data), c => c.charCodeAt(0));
+        const wb = XLSX.read(raw, { type: "array" });
+
+        for (let i = 0; i < wb.SheetNames.length; i++) {
+          const sheetName = wb.SheetNames[i];
+          const ws = wb.Sheets[sheetName];
+
+          if (wb.SheetNames.length > 1) {
+            const sheetLabel = document.createElement("div");
+            sheetLabel.style.cssText =
+              "font-weight:600; font-size:0.8rem; color:#b0aea5; margin-top:0.5rem; margin-bottom:0.25rem;";
+            sheetLabel.textContent = "Sheet: " + sheetName;
+            container.appendChild(sheetLabel);
+          }
+
+          const htmlStr = XLSX.utils.sheet_to_html(ws, { editable: false });
+          const wrapper = document.createElement("div");
+          wrapper.innerHTML = htmlStr;
+          container.appendChild(wrapper);
+        }
+      } catch (err) {
+        container.textContent = "Error rendering spreadsheet: " + err.message;
+      }
+    }
+
+    // ---- Grades ----
+    function renderGrades(run) {
+      const section = document.getElementById("grades-section");
+      const content = document.getElementById("grades-content");
+
+      if (!run.grading) {
+        section.style.display = "none";
+        return;
+      }
+
+      const grading = run.grading;
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("grades-arrow").classList.remove("open");
+
+      const summary = grading.summary || {};
+      const expectations = grading.expectations || [];
+
+      let html = '<div style="padding: 1rem;">';
+
+      // Summary line
+      const passRate = summary.pass_rate != null
+        ? Math.round(summary.pass_rate * 100) + "%"
+        : "?";
+      const badgeClass = summary.pass_rate >= 0.8 ? "grade-pass" : summary.pass_rate >= 0.5 ? "" : "grade-fail";
+      html += '<div class="grades-summary">';
+      html += '<span class="grade-badge ' + badgeClass + '">' + passRate + '</span>';
+      html += '<span>' + (summary.passed || 0) + ' passed, ' + (summary.failed || 0) + ' failed of ' + (summary.total || 0) + '</span>';
+      html += '</div>';
+
+      // Assertions list
+      html += '<ul class="assertion-list">';
+      for (const exp of expectations) {
+        const statusClass = exp.passed ? "pass" : "fail";
+        const statusIcon = exp.passed ? "\u2713" : "\u2717";
+        html += '<li class="assertion-item">';
+        html += '<span class="assertion-status ' + statusClass + '">' + statusIcon + '</span>';
+        html += '<span>' + escapeHtml(exp.text) + '</span>';
+        if (exp.evidence) {
+          html += '<div class="assertion-evidence">' + escapeHtml(exp.evidence) + '</div>';
+        }
+        html += '</li>';
+      }
+      html += '</ul>';
+
+      html += '</div>';
+      content.innerHTML = html;
+    }
+
+    function toggleGrades() {
+      const content = document.getElementById("grades-content");
+      const arrow = document.getElementById("grades-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Previous outputs (collapsible) ----
+    function renderPrevOutputs(run) {
+      const section = document.getElementById("prev-outputs-section");
+      const content = document.getElementById("prev-outputs-content");
+      const prevOutputs = (EMBEDDED_DATA.previous_outputs || {})[run.id];
+
+      if (!prevOutputs || prevOutputs.length === 0) {
+        section.style.display = "none";
+        return;
+      }
+
+      section.style.display = "block";
+      // Reset to collapsed
+      content.classList.remove("open");
+      document.getElementById("prev-outputs-arrow").classList.remove("open");
+
+      // Render the files into the content area
+      content.innerHTML = "";
+      const wrapper = document.createElement("div");
+      wrapper.style.padding = "1rem";
+
+      for (const file of prevOutputs) {
+        const fileDiv = document.createElement("div");
+        fileDiv.className = "output-file";
+
+        const header = document.createElement("div");
+        header.className = "output-file-header";
+        const nameSpan = document.createElement("span");
+        nameSpan.textContent = file.name;
+        header.appendChild(nameSpan);
+        const dlBtn = document.createElement("a");
+        dlBtn.className = "dl-btn";
+        dlBtn.textContent = "Download";
+        dlBtn.download = file.name;
+        dlBtn.href = getDownloadUri(file);
+        header.appendChild(dlBtn);
+        fileDiv.appendChild(header);
+
+        const fc = document.createElement("div");
+        fc.className = "output-file-content";
+
+        if (file.type === "text") {
+          const pre = document.createElement("pre");
+          pre.textContent = file.content;
+          fc.appendChild(pre);
+        } else if (file.type === "image") {
+          const img = document.createElement("img");
+          img.src = file.data_uri;
+          img.alt = file.name;
+          fc.appendChild(img);
+        } else if (file.type === "pdf") {
+          const iframe = document.createElement("iframe");
+          iframe.src = file.data_uri;
+          fc.appendChild(iframe);
+        } else if (file.type === "xlsx") {
+          renderXlsx(fc, file.data_b64);
+        } else if (file.type === "binary") {
+          const a = document.createElement("a");
+          a.className = "download-link";
+          a.href = file.data_uri;
+          a.download = file.name;
+          a.textContent = "Download " + file.name;
+          fc.appendChild(a);
+        }
+
+        fileDiv.appendChild(fc);
+        wrapper.appendChild(fileDiv);
+      }
+
+      content.appendChild(wrapper);
+    }
+
+    function togglePrevOutputs() {
+      const content = document.getElementById("prev-outputs-content");
+      const arrow = document.getElementById("prev-outputs-arrow");
+      content.classList.toggle("open");
+      arrow.classList.toggle("open");
+    }
+
+    // ---- Feedback (saved to server -> feedback.json) ----
+    function saveCurrentFeedback() {
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // Build reviews array from map
+      const reviews = [];
+      for (const [run_id, feedback] of Object.entries(feedbackMap)) {
+        if (feedback.trim()) {
+          reviews.push({ run_id, feedback, timestamp: new Date().toISOString() });
+        }
+      }
+
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reviews, status: "in_progress" }),
+      }).then(() => {
+        document.getElementById("feedback-status").textContent = "Saved";
+      }).catch(() => {
+        // Static mode or server unavailable — no-op on auto-save,
+        // feedback will be downloaded on final submit
+        document.getElementById("feedback-status").textContent = "Will download on submit";
+      });
+    }
+
+    // ---- Done ----
+    function showDoneDialog() {
+      // Save current textarea to feedbackMap (but don't POST yet)
+      const run = EMBEDDED_DATA.runs[currentIndex];
+      const text = document.getElementById("feedback").value;
+      if (text.trim() === "") {
+        delete feedbackMap[run.id];
+      } else {
+        feedbackMap[run.id] = text;
+      }
+
+      // POST once with status: complete — include ALL runs so the model
+      // can distinguish "no feedback" (looks good) from "not reviewed"
+      const reviews = [];
+      const ts = new Date().toISOString();
+      for (const r of EMBEDDED_DATA.runs) {
+        reviews.push({ run_id: r.id, feedback: feedbackMap[r.id] || "", timestamp: ts });
+      }
+      const payload = JSON.stringify({ reviews, status: "complete" }, null, 2);
+      fetch("/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: payload,
+      }).then(() => {
+        document.getElementById("done-overlay").classList.add("visible");
+      }).catch(() => {
+        // Server not available (static mode) — download as file
+        const blob = new Blob([payload], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "feedback.json";
+        a.click();
+        URL.revokeObjectURL(url);
+        document.getElementById("done-overlay").classList.add("visible");
+      });
+    }
+
+    function closeDoneDialog() {
+      // Reset status back to in_progress
+      saveCurrentFeedback();
+      document.getElementById("done-overlay").classList.remove("visible");
+    }
+
+    // ---- Toast ----
+    function showToast(message) {
+      const toast = document.getElementById("toast");
+      toast.textContent = message;
+      toast.classList.add("visible");
+      setTimeout(() => toast.classList.remove("visible"), 2000);
+    }
+
+    // ---- Keyboard nav ----
+    document.addEventListener("keydown", (e) => {
+      // Don't capture when typing in textarea
+      if (e.target.tagName === "TEXTAREA") return;
+
+      if (e.key === "ArrowLeft" || e.key === "ArrowUp") {
+        e.preventDefault();
+        navigate(-1);
+      } else if (e.key === "ArrowRight" || e.key === "ArrowDown") {
+        e.preventDefault();
+        navigate(1);
+      }
+    });
+
+    // ---- Util ----
+    function getDownloadUri(file) {
+      if (file.data_uri) return file.data_uri;
+      if (file.data_b64) return "data:application/octet-stream;base64," + file.data_b64;
+      if (file.type === "text") return "data:text/plain;charset=utf-8," + encodeURIComponent(file.content);
+      return "#";
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement("div");
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // ---- View switching ----
+    function switchView(view) {
+      document.querySelectorAll(".view-tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
+      document.querySelector(`[onclick="switchView('${view}')"]`).classList.add("active");
+      document.getElementById("panel-" + view).classList.add("active");
+    }
+
+    // ---- Benchmark rendering ----
+    function renderBenchmark() {
+      const data = EMBEDDED_DATA.benchmark;
+      if (!data) return;
+
+      // Show the tabs
+      document.getElementById("view-tabs").style.display = "flex";
+
+      const container = document.getElementById("benchmark-content");
+      const summary = data.run_summary || {};
+      const metadata = data.metadata || {};
+      const notes = data.notes || [];
+
+      let html = "";
+
+      // Header
+      html += "<h2 style='font-family: Poppins, sans-serif; margin-bottom: 0.5rem;'>Benchmark Results</h2>";
+      html += "<p style='color: var(--text-muted); font-size: 0.875rem; margin-bottom: 1.25rem;'>";
+      if (metadata.skill_name) html += "<strong>" + escapeHtml(metadata.skill_name) + "</strong> &mdash; ";
+      if (metadata.timestamp) html += metadata.timestamp + " &mdash; ";
+      if (metadata.evals_run) html += "Evals: " + metadata.evals_run.join(", ") + " &mdash; ";
+      html += (metadata.runs_per_configuration || "?") + " runs per configuration";
+      html += "</p>";
+
+      // Summary table
+      html += '<table class="benchmark-table">';
+
+      function fmtStat(stat, pct) {
+        if (!stat) return "—";
+        const suffix = pct ? "%" : "";
+        const m = pct ? (stat.mean * 100).toFixed(0) : stat.mean.toFixed(1);
+        const s = pct ? (stat.stddev * 100).toFixed(0) : stat.stddev.toFixed(1);
+        return m + suffix + " ± " + s + suffix;
+      }
+
+      function deltaClass(val) {
+        if (!val) return "";
+        const n = parseFloat(val);
+        if (n > 0) return "benchmark-delta-positive";
+        if (n < 0) return "benchmark-delta-negative";
+        return "";
+      }
+
+      // Discover config names dynamically (everything except "delta")
+      const configs = Object.keys(summary).filter(k => k !== "delta");
+      const configA = configs[0] || "config_a";
+      const configB = configs[1] || "config_b";
+      const labelA = configA.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const labelB = configB.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+      const a = summary[configA] || {};
+      const b = summary[configB] || {};
+      const delta = summary.delta || {};
+
+      html += "<thead><tr><th>Metric</th><th>" + escapeHtml(labelA) + "</th><th>" + escapeHtml(labelB) + "</th><th>Delta</th></tr></thead>";
+      html += "<tbody>";
+
+      html += "<tr><td><strong>Pass Rate</strong></td>";
+      html += "<td>" + fmtStat(a.pass_rate, true) + "</td>";
+      html += "<td>" + fmtStat(b.pass_rate, true) + "</td>";
+      html += '<td class="' + deltaClass(delta.pass_rate) + '">' + (delta.pass_rate || "—") + "</td></tr>";
+
+      // Time (only show row if data exists)
+      if (a.time_seconds || b.time_seconds) {
+        html += "<tr><td><strong>Time (s)</strong></td>";
+        html += "<td>" + fmtStat(a.time_seconds, false) + "</td>";
+        html += "<td>" + fmtStat(b.time_seconds, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.time_seconds) + '">' + (delta.time_seconds ? delta.time_seconds + "s" : "—") + "</td></tr>";
+      }
+
+      // Tokens (only show row if data exists)
+      if (a.tokens || b.tokens) {
+        html += "<tr><td><strong>Tokens</strong></td>";
+        html += "<td>" + fmtStat(a.tokens, false) + "</td>";
+        html += "<td>" + fmtStat(b.tokens, false) + "</td>";
+        html += '<td class="' + deltaClass(delta.tokens) + '">' + (delta.tokens || "—") + "</td></tr>";
+      }
+
+      html += "</tbody></table>";
+
+      // Per-eval breakdown (if runs data available)
+      const runs = data.runs || [];
+      if (runs.length > 0) {
+        const evalIds = [...new Set(runs.map(r => r.eval_id))].sort((a, b) => a - b);
+
+        html += "<h3 style='font-family: Poppins, sans-serif; margin-bottom: 0.75rem;'>Per-Eval Breakdown</h3>";
+
+        const hasTime = runs.some(r => r.result && r.result.time_seconds != null);
+        const hasErrors = runs.some(r => r.result && r.result.errors > 0);
+
+        for (const evalId of evalIds) {
+          const evalRuns = runs.filter(r => r.eval_id === evalId);
+          const evalName = evalRuns[0] && evalRuns[0].eval_name ? evalRuns[0].eval_name : "Eval " + evalId;
+
+          html += "<h4 style='font-family: Poppins, sans-serif; margin: 1rem 0 0.5rem; color: var(--text);'>" + escapeHtml(evalName) + "</h4>";
+          html += '<table class="benchmark-table">';
+          html += "<thead><tr><th>Config</th><th>Run</th><th>Pass Rate</th>";
+          if (hasTime) html += "<th>Time (s)</th>";
+          if (hasErrors) html += "<th>Crashes During Execution</th>";
+          html += "</tr></thead>";
+          html += "<tbody>";
+
+          // Group by config and render with average rows
+          const configGroups = [...new Set(evalRuns.map(r => r.configuration))];
+          for (let ci = 0; ci < configGroups.length; ci++) {
+            const config = configGroups[ci];
+            const configRuns = evalRuns.filter(r => r.configuration === config);
+            if (configRuns.length === 0) continue;
+
+            const rowClass = ci === 0 ? "benchmark-row-with" : "benchmark-row-without";
+            const configLabel = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+
+            for (const run of configRuns) {
+              const r = run.result || {};
+              const prClass = r.pass_rate >= 0.8 ? "benchmark-delta-positive" : r.pass_rate < 0.5 ? "benchmark-delta-negative" : "";
+              html += '<tr class="' + rowClass + '">';
+              html += "<td>" + configLabel + "</td>";
+              html += "<td>" + run.run_number + "</td>";
+              html += '<td class="' + prClass + '">' + ((r.pass_rate || 0) * 100).toFixed(0) + "% (" + (r.passed || 0) + "/" + (r.total || 0) + ")</td>";
+              if (hasTime) html += "<td>" + (r.time_seconds != null ? r.time_seconds.toFixed(1) : "—") + "</td>";
+              if (hasErrors) html += "<td>" + (r.errors || 0) + "</td>";
+              html += "</tr>";
+            }
+
+            // Average row
+            const rates = configRuns.map(r => (r.result || {}).pass_rate || 0);
+            const avgRate = rates.reduce((a, b) => a + b, 0) / rates.length;
+            const avgPrClass = avgRate >= 0.8 ? "benchmark-delta-positive" : avgRate < 0.5 ? "benchmark-delta-negative" : "";
+            html += '<tr class="benchmark-row-avg ' + rowClass + '">';
+            html += "<td>" + configLabel + "</td>";
+            html += "<td>Avg</td>";
+            html += '<td class="' + avgPrClass + '">' + (avgRate * 100).toFixed(0) + "%</td>";
+            if (hasTime) {
+              const times = configRuns.map(r => (r.result || {}).time_seconds).filter(t => t != null);
+              html += "<td>" + (times.length ? (times.reduce((a, b) => a + b, 0) / times.length).toFixed(1) : "—") + "</td>";
+            }
+            if (hasErrors) html += "<td></td>";
+            html += "</tr>";
+          }
+          html += "</tbody></table>";
+
+          // Per-assertion detail for this eval
+          const runsWithExpectations = {};
+          for (const config of configGroups) {
+            runsWithExpectations[config] = evalRuns.filter(r => r.configuration === config && r.expectations && r.expectations.length > 0);
+          }
+          const hasAnyExpectations = Object.values(runsWithExpectations).some(runs => runs.length > 0);
+          if (hasAnyExpectations) {
+            // Collect all unique assertion texts across all configs
+            const allAssertions = [];
+            const seen = new Set();
+            for (const config of configGroups) {
+              for (const run of runsWithExpectations[config]) {
+                for (const exp of (run.expectations || [])) {
+                  if (!seen.has(exp.text)) {
+                    seen.add(exp.text);
+                    allAssertions.push(exp.text);
+                  }
+                }
+              }
+            }
+
+            html += '<table class="benchmark-table" style="margin-top: 0.5rem;">';
+            html += "<thead><tr><th>Assertion</th>";
+            for (const config of configGroups) {
+              const label = config.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+              html += "<th>" + escapeHtml(label) + "</th>";
+            }
+            html += "</tr></thead><tbody>";
+
+            for (const assertionText of allAssertions) {
+              html += "<tr><td>" + escapeHtml(assertionText) + "</td>";
+
+              for (const config of configGroups) {
+                html += "<td>";
+                for (const run of runsWithExpectations[config]) {
+                  const exp = (run.expectations || []).find(e => e.text === assertionText);
+                  if (exp) {
+                    const cls = exp.passed ? "benchmark-delta-positive" : "benchmark-delta-negative";
+                    const icon = exp.passed ? "\u2713" : "\u2717";
+                    html += '<span class="' + cls + '" title="Run ' + run.run_number + ': ' + escapeHtml(exp.evidence || "") + '">' + icon + "</span> ";
+                  } else {
+                    html += "— ";
+                  }
+                }
+                html += "</td>";
+              }
+              html += "</tr>";
+            }
+            html += "</tbody></table>";
+          }
+        }
+      }
+
+      // Notes
+      if (notes.length > 0) {
+        html += '<div class="benchmark-notes">';
+        html += "<h3>Analysis Notes</h3>";
+        html += "<ul>";
+        for (const note of notes) {
+          html += "<li>" + escapeHtml(note) + "</li>";
+        }
+        html += "</ul></div>";
+      }
+
+      container.innerHTML = html;
+    }
+
+    // ---- Start ----
+    init();
+    renderBenchmark();
+  </script>
+</body>
+</html>

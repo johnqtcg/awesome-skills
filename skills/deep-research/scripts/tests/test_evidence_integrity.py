@@ -180,6 +180,10 @@ def web_finding(
         "claim_type": "single_fact",
         "confidence": confidence,
         "analysis": "WithTimeout returns a derived context.",
+        "support_review": {
+            "stance": "supports",
+            "rationale": "the excerpt states the return value the claim asserts",
+        },
         "evidence": [
             {
                 "kind": "web",
@@ -350,6 +354,14 @@ class TestWebEvidenceClosure(unittest.TestCase):
         self.assertEqual("high", assessed["effective_confidence"])
         self.assertEqual("Full", summary["degradation"])
 
+    def _quick_session(self, root: Path) -> Path:
+        session_path = root / "session.json"
+        deep_research.initialize_session(
+            session_path,
+            deep_research.plan_research("live verification", explicit_mode="quick"),
+        )
+        return session_path
+
     def test_live_verifier_replaces_serialized_content_before_assessment(self) -> None:
         url = "https://www.nist.gov/example"
         loaded = web_content(url)
@@ -357,22 +369,30 @@ class TestWebEvidenceClosure(unittest.TestCase):
         fresh = web_content(url, live_verified=True)
         fresh.capture_method = "validator-live-fetch"
         fresh.http_status = 200
-        with patch.object(
-            deep_research,
-            "fetch_contents_parallel",
-            return_value=[fresh],
-        ) as fetch:
-            contents = deep_research._live_verify_web_contents(
-                {"findings": [web_finding(url=url)]},
-                [loaded],
+        with tempfile.TemporaryDirectory() as tmp:
+            session_path = self._quick_session(Path(tmp))
+            with patch.object(
+                deep_research,
+                "fetch_contents_parallel",
+                return_value=[fresh],
+            ) as fetch:
+                contents, reservation = deep_research._live_verify_web_contents(
+                    {"findings": [web_finding(url=url)]},
+                    [loaded],
+                    session_path=session_path,
+                    timeout=3,
+                )
+            fetch.assert_called_once_with(
+                [url],
                 timeout=3,
+                max_workers=deep_research.CONTENT_FETCH_WORKERS,
+                capture_method="validator-live-fetch",
+                max_bytes=deep_research.VALIDATION_MAX_BYTES,
+                max_chars=deep_research.VALIDATION_MAX_CHARS,
             )
-        fetch.assert_called_once_with(
-            [url],
-            timeout=3,
-            max_workers=deep_research.CONTENT_FETCH_WORKERS,
-            capture_method="validator-live-fetch",
-        )
+            self.assertEqual(1, reservation["reserved"])
+            ledger = json.loads(session_path.read_text(encoding="utf-8"))
+            self.assertEqual(1, ledger["usage"]["live_verifications"])
         summary = deep_research.validate_research_bundle(
             research_kind="web",
             results=[web_source(url=url)],
@@ -384,6 +404,157 @@ class TestWebEvidenceClosure(unittest.TestCase):
             "high",
             summary["findings"][0]["effective_confidence"],
         )
+
+    def test_live_verification_stops_at_the_session_ceiling(self) -> None:
+        """The final verification path is inside the cumulative budget.
+
+        Before this, `report --live-web` fetched every cited URL through a
+        direct call that touched no ledger, so a Quick session that had already
+        spent its whole allowance could still issue unlimited network requests
+        and still print `Full`.
+        """
+        urls = [f"https://www.nist.gov/p{i}" for i in range(7)]
+        with tempfile.TemporaryDirectory() as tmp:
+            session_path = self._quick_session(Path(tmp))
+            limit = deep_research.MODE_BUDGETS["quick"]["live_verification_max"]
+            findings = {
+                "findings": [
+                    {
+                        "title": "Retention",
+                        "claim_type": "single_fact",
+                        "confidence": "high",
+                        "analysis": "Requests are discarded after processing.",
+                        "evidence": [
+                            {"kind": "web", "url": u, "excerpt": "discarded"}
+                            for u in urls
+                        ],
+                    }
+                ]
+            }
+            with patch.object(
+                deep_research,
+                "fetch_contents_parallel",
+                side_effect=lambda u, **kw: [],
+            ) as fetch:
+                _, reservation = deep_research._live_verify_web_contents(
+                    findings,
+                    [],
+                    session_path=session_path,
+                    timeout=3,
+                )
+            self.assertEqual(limit, reservation["reserved"])
+            self.assertTrue(reservation["exhausted"])
+            self.assertEqual(limit, len(fetch.call_args[0][0]))
+            ledger = json.loads(session_path.read_text(encoding="utf-8"))
+            self.assertEqual(limit, ledger["usage"]["live_verifications"])
+
+            # A second pass on the same ledger must fetch nothing at all.
+            with patch.object(
+                deep_research,
+                "fetch_contents_parallel",
+                side_effect=lambda u, **kw: [],
+            ) as fetch_again:
+                _, second = deep_research._live_verify_web_contents(
+                    findings,
+                    [],
+                    session_path=session_path,
+                    timeout=3,
+                )
+            fetch_again.assert_not_called()
+            self.assertEqual(0, second["reserved"])
+            self.assertTrue(second["exhausted"])
+
+    def test_verification_lifts_both_authoring_truncation_caps(self) -> None:
+        """A correct excerpt from the tail of a long page must still validate.
+
+        Two caps used to silence it independently: a 512 KB download cap and a
+        15,000-character extraction cap. A live A/B measured 19 of 67 correct
+        citations rejected for this reason alone, so verification must read the
+        whole page while authoring keeps the smaller budget.
+        """
+        self.assertGreater(
+            deep_research.VALIDATION_MAX_CHARS, deep_research.CONTENT_MAX_CHARS
+        )
+        self.assertGreater(
+            deep_research.VALIDATION_MAX_BYTES, deep_research.CONTENT_MAX_BYTES
+        )
+        seen = {}
+
+        def fake_fetch(urls, **kwargs):
+            seen.update(kwargs)
+            return []
+
+        url = "https://www.nist.gov/long"
+        with tempfile.TemporaryDirectory() as tmp:
+            session_path = self._quick_session(Path(tmp))
+            with patch.object(deep_research, "fetch_contents_parallel", fake_fetch):
+                deep_research._live_verify_web_contents(
+                    {"findings": [{"evidence": [{"kind": "web", "url": url}]}]},
+                    [],
+                    session_path=session_path,
+                    timeout=3,
+                )
+        self.assertEqual(deep_research.VALIDATION_MAX_CHARS, seen.get("max_chars"))
+        self.assertEqual(deep_research.VALIDATION_MAX_BYTES, seen.get("max_bytes"))
+
+    def test_extraction_cap_is_a_parameter_not_a_hardcoded_default(self) -> None:
+        """`fetch_page_content` must honour a caller-supplied cap."""
+        long_html = "<p>" + ("word " * 20_000) + "needle-at-the-tail</p>"
+        short = deep_research.extract_text_from_html(long_html, max_chars=5_000)
+        full = deep_research.extract_text_from_html(long_html, max_chars=500_000)
+        self.assertNotIn("needle-at-the-tail", short)
+        self.assertIn("needle-at-the-tail", full)
+
+    def test_typographic_variants_do_not_reject_a_correct_quote(self) -> None:
+        """A page's rendering must not decide whether a quote is real.
+
+        Each pair below is one real failure from the 2026-09-08 live A/B: the
+        page rendered curly quotes or wrapped identifiers in backticks and the
+        matcher rejected an excerpt that was copied correctly.
+        """
+        pairs = [
+            ('severity labels such as "LOW," "MEDIUM", and "CRITICAL"',
+             'severity labels such as \u201cLOW,\u201d \u201cMEDIUM\u201d, and \u201cCRITICAL\u201d'),
+            ("An error is thrown if `a` and `b` have different byte lengths.",
+             "An error is thrown if a and b have different byte lengths."),
+            ("a range of 1-10 values",
+             "a range of 1\u201310\u00a0values"),
+        ]
+        for excerpt, page in pairs:
+            self.assertIn(
+                deep_research._normalized_excerpt(excerpt),
+                deep_research._normalized_excerpt(page),
+                excerpt,
+            )
+
+    def test_folding_does_not_loosen_the_match(self) -> None:
+        """The fold must not make an opposite sentence match."""
+        self.assertNotIn(
+            deep_research._normalized_excerpt("the service does retain logs"),
+            deep_research._normalized_excerpt("the service does not retain logs"),
+        )
+        self.assertNotIn(
+            deep_research._normalized_excerpt("acks defaults to 1"),
+            deep_research._normalized_excerpt("acks defaults to all"),
+        )
+
+    def test_validate_live_web_without_session_is_rejected(self) -> None:
+        """--live-web opens sockets, so it may not run outside a ledger."""
+        parser = deep_research.build_parser()
+        with tempfile.TemporaryDirectory() as tmp:
+            findings_path = Path(tmp) / "findings.json"
+            findings_path.write_text(json.dumps({"findings": [web_finding()]}))
+            with self.assertRaises(SystemExit):
+                parser.parse_args(
+                    [
+                        "validate",
+                        "--research-kind",
+                        "web",
+                        "--findings",
+                        str(findings_path),
+                        "--live-web",
+                    ]
+                )
 
     def test_effective_final_url_controls_live_authority(self) -> None:
         requested_url = "https://www.nist.gov/example"
@@ -526,6 +697,10 @@ class TestCodebaseEvidence(unittest.TestCase):
             "claim_type": "runtime_behavior",
             "confidence": "high",
             "analysis": "Bearer tokens are verified by middleware.",
+            "support_review": {
+                "stance": "supports",
+                "rationale": "the pinned code and passing receipt cover this path",
+            },
             "evidence": [
                 {"kind": "code", "id": "code-1"},
                 {"kind": "commit", "id": "commit-1"},
@@ -549,6 +724,10 @@ class TestCodebaseEvidence(unittest.TestCase):
             "claim_type": "code_fact",
             "confidence": "high",
             "analysis": "The middleware calls verifyToken.",
+            "support_review": {
+                "stance": "supports",
+                "rationale": "the pinned excerpt is the call site the claim names",
+            },
             "evidence": [{"kind": "code", "id": "code-1"}],
         }
         summary = deep_research.validate_research_bundle(

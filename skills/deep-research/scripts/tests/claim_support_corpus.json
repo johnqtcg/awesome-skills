@@ -1,0 +1,227 @@
+{
+  "schema": "deep-research/claim-support-corpus-v1",
+  "purpose": "Adversarial corpus for the claim-support screens. Three labels, each with a different obligation. 'conflict': the claim opposes its own excerpt and the screen MUST flag it. 'supported': a correct finding the screen MUST NOT flag, because a false conflict there costs a real author an explicit attestation and a confidence level. 'lexically-opposed': semantically supported but lexically opposite ('cannot be used' vs 'will panic'); a lexical screen cannot resolve these, so the screen is EXPECTED to flag them and the label records the method's real boundary instead of tuning it away.",
+  "thresholds": {
+    "max_false_conflicts": 0,
+    "min_conflict_recall": 1.0
+  },
+  "cases": [
+    {
+      "id": "conflict-retention",
+      "label": "conflict",
+      "claim": "The service permanently retains all request logs.",
+      "excerpt": "The service does not retain request logs.",
+      "note": "Reference case from the external review: containment passes, meaning is inverted."
+    },
+    {
+      "id": "conflict-tls-support",
+      "label": "conflict",
+      "claim": "TLS 1.0 is supported by the server.",
+      "excerpt": "TLS 1.0 is not supported by the server."
+    },
+    {
+      "id": "conflict-retention-zh",
+      "label": "conflict",
+      "claim": "该服务永久保留所有请求日志",
+      "excerpt": "该服务不保留请求日志"
+    },
+    {
+      "id": "conflict-flag-default",
+      "label": "conflict",
+      "claim": "The flag enables retries by default.",
+      "excerpt": "The flag does not enable retries by default."
+    },
+    {
+      "id": "conflict-govulncheck-cvss",
+      "label": "conflict",
+      "claim": "govulncheck reports CVSS scores.",
+      "excerpt": "govulncheck does not report CVSS scores."
+    },
+    {
+      "id": "conflict-create-index-txn",
+      "label": "conflict",
+      "claim": "Postgres allows CREATE INDEX CONCURRENTLY inside a transaction.",
+      "excerpt": "CREATE INDEX CONCURRENTLY cannot be run inside a transaction block."
+    },
+    {
+      "id": "conflict-setenv-parallel",
+      "label": "conflict",
+      "claim": "t.Setenv is safe to call in a parallel test.",
+      "excerpt": "t.Setenv is not safe to call in a parallel test."
+    },
+    {
+      "id": "conflict-instant-ddl",
+      "label": "conflict",
+      "claim": "MySQL INSTANT DDL requires a metadata lock for the whole operation.",
+      "excerpt": "INSTANT DDL does not require a metadata lock for the whole operation."
+    },
+    {
+      "id": "supported-verbatim",
+      "label": "supported",
+      "claim": "SetMaxOpenConns caps open database connections.",
+      "excerpt": "SetMaxOpenConns sets the maximum number of open connections to the database."
+    },
+    {
+      "id": "supported-negative-claim-negative-excerpt",
+      "label": "supported",
+      "claim": "The service does not retain request logs.",
+      "excerpt": "The service does not retain request logs."
+    },
+    {
+      "id": "supported-status-code",
+      "label": "supported",
+      "claim": "The API returns 404 for missing users.",
+      "excerpt": "The API returns 404 for missing users."
+    },
+    {
+      "id": "supported-paraphrase-gomod",
+      "label": "supported",
+      "claim": "Go modules require a go.mod file at the module root.",
+      "excerpt": "Every module is defined by a go.mod file at its root."
+    },
+    {
+      "id": "opposed-setenv-cannot",
+      "label": "lexically-opposed",
+      "claim": "t.Setenv cannot be used in a parallel test.",
+      "excerpt": "Calling t.Setenv in a test that calls t.Parallel will panic.",
+      "note": "Claim is negative, excerpt is positive, meanings agree. No lexical screen resolves this; the author must attest."
+    },
+    {
+      "id": "opposed-shutdown-drop",
+      "label": "lexically-opposed",
+      "claim": "Shutdown does not drop in-flight requests.",
+      "excerpt": "Shutdown waits for in-flight requests to complete.",
+      "note": "Same shape as opposed-setenv-cannot, stated the other way round."
+    },
+    {
+      "id": "opposed-rate-limit",
+      "label": "lexically-opposed",
+      "claim": "The limiter rejects requests above the configured rate.",
+      "excerpt": "Requests above the configured rate are not admitted.",
+      "note": "Verb polarity is inverted while the assertion is identical."
+    },
+    {
+      "id": "supported-setenv-panics",
+      "label": "supported",
+      "claim": "t.Setenv panics when the test is parallel.",
+      "excerpt": "t.Setenv will panic if the test or any subtest calls t.Parallel."
+    },
+    {
+      "id": "supported-insecure-skip-verify",
+      "label": "supported",
+      "claim": "InsecureSkipVerify must not be enabled in production.",
+      "excerpt": "Setting InsecureSkipVerify to true is not acceptable in production."
+    },
+    {
+      "id": "supported-maxidleconns",
+      "label": "supported",
+      "claim": "The default MaxIdleConnsPerHost is 2.",
+      "excerpt": "MaxIdleConnsPerHost defaults to 2 connections per host."
+    },
+    {
+      "id": "supported-idempotent-complement",
+      "label": "supported",
+      "claim": "Retries apply only to idempotent methods.",
+      "excerpt": "Do not retry non-idempotent methods such as POST.",
+      "note": "Claim states the positive rule, excerpt states the negative complement. The bound prefix 'non' must not read as a standalone negator."
+    },
+    {
+      "id": "supported-timeout-zh",
+      "label": "supported",
+      "claim": "该函数在超时后返回错误。",
+      "excerpt": "该函数在超时后会返回一个错误。"
+    },
+    {
+      "id": "supported-concurrently-double-negative",
+      "label": "supported",
+      "claim": "CREATE INDEX CONCURRENTLY does not take an exclusive lock.",
+      "excerpt": "CREATE INDEX CONCURRENTLY does not block writes and does not take an ACCESS EXCLUSIVE lock."
+    },
+    {
+      "id": "supported-quick-query-ceiling",
+      "label": "supported",
+      "claim": "The parser rejects more than 10 queries in quick mode.",
+      "excerpt": "In quick mode the parser rejects more than 10 queries."
+    },
+    {
+      "id": "supported-govulncheck-negative",
+      "label": "supported",
+      "claim": "govulncheck does not emit CVSS scores.",
+      "excerpt": "govulncheck does not report a CVSS score for any finding."
+    },
+    {
+      "id": "supported-fiber-order",
+      "label": "supported",
+      "claim": "Fiber matches routes in registration order.",
+      "excerpt": "Fiber uses linear single-pass matching, so registration order equals priority."
+    },
+    {
+      "id": "supported-shutdown",
+      "label": "supported",
+      "claim": "srv.Shutdown waits for in-flight requests to finish.",
+      "excerpt": "Shutdown gracefully shuts down the server without interrupting any active connections."
+    },
+    {
+      "id": "supported-crypto-rand",
+      "label": "supported",
+      "claim": "Session tokens must not come from math/rand.",
+      "excerpt": "math/rand is not cryptographically secure and must not be used for session tokens."
+    },
+    {
+      "id": "conflict-multi-sentence",
+      "label": "conflict",
+      "claim": "TLS 1.0 is supported by the server.",
+      "excerpt": "TLS 1.3 is supported by the server. TLS 1.0 is not supported by the server.",
+      "note": "The longest shared phrase sits in the non-contradicting sentence; only a shorter anchor reaches the one that matters."
+    },
+    {
+      "id": "supported-multi-sentence",
+      "label": "supported",
+      "claim": "TLS 1.3 is supported by the server.",
+      "excerpt": "TLS 1.3 is supported by the server. TLS 1.0 is not supported by the server.",
+      "note": "Real extracted excerpts run to several sentences. A whole-text negation test flags this correct finding."
+    },
+    {
+      "id": "supported-multi-sentence-2",
+      "label": "supported",
+      "claim": "Shutdown drains active connections.",
+      "excerpt": "Shutdown drains active connections. Close does not drain them."
+    },
+    {
+      "id": "supported-multi-sentence-zh",
+      "label": "supported",
+      "claim": "该接口支持分页。",
+      "excerpt": "该接口支持分页。该接口不支持排序。"
+    }
+  ],
+  "numeric_cases": [
+    {
+      "id": "number-absent",
+      "claim": "The default shutdown deadline is 30 seconds.",
+      "excerpts": [
+        "The server waits for active connections to drain."
+      ],
+      "expect_unquoted": [
+        "30"
+      ]
+    },
+    {
+      "id": "number-present",
+      "claim": "The default shutdown deadline is 30 seconds.",
+      "excerpts": [
+        "The default shutdown deadline is 30 seconds."
+      ],
+      "expect_unquoted": []
+    },
+    {
+      "id": "number-drifted",
+      "claim": "MaxIdleConnsPerHost defaults to 100.",
+      "excerpts": [
+        "MaxIdleConnsPerHost defaults to 2 connections per host."
+      ],
+      "expect_unquoted": [
+        "100"
+      ]
+    }
+  ]
+}

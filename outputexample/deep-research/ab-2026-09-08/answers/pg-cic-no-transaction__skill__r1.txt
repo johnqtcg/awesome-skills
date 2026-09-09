@@ -1,0 +1,9 @@
+## Answer
+
+Yes — this is confirmed by PostgreSQL's official documentation. `CREATE INDEX CONCURRENTLY` is explicitly disallowed inside an explicit transaction block (`BEGIN ... COMMIT`), unlike a regular `CREATE INDEX`, which can run within a transaction block. This is because concurrent index builds internally span multiple transactions (the index is first entered as "invalid," then two table scans occur in separate transactions), which is incompatible with being nested inside a user-controlled transaction. Attempting it produces the runtime error `ERROR: CREATE INDEX CONCURRENTLY cannot run inside a transaction block`. This is also why migration tools that auto-wrap statements in a transaction (Rails, TypeORM, Knex, etc.) require an explicit opt-out (e.g., Rails' `disable_ddl_transaction!`) when using `CONCURRENTLY`.
+
+VERDICT: YES
+
+SOURCES:
+- https://www.postgresql.org/docs/current/sql-createindex.html ||| Another difference is that a regular CREATE INDEX command can be performed within a transaction block, but CREATE INDEX CONCURRENTLY cannot.
+- https://pgfence.com/blog/concurrently-in-a-transaction-silent-footgun/ ||| ERROR: CREATE INDEX CONCURRENTLY cannot run inside a transaction block

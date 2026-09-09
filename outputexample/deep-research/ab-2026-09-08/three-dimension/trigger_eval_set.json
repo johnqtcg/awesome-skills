@@ -1,0 +1,103 @@
+[
+  {
+    "query": "our CTO wants to move the payment service off stripe onto adyen next quarter and he's asking me for a written comparison he can take to the board. i need actual sources for the fee structures and the 3DS2 support claims, not just my impressions — last time i handed him something and he asked 'where did this number come from' and i had nothing",
+    "should_trigger": true,
+    "why": "technical comparison for a decision that will be challenged; needs traceable sources"
+  },
+  {
+    "query": "somebody on our platform team keeps insisting that Go 1.24 made it safe to call t.Setenv inside a t.Parallel test and they've started removing our guards. i'm pretty sure that's wrong but i need to be able to point at the actual docs before i push back in the PR",
+    "should_trigger": true,
+    "why": "claim verification where the author will be contradicted; needs a citable primary source"
+  },
+  {
+    "query": "写一份关于 2025-2026 年服务网格采用趋势的调研，我们要决定还继续投 istio 还是转 cilium。需要能追溯到原始数据来源，领导会问每个数字是哪来的",
+    "should_trigger": true,
+    "why": "Chinese trend-analysis request with an explicit traceability requirement"
+  },
+  {
+    "query": "i inherited this repo at ~/work/billing-api and nobody left docs. can you figure out how the retry logic actually works — which functions do the retrying, what the backoff is, and whether it's actually wired into the http client or just dead code? cite the files and lines because i'll be presenting this to the team",
+    "should_trigger": true,
+    "why": "pure codebase research needing file/line-level evidence"
+  },
+  {
+    "query": "we're getting audited in three weeks and i need to document whether our current TLS config actually meets the NIST guidance we claim to follow in our SOC2 doc. i need to compare what's in internal/server/tls.go against whatever NIST actually says, with links",
+    "should_trigger": true,
+    "why": "hybrid codebase-plus-web investigation for an audit; the strongest case for auditable output"
+  },
+  {
+    "query": "before i sign this contract — the vendor's sales deck claims their API has 99.99% uptime and 'sub-50ms p99 globally'. can you dig into whether that holds up? their status page, any postmortems, third party monitoring, whatever exists. i want to know what's actually documented vs marketing",
+    "should_trigger": true,
+    "why": "verification of a sponsored claim; source-quality assessment is the core need"
+  },
+  {
+    "query": "there's a CVE going around about a deserialization thing in one of the yaml libs and our security guy is asking whether we're exposed. i need to know exactly which versions are affected and what the official advisory says, not a blog post summary of a blog post",
+    "should_trigger": true,
+    "why": "security-sensitive fact-finding that explicitly rejects secondhand sources"
+  },
+  {
+    "query": "my manager asked me to put together the case for whether we should adopt OpenTelemetry or stay on our current prometheus + jaeger setup. she's going to forward it to the platform director so it needs to hold up to scrutiny and i need to be honest about what i couldn't find out",
+    "should_trigger": true,
+    "why": "comparison where 'what I could not establish' matters; honest degradation is the differentiator"
+  },
+  {
+    "query": "ok this is annoying. two different pages in the mysql docs seem to say opposite things about whether INSTANT ddl takes a metadata lock for the whole operation. can you work out which one is actually right and show me why",
+    "should_trigger": true,
+    "why": "conflicting-sources case; needs explicit conflict treatment rather than picking one"
+  },
+  {
+    "query": "i need to understand whether kafka's exactly-once semantics actually survive a broker restart mid-transaction, and i'd rather have the real answer with receipts than a confident guess. this is going into a design doc that other teams will build on",
+    "should_trigger": true,
+    "why": "does not use the word research; the need for verifiable conclusions is implicit but strong"
+  },
+
+  {
+    "query": "quick one — what's the current stable version of node? just need the number, i'm updating a dockerfile",
+    "should_trigger": false,
+    "why": "near-miss: a one-shot lookup with no traceability need; the heavy gated process is waste"
+  },
+  {
+    "query": "can you grab the content of https://kubernetes.io/docs/concepts/services-networking/ingress/ and give it to me as markdown? i want to paste it into our internal wiki",
+    "should_trigger": false,
+    "why": "near-miss: single-URL extraction, that is firecrawl-scrape's job, no research involved"
+  },
+  {
+    "query": "review the diff on my branch feature/oauth-refresh before i open the PR — mostly worried about the token refresh path and whether i've leaked anything into logs",
+    "should_trigger": false,
+    "why": "near-miss: 'look into my code' shape but it is code review, not codebase research"
+  },
+  {
+    "query": "i've been reading about CRDTs for two days and my head hurts. can you just explain to me in plain terms why a LWW-register needs a tiebreaker, i don't need sources i just want to finally get it",
+    "should_trigger": false,
+    "why": "near-miss: a learning/explanation request that explicitly disclaims wanting sources"
+  },
+  {
+    "query": "our staging deploy has been failing since this morning with 'failed to compute cache key: not found' and i've burned two hours on it. logs are in /tmp/deploy-2026-09-08.log, help me figure out what changed",
+    "should_trigger": false,
+    "why": "near-miss: an investigation, but a debugging one — systematic-debugging territory"
+  },
+  {
+    "query": "write the runbook for our on-call rotation covering the three most common pager alerts, we have the alert definitions in monitoring/alerts.yaml and i'll fill in the escalation contacts",
+    "should_trigger": false,
+    "why": "near-miss: reads repo files and produces a document, but it is authoring not investigating"
+  },
+  {
+    "query": "i have this 40 page vendor security questionnaire response saved at ~/Downloads/acme-caiq-2026.pdf. summarize the parts about data residency and subprocessors for me",
+    "should_trigger": false,
+    "why": "near-miss: summarizing a document the user already has, no source discovery or verification"
+  },
+  {
+    "query": "help me pick between naming this thing `EventDispatcher` or `EventBus` — the team is split and i honestly don't care that much, just make a call so we can move on",
+    "should_trigger": false,
+    "why": "near-miss: a decision request with no factual question and no evidence to gather"
+  },
+  {
+    "query": "our product spec says the app should have a 'research mode' where users can save searches and annotate results. can you scaffold the react components for the saved-search sidebar?",
+    "should_trigger": false,
+    "why": "near-miss: the word research appears as a product feature name, not as a task"
+  },
+  {
+    "query": "search my notes in ~/notes/ for anything i wrote about the postgres connection pool sizing we settled on last year, i know it's in there somewhere",
+    "should_trigger": false,
+    "why": "near-miss: 'search and find' shape but it is local retrieval from the user's own files"
+  }
+]

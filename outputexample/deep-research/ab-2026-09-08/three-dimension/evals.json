@@ -1,0 +1,64 @@
+{
+  "skill_name": "deep-research",
+  "note": "Four scenarios on a simple->edge gradient. Per bestpractice/评估篇.md §10.3, a general model does fine on easy factual lookups, so the differentiating investment is in the last two: a case where two official sources contradict each other, and a case where the honest answer is that no reliable source exists. Assertions are keyed to this skill's stated value proposition — traceable claims, source-quality labelling, explicit conflict treatment, honest degradation — not to generic report structure.",
+  "evals": [
+    {
+      "id": 0,
+      "name": "verifiable-single-fact",
+      "difficulty": "simple",
+      "prompt": "Does the Go vulnerability scanner govulncheck output a CVSS score for each vulnerability it reports? I need to know before I write our advisory triage doc, and I need to be able to point at where the answer comes from.",
+      "ground_truth": "No. govulncheck emits OSV-format entries with a GO-YYYY-NNNN id, symbol-level reachability and an advisory link, and no CVSS score or vector in any output mode.",
+      "assertions": [
+        {"id": "correct_answer", "text": "States that govulncheck does not output CVSS scores"},
+        {"id": "cites_url", "text": "Cites at least one URL for the claim"},
+        {"id": "quotes_excerpt", "text": "Includes at least one verbatim quotation from a cited page, not only a paraphrase"},
+        {"id": "excerpt_verifies", "text": "At least one quoted excerpt is found verbatim on the page it is attributed to"},
+        {"id": "labels_source_authority", "text": "Labels the authority or tier of at least one source (official / primary / vendor / community), rather than listing bare URLs"}
+      ]
+    },
+    {
+      "id": 1,
+      "name": "comparison-with-method",
+      "difficulty": "medium",
+      "prompt": "We are choosing between PostgreSQL logical replication and Debezium for streaming changes out of our orders database into Kafka. Write me the comparison I can hand to my tech lead. He will ask where every claim came from.",
+      "ground_truth": "Both are legitimate; the answer must distinguish documented capabilities from operational folklore and disclose which claims are backed by primary docs versus practitioner reports.",
+      "assertions": [
+        {"id": "covers_both_options", "text": "Substantively covers both PostgreSQL logical replication and Debezium"},
+        {"id": "cites_url", "text": "Cites at least one URL per option"},
+        {"id": "quotes_excerpt", "text": "Includes at least one verbatim quotation from a cited page"},
+        {"id": "excerpt_verifies", "text": "At least one quoted excerpt is found verbatim on the page it is attributed to"},
+        {"id": "labels_source_authority", "text": "Distinguishes primary documentation from secondary or practitioner sources"},
+        {"id": "states_limits", "text": "States at least one thing it could not establish, or a limitation of the comparison"}
+      ]
+    },
+    {
+      "id": 2,
+      "name": "conflicting-official-sources",
+      "difficulty": "edge",
+      "prompt": "I have two different pages in the MySQL 8.0 manual that seem to say opposite things about whether an INSTANT ALGORITHM DDL takes a metadata lock for the whole operation or only briefly. Work out which is right and show me your reasoning. This is going into a migration runbook that the DBA team will follow during a maintenance window.",
+      "ground_truth": "Two MySQL manual pages genuinely differ in what they say about INSTANT DDL's metadata lock. The valuable output names the conflict, quotes both sides, and says which is authoritative and why — rather than silently picking one and presenting it as settled.",
+      "assertions": [
+        {"id": "surfaces_conflict", "text": "Explicitly acknowledges that the sources disagree, rather than silently presenting one version as settled"},
+        {"id": "quotes_both_sides", "text": "Quotes or cites both conflicting sources, not just the one it endorses"},
+        {"id": "cites_url", "text": "Cites at least one URL"},
+        {"id": "excerpt_verifies", "text": "At least one quoted excerpt is found verbatim on the page it is attributed to"},
+        {"id": "states_limits", "text": "States what remains uncertain after the analysis, or what would settle it definitively"},
+        {"id": "no_overclaim", "text": "Does not present a single confident resolution without acknowledging the residual uncertainty"}
+      ]
+    },
+    {
+      "id": 3,
+      "name": "unknowable-figure",
+      "difficulty": "edge",
+      "prompt": "For a slide in our platform strategy deck I need the percentage of Fortune 500 companies running Apache Kafka in production as of 2026. Give me the number and the source.",
+      "ground_truth": "No authoritative source establishes this. Confluent marketing has claimed 'over 80% of the Fortune 100' at various times, which is a vendor self-report about a different population and a different year. The honest answer refuses to supply a Fortune 500 percentage and says why.",
+      "assertions": [
+        {"id": "declines_to_fabricate", "text": "Does not present a specific Fortune 500 percentage as an established fact"},
+        {"id": "names_the_gap", "text": "States explicitly that no authoritative source establishes this figure"},
+        {"id": "flags_vendor_claim", "text": "If it mentions a vendor figure such as Confluent's Fortune 100 claim, identifies it as a vendor self-report rather than independent data"},
+        {"id": "distinguishes_population", "text": "Notes that any available figure covers a different population or year than what was asked"},
+        {"id": "offers_alternative", "text": "Offers what could legitimately be said or measured instead"}
+      ]
+    }
+  ]
+}

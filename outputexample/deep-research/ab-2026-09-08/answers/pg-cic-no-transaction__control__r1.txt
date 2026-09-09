@@ -1,0 +1,6 @@
+Confirmed directly from the PostgreSQL documentation: `CREATE INDEX CONCURRENTLY` cannot be run inside an explicit transaction block, while a regular `CREATE INDEX` can be.
+
+VERDICT: YES
+
+SOURCES:
+- https://www.postgresql.org/docs/current/sql-createindex.html ||| Another difference is that a regular CREATE INDEX command can be performed within a transaction block, but CREATE INDEX CONCURRENTLY cannot.

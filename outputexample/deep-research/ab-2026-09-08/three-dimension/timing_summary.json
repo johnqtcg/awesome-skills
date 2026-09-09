@@ -1,0 +1,69 @@
+{
+ "with_skill": {
+  "runs": 4,
+  "total_tokens": 1014072,
+  "mean_tokens": 253518,
+  "total_tool_uses": 325,
+  "mean_tool_uses": 81.2,
+  "total_duration_s": 4025.7,
+  "mean_duration_s": 1006.4,
+  "per_eval": {
+   "eval-0-verifiable-single-fact": {
+    "tokens": 202276,
+    "tools": 58,
+    "s": 561.3
+   },
+   "eval-1-comparison-with-method": {
+    "tokens": 249834,
+    "tools": 91,
+    "s": 1071.2
+   },
+   "eval-2-conflicting-official-sources": {
+    "tokens": 344410,
+    "tools": 113,
+    "s": 1595.0
+   },
+   "eval-3-unknowable-figure": {
+    "tokens": 217552,
+    "tools": 63,
+    "s": 798.2
+   }
+  }
+ },
+ "without_skill": {
+  "runs": 4,
+  "total_tokens": 572507,
+  "mean_tokens": 143127,
+  "total_tool_uses": 84,
+  "mean_tool_uses": 21,
+  "total_duration_s": 1154.6,
+  "mean_duration_s": 288.6,
+  "per_eval": {
+   "eval-0-verifiable-single-fact": {
+    "tokens": 125696,
+    "tools": 15,
+    "s": 155.4
+   },
+   "eval-1-comparison-with-method": {
+    "tokens": 145284,
+    "tools": 18,
+    "s": 230.9
+   },
+   "eval-2-conflicting-official-sources": {
+    "tokens": 172164,
+    "tools": 34,
+    "s": 597.3
+   },
+   "eval-3-unknowable-figure": {
+    "tokens": 129363,
+    "tools": 17,
+    "s": 171.0
+   }
+  }
+ },
+ "multiples": {
+  "tokens": 1.77,
+  "tool_uses": 3.87,
+  "duration": 3.49
+ }
+}

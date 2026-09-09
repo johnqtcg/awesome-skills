@@ -1,0 +1,101 @@
+{
+  "schema": "deep-research/ab-fixtures-v1",
+  "note": "Every answer key is hand-written from a primary source verified before this eval was designed, never derived from any run's output. Each item was chosen because a plausible wrong answer circulates widely, so a model answering from memory alone has a real chance of failing. Answer keys are deliberately mixed YES/NO: with an all-NO key set a model that always answers NO scores perfectly without researching anything, so the accuracy column would measure nothing.",
+  "fixtures": [
+    {
+      "id": "govulncheck-cvss",
+      "question": "Does the Go vulnerability scanner `govulncheck` output a CVSS score for each vulnerability it reports?",
+      "answer": "NO",
+      "ground_truth": "govulncheck reports OSV-format entries with a GO-YYYY-NNNN id, symbol-level reachability and an advisory link. It emits no CVSS score or vector in any output mode.",
+      "lore": "Most vulnerability scanners print CVSS severity, so a model answering from habit says YES.",
+      "primary_domains": [
+        "go.dev",
+        "pkg.go.dev"
+      ]
+    },
+    {
+      "id": "tsetenv-parallel",
+      "question": "On Go 1.24 or newer, is it allowed to call `t.Setenv` inside a test that also calls `t.Parallel`?",
+      "answer": "NO",
+      "ground_truth": "t.Setenv panics if the test or any of its subtests calls t.Parallel. This has held on every Go release; no version made the combination legal.",
+      "lore": "A widely repeated claim is that Go 1.24 made this safe.",
+      "primary_domains": [
+        "pkg.go.dev",
+        "go.dev"
+      ]
+    },
+    {
+      "id": "kafka-acks-default",
+      "question": "In Apache Kafka 3.x, is the default value of the Java producer's `acks` configuration `1`?",
+      "answer": "NO",
+      "ground_truth": "Kafka 3.0 flipped the Java producer defaults: enable.idempotence became true and acks became all. Before 3.0 the acks default was 1.",
+      "lore": "acks=1 was the default for many years and is still repeated in most tutorials.",
+      "primary_domains": [
+        "kafka.apache.org"
+      ]
+    },
+    {
+      "id": "node-timingsafeequal",
+      "question": "In Node.js, does `crypto.timingSafeEqual` return false when the two buffers have different lengths?",
+      "answer": "NO",
+      "ground_truth": "It throws when the byte lengths differ; it does not return false. Callers must compare lengths themselves before calling it.",
+      "lore": "A comparison function is assumed to return a boolean for any input.",
+      "primary_domains": [
+        "nodejs.org"
+      ]
+    },
+    {
+      "id": "go-xml-maxdepth",
+      "question": "Does Go's standard library `encoding/xml` package provide a setting to limit the maximum nesting depth of parsed XML?",
+      "answer": "NO",
+      "ground_truth": "encoding/xml exposes no depth limit of any kind. Its Decoder has no MaxDepth field or equivalent option.",
+      "lore": "Other languages' XML parsers expose depth limits, and XXE/billion-laughs advice implies one exists.",
+      "primary_domains": [
+        "pkg.go.dev",
+        "go.dev"
+      ]
+    },
+    {
+      "id": "playwright-topass",
+      "question": "Was Playwright's `expect(...).toPass()` assertion retry helper available in Playwright version 1.20?",
+      "answer": "NO",
+      "ground_truth": "toPass was introduced in Playwright 1.29, so it does not exist in 1.20.",
+      "lore": "The API feels old enough to predate 1.29, and version-introduced facts are commonly misremembered.",
+      "primary_domains": [
+        "playwright.dev"
+      ]
+    },
+    {
+      "id": "http-delete-200",
+      "question": "Under the HTTP specification, is it valid for a DELETE request to return status 200 with a response body?",
+      "answer": "YES",
+      "ground_truth": "RFC 9110 allows DELETE to return 200 with a representation of the status. 204 is common but not required.",
+      "lore": "Review lore insists DELETE must return 204 with no body.",
+      "primary_domains": [
+        "rfc-editor.org",
+        "httpwg.org",
+        "ietf.org"
+      ]
+    },
+    {
+      "id": "pg-cic-no-transaction",
+      "question": "In PostgreSQL, is it true that CREATE INDEX CONCURRENTLY cannot be executed inside an explicit transaction block?",
+      "answer": "YES",
+      "ground_truth": "CREATE INDEX CONCURRENTLY cannot run inside a transaction block; PostgreSQL documents this restriction explicitly.",
+      "lore": "Because most DDL in PostgreSQL is transactional, it is often assumed this one is too.",
+      "primary_domains": [
+        "postgresql.org"
+      ]
+    },
+    {
+      "id": "kafka-idempotence-default",
+      "question": "In Apache Kafka 3.x, is the Java producer's enable.idempotence configuration set to true by default?",
+      "answer": "YES",
+      "ground_truth": "Kafka 3.0 changed the Java producer default for enable.idempotence to true, alongside acks=all.",
+      "lore": "It was false by default before 3.0 and most older material still says so.",
+      "primary_domains": [
+        "kafka.apache.org"
+      ]
+    }
+  ]
+}

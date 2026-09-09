@@ -1,0 +1,9 @@
+Research complete — the official Apache Kafka KIP-679 wiki (apache.org, verified live) confirms the producer's default `enable.idempotence` was changed to `true` starting with the Kafka 3.0 release, corroborated by an independent practitioner source stating this applies to Kafka 3.0 and later (i.e., the whole 3.x line).
+
+In Apache Kafka 3.x, the Java producer's `enable.idempotence` configuration is `true` by default. This change was introduced by KIP-679 ("Producer will enable the strongest delivery guarantee by default"), which set the new default starting with the Kafka 3.0 release, and it has remained the default throughout the 3.x line.
+
+VERDICT: YES
+
+SOURCES:
+- https://cwiki.apache.org/confluence/display/KAFKA/KIP-679%3A+Producer+will+enable+the+strongest+delivery+guarantee+by+default ||| But after this KIP, we set the default enable.idempotence  to true, so we have to also set the default acks  config here to -1 for this change.
+- https://www.conduktor.io/kafka/idempotent-kafka-producer ||| Idempotent producers are enabled by default in Kafka 3.0 and later versions.

@@ -1,0 +1,6 @@
+This is confirmed and matches the actual Node.js docs wording. Node's `crypto.timingSafeEqual` requires both buffers to have the same byte length — if they don't, it throws a `RangeError` (`ERR_CRYPTO_TIMING_SAFE_EQUAL_LENGTH`) rather than returning `false`.
+
+VERDICT: NO
+
+SOURCES:
+- https://bun.com/reference/node/crypto/timingSafeEqual ||| An error is thrown if `a` and `b` have different byte lengths.

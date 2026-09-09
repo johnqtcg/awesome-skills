@@ -1,0 +1,8 @@
+This confirms the verdict clearly. RFC 9110 (HTTP Semantics), which supersedes RFC 7231, explicitly defines this behavior for the DELETE method in Section 9.3.5: a server may respond with 200 (OK) to a DELETE request when the deletion has been enacted **and** the response message includes a representation (body) describing the status of the action. This is distinct from 204 (No Content), which is used when no body is needed, and 202 (Accepted) for deferred/asynchronous deletions.
+
+So yes — under the HTTP specification, it is explicitly valid for a DELETE request to return 200 with a response body, provided that body describes the outcome/status of the deletion.
+
+VERDICT: YES
+
+SOURCES:
+- https://www.rfc-editor.org/rfc/rfc9110.txt ||| The origin server SHOULD send 202 (Accepted) if the action will likely succeed but has not yet been enacted, 204 (No Content) if the action has been enacted and no further information is to be supplied, or 200 (OK) if the action has been enacted and the response message includes a representation describing the status.

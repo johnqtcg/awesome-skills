@@ -3,7 +3,7 @@ name: deep-research
 description: |
   Perform auditable research with executable mode budgets, mandatory source-content verification, typed web and repository evidence, confidence assessment, honest degradation, and one fixed nine-section report.
   Use for web research, claim verification, technical comparisons, trend analysis, pure codebase research, and hybrid codebase-plus-web investigations that need traceable conclusions rather than search-result summaries.
-allowed-tools: Read, Write, Grep, Glob, WebSearch, WebFetch, Bash(*deep_research.py plan*), Bash(*deep_research.py reserve-budget*), Bash(*deep_research.py retrieve*), Bash(*deep_research.py fetch-content*), Bash(*deep_research.py search-codebase*), Bash(*deep_research.py snapshot-codebase*), Bash(*deep_research.py import-test-receipt*), Bash(*deep_research.py validate*), Bash(*deep_research.py report*), Bash(git log*), Bash(go test*), Bash(python3 -m unittest*), Bash(python3 -m pytest*)
+allowed-tools: Read, Write, Grep, Glob, WebSearch, WebFetch, Bash(*deep_research.py plan*), Bash(*deep_research.py reserve-budget*), Bash(*deep_research.py retrieve*), Bash(*deep_research.py fetch-content*), Bash(*deep_research.py quick-check*), Bash(*deep_research.py search-codebase*), Bash(*deep_research.py snapshot-codebase*), Bash(*deep_research.py import-test-receipt*), Bash(*deep_research.py validate*), Bash(*deep_research.py report*), Bash(git log*), Bash(go test*), Bash(python3 -m unittest*), Bash(python3 -m pytest*)
 ---
 
 # Deep Research
@@ -71,6 +71,23 @@ Define the evidence chain before retrieval.
 | Trend/adoption claim | 2 data sources from different periods | Medium |
 | Disputed or fast-moving topic | 4 sources across tiers + explicit conflict treatment | Tiered |
 
+Each finding must also carry a claim-support review. Excerpt containment
+proves the quotation is real; it does not prove the quotation supports the
+sentence built on it. These are two verdicts and the report prints both.
+
+```json
+"support_review": {
+  "stance": "supports",
+  "rationale": "why this excerpt entails this claim",
+  "reviewed_by": "author"
+}
+```
+
+`stance` is one of `supports | partial | context-only | contradicts`. A missing
+block is `unreviewed`, never an implicit pass, and caps the finding below High.
+A polarity or unquoted-number screen can only remove support, never grant it;
+a screened conflict without an attestation makes the finding unusable.
+
 Use typed evidence:
 
 - Web: `{"kind":"web","url":"...","excerpt":"exact text from content.json"}`
@@ -125,11 +142,10 @@ python3 scripts/deep_research.py retrieve \
   --output /tmp/results.json
 ```
 
-The parser also rejects more than 10, 25, or 50 queries in one Quick,
-Standard, or Deep invocation. The session ledger atomically enforces those
-same ceilings across repeated invocations, so two calls cannot each consume
-the full allowance. The hard ceiling is 50 retrieval calls per Deep session.
-One query consumes one retrieval call.
+The parser rejects more than 10, 25, or 50 queries in one Quick, Standard, or
+Deep invocation, and the ledger enforces the same ceilings across repeated
+invocations, so two calls cannot each consume the full allowance. The hard
+ceiling is 50 retrieval calls per Deep session; one query is one call.
 
 `fetch-content` defaults to the remaining session extraction allowance and
 rejects an explicitly larger per-invocation `--limit`.
@@ -145,6 +161,13 @@ python3 scripts/deep_research.py reserve-budget \
   --count 1 \
   --output /tmp/budget_reservation.json
 ```
+
+Final live re-verification has its own budget line, `live_verifications`
+(Quick 5 / Standard 10 / Deep 15), because it opens real sockets. `validate`
+and `report` therefore require `--session` whenever `--live-web` is passed.
+When cited pages outnumber the remaining allowance the command verifies as many
+as the ledger permits, marks budget exhaustion, and degrades to Partial rather
+than fetching past the ceiling.
 
 The ledger is an operational concurrency-safe constraint, not a tamper-proof
 audit log. It cannot account for tool calls that bypass both the bundled
@@ -169,21 +192,22 @@ Each web evidence object must identify an exact excerpt found in a successfully 
 
 Content extraction is mandatory for web and hybrid research.
 
-`fetch-content` accepts only public `http`/`https` targets. It rejects
-credentials, local/non-HTTP schemes, localhost, and every literal or
-DNS-resolved address that is not public unicast. The transport connects to an
-already validated IP while preserving hostname verification and repeats the
-same validation before every redirect hop. This closes local-file reads,
-metadata/private-network SSRF, mixed-DNS, and DNS-rebinding gaps.
+`fetch-content` accepts only public `http`/`https` targets, connects to an
+already validated IP while preserving hostname verification, and revalidates
+before every redirect hop. See `references/web-evidence-and-egress.md`.
 
-Treat a saved `content.json` as an untrusted authoring and audit artifact.
-Loading it always clears `live_verified`, even if the caller wrote that field.
-It may support a Medium finding after excerpt matching, but it cannot establish
-primary-source status or High confidence. For Web High, the final `validate`
-or `report` command must use `--live-web`; that command freshly retrieves each
-cited URL through the safe transport and derives source tier/type from the
-effective final URL. Caller-provided `source_tier`, `source_type`, domain, and
-classification-basis fields never grant authority.
+Live verification reads the whole page: it lifts both the authoring download cap
+(512 KB) and the extraction cap (15,000 characters), because a correct excerpt
+from the tail of a long reference page could otherwise never match. Excerpt
+matching also folds typographic variants — curly quotes, dashes, non-breaking
+spaces, backticks — so a page's rendering cannot reject a quote that is right.
+
+Treat a saved `content.json` as an untrusted authoring artifact. Loading it
+always clears `live_verified`, so it may support Medium after excerpt matching
+but never primary status or High. Web High requires `--live-web` on the final
+`validate` or `report`, which refetches each cited URL through the safe
+transport and derives tier/type from the effective final URL. Caller-provided
+authority fields never grant authority.
 
 For `codebase`, use `search-codebase`; content extraction is not required:
 
@@ -194,12 +218,10 @@ python3 scripts/deep_research.py search-codebase \
   --output /tmp/code_evidence.json
 ```
 
-`search-codebase` checks provenance per matched file. Clean tracked content is
-pinned to the real HEAD object ID. Modified, staged, or untracked content is
-emitted as `working-tree-unpinned` and cannot support a High direct-code
-finding. The validator independently checks that commits exist, reads
-`<commit>:<path>`, and compares the declared line and excerpt. It also verifies
-commit subjects against Git.
+`search-codebase` pins clean tracked content to the real HEAD object ID and
+emits modified, staged, or untracked content as `working-tree-unpinned`, which
+cannot support a High direct-code finding. The validator rereads
+`<commit>:<path>` and compares the declared line, excerpt, and commit subject.
 
 Execute a focused test once through the host's normal permission path. Then
 create a `deep-research/host-test-receipt-v2` receipt and import it:
@@ -222,25 +244,15 @@ python3 scripts/deep_research.py import-test-receipt \
 ```
 
 `snapshot-codebase` only reads repository root, HEAD, tree hash, and dirty
-state; it does not run tests or create execution proof. Write its output
-outside the repository. The host should compare before/after snapshots and
-copy the unchanged clean identity into the receipt. The helper never executes
-receipt argv. It checks the versioned schema, real commit/tree and tested
-paths, result metadata, and relevance decision.
+state; write its output outside the repository. The host compares before/after
+snapshots and copies the unchanged clean identity into the receipt. The helper
+never executes receipt argv.
 
-Runtime High treats the finding's complete code evidence set as atomic: every
-cited code item must be pinned, all must use one commit/tree, and one receipt
-must cover the finding plus every code ID and tested path. Multiple receipts
-cannot be combined to satisfy that coverage. Dirty, mismatched, unreviewed,
-uncovered, or failed receipts are retained for audit context but cannot
-support High.
-
-This skill directly pre-approves only Go, pytest, and unittest test commands.
-The receipt schema can describe Cargo, npm, Maven, Gradle, and .NET tests, but
-those commands require normal host authorization. `Write` permits authoring
-findings and receipt JSON; the host integration remains responsible for
-truthful timestamps, complete-output hashes, and execution metadata.
-Load `references/test-receipt-schema.md` for the full contract.
+Runtime High treats the finding's complete code evidence set as atomic: one
+receipt must cover the finding, every code ID, and every tested path on one
+clean commit/tree. This skill pre-approves only Go, pytest, and unittest
+commands. Load `references/test-receipt-schema.md` for the full contract,
+including receipt-coverage failure modes and other frameworks.
 
 ### 8) Execution Integrity Gate
 
@@ -256,7 +268,25 @@ Load `references/test-receipt-schema.md` for the full contract.
 
 ## Unified Workflow
 
-1. Run `plan`; record kind, mode, and budgets.
+For a Quick single-fact check, collapse the collection half into one command:
+
+```bash
+python3 scripts/deep_research.py quick-check \
+  --request "<narrow question>" \
+  --claim "<the claim to verify>" \
+  --workdir /tmp/qc
+```
+
+It plans, retrieves, extracts, and writes a findings skeleton with the
+candidate evidence already in place. Fill in each excerpt and `support_review`,
+save as `findings.json`, then run the single `report --live-web` it prints.
+Every gate still applies. For Standard and Deep work, use the numbered steps
+below.
+
+1. Run `plan`; record kind, mode, and budgets. When it reports a
+   classification confidence below `high`, confirm the routing or rerun with
+   `--research-kind` / `--mode`; a deterministic keyword rule always answers,
+   which is not the same as answering correctly.
 2. Split the question into 2–4 subtopics.
 3. Collect required artifacts:
    - `web`: `retrieve` → `fetch-content`
@@ -271,21 +301,10 @@ Load `references/test-receipt-schema.md` for the full contract.
    canonical contract.
 7. Deliver the report without renaming, splitting, or omitting top-level sections.
 
-Web validation:
-
-```bash
-python3 scripts/deep_research.py validate \
-  --research-kind web \
-  --results /tmp/results.json \
-  --content /tmp/content.json \
-  --findings /tmp/findings.json \
-  --live-web \
-  --output /tmp/validation.json
-```
-
-Use the command above when validation itself is the final deliverable. When a
-report is required, prefer a single `report --live-web` invocation so the same
-pages are not fetched twice.
+Run `validate` with the same evidence flags when validation itself is the
+deliverable; `--live-web` there also requires `--session`. When a report is
+required, prefer a single `report --live-web` so the same pages are not
+fetched twice.
 
 Final Web report:
 
@@ -319,6 +338,9 @@ python3 scripts/deep_research.py report \
 
 Use one rule everywhere:
 
+- Require an attested claim-support review (`stance: supports`, no screened
+  conflict, no unquoted number) for every `High`. Citation integrity and claim
+  support are separate gates and High needs both.
 - Allow `High` for a narrow single fact only when the current validator/report
   process freshly fetched the cited page, matched the excerpt, and re-derived
   T1 from the effective final URL.
@@ -369,8 +391,17 @@ Treat automated classification as conservative preclassification:
 - Emit T1–T5, classification basis, date or `unknown`, sponsorship, and methodology for each web source.
 - Ignore caller-provided authority labels during validation. Re-derive
   tier/type from the normalized URL and, for live evidence, the effective final
-  URL. The current executable automatic T1 rule is intentionally fail-closed
-  to recognized government namespaces.
+  URL.
+- Automatic T1 comes from two places only: recognized government namespaces,
+  and `references/source-authority-registry.json`, a curated list binding a
+  domain to a standards body, government or owning project with a stated basis
+  and check date. Registry classifications carry a `registry:` basis so a
+  checked ownership record is never confused with a URL-shape guess. An
+  unlisted host keeps its heuristic tier; absence is not evidence of
+  untrustworthiness.
+- A project's own documentation is T1 about that project's own behavior and is
+  simultaneously `vendor_self`. It cannot be the independent primary unit for a
+  comparison, benchmark or recommendation.
 - Surface unknown sponsorship/methodology rather than guessing.
 
 Use the default tiers in `references/hallucination-and-verification.md`.
@@ -391,17 +422,23 @@ Use the default tiers in `references/hallucination-and-verification.md`.
 
 1. **Synthesize from snippets** — extract the page and cite an exact supporting excerpt.
 2. **Attach a URL without support text** — a URL proves location, not claim support.
-3. **Call one generic source "official" because its host starts with docs** — record the classification basis.
-4. **Call every High finding a two-domain claim** — apply the narrow T1 single-fact exception.
-5. **Call every one-source claim High** — the exception requires T1 primary content and a narrow fact.
-6. **Force repository facts into fake web citations** — cite code, commit, and test evidence IDs.
-7. **Treat exit code 0 or partial receipt coverage as semantic proof** — require a focused selector and one receipt covering the finding plus the complete same-snapshot code set.
-8. **Generate a report without content for web research** — the parser must stop.
-9. **Split Consensus and Debate into top-level headings** — keep both under section 6.
-10. **Exceed a mode budget** — stop, mark budget exhaustion, and degrade honestly.
-11. **Trust caller-authored T1 or `live_verified` fields** — re-fetch in the
+3. **Quote page source instead of rendered text** — an excerpt copied from
+   markup (`tr><th>Default:</th><td>all</td></tr`) or assembled into a list you
+   wrote yourself is not a quotation and will not validate.
+4. **Treat a matched excerpt as a supported claim** — containment proves the
+   quote is real, not that it backs the sentence. Review the claim against the
+   excerpt and record the stance; a claim that inverts its own quote is unusable.
+5. **Call one generic source "official" because its host starts with docs** — the registry binds a domain to an owner; a URL shape does not.
+6. **Call every High finding a two-domain claim** — apply the narrow T1 single-fact exception.
+7. **Call every one-source claim High** — the exception requires T1 primary content and a narrow fact.
+8. **Force repository facts into fake web citations** — cite code, commit, and test evidence IDs.
+9. **Treat exit code 0 or partial receipt coverage as semantic proof** — require a focused selector and one receipt covering the finding plus the complete same-snapshot code set.
+10. **Generate a report without content for web research** — the parser must stop.
+11. **Split Consensus and Debate into top-level headings** — keep both under section 6.
+12. **Exceed a mode budget** — stop, mark budget exhaustion, and degrade honestly.
+13. **Trust caller-authored T1 or `live_verified` fields** — re-fetch in the
     validator and re-derive authority from the effective final URL.
-12. **Fetch `file:`, FTP, localhost, private, link-local, or metadata targets**
+14. **Fetch `file:`, FTP, localhost, private, link-local, or metadata targets**
     — reject before reserving budget or opening a connection, including after redirects.
 
 ```
@@ -411,17 +448,12 @@ GOOD: Finding (Medium): X was faster in this benchmark, with method limits. evid
 
 ## Load References Selectively
 
-For every report:
-→ Load `references/output-contract-template.md` for the one nine-section structure, findings schema, and evidence examples.
-
-For quantitative, high-stakes, disputed, sponsored, or model-generated claims:
-→ Load `references/hallucination-and-verification.md` for verification, confidence, T1–T5, sponsorship, methodology, and degradation rules.
-
-For debugging, APIs, code search, comparisons, benchmarks, standards, or security:
-→ Load `references/research-patterns.md` for topic-specific query and evidence patterns.
-
-For any runtime-behavior finding backed by a test:
-→ Load `references/test-receipt-schema.md`; execute through the host once, then import and statically validate the receipt.
+| When | → Load |
+|---|---|
+| Every report | `references/output-contract-template.md` — nine-section structure, findings schema, evidence and `support_review` examples |
+| Quantitative, high-stakes, disputed, sponsored, or model-generated claims | `references/hallucination-and-verification.md` — verification, confidence, claim support, T1–T5, degradation |
+| Debugging, APIs, code search, comparisons, benchmarks, standards, security | `references/research-patterns.md` — topic-specific query and evidence patterns |
+| Any runtime-behavior finding backed by a test | `references/test-receipt-schema.md` — execute through the host once, then import and statically validate |
 
 ## Subcommands Reference
 
@@ -431,20 +463,23 @@ For any runtime-behavior finding backed by a test:
 | `reserve-budget` | Reserve ledger usage before external host search/fetch | `--session`, `--budget`, `--count`, `--output` |
 | `retrieve` | Search DDG Lite under cumulative budget | `--query`, `--session`, `--limit-per-query`, `--output` |
 | `fetch-content` | Safely extract public HTTP(S) content under cumulative budget | `--results` or `--url`, `--session`, `--limit`, `--output` |
+| `quick-check` | One-shot Quick collection plus a findings skeleton | `--request`, `--claim`, `--url`, `--workdir` |
 | `search-codebase` | Produce per-file pinned or unpinned repository evidence | `--pattern`, `--root`, `--glob`, `--output` |
 | `snapshot-codebase` | Read repository root, HEAD, tree, and dirty state without executing tests | `--root`, `--output` |
 | `import-test-receipt` | Statically verify and append one host-created receipt | `--receipt`, `--code-evidence`, `--output` |
-| `validate` | Re-read typed evidence and optionally live-verify cited Web pages | `--research-kind`, `--results`, `--content`, `--code-evidence`, `--findings`, `--live-web`, `--timeout`, `--output` |
+| `validate` | Re-read typed evidence and optionally live-verify cited Web pages | `--research-kind`, `--results`, `--content`, `--code-evidence`, `--findings`, `--session`, `--live-web`, `--timeout`, `--output` |
 | `report` | Auto-validate, optionally live-verify Web evidence, enforce source ceiling, and render nine sections | `--question`, `--research-kind`, `--session`, evidence flags, `--live-web`, `--timeout`, `--validation-output`, `--output` |
 
 ## Search and Extraction Fallbacks
 
-If DDG Lite fails, use an available search tool with the same query plan and preserve its result metadata. If static extraction fails, use an available browser-capable fetcher, then save equivalent content records. Imported records remain untrusted serialized evidence and cannot produce Web High; the bundled validator must still perform its own safe live capture. Report the actual method used; do not rank tools or claim one is universally best.
+If DDG Lite fails, use an available search tool with the same query plan and preserve its result metadata. If static extraction fails, use a browser-capable fetcher and save equivalent content records. Imported records stay untrusted and cannot produce Web High; the bundled validator must still make its own safe live capture. Report the actual method used.
 
 ## Bundled Assets
 
 - `scripts/deep_research.py`: compatibility CLI plus shared Web validation/report engine
-- `scripts/deep_research_lib/planning.py`: multilingual classification and mode budgets
+- `scripts/deep_research_lib/planning.py`: multilingual classification, routing confidence, and mode budgets
+- `scripts/deep_research_lib/claim_support.py`: claim-support attestation plus polarity and numeric screens
+- `scripts/deep_research_lib/authority.py`: curated source-authority registry lookup
 - `scripts/deep_research_lib/session.py`: cross-process locked, cumulative session-budget ledger
 - `scripts/deep_research_lib/repository.py`: Git provenance, read-only snapshot metadata, and static host-receipt verification
 - `scripts/deep_research_lib/reporting.py`: cited-source selection and ceiling enforcement
@@ -455,7 +490,9 @@ If DDG Lite fails, use an available search tool with the same query plan and pre
 - `scripts/tests/test_golden_scenarios.py`: fixture request → executable decision tests
 - `scripts/tests/test_subcommand_smoke.py`: offline CLI end-to-end tests
 - `scripts/tests/test_web_security.py`: local-scheme, private-address, mixed-DNS, redirect, and DNS-pinning negative tests
+- `scripts/tests/test_claim_support.py` + `scripts/tests/claim_support_corpus.json`: adversarial claim-vs-excerpt corpus and screen mutation tests
 - `references/output-contract-template.md`: canonical schema and report template
+- `references/source-authority-registry.json`: curated domain-to-authority registry
 - `references/hallucination-and-verification.md`: verification/confidence/source-quality protocol
 - `references/web-evidence-and-egress.md`: Web provenance state machine and safe-egress contract
 - `references/research-patterns.md`: programmer-focused research patterns

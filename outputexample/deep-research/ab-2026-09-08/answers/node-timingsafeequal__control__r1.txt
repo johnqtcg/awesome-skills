@@ -1,0 +1,6 @@
+Node's `crypto.timingSafeEqual` does **not** return `false` for buffers of different lengths — it throws an error instead (to avoid leaking length information via timing).
+
+VERDICT: NO
+
+SOURCES:
+- https://bun.com/reference/node/crypto/timingSafeEqual ||| An error is thrown if `a` and `b` have different byte lengths.

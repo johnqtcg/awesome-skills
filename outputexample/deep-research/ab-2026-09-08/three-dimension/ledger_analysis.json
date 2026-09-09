@@ -1,0 +1,114 @@
+{
+  "finding": "Every observable with-skill run created a second session ledger. Two distinct causes: (a) the agent re-planned to a larger mode and, because `plan` refuses to overwrite an existing ledger, had to create a new file \u2014 the first ledger was never used; (b) eval-3 spent its quick ledger to exactly its 5/5 ceiling and then continued under a fresh ledger, which routes around the cumulative ceiling the ledger exists to enforce.",
+  "live_verifications_all_zero": "No ledger records a single live verification, so `validate --live-web` / `report --live-web` \u2014 the only path to Web High confidence \u2014 was never exercised in any run.",
+  "ledgers": [
+    {
+      "eval": "eval-1-comparison-with-method",
+      "ledger": "research_plan.json",
+      "mode": "standard",
+      "usage": {
+        "retrieval_calls": 0,
+        "content_extractions": 0,
+        "live_verifications": 0,
+        "report_sources": 0
+      },
+      "budget": {
+        "retrieval_min": 15,
+        "retrieval_max": 25,
+        "content_max": 10,
+        "live_verification_max": 10,
+        "report_sources_max": 20
+      }
+    },
+    {
+      "eval": "eval-1-comparison-with-method",
+      "ledger": "research_plan_v2.json",
+      "mode": "deep",
+      "usage": {
+        "retrieval_calls": 23,
+        "content_extractions": 13,
+        "live_verifications": 0,
+        "report_sources": 0
+      },
+      "budget": {
+        "retrieval_min": 30,
+        "retrieval_max": 50,
+        "content_max": 15,
+        "live_verification_max": 15,
+        "report_sources_max": 40
+      }
+    },
+    {
+      "eval": "eval-2-conflicting-official-sources",
+      "ledger": "research_plan.json",
+      "mode": "quick",
+      "usage": {
+        "retrieval_calls": 0,
+        "content_extractions": 0,
+        "live_verifications": 0,
+        "report_sources": 0
+      },
+      "budget": {
+        "retrieval_min": 5,
+        "retrieval_max": 10,
+        "content_max": 5,
+        "live_verification_max": 5,
+        "report_sources_max": 8
+      }
+    },
+    {
+      "eval": "eval-2-conflicting-official-sources",
+      "ledger": "research_plan_v2.json",
+      "mode": "deep",
+      "usage": {
+        "retrieval_calls": 5,
+        "content_extractions": 11,
+        "live_verifications": 0,
+        "report_sources": 0
+      },
+      "budget": {
+        "retrieval_min": 30,
+        "retrieval_max": 50,
+        "content_max": 15,
+        "live_verification_max": 15,
+        "report_sources_max": 40
+      }
+    },
+    {
+      "eval": "eval-3-unknowable-figure",
+      "ledger": "research_plan.json",
+      "mode": "quick",
+      "usage": {
+        "retrieval_calls": 5,
+        "content_extractions": 5,
+        "live_verifications": 0,
+        "report_sources": 0
+      },
+      "budget": {
+        "retrieval_min": 5,
+        "retrieval_max": 10,
+        "content_max": 5,
+        "live_verification_max": 5,
+        "report_sources_max": 8
+      }
+    },
+    {
+      "eval": "eval-3-unknowable-figure",
+      "ledger": "research_plan_v2.json",
+      "mode": "standard",
+      "usage": {
+        "retrieval_calls": 5,
+        "content_extractions": 5,
+        "live_verifications": 0,
+        "report_sources": 0
+      },
+      "budget": {
+        "retrieval_min": 15,
+        "retrieval_max": 25,
+        "content_max": 10,
+        "live_verification_max": 10,
+        "report_sources_max": 20
+      }
+    }
+  ]
+}

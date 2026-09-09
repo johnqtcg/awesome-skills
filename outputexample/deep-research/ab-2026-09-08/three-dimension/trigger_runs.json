@@ -1,0 +1,876 @@
+[
+ {
+  "index": 0,
+  "rep": 2,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 70.0,
+  "error": ""
+ },
+ {
+  "index": 0,
+  "rep": 1,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 77.0,
+  "error": ""
+ },
+ {
+  "index": 0,
+  "rep": 0,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 84.1,
+  "error": ""
+ },
+ {
+  "index": 1,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "mcp__plugin_claude-mem_mcp-search__get_observations",
+   "WebSearch",
+   "WebSearch",
+   "WebSearch"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 85.3,
+  "error": ""
+ },
+ {
+  "index": 1,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "WebSearch",
+   "WebSearch",
+   "WebSearch",
+   "WebSearch",
+   "WebSearch"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 70.7,
+  "error": ""
+ },
+ {
+  "index": 2,
+  "rep": 1,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 92.2,
+  "error": ""
+ },
+ {
+  "index": 3,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 46.0,
+  "error": ""
+ },
+ {
+  "index": 1,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "mcp__plugin_claude-mem_mcp-search__get_observations",
+   "WebSearch",
+   "WebSearch",
+   "ToolSearch",
+   "WebSearch",
+   "WebSearch"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 187.7,
+  "error": ""
+ },
+ {
+  "index": 2,
+  "rep": 0,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 113.2,
+  "error": ""
+ },
+ {
+  "index": 3,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 32.5,
+  "error": ""
+ },
+ {
+  "index": 3,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 45.6,
+  "error": ""
+ },
+ {
+  "index": 4,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Read",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 41.4,
+  "error": ""
+ },
+ {
+  "index": 4,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Read",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 39.8,
+  "error": ""
+ },
+ {
+  "index": 5,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [],
+  "skills_advertised": 88,
+  "duration_s": 19.6,
+  "error": ""
+ },
+ {
+  "index": 5,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [],
+  "skills_advertised": 88,
+  "duration_s": 19.1,
+  "error": ""
+ },
+ {
+  "index": 5,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [],
+  "skills_advertised": 88,
+  "duration_s": 26.1,
+  "error": ""
+ },
+ {
+  "index": 4,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Read",
+   "Bash",
+   "Read"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 39.7,
+  "error": ""
+ },
+ {
+  "index": 6,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "ToolSearch",
+   "Read",
+   "WebSearch"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 55.0,
+  "error": ""
+ },
+ {
+  "index": 2,
+  "rep": 2,
+  "triggered": false,
+  "error": "timeout",
+  "tools": [],
+  "skills_advertised": null,
+  "duration_s": 240.0
+ },
+ {
+  "index": 6,
+  "rep": 2,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Bash",
+   "Read",
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 69.7,
+  "error": ""
+ },
+ {
+  "index": 6,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "ToolSearch",
+   "Read",
+   "WebSearch",
+   "WebSearch",
+   "WebSearch",
+   "ToolSearch"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 100.1,
+  "error": ""
+ },
+ {
+  "index": 7,
+  "rep": 0,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Bash",
+   "Read",
+   "Bash",
+   "Skill",
+   "Bash",
+   "Bash",
+   "Read",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 98.0,
+  "error": ""
+ },
+ {
+  "index": 7,
+  "rep": 2,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Bash",
+   "Read",
+   "Bash",
+   "ToolSearch",
+   "Skill",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 76.5,
+  "error": ""
+ },
+ {
+  "index": 8,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "WebSearch",
+   "WebSearch",
+   "ToolSearch",
+   "Skill",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 86.2,
+  "error": ""
+ },
+ {
+  "index": 7,
+  "rep": 1,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 109.6,
+  "error": ""
+ },
+ {
+  "index": 8,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "WebSearch",
+   "WebSearch",
+   "Skill",
+   "Skill",
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Read",
+   "Read",
+   "Read",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 106.7,
+  "error": ""
+ },
+ {
+  "index": 8,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "WebSearch",
+   "WebSearch",
+   "Skill",
+   "Skill",
+   "Skill",
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 100.4,
+  "error": ""
+ },
+ {
+  "index": 9,
+  "rep": 1,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 91.0,
+  "error": ""
+ },
+ {
+  "index": 9,
+  "rep": 2,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 109.1,
+  "error": ""
+ },
+ {
+  "index": 9,
+  "rep": 0,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 163.6,
+  "error": ""
+ },
+ {
+  "index": 10,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "WebSearch"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 53.9,
+  "error": ""
+ },
+ {
+  "index": 11,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Read"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 104.6,
+  "error": ""
+ },
+ {
+  "index": 11,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Read",
+   "Bash",
+   "Read",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 50.9,
+  "error": ""
+ },
+ {
+  "index": 11,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Read"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 108.3,
+  "error": ""
+ },
+ {
+  "index": 10,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "WebSearch"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 110.1,
+  "error": ""
+ },
+ {
+  "index": 10,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "WebSearch"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 114.2,
+  "error": ""
+ },
+ {
+  "index": 12,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 23.5,
+  "error": ""
+ },
+ {
+  "index": 12,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 30.7,
+  "error": ""
+ },
+ {
+  "index": 12,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 30.3,
+  "error": ""
+ },
+ {
+  "index": 13,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [],
+  "skills_advertised": 88,
+  "duration_s": 28.2,
+  "error": ""
+ },
+ {
+  "index": 13,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [],
+  "skills_advertised": 88,
+  "duration_s": 18.7,
+  "error": ""
+ },
+ {
+  "index": 14,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Read",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 24.7,
+  "error": ""
+ },
+ {
+  "index": 14,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 29.9,
+  "error": ""
+ },
+ {
+  "index": 14,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Read",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 37.0,
+  "error": ""
+ },
+ {
+  "index": 15,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 34.8,
+  "error": ""
+ },
+ {
+  "index": 15,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 23.8,
+  "error": ""
+ },
+ {
+  "index": 15,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 29.9,
+  "error": ""
+ },
+ {
+  "index": 16,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Read",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 34.5,
+  "error": ""
+ },
+ {
+  "index": 16,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 28.9,
+  "error": ""
+ },
+ {
+  "index": 16,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 32.9,
+  "error": ""
+ },
+ {
+  "index": 17,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [],
+  "skills_advertised": 88,
+  "duration_s": 18.8,
+  "error": ""
+ },
+ {
+  "index": 17,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [],
+  "skills_advertised": 88,
+  "duration_s": 15.5,
+  "error": ""
+ },
+ {
+  "index": 13,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [],
+  "skills_advertised": 88,
+  "duration_s": 118.2,
+  "error": ""
+ },
+ {
+  "index": 19,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 50.1,
+  "error": ""
+ },
+ {
+  "index": 18,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Read",
+   "Bash",
+   "Write",
+   "Write",
+   "Write",
+   "Write"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 62.2,
+  "error": ""
+ },
+ {
+  "index": 18,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Read",
+   "Bash",
+   "Write"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 76.8,
+  "error": ""
+ },
+ {
+  "index": 18,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Write",
+   "Write",
+   "Write",
+   "Write",
+   "Write"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 85.1,
+  "error": ""
+ },
+ {
+  "index": 19,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 34.2,
+  "error": ""
+ },
+ {
+  "index": 17,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [],
+  "skills_advertised": 88,
+  "duration_s": 103.6,
+  "error": ""
+ },
+ {
+  "index": 19,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash"
+  ],
+  "skills_advertised": 88,
+  "duration_s": 41.1,
+  "error": ""
+ }
+]

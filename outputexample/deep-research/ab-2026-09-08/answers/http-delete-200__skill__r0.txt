@@ -1,0 +1,11 @@
+## Answer
+
+Yes. Under RFC 9110 (the current IETF HTTP Semantics standard, which obsoletes RFC 7231), a `DELETE` request may validly receive a `200 (OK)` response that includes a body. Section 9.3.5 explicitly lists this as one of three acceptable success responses to `DELETE`: a `202 Accepted` (action not yet enacted), a `204 No Content` (enacted, no body), or a `200 OK` "if the action has been enacted and the response message includes a representation describing the status." MDN's HTTP reference for the `DELETE` method corroborates this, stating that a successful response "may" have a body and giving a `200 OK` example whose body describes the deletion outcome.
+
+So a `DELETE` returning `200` with a JSON/HTML body describing the result of the deletion is fully spec-compliant — it's an alternative to the more common `204 No Content`, used when the server wants to return information about the outcome.
+
+VERDICT: YES
+
+SOURCES:
+- https://www.rfc-editor.org/rfc/rfc9110.txt ||| a 200 (OK) status code if the action has been enacted and the response message includes a representation describing the status.
+- https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Methods/DELETE ||| A 200 OK response means the request was successful and the response body includes a representation describing the outcome:

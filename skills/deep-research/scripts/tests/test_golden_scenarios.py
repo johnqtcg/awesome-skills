@@ -265,6 +265,10 @@ class TestBehavioralScenarios(unittest.TestCase):
             "claim_type": "single_fact",
             "confidence": "high",
             "analysis": "It returns a derived context.",
+            "support_review": {
+                "stance": "supports",
+                "rationale": "the excerpt states the return value the claim asserts",
+            },
             "evidence": [{
                 "kind": "web",
                 "url": source.url,

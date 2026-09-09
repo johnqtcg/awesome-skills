@@ -1,0 +1,109 @@
+[
+  {
+    "eval": "eval-0-verifiable-single-fact",
+    "arm": "with_skill",
+    "chars": 10330,
+    "urls": 4,
+    "urls_fetchable": 4,
+    "quotes": 1,
+    "quotes_verified": 1,
+    "verified_rate": 1.0,
+    "unverified_examples": []
+  },
+  {
+    "eval": "eval-0-verifiable-single-fact",
+    "arm": "without_skill",
+    "chars": 4913,
+    "urls": 4,
+    "urls_fetchable": 4,
+    "quotes": 6,
+    "quotes_verified": 1,
+    "verified_rate": 0.167,
+    "unverified_examples": [
+      "does not emit a CVSS score (or any other severity label \u2014 LOW/MEDIUM/HIGH/CRITICAL) for th",
+      "output of govulncheck is defined by the",
+      ", or similar field anywhere in this package's exported types ("
+    ]
+  },
+  {
+    "eval": "eval-1-comparison-with-method",
+    "arm": "with_skill",
+    "chars": 23387,
+    "urls": 12,
+    "urls_fetchable": 12,
+    "quotes": 0,
+    "quotes_verified": 0,
+    "verified_rate": null,
+    "unverified_examples": []
+  },
+  {
+    "eval": "eval-1-comparison-with-method",
+    "arm": "without_skill",
+    "chars": 19065,
+    "urls": 21,
+    "urls_fetchable": 21,
+    "quotes": 12,
+    "quotes_verified": 0,
+    "verified_rate": 0.0,
+    "unverified_examples": [
+      "is almost always: **adopt Debezium's packaged connector, or roll a thinner custom consumer",
+      "Debezium vs. a managed CDC SaaS (Fivetran/Airbyte/Estuary/Streamkap)",
+      "the database schema and DDL commands are not replicated ... subsequent schema changes woul"
+    ]
+  },
+  {
+    "eval": "eval-2-conflicting-official-sources",
+    "arm": "with_skill",
+    "chars": 13586,
+    "urls": 6,
+    "urls_fetchable": 5,
+    "quotes": 6,
+    "quotes_verified": 4,
+    "verified_rate": 0.667,
+    "unverified_examples": [
+      "ALGORITHM=INSTANT takes exclusive metadata lock on table",
+      "The referenced documentation has been revised. The changes should appear online soon."
+    ]
+  },
+  {
+    "eval": "eval-2-conflicting-official-sources",
+    "arm": "without_skill",
+    "chars": 14856,
+    "urls": 7,
+    "urls_fetchable": 1,
+    "quotes": 26,
+    "quotes_verified": 4,
+    "verified_rate": 0.154,
+    "unverified_examples": [
+      "takes a metadata lock for the whole operation",
+      "Instant operations only modify metadata in the data dictionary. **An exclusive metadata lo",
+      "`INSTANT`: Operations only modify metadata in the data dictionary. **An exclusive metadata"
+    ]
+  },
+  {
+    "eval": "eval-3-unknowable-figure",
+    "arm": "with_skill",
+    "chars": 8910,
+    "urls": 3,
+    "urls_fetchable": 3,
+    "quotes": 0,
+    "quotes_verified": 0,
+    "verified_rate": null,
+    "unverified_examples": []
+  },
+  {
+    "eval": "eval-3-unknowable-figure",
+    "arm": "without_skill",
+    "chars": 5714,
+    "urls": 4,
+    "urls_fetchable": 3,
+    "quotes": 11,
+    "quotes_verified": 4,
+    "verified_rate": 0.364,
+    "unverified_examples": [
+      "the percentage of Fortune 500 companies running Apache Kafka in production as of 2026.",
+      "rather than an external fact. Do not present a specific number (e.g.,",
+      "[Kafka is] one of the most successful open source projects... estimated to have been used "
+    ]
+  }
+]

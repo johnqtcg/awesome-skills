@@ -1,0 +1,12 @@
+## Answer
+
+Yes. Starting with Apache Kafka 3.0 (and continuing throughout the 3.x line), the Java producer's `enable.idempotence` configuration defaults to `true`. This was a deliberate change introduced by KIP-679 ("Producer will enable the strongest delivery guarantee by default"), which flipped the default from `false` to `true` (and `acks` from `1` to `all`) as of the 3.0.0 release. The current official Kafka producer configuration reference confirms `enable.idempotence` still has `Default: true` (with the caveat that a conflicting explicit setting, e.g. `acks=1` or `retries=0`, will silently disable idempotence unless it was explicitly turned on).
+
+Note: Kafka 3.0.0 itself shipped with a bug (KAFKA-13598) where the default wasn't correctly applied in all cases; this was fixed in 3.0.1, 3.1.1, and 3.2.0, so for the current 3.x releases the `true` default holds as intended.
+
+VERDICT: YES
+
+SOURCES:
+- https://kafka.apache.org/39/configuration/producer-configs/ ||| Idempotence is enabled by default if no conflicting configurations are set.
+- https://kafka.apache.org/39/getting-started/upgrade/ ||| The producer has stronger delivery guarantees by default: idempotence is enabled and acks is set to all instead of 1.
+- https://cwiki.apache.org/confluence/spaces/KAFKA/pages/165221843/KIP-679+Producer+will+enable+the+strongest+delivery+guarantee+by+default ||| But after this KIP, we set the default enable.idempotence to true, so we have to also set the default acks config here to -1 for this change.

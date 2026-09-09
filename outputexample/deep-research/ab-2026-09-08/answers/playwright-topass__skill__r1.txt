@@ -1,0 +1,16 @@
+## Answer
+
+No — `expect(...).toPass()` was **not** available in Playwright 1.20.
+
+Evidence trail:
+- Playwright 1.20.0 was released on GitHub on **March 14, 2022**. Its full release notes (fetched directly from the GitHub release page) list highlights like `animations`/`mask` screenshot options, anonymous snapshot names, `maxDiffPixels`/`maxDiffPixelRatio`, `fullyParallel` mode, per-project `grep`, and `locator.highlight()` — with no mention of `toPass` anywhere in the notes.
+- The feature was actually introduced by GitHub pull request **#19463**, titled *"feat(api): introduce expect().toPass"*, authored by Playwright maintainer Pavel Feldman and **merged into `main` on December 15, 2022** — roughly nine months after 1.20 shipped. That timing places `toPass()`'s introduction around the Playwright 1.29 release line, not 1.20.
+- I also checked the GitHub release notes for 1.21, 1.22, 1.23, and 1.24 directly; none of them mention `toPass` either, consistent with it not existing until the December 2022 PR.
+
+So at the time of Playwright 1.20, retries for arbitrary assertion blocks via `toPass()` did not yet exist.
+
+VERDICT: NO
+
+SOURCES:
+- https://github.com/microsoft/playwright/pull/19463 ||| feat(api): introduce expect().toPass
+- https://github.com/microsoft/playwright/releases/tag/v1.20.0 ||| aslushnikov released this 14 Mar 22:58

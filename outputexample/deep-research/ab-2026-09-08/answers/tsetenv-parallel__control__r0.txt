@@ -1,0 +1,7 @@
+No — this restriction is unchanged in Go 1.24. `t.Setenv` still panics if the test itself or any parent/ancestor test has called `t.Parallel()`, because environment variables are process-wide and mutating them concurrently would be a data race. Nothing in the Go 1.24 release changed this behavior.
+
+VERDICT: NO
+
+SOURCES:
+- https://pkg.go.dev/testing#T.Setenv ||| Because Setenv affects the whole process, it cannot be used in parallel tests or tests with parallel ancestors.
+- https://github.com/golang/go/issues/55128 ||| testing: T.Setenv can be called after T.Parallel

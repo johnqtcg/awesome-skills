@@ -132,12 +132,37 @@ the parser so documented flags cannot drift from accepted flags.
 
 | Metric | Count |
 |---|---:|
-| Total tests | 301 |
+| Total tests | 363 |
 | Golden fixtures | 16 |
+| Claim-support corpus cases | 30 |
 | Behavioral fixtures executed through code | 8 |
 | Keyword fixtures | 8 |
 | Canonical top-level report sections | 9 |
 | Evidence kinds | 4 (`web`, `code`, `commit`, `test`) |
+
+These counts are not prose. `test_skill_contract.py` reads this table and
+compares each number with what discovery actually finds, so a stale figure
+fails the regression instead of quietly misreporting coverage.
+
+## Claim Support
+
+`test_claim_support.py` answers a question the rest of the suite does not: it
+checks whether a claim is supported by the excerpt it cites, not merely whether
+the excerpt exists on the page.
+
+| Behavior | Verification |
+|---|---|
+| A claim that inverts its own excerpt cannot ship | Run the real bundle validator and assert not-Full, not-usable, and the typed issue |
+| A faithful but unreviewed claim is capped below High | Same validator, assert Medium and `partially-reviewed` |
+| A faithful, attested claim reaches High | Same validator, assert Full and High |
+| Correct findings are not flagged | Screen every `supported` corpus case; the allowed false-conflict count is 0 |
+| Real contradictions are flagged | Screen every `conflict` corpus case against a recall floor stored in the corpus |
+| The method's boundary stays visible | `lexically-opposed` cases must keep tripping the screen; if one stops, reclassify it deliberately |
+| Each screen mechanism is load-bearing | Remove negators, clause scoping, hyphen joining, and multi-length anchor search in turn and assert each removal regresses |
+| The report never lets one verdict imply the other | Assert the rendered report names citation integrity and claim support separately |
+| A malformed or bare attestation cannot approve | Feed non-dict, unknown-stance, and too-short-rationale blocks |
+| The authority registry fails closed | Point the loader at a missing file and assert no entries |
+| Vendor-self docs are not an independent primary | Assert a two-unit vendor-only High request downgrades |
 
 ## Adding Coverage
 

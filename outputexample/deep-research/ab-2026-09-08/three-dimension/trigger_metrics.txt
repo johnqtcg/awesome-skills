@@ -1,0 +1,24 @@
+runs: 60  (20 queries x 3 reps)
+
+POSITIVES (should trigger)
+  q00 3/3 PASS  technical comparison for a decision that will be challenged; needs traceable sources
+  q01 0/3 FAIL  claim verification where the author will be contradicted; needs a citable primary source
+  q02 2/3 PASS  Chinese trend-analysis request with an explicit traceability requirement
+  q03 0/3 FAIL  pure codebase research needing file/line-level evidence
+  q04 0/3 FAIL  hybrid codebase-plus-web investigation for an audit; the strongest case for auditable output
+  q05 0/3 FAIL  verification of a sponsored claim; source-quality assessment is the core need
+  q06 1/3 FAIL  security-sensitive fact-finding that explicitly rejects secondhand sources
+  q07 3/3 PASS  comparison where 'what I could not establish' matters; honest degradation is the differentiator
+  q08 0/3 FAIL  conflicting-sources case; needs explicit conflict treatment rather than picking one
+  q09 3/3 PASS  does not use the word research; the need for verifiable conclusions is implicit but strong
+
+NEGATIVES (should not trigger)
+  false triggers: 0/10 queries (none)
+
+Recall    (query-level, >=50% of reps): 4/10 = 40%   [bar: >=90%]
+Recall    (run-level):                  12/30 = 40%
+Precision (query-level):                10/10 = 100%   [bar: >=90%]
+Precision (run-level):                  30/30 = 100%
+Overall accuracy (query-level):         14/20 = 70%
+
+competing skills advertised per run: [(88, 59)]

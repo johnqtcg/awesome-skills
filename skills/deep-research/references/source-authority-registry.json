@@ -1,0 +1,244 @@
+{
+  "schema": "deep-research/source-authority-v1",
+  "updated_at": "2026-09-08",
+  "policy": {
+    "why": "Automatic T1 used to be limited to government suffixes, so go.dev, kubernetes.io and rfc-editor.org all derived as T4 and no High-confidence single fact about Go, Kubernetes or an RFC was reachable. Shape-based rules cannot fix that without reopening the self-declared-official hole: any host can be named docs.something. This registry is the middle path — a small, curated, versioned list where each entry records who owns the domain and when that was checked.",
+    "authority_levels": {
+      "standards-body": "Publishes the normative text of a standard. T1 for any claim about that standard.",
+      "government": "Government or intergovernmental publisher. T1.",
+      "project-owned": "The domain is operated by the project that produces the software. T1 for a narrow factual claim about that project's own behavior, API or configuration. NOT an independent source: for comparisons, benchmarks and recommendations it is vendor-self evidence and cannot serve as the primary leg of a two-independent-source High."
+    },
+    "limits": [
+      "Registry membership proves domain ownership, never correctness. A project's own documentation can be stale or wrong.",
+      "Subject fields document why the entry exists and are surfaced in the classification basis. The executable rule binds authority to the domain, not to a per-finding subject declaration.",
+      "An unlisted domain keeps its heuristic classification. Absence from this file is never evidence that a source is untrustworthy.",
+      "Entries must be re-checked when verified_on is older than a year."
+    ]
+  },
+  "entries": [
+    {
+      "subjects": ["ietf", "rfc", "internet-draft", "http", "tls", "tcp", "uri"],
+      "domains": ["rfc-editor.org", "ietf.org", "datatracker.ietf.org"],
+      "authority": "standards-body",
+      "basis": "IETF and the RFC Editor publish the normative RFC series",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["ip", "dns", "port-numbers", "media-types"],
+      "domains": ["iana.org"],
+      "authority": "standards-body",
+      "basis": "IANA operates the protocol parameter registries",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["html", "css", "dom", "webauthn", "web-platform"],
+      "domains": ["w3.org", "whatwg.org"],
+      "authority": "standards-body",
+      "basis": "W3C and WHATWG publish the normative web platform specifications",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["ecmascript", "javascript", "json"],
+      "domains": ["ecma-international.org"],
+      "authority": "standards-body",
+      "basis": "Ecma International publishes ECMA-262 and ECMA-404",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["iso-standards", "sql-standard", "iso-8601"],
+      "domains": ["iso.org"],
+      "authority": "standards-body",
+      "basis": "ISO publishes the normative ISO standard texts",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["unicode", "utf-8", "collation"],
+      "domains": ["unicode.org"],
+      "authority": "standards-body",
+      "basis": "The Unicode Consortium publishes the Unicode Standard and UTS reports",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["posix", "single-unix-specification"],
+      "domains": ["opengroup.org"],
+      "authority": "standards-body",
+      "basis": "The Open Group publishes POSIX and the Single UNIX Specification",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["owasp", "application-security"],
+      "domains": ["owasp.org"],
+      "authority": "standards-body",
+      "basis": "OWASP publishes the Top 10 and ASVS reference documents",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["cve", "cwe", "vulnerability-identifier"],
+      "domains": ["cve.org", "mitre.org", "first.org"],
+      "authority": "standards-body",
+      "basis": "MITRE operates the CVE and CWE programs; FIRST publishes the CVSS specification",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["go", "golang"],
+      "domains": ["go.dev", "golang.org", "pkg.go.dev"],
+      "authority": "project-owned",
+      "basis": "Official domains of the Go project, maintained by the Go team",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["python", "cpython", "pep"],
+      "domains": ["python.org", "peps.python.org"],
+      "authority": "project-owned",
+      "basis": "Official domains of the Python Software Foundation and the PEP series",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["rust", "cargo"],
+      "domains": ["rust-lang.org", "doc.rust-lang.org"],
+      "authority": "project-owned",
+      "basis": "Official domains of the Rust project",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["node", "nodejs"],
+      "domains": ["nodejs.org"],
+      "authority": "project-owned",
+      "basis": "Official domain of the Node.js project",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["java", "openjdk", "jdk"],
+      "domains": ["openjdk.org"],
+      "authority": "project-owned",
+      "basis": "Official domain of the OpenJDK project",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["kubernetes", "k8s"],
+      "domains": ["kubernetes.io", "k8s.io"],
+      "authority": "project-owned",
+      "basis": "Official domains of the Kubernetes project under the CNCF",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["docker", "oci-image", "containerd"],
+      "domains": ["docs.docker.com", "opencontainers.org", "containerd.io"],
+      "authority": "project-owned",
+      "basis": "Official documentation domains for Docker, the OCI specifications and containerd",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["postgresql", "postgres"],
+      "domains": ["postgresql.org"],
+      "authority": "project-owned",
+      "basis": "Official domain of the PostgreSQL Global Development Group",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["mysql", "innodb"],
+      "domains": ["dev.mysql.com"],
+      "authority": "project-owned",
+      "basis": "Official MySQL reference manual domain",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["sqlite"],
+      "domains": ["sqlite.org"],
+      "authority": "project-owned",
+      "basis": "Official domain of the SQLite project",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["mongodb"],
+      "domains": ["mongodb.com"],
+      "authority": "project-owned",
+      "basis": "Official documentation domain of MongoDB Inc.",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["redis"],
+      "domains": ["redis.io"],
+      "authority": "project-owned",
+      "basis": "Official domain of the Redis project",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["kafka", "zookeeper", "spark", "httpd"],
+      "domains": ["apache.org"],
+      "authority": "project-owned",
+      "basis": "Apache Software Foundation project documentation",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["nginx"],
+      "domains": ["nginx.org"],
+      "authority": "project-owned",
+      "basis": "Official domain of the nginx project",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["linux-kernel"],
+      "domains": ["kernel.org"],
+      "authority": "project-owned",
+      "basis": "Official kernel source and documentation domain",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["git"],
+      "domains": ["git-scm.com"],
+      "authority": "project-owned",
+      "basis": "Official Git documentation domain",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["prometheus", "opentelemetry", "grafana"],
+      "domains": ["prometheus.io", "opentelemetry.io", "grafana.com"],
+      "authority": "project-owned",
+      "basis": "Official project documentation domains",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["terraform", "vault", "consul"],
+      "domains": ["developer.hashicorp.com"],
+      "authority": "project-owned",
+      "basis": "Official HashiCorp product documentation domain",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["aws"],
+      "domains": ["docs.aws.amazon.com"],
+      "authority": "project-owned",
+      "basis": "Official AWS product documentation domain",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["azure", "dotnet", "typescript"],
+      "domains": ["learn.microsoft.com", "typescriptlang.org"],
+      "authority": "project-owned",
+      "basis": "Official Microsoft product documentation and the TypeScript project domain",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["gcp", "google-cloud"],
+      "domains": ["cloud.google.com"],
+      "authority": "project-owned",
+      "basis": "Official Google Cloud product documentation domain",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["react", "nextjs", "vue", "angular"],
+      "domains": ["react.dev", "nextjs.org", "vuejs.org", "angular.dev"],
+      "authority": "project-owned",
+      "basis": "Official framework documentation domains",
+      "verified_on": "2026-09-08"
+    },
+    {
+      "subjects": ["mdn", "web-api-reference"],
+      "domains": ["developer.mozilla.org"],
+      "authority": "project-owned",
+      "basis": "Mozilla-operated web platform reference; normative text remains W3C/WHATWG",
+      "verified_on": "2026-09-08"
+    }
+  ]
+}

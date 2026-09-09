@@ -1,6 +1,6 @@
 # Deep Research Output Contract
 
-Use this exact nine-section structure for Quick, Standard, and Deep reports. Quick may be concise; it may not omit or rename a section.
+Use this exact nine-section structure for Quick, Standard, and Deep reports. Quick may be concise; it may not omit or rename a section. In Quick mode the report generator fills sections 5 and 6 with a one-line statement when no analysis or competing source was authored, so a single-fact check does not have to invent prose to satisfy the contract.
 
 ## Input Contract
 
@@ -12,6 +12,11 @@ Use this exact nine-section structure for Quick, Standard, and Deep reports. Qui
   "claim_type": "single_fact",
   "confidence": "high",
   "analysis": "The supported conclusion.",
+  "support_review": {
+    "stance": "supports",
+    "rationale": "why this excerpt entails this claim",
+    "reviewed_by": "author"
+  },
   "evidence": [
     {
       "kind": "web",
@@ -38,12 +43,23 @@ capture in the current process.
   "claim_type": "runtime_behavior",
   "confidence": "high",
   "analysis": "The behavior supported by code and execution.",
+  "support_review": {
+    "stance": "supports",
+    "rationale": "the receipt covers this finding and every cited code id",
+    "reviewed_by": "author"
+  },
   "evidence": [
     {"kind": "code", "id": "code-1"},
     {"kind": "test", "id": "test-1"}
   ]
 }
 ```
+
+`support_review` applies to findings, analysis sections, consensus rows and
+debate rows alike. `stance` is one of `supports | partial | context-only |
+contradicts`; an absent or malformed block is `unreviewed`, never an implicit
+pass, and caps the row below High. See the Claim Support section of
+`hallucination-and-verification.md` for the full verdict table.
 
 Repository evidence records use these required fields:
 
@@ -193,6 +209,9 @@ identity and eligibility but never executes recorded argv. See
 
 ## Confidence Contract
 
+- Every claim type additionally requires an `attested` claim-support review.
+  Citation integrity (the excerpt was really read) and claim support (the
+  excerpt backs the sentence) are separate gates; High needs both.
 - `single_fact`: allow High only with one T1 primary Web source freshly
   captured by the current validator/report process. The exact excerpt must
   match that capture, and T1 must be re-derived from its effective final URL.
@@ -201,7 +220,7 @@ identity and eligibility but never executes recorded argv. See
   pinned to one commit/tree and one passed, reviewed host receipt covers the
   stable finding plus every code ID, names every tested path, and matches that
   same clean snapshot.
-- Other claim types: require at least two independent verified evidence units and at least one primary unit for High.
+- Other claim types: require at least two independent verified evidence units and at least one primary unit for High. A `vendor_self` source — the subject project's own documentation — does not count as that primary unit.
 - Any verified evidence may support Medium when High requirements are unmet.
 - No verified evidence means unusable, not Low-but-publishable.
 

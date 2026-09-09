@@ -1,0 +1,6 @@
+Confirmed: the official Playwright release notes page (playwright.dev/docs/release-notes) lists `toPass()` for the first time under **Version 1.29**, with no mention of it under Version 1.20's section (verified the raw HTML directly, since Version 1.20 through 1.23 sections contain zero occurrences of "toPass").
+
+VERDICT: NO
+
+SOURCES:
+- https://playwright.dev/docs/release-notes ||| Retry blocks of code until all assertions pass:

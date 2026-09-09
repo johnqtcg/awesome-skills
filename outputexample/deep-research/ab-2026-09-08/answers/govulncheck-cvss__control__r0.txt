@@ -1,0 +1,6 @@
+This is directly confirmed by the official Go documentation: the Go vulnerability database (which govulncheck relies on) deliberately does not use CVSS scores or severity labels, favoring detailed descriptions instead. Multiple third-party sources corroborate that govulncheck's output/prioritization is based on call-trace/reachability analysis rather than CVSS.
+
+VERDICT: NO
+
+SOURCES:
+- https://go.dev/doc/security/vuln/ ||| Why does the Go vulnerability database not use severity labels?

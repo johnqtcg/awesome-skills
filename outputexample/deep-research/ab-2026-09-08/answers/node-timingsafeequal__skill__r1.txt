@@ -1,0 +1,11 @@
+This corroborates the Bun mirror quote with a primary Node.js repository source (a commit updating the official docs). I now have sufficient verified evidence to answer confidently.
+
+## Answer
+
+No. In Node.js, `crypto.timingSafeEqual(a, b)` does **not** return `false` when the two buffers have different lengths — it **throws an error** instead. Specifically, if `a` and `b` have different byte lengths, Node.js throws a `RangeError` with code `ERR_CRYPTO_TIMING_SAFE_EQUAL_LENGTH` and message "Input buffers must have the same byte length." The Node.js documentation explicitly states both requirements: the buffers must be `Buffer`, `TypedArray`, or `DataView` instances, must have the same byte length, and an error is thrown if they don't. This is a common source of bugs/vulnerabilities — some developers mistakenly assume it returns `false` for mismatched lengths and don't wrap the call in a length check or try/catch, causing an unhandled exception in production when comparing user-supplied values (e.g., HMAC signatures) of unexpected length.
+
+VERDICT: NO
+
+SOURCES:
+- https://bun.com/reference/node/crypto/timingSafeEqual ||| `a` and `b` must both be `Buffer`s, `TypedArray`s, or `DataView`s, and they must have the same byte length. An error is thrown if `a` and `b` have different byte lengths.
+- https://github.com/nodejs/node/commit/4780449b4e ||| An error is thrown if `a` and `b` have different byte lengths.

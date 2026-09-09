@@ -1,0 +1,6 @@
+Go's `testing` package documentation for `T.Setenv` explicitly states that it cannot be used in parallel tests, and Go 1.24 actually tightened enforcement of this rule (closing a loophole where subtests created via `T.Run` after `T.Parallel` could call `t.Setenv` without panicking, per golang/go#55128).
+
+VERDICT: NO
+
+SOURCES:
+- https://pkg.go.dev/testing ||| Because Setenv affects the whole process, it cannot be used in parallel tests or tests with parallel ancestors.

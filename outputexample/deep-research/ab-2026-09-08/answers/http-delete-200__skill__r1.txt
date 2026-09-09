@@ -1,0 +1,14 @@
+## Answer
+
+Yes — under the HTTP specification, a DELETE request can validly return status **200 OK** with a response body.
+
+The current normative reference, RFC 9110 (HTTP Semantics, which obsoletes RFC 7231), explicitly enumerates three valid successful outcomes for a DELETE request depending on whether/what information is returned: 202 Accepted (pending), 204 No Content (no body), and 200 OK (with a response body describing the outcome). MDN's HTTP method reference for DELETE — which cites RFC 9110's "HTTP Semantics # name-delete" as its normative specification — states directly that a 200 OK response "means the request was successful and the response body includes a representation describing the outcome," distinguishing it from 204 (which has no body). A secondary source (devgex.com) independently quotes the same underlying spec language: the origin server "SHOULD send ... a 200 status code if the action has been enacted and the response message includes a representation describing the status."
+
+This was verified via live re-fetch of the cited pages (MDN classified as T1/registry-confirmed, sourced from RFC 9110); the finding's confidence was mechanically capped at Medium only because my analysis text mentioned the RFC number "9110" which isn't literally quoted in an excerpt — this is a citation-hygiene technicality, not a doubt about the substance of the answer.
+
+VERDICT: YES
+
+SOURCES:
+- https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Methods/DELETE ||| A 200 OK response means the request was successful and the response body includes a representation describing the outcome:
+- https://devgex.com/en/article/00039939 ||| If a DELETE method is successfully applied, the origin server SHOULD send a 202 status code if the action will likely succeed but has not yet been enacted, a 204 status code if the action has been enacted and no further information is to be supplied, or a 200 status code if the action has been enacted and the response message includes a representation describing the status.
+- https://http.dev/delete ||| 200 OK is appropriate when the server returns the deleted resource or a confirmation message in the response body.

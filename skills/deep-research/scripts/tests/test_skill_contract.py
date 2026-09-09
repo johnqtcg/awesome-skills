@@ -1,5 +1,6 @@
 """Structural and content contract tests for the deep-research SKILL.md."""
 
+import json
 import re
 import unittest
 from pathlib import Path
@@ -63,6 +64,7 @@ class TestFrontmatter(unittest.TestCase):
             "snapshot-codebase",
             "import-test-receipt",
             "reserve-budget",
+            "quick-check",
             "validate",
             "report",
         ]:
@@ -427,7 +429,7 @@ class TestExecutableContractBridges(unittest.TestCase):
 
     def test_report_auto_validates(self):
         report_handler = self.script.split("def cmd_report", 1)[1].split(
-            "def cmd_fetch_content", 1
+            "\ndef cmd_", 1
         )[0]
         self.assertIn("validate_research_bundle", report_handler)
 
@@ -454,6 +456,142 @@ class TestExecutableContractBridges(unittest.TestCase):
             combined,
         )
         self.assertNotIn("Every finding marked `High`", combined)
+
+
+class TestClaimSupportContract(unittest.TestCase):
+    """SKILL.md and the references must document the second verdict."""
+
+    def setUp(self) -> None:
+        self.skill = SKILL_MD.read_text(encoding="utf-8")
+        self.hallucination = HALLUCINATION_REF.read_text(encoding="utf-8")
+        self.contract = OUTPUT_CONTRACT.read_text(encoding="utf-8")
+
+    def test_skill_defines_the_support_review_block(self) -> None:
+        self.assertIn("support_review", self.skill)
+        for stance in ("supports", "partial", "context-only", "contradicts"):
+            self.assertIn(stance, self.skill, stance)
+
+    def test_skill_separates_containment_from_support(self) -> None:
+        self.assertRegex(
+            self.skill,
+            r"(?i)containment.*(does not|not).*support|"
+            r"does not prove the quotation supports",
+        )
+
+    def test_missing_review_is_documented_as_not_a_pass(self) -> None:
+        self.assertIn("never an implicit pass", self.skill)
+
+    def test_reference_carries_the_full_verdict_table(self) -> None:
+        for state in (
+            "attested",
+            "unreviewed",
+            "qualified",
+            "disputed",
+            "contradicted",
+        ):
+            self.assertIn(state, self.hallucination, state)
+
+    def test_reference_states_the_screens_cannot_grant_support(self) -> None:
+        self.assertIn("only *remove*", self.hallucination)
+
+    def test_schema_examples_include_the_review_block(self) -> None:
+        self.assertGreaterEqual(self.contract.count('"support_review"'), 2)
+
+
+class TestAuthorityRegistryContract(unittest.TestCase):
+    """The registry must be documented as ownership, never as correctness."""
+
+    REGISTRY = SKILL_ROOT / "references" / "source-authority-registry.json"
+
+    def setUp(self) -> None:
+        self.skill = SKILL_MD.read_text(encoding="utf-8")
+        self.registry = json.loads(self.REGISTRY.read_text(encoding="utf-8"))
+
+    def test_skill_no_longer_claims_t1_is_government_only(self) -> None:
+        """The old fail-closed sentence became false when the registry landed."""
+        self.assertNotIn(
+            "fail-closed to recognized government namespaces", self.skill
+        )
+
+    def test_skill_names_the_registry_and_the_vendor_self_limit(self) -> None:
+        self.assertIn("source-authority-registry.json", self.skill)
+        self.assertIn("vendor_self", self.skill)
+
+    def test_registry_states_its_own_limits(self) -> None:
+        limits = " ".join(self.registry["policy"]["limits"])
+        self.assertIn("never correctness", limits)
+        self.assertIn("heuristic classification", limits)
+
+    def test_every_entry_names_an_owner_and_a_check_date(self) -> None:
+        for entry in self.registry["entries"]:
+            self.assertTrue(entry["basis"], entry)
+            self.assertRegex(entry["verified_on"], r"^\d{4}-\d{2}-\d{2}$")
+            self.assertIn(
+                entry["authority"],
+                {"standards-body", "government", "project-owned"},
+            )
+
+
+class TestLiveVerificationBudgetContract(unittest.TestCase):
+    def setUp(self) -> None:
+        self.skill = SKILL_MD.read_text(encoding="utf-8")
+
+    def test_skill_documents_the_live_verification_budget(self) -> None:
+        self.assertIn("live_verifications", self.skill)
+
+    def test_skill_requires_session_for_live_web(self) -> None:
+        self.assertRegex(
+            self.skill,
+            r"(?i)require .*--session.* whenever .*--live-web",
+        )
+
+    def test_documented_validate_example_passes_session(self) -> None:
+        """A copyable example that the parser rejects is a broken recipe."""
+        self.assertNotRegex(
+            self.skill,
+            r"validate \\\n(?:.*\\\n)*?\s*--live-web(?!.*--session)",
+        )
+
+
+class TestCoverageMatrixIsNotStale(unittest.TestCase):
+    """The counts in COVERAGE.md are claims about this suite, so check them.
+
+    A hand-maintained total silently drifts and then reads as coverage the
+    suite no longer has. Deriving it here makes a stale number a test failure.
+    """
+
+    COVERAGE_MD = SKILL_ROOT / "scripts" / "tests" / "COVERAGE.md"
+
+    def _stated(self, label: str) -> int:
+        text = self.COVERAGE_MD.read_text(encoding="utf-8")
+        match = re.search(rf"\|\s*{re.escape(label)}\s*\|\s*(\d+)\s*\|", text)
+        self.assertIsNotNone(match, f"COVERAGE.md has no row for {label!r}")
+        return int(match.group(1))
+
+    def test_total_test_count_matches_discovery(self) -> None:
+        suite = unittest.defaultTestLoader.discover(
+            str(self.COVERAGE_MD.parent), pattern="test_*.py"
+        )
+        self.assertEqual(
+            suite.countTestCases(),
+            self._stated("Total tests"),
+            "COVERAGE.md total is stale; update it after adding tests",
+        )
+
+    def test_golden_fixture_count_matches_disk(self) -> None:
+        golden = list((self.COVERAGE_MD.parent / "golden").glob("*.json"))
+        self.assertEqual(len(golden), self._stated("Golden fixtures"))
+
+    def test_claim_support_corpus_count_matches_the_corpus(self) -> None:
+        corpus = json.loads(
+            (self.COVERAGE_MD.parent / "claim_support_corpus.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            len(corpus["cases"]),
+            self._stated("Claim-support corpus cases"),
+        )
 
 
 class TestLineCount(unittest.TestCase):

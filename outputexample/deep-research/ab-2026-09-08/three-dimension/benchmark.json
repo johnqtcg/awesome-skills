@@ -1,0 +1,430 @@
+{
+  "metadata": {
+    "skill_name": "deep-research",
+    "skill_path": "<path/to/skill>",
+    "executor_model": "<model-name>",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-09-08T06:16:35Z",
+    "evals_run": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "runs_per_configuration": 3
+  },
+  "runs": [
+    {
+      "eval_id": 0,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 561.3,
+        "tokens": 202276,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "States that govulncheck does not output CVSS scores",
+          "passed": true,
+          "evidence": "Line 3: '**Direct answer: No.** govulncheck does not emit a CVSS score for any vulnerability it reports, in its default text output, its JSON schema, or ... SARIF/VEX output.'"
+        },
+        {
+          "text": "Cites at least one URL for the claim",
+          "passed": true,
+          "evidence": "Sources section [1]-[4] each carry a full URL, e.g. 'https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck'"
+        },
+        {
+          "text": "Includes at least one verbatim quotation from a cited page, not only a paraphrase",
+          "passed": true,
+          "evidence": "Executive Summary / Finding 1 quotes the godoc verbatim: 'which \"contains the JSON output structs for govulncheck,\"'"
+        },
+        {
+          "text": "At least one quoted excerpt is found verbatim on the page it is attributed to",
+          "passed": true,
+          "evidence": "quote_verification.json: eval-0 with_skill quotes=1, quotes_verified=1 (>0)."
+        },
+        {
+          "text": "Labels the authority or tier of at least one source (official / primary / vendor / community), rather than listing bare URLs",
+          "passed": true,
+          "evidence": "Sources section labels each entry, e.g. '[2] ... \u2014 official (preclassified T1)' and '[3] ... \u2014 website (preclassified T4)'."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.6667,
+        "passed": 4,
+        "failed": 2,
+        "total": 6,
+        "time_seconds": 1071.2,
+        "tokens": 249834,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Substantively covers both PostgreSQL logical replication and Debezium",
+          "passed": true,
+          "evidence": "Detailed Analysis sections 'How each option actually gets changes into Kafka', 'Schema and DDL handling', etc. discuss both at length, with dedicated findings for each."
+        },
+        {
+          "text": "Cites at least one URL per option",
+          "passed": true,
+          "evidence": "Sources [5],[7],[8] are postgresql.org pages (logical replication); [1],[2],[3],[4] are debezium.io/confluent pages (Debezium)."
+        },
+        {
+          "text": "Includes at least one verbatim quotation from a cited page",
+          "passed": false,
+          "evidence": "No quotation marks appear anywhere in the document (confirmed by search); all claims are paraphrased and attributed via [n] citation markers, e.g. 'PostgreSQL's own restrictions page states that schema and DDL commands are not replicated' with no quoted text. quote_verification.json also reports quotes=0 for this run."
+        },
+        {
+          "text": "At least one quoted excerpt is found verbatim on the page it is attributed to",
+          "passed": false,
+          "evidence": "quote_verification.json: eval-1 with_skill quotes=0, quotes_verified=0 (no quotes to verify)."
+        },
+        {
+          "text": "Distinguishes primary documentation from secondary or practitioner sources",
+          "passed": true,
+          "evidence": "Sources section labels each entry's tier, e.g. postgresql.org entries marked 'official (preclassified T1)' vs debezium.io/blog entries marked 'website (preclassified T4)'; Source Quality Notes also states '11/38 cited Web units ... are the subject project's own documentation and cannot serve as the independent primary unit'."
+        },
+        {
+          "text": "States at least one thing it could not establish, or a limitation of the comparison",
+          "passed": true,
+          "evidence": "Section 9 'Gaps & Limitations': 'No independent, disclosed-methodology benchmark comparing Debezium's end-to-end latency/throughput ... was found' and notes on excluded/failed sources."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 6,
+        "failed": 0,
+        "total": 6,
+        "time_seconds": 1595.0,
+        "tokens": 344410,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Explicitly acknowledges that the sources disagree, rather than silently presenting one version as settled",
+          "passed": true,
+          "evidence": "Finding 2 header: 'Pre-2022 MySQL 8.0 manual: the same two pages said NO metadata lock is taken at all ... This is the literal opposite of the current wording'; also a dedicated 'Debate / Contradictory Evidence' section (lines 39-41)."
+        },
+        {
+          "text": "Quotes or cites both conflicting sources, not just the one it endorses",
+          "passed": true,
+          "evidence": "Cites current pages [2][3] with the 'may be taken briefly' wording and Wayback captures [4][5] quoted as 'No metadata locks are taken on the table' / 'No exclusive metadata locks are taken on the table during preparation and execution'."
+        },
+        {
+          "text": "Cites at least one URL",
+          "passed": true,
+          "evidence": "Sources section [1]-[5] each with full URLs (docs.oracle.com and web.archive.org)."
+        },
+        {
+          "text": "At least one quoted excerpt is found verbatim on the page it is attributed to",
+          "passed": true,
+          "evidence": "mechanical re-check after the checker was fixed to read single-quoted spans: 6 quoted spans, 4 confirmed verbatim on a cited page (quote_verification.json)"
+        },
+        {
+          "text": "States what remains uncertain after the analysis, or what would settle it definitively",
+          "passed": true,
+          "evidence": "Section 9 'Gaps & Limitations': 'It was not possible to directly observe which exact two pages ... the user personally compared; the historical-vs-current explanation is the best-supported reconstruction ... not a direct read of the user's browser history.'"
+        },
+        {
+          "text": "Does not present a single confident resolution without acknowledging the residual uncertainty",
+          "passed": true,
+          "evidence": "Executive Summary is explicitly framed 'Partial result:'; findings carry Medium (not High) confidence with explicit 'Downgrade' rationale and a 'disputed' claim-support verdict noted in Section 7."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 798.2,
+        "tokens": 217552,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Does not present a specific Fortune 500 percentage as an established fact",
+          "passed": true,
+          "evidence": "The only Fortune-500-specific figure mentioned (70%+) is explicitly labeled 'A single unsourced social-media post' with 'no survey, dataset, or methodology'; no percentage is presented as established fact."
+        },
+        {
+          "text": "States explicitly that no authoritative source establishes this figure",
+          "passed": true,
+          "evidence": "'No source found discloses a methodology-backed percentage of Fortune 500 companies running Apache Kafka in production as of 2026.'"
+        },
+        {
+          "text": "If it mentions a vendor figure such as Confluent's Fortune 100 claim, identifies it as a vendor self-report rather than independent data",
+          "passed": true,
+          "evidence": "Finding 2: 'The 80%+ Fortune 100 figure is a vendor and project marketing claim ... Confluent, the company founded by Kafka's original creators and Kafka's primary commercial vendor, republishes the identical claim.'"
+        },
+        {
+          "text": "Notes that any available figure covers a different population or year than what was asked",
+          "passed": true,
+          "evidence": "'it names the Fortune 100 (not 500), it says \"trust and use\" (not \"run in production\"), and it is undated evergreen marketing copy rather than a dated survey result.'"
+        },
+        {
+          "text": "Offers what could legitimately be said or measured instead",
+          "passed": true,
+          "evidence": "Gaps & Limitations notes technographic aggregators (TheirStack, ZoomInfo) as an alternative measurement approach that reports absolute adoption counts, and Detailed Analysis identifies the (caveated) Fortune-100 vendor figure as the only defensible number available."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 0,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 155.4,
+        "tokens": 125696,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "States that govulncheck does not output CVSS scores",
+          "passed": true,
+          "evidence": "Line 5: '**No.** `govulncheck` does not emit a CVSS score (or any other severity label...) for the vulnerabilities it reports.'"
+        },
+        {
+          "text": "Cites at least one URL for the claim",
+          "passed": true,
+          "evidence": "Sources section lists 4 URLs, e.g. 'https://go.dev/doc/security/vuln/'"
+        },
+        {
+          "text": "Includes at least one verbatim quotation from a cited page, not only a paraphrase",
+          "passed": true,
+          "evidence": "Line 24 blockquote: '> \"Most vulnerability reporting formats use severity labels such as ... We believe good descriptions of vulnerabilities are more useful than severity indicators.\"'"
+        },
+        {
+          "text": "At least one quoted excerpt is found verbatim on the page it is attributed to",
+          "passed": true,
+          "evidence": "quote_verification.json: eval-0 without_skill quotes=6, quotes_verified=1 (>0)."
+        },
+        {
+          "text": "Labels the authority or tier of at least one source (official / primary / vendor / community), rather than listing bare URLs",
+          "passed": true,
+          "evidence": "Sources section: '(go.dev, official Go documentation)' and '(pkg.go.dev, generated from source)' labels."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.8333,
+        "passed": 5,
+        "failed": 1,
+        "total": 6,
+        "time_seconds": 230.9,
+        "tokens": 145284,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Substantively covers both PostgreSQL logical replication and Debezium",
+          "passed": true,
+          "evidence": "Section 0 frames both, Section 2 is a full side-by-side comparison table, Sections 3.1-3.6 discuss both in depth."
+        },
+        {
+          "text": "Cites at least one URL per option",
+          "passed": true,
+          "evidence": "Sources item 1 (postgresql.org logical-replication-restrictions) and item 9 (AWS RDS logical replication) cover PostgreSQL; items 2-8, 12-15 cover Debezium."
+        },
+        {
+          "text": "Includes at least one verbatim quotation from a cited page",
+          "passed": true,
+          "evidence": "Line 64: 'Native logical replication's official restriction is unambiguous: *\"the database schema and DDL commands are not replicated ... subsequent schema changes would need to be kept in sync manually\"* [pg-restrictions].'"
+        },
+        {
+          "text": "At least one quoted excerpt is found verbatim on the page it is attributed to",
+          "passed": false,
+          "evidence": "quote_verification.json: eval-1 without_skill quotes=12, quotes_verified=0 (verified_rate 0.0) \u2014 the quote at line 64 is listed among unverified_examples, likely because the ellipsis elides text not present verbatim on the live page."
+        },
+        {
+          "text": "Distinguishes primary documentation from secondary or practitioner sources",
+          "passed": true,
+          "evidence": "Sources items 1-3 are explicitly annotated 'primary source, fetched directly'; other entries (blogs, vendor comparison pieces) carry no such label."
+        },
+        {
+          "text": "States at least one thing it could not establish, or a limitation of the comparison",
+          "passed": true,
+          "evidence": "Section 4 'What I did not verify': 'I did not benchmark WAL growth, replication lag, or throughput against your actual orders table volumes/shapes...'"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 6,
+        "failed": 0,
+        "total": 6,
+        "time_seconds": 597.3,
+        "tokens": 172164,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Explicitly acknowledges that the sources disagree, rather than silently presenting one version as settled",
+          "passed": true,
+          "evidence": "Section 'Evidence the \"No metadata locks are taken\" wording was a documented error, since corrected' explicitly walks through the old vs. new wording and names it as a documentation error that was fixed."
+        },
+        {
+          "text": "Quotes or cites both conflicting sources, not just the one it endorses",
+          "passed": true,
+          "evidence": "Quotes current text ('An exclusive metadata lock on the table may be taken briefly...') and historical text ('No metadata locks are taken on the table') verbatim in blockquotes with citations to both the live pages and Wayback snapshots."
+        },
+        {
+          "text": "Cites at least one URL",
+          "passed": true,
+          "evidence": "Sources section lists 7 URLs including dev.mysql.com pages, bugs.mysql.com, and Wayback Machine snapshots."
+        },
+        {
+          "text": "At least one quoted excerpt is found verbatim on the page it is attributed to",
+          "passed": true,
+          "evidence": "quote_verification.json: eval-2 without_skill quotes=26, quotes_verified=4 (>0)."
+        },
+        {
+          "text": "States what remains uncertain after the analysis, or what would settle it definitively",
+          "passed": true,
+          "evidence": "'Confidence and scope' section: 'Not independently verified in a live server in this session ... it is worth a 10-minute dry run of the bug's repro script ... against a staging instance ... to see the exact lock_wait_timeout and blocking behavior firsthand.'"
+        },
+        {
+          "text": "Does not present a single confident resolution without acknowledging the residual uncertainty",
+          "passed": true,
+          "evidence": "Despite a confident 'Verdict' section, the answer explicitly flags residual uncertainty in 'Confidence and scope': 'Not independently verified in a live server in this session', recommending a dry-run before relying on it during the maintenance window."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 3,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 171.0,
+        "tokens": 129363,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Does not present a specific Fortune 500 percentage as an established fact",
+          "passed": true,
+          "evidence": "'Do not present a specific number (e.g., \"80% of the Fortune 500 use Kafka\") as a verified, current statistic \u2014 I could not substantiate one.'"
+        },
+        {
+          "text": "States explicitly that no authoritative source establishes this figure",
+          "passed": true,
+          "evidence": "'There is no reliable, independently verified statistic for \"the percentage of Fortune 500 companies running Apache Kafka in production as of 2026.\"'"
+        },
+        {
+          "text": "If it mentions a vendor figure such as Confluent's Fortune 100 claim, identifies it as a vendor self-report rather than independent data",
+          "passed": true,
+          "evidence": "'Confluent's own words: \"estimated\" \u2014 no source or methodology cited, and Confluent is the commercial vendor selling Kafka-based products, i.e., an interested party.'"
+        },
+        {
+          "text": "Notes that any available figure covers a different population or year than what was asked",
+          "passed": true,
+          "evidence": "'This is about the Fortune 100, not the Fortune 500' and 'This is a 2021 figure (used to sell an IPO), five years stale as of 2026.'"
+        },
+        {
+          "text": "Offers what could legitimately be said or measured instead",
+          "passed": true,
+          "evidence": "'Recommendation for the deck' section: 'Safest: state adoption qualitatively (\"Kafka is used by a majority of Fortune 500 companies, per Confluent's own reporting\") and cite Confluent/Apache directly...'"
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 0.9167,
+        "stddev": 0.1667,
+        "min": 0.6667,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 1006.425,
+        "stddev": 444.2635,
+        "min": 561.3,
+        "max": 1595.0
+      },
+      "tokens": {
+        "mean": 253518.0,
+        "stddev": 63755.322,
+        "min": 202276,
+        "max": 344410
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.9583,
+        "stddev": 0.0833,
+        "min": 0.8333,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 288.65,
+        "stddev": 208.3242,
+        "min": 155.4,
+        "max": 597.3
+      },
+      "tokens": {
+        "mean": 143126.75,
+        "stddev": 21143.0641,
+        "min": 125696,
+        "max": 172164
+      }
+    },
+    "delta": {
+      "pass_rate": "-0.04",
+      "time_seconds": "+717.8",
+      "tokens": "+110391"
+    }
+  },
+  "notes": []
+}

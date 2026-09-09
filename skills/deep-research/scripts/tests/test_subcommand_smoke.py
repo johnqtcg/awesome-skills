@@ -18,6 +18,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 SCRIPT = Path(__file__).resolve().parents[1] / "deep_research.py"
 SKILL_MD = Path(__file__).resolve().parents[2] / "SKILL.md"
@@ -233,6 +234,101 @@ class SubcommandSmokeTests(unittest.TestCase):
         self.assertEqual(0, proc.returncode, proc.stderr)
         payload = json.loads(out.read_text(encoding="utf-8"))
         self.assertEqual(1, payload["reserved"])
+
+
+class QuickCheckOneShotTests(unittest.TestCase):
+    """The Quick collection path must stay one command with every gate intact."""
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.workdir = Path(self._tmp.name) / "qc"
+
+    def _run(self, url: str = "https://go.dev/doc/database/manage-connections") -> int:
+        captured = deep_research.ContentResult(
+            url=url,
+            final_url=url,
+            title="Managing connections",
+            content="SetMaxOpenConns sets the maximum number of open connections.",
+            word_count=9,
+            error="",
+            http_status=200,
+            fetched_at=deep_research.utc_now_iso(),
+        )
+        parser = deep_research.build_parser()
+        args = parser.parse_args([
+            "quick-check",
+            "--request", "What does SetMaxOpenConns do?",
+            "--claim", "SetMaxOpenConns caps open connections.",
+            "--url", url,
+            "--workdir", str(self.workdir),
+        ])
+        with patch.object(deep_research, "resolve_public_target", return_value=None), \
+             patch.object(
+                 deep_research, "fetch_contents_parallel", return_value=[captured]
+             ):
+            return int(args.func(args))
+
+    def test_one_command_produces_the_whole_collection_half(self) -> None:
+        self.assertEqual(0, self._run())
+        for name in ("session.json", "results.json", "content.json",
+                     "findings.template.json"):
+            self.assertTrue((self.workdir / name).exists(), name)
+
+    def test_skeleton_carries_the_claim_and_a_support_review_slot(self) -> None:
+        self._run()
+        template = json.loads(
+            (self.workdir / "findings.template.json").read_text(encoding="utf-8")
+        )
+        finding = template["findings"][0]
+        self.assertEqual("SetMaxOpenConns caps open connections.", finding["analysis"])
+        self.assertIn("support_review", finding)
+        self.assertEqual("single_fact", finding["claim_type"])
+        self.assertEqual(1, len(finding["evidence"]))
+
+    def test_extraction_is_charged_to_the_session_ledger(self) -> None:
+        self._run()
+        ledger = json.loads((self.workdir / "session.json").read_text(encoding="utf-8"))
+        self.assertEqual("quick", ledger["mode"])
+        self.assertEqual(1, ledger["usage"]["content_extractions"])
+        self.assertEqual(0, ledger["usage"]["retrieval_calls"])
+
+    def test_the_printed_next_step_command_actually_parses(self) -> None:
+        """A recipe the parser rejects is worse than no recipe.
+
+        quick-check prints the exact `report --live-web` invocation to run
+        next, so that string has to survive the real argument parser.
+        """
+        import contextlib
+        import io
+        import shlex
+
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.assertEqual(0, self._run())
+        printed = [
+            line.strip()
+            for line in buf.getvalue().splitlines()
+            if line.strip().startswith("python3 ")
+        ]
+        self.assertEqual(1, len(printed), buf.getvalue())
+        argv = shlex.split(printed[0])[2:]
+        parsed = deep_research.build_parser().parse_args(argv)
+        self.assertEqual("report", parsed.cmd)
+        self.assertTrue(parsed.live_web)
+        self.assertTrue(parsed.session, "--live-web recipe must carry --session")
+
+    def test_unsafe_target_is_rejected_before_any_fetch(self) -> None:
+        parser = deep_research.build_parser()
+        args = parser.parse_args([
+            "quick-check",
+            "--request", "local file read",
+            "--url", "http://127.0.0.1/secret",
+            "--workdir", str(self.workdir),
+        ])
+        with patch.object(deep_research, "fetch_contents_parallel") as fetch:
+            self.assertEqual(2, int(args.func(args)))
+        fetch.assert_not_called()
 
 
 class ParserHandlerDriftGuards(unittest.TestCase):

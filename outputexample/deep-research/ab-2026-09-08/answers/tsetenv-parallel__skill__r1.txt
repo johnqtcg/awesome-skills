@@ -1,0 +1,10 @@
+## Answer
+
+No — on Go 1.24 (and current Go versions), calling `t.Setenv` is still not allowed in a test that also calls `t.Parallel`. The `testing` package documentation is explicit: `Setenv` "cannot be used in parallel tests or tests with parallel ancestors," because it affects the whole process. This restriction predates Go 1.24 (it's the same behavior since `T.Setenv` was introduced) and the Go 1.24 release notes contain no mention of any change to this behavior — the `testing` package doc for the `go1.24.0`-pinned version confirms the restriction is still in force. Calling `t.Setenv` after (or in a test with) `t.Parallel` will cause the test to panic at runtime.
+
+VERDICT: NO
+
+SOURCES:
+- https://pkg.go.dev/testing@go1.24.0 ||| Because Setenv affects the whole process, it cannot be used in parallel tests or tests with parallel ancestors.
+- https://pkg.go.dev/testing ||| Because Setenv affects the whole process, it cannot be used in parallel tests or tests with parallel ancestors.
+- https://github.com/golang/go/issues/55128 ||| T.Setenv will panic if it be called after T.Parallel but it can be called in T.Run .

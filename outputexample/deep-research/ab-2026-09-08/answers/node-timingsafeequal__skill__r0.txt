@@ -1,0 +1,13 @@
+## Answer
+
+No — `crypto.timingSafeEqual()` does **not** return `false` when the two buffers have different lengths. Instead, it **throws an error** (a `RangeError`) if `a` and `b` have different byte lengths. Both buffers must be the same length for the function to execute the constant-time comparison and return a boolean; a length check is not something the function tolerates and falls back on.
+
+This is why common wrapper patterns (e.g., in the exoticasoftware.dev blog found during research) explicitly check `a.length === b.length` and return `false` themselves *before* calling `timingSafeEqual`, precisely because calling it directly with mismatched lengths would throw rather than yield a safe `false`.
+
+I confirmed this directly against the current official Node.js API documentation (`crypto.timingSafeEqual(a, b)` section) and cross-checked it against Bun's Node-compatibility reference, which mirrors the same wording.
+
+VERDICT: NO
+
+SOURCES:
+- https://nodejs.org/api/crypto.html ||| An error is thrown if a and b have different byte lengths.
+- https://bun.com/reference/node/crypto/timingSafeEqual ||| An error is thrown if a and b have different byte lengths.

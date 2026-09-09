@@ -1,0 +1,5 @@
+VERDICT: NO
+
+SOURCES:
+- https://go.dev/doc/tutorial/govulncheck ||| Vulnerability #1: GO-2021-0113
+- https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck ||| If no vulnerabilities are found, govulncheck will display a short message. If there are vulnerabilities, each is displayed briefly, with a summary of a call stack.

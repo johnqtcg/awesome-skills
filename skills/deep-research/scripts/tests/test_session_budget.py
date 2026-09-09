@@ -301,5 +301,82 @@ class TestMultilingualPlanner(unittest.TestCase):
         self.assertEqual("deep", plan["mode"])
 
 
+class LedgerSchemaEvolution(unittest.TestCase):
+    """A new budget line must not strand a session from an older version."""
+
+    LEGACY = {
+        "request": "x",
+        "research_kind": "web",
+        "mode": "quick",
+        "budget": {
+            "retrieval_min": 5,
+            "retrieval_max": 10,
+            "content_max": 5,
+            "report_sources_max": 8,
+        },
+        "schema": "deep-research/session-v1",
+        "session_id": "a" * 32,
+        "created_at": "2026-01-01T00:00:00+00:00",
+        "updated_at": "2026-01-01T00:00:00+00:00",
+        "usage": {
+            "retrieval_calls": 0,
+            "content_extractions": 0,
+            "report_sources": 0,
+        },
+        "events": [],
+    }
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.path = Path(self._tmp.name) / "legacy.json"
+
+    def _write(self, payload: dict) -> None:
+        self.path.write_text(json.dumps(payload), encoding="utf-8")
+
+    def test_missing_budget_line_is_backfilled_from_the_mode(self) -> None:
+        self._write(self.LEGACY)
+        state = deep_research.load_session(self.path)
+        self.assertEqual(
+            deep_research.MODE_BUDGETS["quick"]["live_verification_max"],
+            state["budget"]["live_verification_max"],
+        )
+        self.assertEqual(0, state["usage"]["live_verifications"])
+
+    def test_a_legacy_ledger_can_still_reserve_the_new_line(self) -> None:
+        self._write(self.LEGACY)
+        reservation = deep_research.reserve_session_budget(
+            self.path, "live_verifications", 2, allow_partial=False
+        )
+        self.assertEqual(2, reservation["reserved"])
+        self.assertEqual(
+            2,
+            json.loads(self.path.read_text(encoding="utf-8"))["usage"][
+                "live_verifications"
+            ],
+        )
+
+    def test_a_tampered_budget_value_is_still_rejected(self) -> None:
+        """Backfilling an absent key must not soften the anti-tampering check."""
+        tampered = json.loads(json.dumps(self.LEGACY))
+        tampered["budget"]["live_verification_max"] = 500
+        self._write(tampered)
+        with self.assertRaisesRegex(ValueError, "not canonical"):
+            deep_research.load_session(self.path)
+
+        inflated = json.loads(json.dumps(self.LEGACY))
+        inflated["budget"]["retrieval_max"] = 5000
+        self._write(inflated)
+        with self.assertRaisesRegex(ValueError, "not canonical"):
+            deep_research.load_session(self.path)
+
+    def test_a_usage_value_over_its_ceiling_is_still_rejected(self) -> None:
+        overspent = json.loads(json.dumps(self.LEGACY))
+        overspent["usage"]["live_verifications"] = 999
+        self._write(overspent)
+        with self.assertRaisesRegex(ValueError, "invalid session usage"):
+            deep_research.load_session(self.path)
+
+
 if __name__ == "__main__":
     unittest.main()

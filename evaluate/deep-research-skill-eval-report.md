@@ -1,344 +1,235 @@
 # deep-research Skill Evaluation Report
 
-> Evaluation framework: [skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator)
-> Evaluation date: 2026-03-12
-> Evaluation target: `deep-research`
+> Evaluation date: 2026-09-08
+> Evaluation target: `deep-research` at the current repository head
+> Framework: [skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator), three dimensions per [`bestpractice/评估篇.md`](../bestpractice/评估篇.md) §10
+> Scale: 60 nested `claude -p` runs (trigger) + 4 scenarios × 2 arms (task) = 68 real runs
+> Raw evidence: [`outputexample/deep-research/ab-2026-09-08/three-dimension/`](../outputexample/deep-research/ab-2026-09-08/three-dimension/)
 
 ---
 
-Snapshot note: this report evaluates the `deep-research` skill as of **2026-03-12**. The current repository head has since expanded the skill to a 9-section output contract with `references/` and helper scripts. Structural counts and token estimates below refer to the evaluated snapshot, not the latest head revision.
+## Headline
 
-> **Post-evaluation update — 2026-07-19:** The current implementation now enforces one nine-section contract in both documentation and the report generator. Web/Hybrid work requires `content.json`, exact excerpt matching, and automatic report validation, but saved content is explicitly caller-controlled: loading it clears live status, and caller-provided tier/type/domain fields cannot grant authority. Web High now requires a current `validate/report --live-web` capture and T1 re-derived from the effective final URL. All bundled Web access uses a public-network-only HTTP(S) transport that rejects local schemes, credentials, localhost, every non-public or mixed DNS answer, and unsafe redirect targets; it connects to a validated IP while preserving TLS hostname verification. Repository claims are independently checked against real Git objects/blobs or bounded unpinned working-tree content. Test execution remains in the host permission layer, with one versioned receipt binding the complete cited code set to one clean snapshot. Mode budgets accumulate under cross-process locks, external tool calls have a reservation path, and cited report-source ceilings execute. The offline regression now contains 301 tests, including caller-authored T1/live negatives, local-file/private-address/mixed-DNS/redirect probes, DNS-pinned connection checks, request → decision scenarios, forged repository evidence, a real multiprocess budget race, and source ceilings. Receipts remain host attestations rather than cryptographic execution proof; serialized Web hashes remain audit metadata rather than reusable execution proof; the ledger is an operational constraint rather than a tamper-proof log; and Windows locking still needs Windows CI. These improvements were not part of the 2026-03-12 score and should be evaluated in a future fresh benchmark.
+**This skill is not being triggered when it should be, and that outweighs everything else in this report.**
 
-`deep-research` is a source-backed research skill for factual and analytical research tasks. It suits technical surveys, option comparison, claim verification, and cross-source synthesis, emphasizing evidence retrieval before conclusions. In the evaluated snapshot, its three main strengths were: built-in evidence-chain requirements and hallucination-aware validation that reduce unsupported conclusions; a stable 7-section output template suitable for reusable research reports; and numbered citations, source-credibility labels, and execution-completeness notes that make results easier to verify, review, and extend.
+Recall is **40%** against a 90% bar. Six of ten realistic should-trigger queries lost to the base model's own instincts — including every claim-verification query, every codebase-research query, and one vendor-claim verification where three consecutive runs used **no tools at all** and answered from memory. Those are the exact use cases the description enumerates. Precision is perfect (100%, zero false triggers on ten near-misses), so the description is not too broad — it is too quiet.
 
-## 1. Evaluation Overview
+On task performance the two arms are indistinguishable: 20/22 assertions for the skill, 21/22 for the baseline, with 19 of 22 assertions passing in both. The skill's real output is 59 machine-validated, live-re-fetched excerpts — and **none of them appear in the report the user receives.**
 
-This evaluation reviews the deep-research skill along two axes: **actual task performance** and **token cost-effectiveness**. Three research scenarios of increasing complexity were designed (focused technical research, multi-perspective analysis, cross-domain synthesis). Each scenario was run with both with-skill and without-skill configurations, for 3 scenarios × 2 configs = 6 independent subagent runs, scored against 27 assertions.
-
-| Dimension | With Skill | Without Skill | Delta |
-|-----------|-----------|--------------|-------|
-| **Assertion pass rate** | **27/27 (100%)** | 9/27 (33.3%) | **+66.7 pp** |
-| **7-section template compliance** | 3/3 correct | 0/3 | Skill-only |
-| **Numbered citation format [1]-[n]** | 3/3 correct | 0/3 | Skill-only |
-| **Source credibility labels** | 3/3 correct | 0/3 | Skill-only |
-| **Content quality (depth/breadth/data)** | 3/3 correct | 3/3 correct | No delta |
-| **Skill Token cost** | ~1,350 tokens | 0 | — |
-| **Token cost per 1% pass-rate gain** | **~20 tokens** | — | Best among evaluated skills |
-
-**Key finding: The deep-research skill’s core value is structural discipline, not content quality.** The base model already has strong research ability (breadth, depth, data citation), but lacks consistent report structure. The skill’s 7-section template + numbered citations + credibility labels fill that gap.
+Cost: 1.77× tokens, 3.87× tool calls, 3.49× wall time. The token cost breaks even against 10–19 seconds of engineer time, so it is not the constraint. The constraint is **+12 minutes of latency per run.**
 
 ---
 
-## 2. Test Methodology
+## 1. 维度一 · Trigger accuracy
 
-### 2.1 Scenario Design
+Twenty realistic queries (ten should-trigger, ten near-miss should-not-trigger), each run three times through a nested `claude -p` session where the skill is installed at `~/.claude/skills/deep-research` alongside the user's other 88 skills. A trigger is counted when the run invokes the skill by any path — the Skill tool naming it, or a Read of its SKILL.md.
 
-| Scenario | User request | Core focus | Assertions |
-|----------|--------------|------------|------------|
-| Eval 1: Focused technical research | "Research Go generics adoption — patterns, best practices, pitfalls" | Template compliance, citation format, technical depth | 10 |
-| Eval 2: Multi-perspective analysis | "Research AI code review tools — developer, team lead, security perspectives" | Multi-perspective coverage, debate identification, balance | 8 |
-| Eval 3: Cross-domain synthesis | "Research OSS maintainer burnout — causes, strategies, evidence" | Evidence layering, consensus vs. debate, research gaps | 9 |
+| Metric | Value | Bar |
+|---|:--:|:--:|
+| Recall (query-level, ≥50% of reps) | **4/10 = 40%** | ≥90% ❌ |
+| Recall (run-level) | 12/30 = 40% | — |
+| Precision (query-level) | **10/10 = 100%** | ≥90% ✅ |
+| Precision (run-level) | 30/30 = 100% | — |
+| Overall accuracy | 14/20 = 70% | — |
 
-### 2.2 Execution
+### What triggers, and what does not
 
-- With-skill runs load SKILL.md first and follow its Research Process and Output Format
-- Without-skill runs load no skill; reports are generated by model default behavior
-- All runs may use WebSearch and WebFetch for real sources
-- 6 subagents run in parallel
+Every query that fired is framed as a **multi-option comparison or decision**:
 
-### 2.3 Skill Characteristics
+| Query | Rate | Framing |
+|---|:--:|---|
+| Stripe vs Adyen comparison for the board | 3/3 | choosing between two named options |
+| OpenTelemetry vs current stack, for a director | 3/3 | building the case for a decision |
+| Kafka exactly-once "with receipts", for a design doc | 3/3 | traceability stated, no option list |
+| 服务网格采用趋势调研（istio vs cilium） | 2/3 | Chinese trend + traceability |
 
-At evaluation time, deep-research was a **single-file skill** (SKILL.md only, no references): 193 lines, 985 words, ~1,350 tokens. Core components:
+Every failure falls into one of three classes, and in each the model reached for a generic tool instead:
 
-| Component | Lines | Est. tokens |
-|-----------|-------|-------------|
-| Research Process (5 steps) | ~30 | ~200 |
-| Output Format (7-section template) | ~30 | ~200 |
-| Source Evaluation Criteria | ~8 | ~60 |
-| Full example (Intermittent Fasting) | ~80 | ~550 |
-| Other (description/frontmatter/headers) | ~45 | ~340 |
-| **Total** | **193** | **~1,350** |
+| Query | Rate | Went to instead |
+|---|:--:|---|
+| Refute a colleague's `t.Setenv` + `t.Parallel` claim | 0/3 | `ToolSearch` → `WebSearch` |
+| Two MySQL manual pages contradict each other | 0/3 | `ToolSearch` → `WebSearch` |
+| Verify a vendor's uptime and p99 claims before signing | 0/3 | **no tools at all** — answered from memory |
+| Work out how an inherited repo's retry logic works | 0/3 | `Bash` |
+| Check `internal/server/tls.go` against NIST for an audit | 0/3 | `Bash` / `Read` |
+| Which yaml-lib versions a CVE affects | 1/3 | `Bash` |
 
----
+The description lists "claim verification", "pure codebase research" and "hybrid codebase-plus-web investigations". It loses on all three. The vendor-claim query is the worst case: unverified confident recall is precisely the failure this skill exists to prevent, and the skill was never consulted.
 
-## 3. Assertion Pass Rate
+### Recommended description changes
 
-### 3.1 Summary
+The evidence points at four concrete gaps, not a general rewrite:
 
-| Scenario | Assertions | With Skill | Without Skill | Delta |
-|----------|-----------|-----------|--------------|-------|
-| Eval 1: Go generics research | 10 | **10/10 (100%)** | 3/10 (30.0%) | +70.0% |
-| Eval 2: AI code review | 8 | **8/8 (100%)** | 3/8 (37.5%) | +62.5% |
-| Eval 3: OSS maintainer burnout | 9 | **9/9 (100%)** | 3/9 (33.3%) | +66.7% |
-| **Total** | **27** | **27/27 (100%)** | **9/27 (33.3%)** | **+66.7%** |
+1. **Verification framing.** Add trigger language for "verify / fact-check / is it true that / before I push back / the docs contradict each other", plus Chinese equivalents (核实 / 求证 / 查证 / 文档互相矛盾).
+2. **Local investigation framing.** "Figure out how X works in this repo", "which functions do Y", "cite the files and lines" currently read as ordinary file work. Say otherwise explicitly.
+3. **Stakes language.** All four winners carried consequence — "for the board", "he will ask where this came from", "going into a design doc". Name that pattern: audits, runbooks, contract decisions, PR disputes.
+4. **A push clause.** skill-creator's own guidance is that Claude under-triggers skills and descriptions should be "a little bit pushy". This description is a flat enumeration of capabilities with no push at all.
 
-### 3.2 Per-Item Score Details
-
-#### Eval 1: Go Generics Research
-
-| # | Assertion | With Skill | Without Skill |
-|---|-----------|:---------:|:------------:|
-| A1 | "Executive Summary" section exists | ✅ | ✅ |
-| A2 | "Key Findings" section has numbered citations [1]-[n] | ✅ (6 findings) | ❌ |
-| A3 | "Detailed Analysis" section has subtopics | ✅ (7 subtopics) | ❌ |
-| A4 | "Areas of Consensus" section | ✅ (6 points) | ❌ |
-| A5 | "Areas of Debate" section | ✅ (6 points) | ❌ |
-| A6 | "Sources" section uses numbered [1]-[n] citations | ✅ (18 sources) | ❌ |
-| A7 | "Gaps and Further Research" section | ✅ (8 gaps) | ❌ |
-| A8 | ≥3 independent sources | ✅ (18) | ✅ (11) |
-| A9 | Sources include credibility labels | ✅ | ❌ |
-| A10 | Findings include concrete data points | ✅ | ✅ |
-
-#### Eval 2: AI Code Review Multi-Perspective Analysis
-
-| # | Assertion | With Skill | Without Skill |
-|---|-----------|:---------:|:------------:|
-| B1 | All 7 template sections present | ✅ | ❌ |
-| B2 | Covers 3 perspectives (developer/manager/security) | ✅ | ✅ |
-| B3 | ≥4 independent sources | ✅ (19) | ✅ (10) |
-| B4 | Citations use [1]-[n] format | ✅ | ❌ |
-| B5 | Sources section has credibility labels | ✅ | ❌ |
-| B6 | Areas of Debate identifies real disagreements | ✅ (6 debates) | ❌ |
-| B7 | Balanced pros and cons | ✅ | ✅ |
-| B8 | Mentions specific tools or studies | ✅ | ✅ |
-
-#### Eval 3: OSS Maintainer Burnout Research
-
-| # | Assertion | With Skill | Without Skill |
-|---|-----------|:---------:|:------------:|
-| C1 | All 7 template sections present | ✅ | ❌ |
-| C2 | ≥4 independent sources | ✅ (29) | ✅ (~30) |
-| C3 | Citations use [1]-[n] and are referenced in body | ✅ | ❌ |
-| C4 | Sources include credibility assessment | ✅ | ❌ |
-| C5 | Strategies have evidence layering (strong/moderate/weak) | ✅ | ✅ |
-| C6 | Covers three themes (causes/strategies/evidence) | ✅ | ✅ |
-| C7 | Consensus vs. debate clearly distinguished | ✅ | ❌ |
-| C8 | Gaps section proposes concrete research directions | ✅ (8 gaps) | ❌ |
-| C9 | Includes data points and study citations | ✅ | ✅ |
-
-### 3.3 Classification of 18 Without-Skill Failures
-
-| Failure type | Count | Evals | Notes |
-|--------------|-------|-------|-------|
-| **Missing specific 7-section template sections** | 12 | 1/2/3 | Key Findings (3), Areas of Consensus (3), Areas of Debate (3), Gaps and Further Research (3) |
-| **Missing [1]-[n] citation format** | 3 | 1/2/3 | Used inline URLs or reference tables, no unified numbering |
-| **Missing source credibility labels** | 3 | 1/2/3 | Listed sources but no "peer-reviewed / authoritative / moderate credibility" labels |
-
-**Note**: All 18 failures are **structural/format** failures, not content-quality failures. Without-skill passed all content dimensions (source count, data points, perspective coverage, evidence layering).
-
-### 3.4 Trend Analysis
-
-| Scenario complexity | With-Skill advantage | Failure type |
-|---------------------|----------------------|--------------|
-| Eval 1 (focused technical) | +70.0% (7 failures) | All structural |
-| Eval 2 (multi-perspective) | +62.5% (5 failures) | All structural |
-| Eval 3 (cross-domain) | +66.7% (6 failures) | All structural |
-
-The skill’s advantage is **highly stable** across scenarios (62.5%–70.0%), unlike other skills with complexity-dependent trends. The reason: the skill’s core value—template compliance—does not depend on scenario complexity. Regardless of topic, the 7-section template and citation format are either followed or not.
+`scripts/run_loop.py` automates exactly this loop against the eval set, committed at `three-dimension/trigger_eval_set.json`.
 
 ---
 
-## 4. Dimension-by-Dimension Comparison
+## 2. 维度二 · Task performance
 
-### 4.1 Report Structure (7-Section Template)
+Four scenarios on a simple → edge gradient, chosen per §10.3's guidance that the differentiating investment belongs in the hard cases. Both arms ran as independent subagents with live web access, the same prompt and the same tools; the with-skill arm was pointed at `SKILL.md` and followed it.
 
-This is the skill’s **unique** differentiator and accounts for 12 assertion deltas.
+| # | Scenario | Difficulty | Why chosen |
+|---|---|---|---|
+| 0 | Does `govulncheck` emit CVSS scores? | simple | a general model handles this; baseline check |
+| 1 | PostgreSQL logical replication vs Debezium | medium | comparison whose provenance will be challenged |
+| 2 | Two MySQL manual pages contradict on INSTANT DDL's metadata lock | **edge** | does the output surface the conflict or silently pick a side? |
+| 3 | % of Fortune 500 running Kafka in production, 2026 | **edge** | no authoritative source exists — does the output admit it? |
 
-| Section | With Skill 3/3 | Without Skill alternative |
-|---------|----------------|---------------------------|
-| Executive Summary | ✅ Always present | ✅ Usually present (2/3 have heading) |
-| Key Findings | ✅ Concise points + citations | ❌ No dedicated section; findings scattered |
-| Detailed Analysis | ✅ In-depth analysis with subheadings | ⚠️ Often similar content, different naming |
-| Areas of Consensus | ✅ Dedicated section | ❌ None; consensus implied in body |
-| Areas of Debate | ✅ Dedicated section | ❌ None; debate scattered |
-| Sources | ✅ Numbered + credibility | ⚠️ Present but varied format (tables/lists/inline) |
-| Gaps and Further Research | ✅ Forward-looking research directions | ❌ No dedicated section or brief mention only |
+### Assertion benchmark
 
-**Practical value**:
-- **Areas of Consensus + Debate** is the most valuable structural element—it forces researchers to separate "confirmed" from "still debated" findings and avoids readers treating preliminary findings as settled
-- **Gaps section** drives forward-looking thinking—without-skill output is a "snapshot of the moment"; with-skill adds a "future research directions" dimension
-- **Key Findings section** gives busy readers a quick overview—without-skill readers must read the full report to extract main points
+| Metric | With Skill | Without Skill | Delta |
+|---|:--:|:--:|:--:|
+| Assertion pass rate | 20/22 = **91.7%** | 21/22 = **95.8%** | **−0.04** |
+| Per-eval (0/1/2/3) | 5/5, 4/6, 6/6, 5/5 | 5/5, 5/6, 6/6, 5/5 | |
 
-### 4.2 Citation Format (Numbered [1]-[n])
+**Nineteen of twenty-two assertions passed in both arms.** Exactly one discriminated, and it favoured the baseline: the eval-1 with-skill report contains no verbatim quotation at all, only paraphrase with `[n]` markers.
 
-| Dimension | With Skill | Without Skill |
-|-----------|-----------|--------------|
-| Citation format | `[1]`, `[2]`, ..., `[n]` — body numbers + full citations at end | Inline URLs, tables, parenthetical citations, author-year mix |
-| Cross-reference | Body `[1][2]` maps directly to Sources section | Manual matching across formats |
-| Consistency | 3/3 scenarios identical format | 3/3 scenarios different formats |
+A non-discriminating assertion set is a finding about the assertions as much as about the skill: on this scenario set, the properties I could state objectively are properties a competent general model already delivers.
 
-**Analysis**: Without-skill Eval 1 used a Markdown table for sources (URL + "Key Contribution"), Eval 2 used a numbered table, Eval 3 listed sources by category. All three differed. With-skill’s 3 scenarios used the same format: body `[n]`, end `[n] Full citation (credibility note)`.
+### The two arms deliver evidence in different, non-overlapping ways
 
-### 4.3 Source Credibility Labels
+This is the real result, and the assertion count hides it.
 
-| Scenario | With Skill | Without Skill |
-|----------|-----------|--------------|
-| Eval 1 | 18 sources, each labeled e.g. "(Official Go team guidance; highest credibility)" | 11 sources, only "Key Contribution" column |
-| Eval 2 | 19 sources, each labeled e.g. "(Pre-print; moderate credibility)" | 10 sources, only "Type" column |
-| Eval 3 | 29 sources, each labeled e.g. "(Peer-reviewed conference paper; high credibility)" | ~30 sources by Academic/Industry, no per-source credibility |
+| Measure | Without Skill | With Skill |
+|---|:--:|:--:|
+| Machine-validated excerpts (re-fetched and matched) | — | **59, all 59 live-verified** |
+| Verbatim quotes **in the delivered report** | **55 spans, 9 independently confirmed** | 7 spans, 5 confirmed |
+| Numbered per-claim citation markers | 0 | **78** |
+| Per-claim confidence labels | 2 | **20** |
+| Explicit gap / limitation statements | 2 | **10** |
 
-**Practical value**: Credibility labels help readers quickly assess evidence weight. E.g. in Eval 3, with-skill labeled "self-reported survey data, not a randomized trial, but the effect sizes are large", making Tidelift data limitations clear. Without-skill only listed source names without authority assessment.
+The skill gives you a claim→source map with calibrated confidence and named gaps. The baseline gives you the source's actual words. Both are traceability; neither substitutes for the other.
 
-### 4.4 Content Quality Comparison
+**The most actionable defect in this report follows directly from that table: the skill validates 59 excerpts against live pages and then discards every one of them when rendering the report.** They survive only in `findings.json`. A reader who wants to check a claim must be handed the JSON artifacts. Rendering each finding's validated excerpt beneath it would combine both arms' strengths at no research cost — the work is already done and thrown away.
 
-| Dimension | With Skill | Without Skill | Delta |
-|-----------|-----------|--------------|-------|
-| Source count | 18 / 19 / 29 | 11 / 10 / ~30 | Comparable or with-skill slightly more |
-| Data-point density | High | High | No significant difference |
-| Code examples (Eval 1) | Multiple full Go code blocks | Multiple full Go code blocks | No significant difference |
-| Performance data (Eval 1) | PlanetScale benchmark table | DeepSource citation + qualitative | With-skill slightly better |
-| Tool comparison table (Eval 2) | 5 tools × 3 dimensions | 5 tools × 3 dimensions (different data) | Comparable |
-| Evidence layering (Eval 3) | Strong/Moderate/Weak + Consensus/Debate | Strongest/Moderate/Weak/Absent | Comparable |
-| WebSearch usage | Extensive (12+ searches/eval) | Extensive (8+ searches/eval) | Comparable |
-| Research depth | Excellent | Excellent | No significant difference |
+*(No fidelity **rate** is claimed for the baseline. My extractor collects any quoted span, including emphasis and quotations of the user's own question, so its 55-span denominator is not a set of source citations. The 9 and 5 confirmed counts are positive findings; the unconfirmed remainder is not evidence of fabrication.)*
 
-**Conclusion**: The base model’s content quality is already strong. With-skill and without-skill are nearly identical on source count, data density, and analysis depth. The skill’s incremental value is entirely in **structured template** and **citation format**.
+### Where the skill genuinely won
 
----
+Scenario 2 is the one case where the skill arm out-researched the baseline, decisively. The baseline resolved the apparent contradiction correctly by distinguishing lock **mode** from lock **duration** — a good answer. The skill arm went further and found *why the user saw a contradiction at all*: Wayback Machine snapshots, live-verified during the run, show the same URLs said "No metadata locks are taken on the table" as recently as April 2021, and MySQL Bug #106480 records Oracle confirming a documentation defect fixed on 2022-05-13. It also disclosed that `dev.mysql.com` and `bugs.mysql.com` returned 403 to the bundled fetcher, so current-state evidence came from Oracle's mirror and confidence was capped at Medium.
 
-## 5. Token Cost-Effectiveness
+That is the shape of this skill's value: not a better answer, but a defensible one with its own weaknesses on the record.
 
-### 5.1 Skill Size
+Scenario 3 went the other way. Both arms correctly refused to supply a Fortune 500 percentage. The **baseline** additionally located Confluent's 2021 S-1, which discloses an auditable 136 of the Fortune 500 as paying customers, and identified IBM's page as citation drift from Confluent's "Fortune 100" line. The skill arm surfaced neither.
 
-At evaluation time, deep-research was a **very lightweight skill**—single file, no references, fixed ~1,350 token cost.
+### Process observations
 
-| File | Lines | Words | Bytes | Est. tokens |
-|------|-------|-------|------|-------------|
-| **SKILL.md** | 193 | 985 | 6,995 | ~1,350 |
-| **Description (always in context)** | — | ~40 | — | ~50 |
-| **References** | None | — | — | 0 |
-| **Total** | **193** | **985** | **6,995** | **~1,350** |
+All four with-skill runs executed the bundled pipeline — `plan`, `retrieve`, `fetch-content`, `validate`, `report --live-web` — and all four performed live verification (10, 3, 11 and 4 verifications).
 
-### 5.2 Token Cost vs. Quality Gain
+Two process defects appeared in every run:
 
-| Metric | Value |
-|--------|-------|
-| With-skill pass rate | 100% (27/27) |
-| Without-skill pass rate | 33.3% (9/27) |
-| Pass-rate gain | +66.7 pp |
-| Token cost per assertion fixed | ~75 tokens |
-| Token cost per 1% pass-rate gain | **~20 tokens** |
+1. **Ledger proliferation.** Every run created a second session ledger. In three, the agent re-planned to a larger mode and, because `plan` refuses to overwrite an existing ledger, had to write a new file — leaving the first unused. In scenario 3 the `quick` ledger was spent to exactly its 5/5 ceiling and the run continued under a fresh `standard` ledger. **A new ledger routes around the cumulative ceiling the ledger exists to enforce,** and no single ledger represents a session's real total.
+2. **Authority registry coverage.** Every source in the eval-1 report rendered as `website (preclassified T4) — basis: heuristic:unverified-domain`, including `debezium.io`, `docs.confluent.io` and `dev.mysql.com`. The registry added in the previous hardening pass covers standards bodies and major language projects but misses the ordinary vendor-documentation domains real research lands on, so confidence is capped for reasons unrelated to the evidence.
 
-### 5.3 Token Segment Cost-Effectiveness
-
-| Module | Est. tokens | Related assertion deltas | Cost-effectiveness |
-|--------|-------------|---------------------------|---------------------|
-| **Output Format template** | ~200 | 12 (7-section × 3 evals, minus Executive Summary) | **Very high** — 17 tok/assertion |
-| **Citation rules ([1]-[n] + credibility)** | ~80 | 6 (number format 3 + credibility 3) | **Very high** — 13 tok/assertion |
-| **Research Process (5 steps)** | ~200 | Indirect (drives systematic method) | **Medium** — no direct assertion |
-| **Source Evaluation Criteria** | ~60 | Indirect (drives credibility content) | **Medium** — indirect |
-| **Full example (Intermittent Fasting)** | ~550 | Indirect (demonstrates template use) | **Low** — 41% tokens, no direct assertion |
-| **Other (frontmatter/headers)** | ~260 | 0 | **Low** — basic framework |
-
-### 5.4 High-Leverage vs. Low-Leverage Instructions
-
-**High leverage (~280 tokens → 18 assertion deltas)**:
-- Output Format template definition (~200 tok → 12)
-- Citation format + credibility rules (~80 tok → 6)
-
-**Medium leverage (~260 tokens → indirect)**:
-- Research Process 5 steps (~200 tok)
-- Source Evaluation Criteria (~60 tok)
-
-**Low leverage (~810 tokens → 0 direct deltas)**:
-- Full example (~550 tok)—41% of total; may indirectly help template adherence
-- Other framework content (~260 tok)
-
-### 5.5 Token Efficiency Rating
-
-| Rating | Conclusion |
-|--------|------------|
-| **Overall ROI** | **Excellent** — ~1,350 tokens for +66.7% pass rate |
-| **High-leverage token share** | ~21% (280/1,350) directly contributes to 18/18 assertion deltas |
-| **Low-leverage token share** | ~60% (810/1,350) with no direct assertion contribution |
-| **Reference cost-effectiveness** | N/A — no references |
-| **Example cost-effectiveness** | **Optimizable** — 550 tokens (41%) for one example; room to compress |
-
-### 5.6 Comparison with Other Skills
-
-| Metric | deep-research | yt-dlp-downloader | go-makefile-writer | tdd-workflow |
-|--------|--------------|-------------------|-------------------|--------------|
-| SKILL.md tokens | **~1,350** | ~2,370 | ~1,960 | ~2,100 |
-| Total load tokens | **~1,350** | ~5,100–5,730 | ~4,100–4,600 | ~3,600–4,800 |
-| Pass-rate gain | **+66.7%** | +55.0% | +31.0% | +46.2% |
-| Tokens per 1% (SKILL.md) | **~20 tok** | ~43 tok | ~63 tok | ~45 tok |
-| Tokens per 1% (full) | **~20 tok** | ~95 tok | ~149 tok | ~92 tok |
-
-deep-research has the **best** token cost-effectiveness among evaluated skills because:
-1. **Single file, zero references** — fixed ~1,350 token cost, no conditional loading
-2. **Precise fit for base-model gap** — the gap is structural template (easy to fill with few tokens), not domain knowledge
-3. **Very compact template instructions** — 7-section definition in ~200 tokens drives 12 assertion deltas
+A third defect came from the runs' own reports: **DuckDuckGo Lite returns JS-redirect wrapper URLs that the bundled `fetch-content` cannot follow.** One agent had to decode the `uddg` parameter by hand to obtain real target URLs. The bundled retrieval path is effectively unusable in this environment without that manual step.
 
 ---
 
-## 6. Boundary with Base Model Capabilities
+## 3. 维度三 · Token cost-effectiveness
 
-### 6.1 Capabilities Base Model Already Has (No Skill Increment)
+### Input overhead
 
-| Capability | Evidence |
-|------------|----------|
-| WebSearch + WebFetch information gathering | 3/3 scenarios used 8–12+ searches |
-| Multi-source synthesis | 3/3 scenarios cited 10–30 sources |
-| Concrete data-point citation | 3/3 scenarios included numbers, percentages, study results |
-| Multi-perspective coverage | Eval 2 correctly covered developer/manager/security |
-| Evidence layering (strong/moderate/weak) | Eval 3 without-skill implemented Strongest/Moderate/Weak on its own |
-| Code examples and benchmark data | Eval 1 without-skill included full Go code and performance tables |
-| Balanced pros and cons | 3/3 scenarios covered both sides |
+| Component | Tokens |
+|---|--:|
+| `SKILL.md` | 6,627 |
+| + two typical reference files | ~10,900 |
+| all five reference files | 17,253 |
 
-### 6.2 Base Model Gaps (Skill Fills)
+### Measured cost per run
 
-| Gap | Evidence | Risk level |
-|-----|----------|------------|
-| **No consistent report template** | 3/3 scenarios used different structures | **Medium** — hard to compare across reports |
-| **Missing Areas of Consensus/Debate** | 3/3 scenarios no dedicated sections | **Medium** — readers can’t separate confirmed vs. unsettled |
-| **Missing Key Findings quick overview** | 3/3 scenarios no dedicated section | **Low** — readers can extract themselves |
-| **Missing Gaps and Further Research** | 3/3 scenarios none or brief mention | **Medium** — no forward-looking dimension |
-| **Inconsistent citation format** | 3/3 scenarios different formats | **Low** — functionality unaffected |
-| **No source credibility labels** | 3/3 scenarios no per-source assessment | **Medium** — readers can’t quickly assess evidence weight |
+| Metric | Without Skill | With Skill | Multiple |
+|---|--:|--:|:--:|
+| Total tokens | 143,127 | 253,518 | **1.77×** |
+| Tool calls | 21.0 | 81.2 | **3.87×** |
+| Wall seconds | 288.6 | 1,006.4 | **3.49×** |
 
-**Core finding**: The base model’s "research ability" (search, synthesis, analysis) is strong, but its "research report discipline" (structure consistency, citation norms, credibility assessment) has clear gaps. The skill fills the latter.
+Per-scenario token multiples were stable at 1.61× / 1.72× / 2.00× / 1.68×; wall-clock multiples ranged 2.7×–4.6×.
 
----
+### Cost and break-even
 
-## 7. Overall Score
+The subagent accounting reports one token total per run rather than an input/output split, so the dollar figure is a band across plausible output shares rather than a single invented number.
 
-### 7.1 Dimension Scores
+| Output share assumed | Baseline | With Skill | Delta |
+|---|--:|--:|--:|
+| 5% | $0.515 | $0.913 | **+$0.397** |
+| 15% | $0.687 | $1.217 | **+$0.530** |
 
-| Dimension | With Skill | Without Skill | Delta |
-|-----------|-----------|--------------|-------|
-| Report structure compliance | 5.0/5 | 1.0/5 | +4.0 |
-| Citation format and credibility | 5.0/5 | 1.5/5 | +3.5 |
-| Consensus/debate distinction | 5.0/5 | 1.0/5 | +4.0 |
-| Forward-looking (Gaps section) | 5.0/5 | 1.5/5 | +3.5 |
-| Content depth and breadth | 5.0/5 | 4.5/5 | +0.5 |
-| Source count and quality | 5.0/5 | 4.5/5 | +0.5 |
-| **Mean** | **5.0/5** | **2.33/5** | **+2.67** |
+At $100–150/hour that delta is repaid by **0.16–0.32 minutes — ten to nineteen seconds — of engineer time.**
 
-### 7.2 Weighted Total
+So the token question is settled: the cost is trivial against any plausible benefit. **The binding cost is latency: +718 seconds, twelve minutes, per run,** paid by the person waiting. Scenario 2 took the skill arm 26.6 minutes against the baseline's 10.
 
-| Dimension | Weight | Score | Weighted |
-|-----------|--------|------|----------|
-| Assertion pass rate (delta) | 25% | 10/10 | 2.50 |
-| Report structure compliance | 20% | 10/10 | 2.00 |
-| Citation format and credibility | 15% | 10/10 | 1.50 |
-| Consensus/debate + forward-looking | 10% | 10/10 | 1.00 |
-| Token cost-effectiveness | 15% | 10/10 | 1.50 |
-| Content quality increment | 10% | 2.0/10 | 0.20 |
-| Source count/quality increment | 5% | 2.0/10 | 0.10 |
-| **Weighted total** | | | **8.80/10** |
-
-Lower scores on content quality and source increment reflect an important fact: **the base model’s research ability is already strong**. The skill’s value is in structured report writing, not information gathering or analysis depth. This is not a skill defect but an accurate reflection of its design.
+No ROI multiple is quoted. A large ratio computed from a ten-second break-even would be arithmetically true and rhetorically misleading — it would invite trust in a number whose denominator is negligible, while the real cost sits in a term the ratio does not contain.
 
 ---
 
-## 8. Evaluation Materials
+## 4. Verdict
 
-| Material | Path |
-|----------|------|
-| Eval 1 with-skill output | `/tmp/research-eval/eval-1/with_skill/response.md` |
-| Eval 1 without-skill output | `/tmp/research-eval/eval-1/without_skill/response.md` |
-| Eval 2 with-skill output | `/tmp/research-eval/eval-2/with_skill/response.md` |
-| Eval 2 without-skill output | `/tmp/research-eval/eval-2/without_skill/response.md` |
-| Eval 3 with-skill output | `/tmp/research-eval/eval-3/with_skill/response.md` |
-| Eval 3 without-skill output | `/tmp/research-eval/eval-3/without_skill/response.md` |
+| Dimension | Weight | Score | Weighted | Basis |
+|---|:--:|:--:|:--:|---|
+| Trigger accuracy | 35% | 3.5/10 | 1.23 | Recall 40% against a 90% bar; Precision 100%. A skill that does not fire has no other value. |
+| Task performance | 35% | 5.5/10 | 1.93 | 20/22 vs 21/22; 19 of 22 assertions non-discriminating; one clear win (scenario 2), one clear loss (scenario 3); validated excerpts discarded before delivery |
+| Token cost-effectiveness | 30% | 7.0/10 | 2.10 | Token delta repaid by ~15 seconds of engineer time; +12 min latency is the real cost |
+| **Weighted total** | | | **5.26/10** |
+
+Trigger accuracy carries the heaviest weight because it gates everything else: on this evidence, six times in ten the rest of this report does not apply, because the skill is never consulted.
+
+**Where this skill earns its cost:** work whose conclusions will be audited or disputed — a migration runbook, a security decision, a comparison a director will interrogate. Scenario 2 shows what that looks like: the answer, its provenance, the version history that explains the confusion, and an honest note that the primary domain blocked the fetcher.
+
+**Where it does not:** anything not framed as a decision between named options — which, per dimension 1, is also most of what it will never be invited to.
+
+### Priority of fixes
+
+1. **Fix the description** (dimension 1). Nothing else here matters at 40% recall. Run `scripts/run_loop.py` against the committed eval set.
+2. **Render validated excerpts in the report.** Fifty-nine live-verified excerpts are produced and discarded. A rendering change, not a research change.
+3. **Extend the authority registry** to ordinary vendor-documentation domains, or stop capping confidence on registry absence alone.
+4. **Fix the retrieval path** — decode DDG's `uddg` wrappers inside `retrieve` so `fetch-content` receives real URLs.
+5. **Make re-planning first-class** so an agent can widen its mode without abandoning its ledger, and treat a second ledger for the same task as budget exhaustion rather than a fresh allowance.
+
+---
+
+## 5. Limitations — read before quoting any number above
+
+1. **Task performance is n=1 per cell.** Four scenarios × two arms, one run each. The trigger dimension has three repetitions per query; the task dimension has none. No variance is reported for the task dimension because none was measured — and `benchmark.md`'s header saying "3 runs each per configuration" is an aggregator default, not what happened.
+2. **The baseline is not a naked model.** Both arms ran as subagents inside this repository, so both inherited a `CLAUDE.md` that already demands "Verification Before Done" and "No Laziness: find root causes". The baseline is a model already instructed toward evidence discipline. A naked-model baseline would very likely score lower, and the honest reading of "no task-performance delta" is "no delta against an already-rigorous baseline".
+3. **The assertion set barely discriminates.** 19 of 22 assertions passed in both arms. Assertions that separate these arms would have to test the auditability apparatus directly, which edges toward testing "did it use the skill".
+4. **My own measurement pipeline was wrong three times.** Each was caught and corrected; each is recorded because an evaluation that hides its own errors is not evidence.
+   - I read session ledgers while runs were still executing and concluded live verification never happened. It did — 10, 3, 11 and 4 times. Retracted.
+   - The quote extractor read only double-quoted spans, so it scored the skill's best-quoting run as having none. Fixed; that run turned out to have the highest verified rate of any run (4 of 6).
+   - The extractor over-collects emphasis and self-quotation, so the baseline's 55-span count is not a citation count and no fidelity rate can be derived from it.
+5. **Single model, single day, live web.** Sonnet, 2026-09-08. `dev.mysql.com` 403s and DDG wrapper URLs are environment facts that may not reproduce.
+6. **Trigger results are environment-specific.** 88 skills were advertised in every trigger run. Recall in a session with fewer competitors would likely be higher; this measures a heavily-populated real environment.
+7. **Scenario coverage.** Four web-research scenarios. Nothing here measures pure codebase research or the test-receipt path, both of which the skill supports and neither of which was exercised.
+
+---
+
+## 6. Reproducing this
+
+```bash
+cd outputexample/deep-research/ab-2026-09-08/three-dimension
+cat trigger_metrics.txt          # dimension 1 result
+cat trigger_eval_set.json        # the 20 queries, with why each was chosen
+cat benchmark.md                 # dimension 2 aggregate
+cat grading_summary.json         # per-assertion grades, incl. the checker correction
+cat timing_summary.json          # dimension 3 raw cost data
+cat ledger_analysis.json         # the session-ledger finding
+ls answers/                      # all 8 delivered answers
+open eval_review.html            # skill-creator eval viewer: outputs + benchmark tabs
+```
+
+`trigger_run.py` is the trigger harness; its docstring records the two deliberate changes made to skill-creator's `run_eval.py` for a skill that is already installed. `verify_quotes.py` is the mechanical quote checker, applied identically to both arms.
+
+---
+
+## 7. Previous evaluations — superseded
+
+| Date | Method | Score | Why superseded |
+|---|---|:--:|---|
+| 2026-03-12 | 3 scenarios × 2 configs, 27 assertions | 8.80/10 | Evaluated a 7-section snapshot that no longer exists; the baseline was never asked to produce the format it was scored on; evidence lived in `/tmp` and is gone. |
+| 2026-09-08 (earlier the same day) | 9 fixtures × 2 arms × 2 reps, 36 runs | 6.26/10 | Injected `SKILL.md` into the system prompt, which **bypasses triggering entirely** — the dimension that turns out to dominate. It also forced both arms into a fixed `url ||| excerpt` output shape, which told the baseline what to produce and inflated the measured token gap to 6.8× against this evaluation's 1.77×. Its citation-fidelity work and the three truncation defects it exposed remain valid, and its data is retained as `results-before-fix.json` / `results.json`. |
+
+All three evaluations agree on the shape of the result: **this skill's value is auditability discipline, not research ability.** This one adds the finding that the discipline is usually never invoked.

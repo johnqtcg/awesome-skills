@@ -1,0 +1,12 @@
+## Answer
+
+No — `govulncheck` does not output a CVSS score for the vulnerabilities it reports.
+
+I researched this using the official Go project documentation for the `govulncheck` command (pkg.go.dev), the Go vulnerability database report format specification, and the `govulncheck` source's doc.go. Across all of these authoritative documents, the described output consists of: a brief per-vulnerability message with a **call-stack summary** (source mode) or affected-module list (binary mode), plus three supported machine-readable output formats — **streaming JSON**, **SARIF**, and **OpenVEX**. None of these documents mention a CVSS score, CVSS vector, or severity rating as part of what `govulncheck` emits. This absence is corroborated by a still-open Go project GitHub issue (`golang/go#70289`, "x/vuln: request govulncheck mark CVE's with severity level"), which is a feature request asking for severity/CVSS labeling — itself evidence that this capability does not currently exist in the tool.
+
+Because this is an "absence of a feature" claim, the automated claim-support screen in the deep-research verification pipeline flagged that a single positive excerpt (describing what *is* shown) cannot mechanically prove a negative with full certainty, so the finding is rated at Medium rather than High confidence — an honest epistemic limitation, not contradicting evidence.
+
+VERDICT: NO
+
+SOURCES:
+- https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck ||| If no vulnerabilities are found, govulncheck will display a short message. If there are vulnerabilities, each is displayed briefly, with a summary of a call stack.

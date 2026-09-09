@@ -1,0 +1,9 @@
+## Answer
+
+No. Playwright's `expect(...).toPass()` retry helper was **not** available in version 1.20 (released March 14, 2022). It was introduced later, in Playwright **1.29** (released December 16, 2022), via commit `0e2732d` ("feat(api): introduce expect().toPass", PR #19463, merged 2022-12-15). Confirming this directly: the `docs/src/test-assertions-js.md` file at the `v1.20.0` git tag contains no mention of `toPass`, and the official Playwright release notes document the feature's debut under the "Version 1.29" heading.
+
+VERDICT: NO
+
+SOURCES:
+- https://github.com/microsoft/playwright/blob/main/docs/src/release-notes-js.md ||| Retry blocks of code until all assertions pass:
+- https://github.com/microsoft/playwright/commit/0e2732decfb511a6d625f66deae2fac760c6d87e ||| feat(api): introduce expect().toPass (#19463)

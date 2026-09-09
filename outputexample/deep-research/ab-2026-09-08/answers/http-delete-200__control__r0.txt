@@ -1,0 +1,6 @@
+This confirms the answer directly from the spec-derived documentation and matches RFC 9110 §9.3.5, which states that on successful DELETE, an origin server SHOULD send 202 (Accepted) if not yet enacted, 204 (No Content) if enacted with no further info, or 200 (OK) if enacted and the response includes a representation describing the status. So a 200 response with a body is explicitly valid and expected to carry a representation.
+
+VERDICT: YES
+
+SOURCES:
+- https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Methods/DELETE ||| A 200 OK response means the request was successful and the response body includes a representation describing the outcome:

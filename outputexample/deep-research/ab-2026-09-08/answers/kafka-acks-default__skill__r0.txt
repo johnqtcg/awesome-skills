@@ -1,0 +1,10 @@
+Confirmed: Kafka 3.0 and 3.4 official docs both show `acks` default = `all`, not `1`. This aligns with the earlier Medium/Conduktor sources noting the change took effect starting Kafka 3.0 (KIP-679). The default was `1` only in Kafka 2.8 and earlier.
+
+The answer is **NO** — in Kafka 3.x, the Java producer's `acks` default is `all` (equivalent to `-1`), not `1`. This changed starting with Kafka 3.0.
+
+VERDICT: NO
+
+SOURCES:
+- https://kafka.apache.org/30/generated/producer_config.html ||| <tr><th>Default:</th><td>all</td></tr>
+- https://kafka.apache.org/34/generated/producer_config.html ||| <tr><th>Default:</th><td>all</td></tr>
+- https://www.conduktor.io/kafka/kafka-producer-acks-deep-dive ||| The default value of acks has changed with Kafka v3.0 If using Kafka acks=1 If using Kafka >= v3.0, acks=all

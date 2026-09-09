@@ -18,11 +18,16 @@ Serialized data is caller-controlled. Loading it always sets
 ignores caller-provided `source_tier`, `source_type`, `domain`, and
 `classification_basis` when making authority decisions.
 
-The current executable automatic T1 policy is intentionally conservative:
-recognized government namespaces may derive as T1. Other domains remain below
-High unless a future trusted authority registry or host execution handle is
-added. This avoids replacing caller self-assertion with another unaudited JSON
-field.
+Automatic T1 derives from recognized government namespaces and from
+`source-authority-registry.json`, a curated registry binding a domain to a
+standards body, government, or owning project with a stated basis and check
+date. Matching is exact host or a true subdomain, so a listed
+`docs.aws.amazon.com` does not lift `amazon.com`. Registry results carry a
+`registry:` classification basis; an unlisted host keeps its heuristic tier,
+and an unreadable registry yields no entries. Authority is therefore never a
+caller-supplied JSON field, and `project-owned` entries are marked
+`vendor_self` so they cannot act as the independent primary unit for a
+comparison or recommendation.
 
 ## Provenance Recorded for a Live Capture
 

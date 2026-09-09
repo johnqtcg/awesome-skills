@@ -27,6 +27,11 @@ SESSION_SCHEMA = "deep-research/session-v1"
 BUDGET_KEYS = {
     "retrieval_calls": "retrieval_max",
     "content_extractions": "content_max",
+    # Final live re-verification fetches the network too. It gets its own line
+    # rather than draining content_extractions, because a run that spent its
+    # extraction allowance doing the research must still be able to verify and
+    # report — but it must not be able to fetch without limit either.
+    "live_verifications": "live_verification_max",
     "report_sources": "report_sources_max",
 }
 
@@ -107,16 +112,27 @@ def _validate_session(payload: Any, path: Path) -> Dict[str, Any]:
         raise ValueError(f"session artifact is incomplete: {path}")
     canonical_budget = MODE_BUDGETS[mode]
     for key, expected in canonical_budget.items():
+        if key not in budget:
+            # A ledger written before this budget line existed is adopted, not
+            # rejected: the value is derived from the mode, never chosen by the
+            # caller, so backfilling it cannot raise a ceiling. Rejecting would
+            # strand an in-flight research run on a version bump.
+            budget[key] = expected
+            continue
         try:
-            actual = int(budget.get(key, -1))
+            actual = int(budget[key])
         except (TypeError, ValueError):
             actual = -1
         if actual != expected:
+            # A key that is present with the wrong value is tampering, which is
+            # what this check exists for.
             raise ValueError(
                 f"session budget {key} is not canonical for {mode}: {path}"
             )
     for usage_key, limit_key in BUDGET_KEYS.items():
-        value = usage.get(usage_key)
+        # A ledger written before this budget line existed is still valid; an
+        # absent counter means nothing has been spent on it.
+        value = usage.setdefault(usage_key, 0)
         if (
             isinstance(value, bool)
             or not isinstance(value, int)
@@ -172,6 +188,7 @@ def initialize_session(path: Path, plan: Dict[str, Any]) -> Dict[str, Any]:
             "usage": {
                 "retrieval_calls": 0,
                 "content_extractions": 0,
+                "live_verifications": 0,
                 "report_sources": 0,
             },
             "events": [],

@@ -195,14 +195,48 @@ class TestInferSourceType(unittest.TestCase):
     def test_blog_devto(self):
         self.assertEqual("blog", deep_research.infer_source_type("dev.to"))
 
-    def test_docs_subdomain(self):
-        self.assertEqual("website", deep_research.infer_source_type("docs.python.org"))
+    def test_docs_prefix_alone_confers_no_authority(self):
+        """A docs.* prefix on an unlisted host must stay unverified."""
+        self.assertEqual(
+            "website", deep_research.infer_source_type("docs.notarealproject.io")
+        )
 
     def test_docs_subdomain_is_not_automatically_t1(self):
         source_type, tier, basis = deep_research.infer_source_quality("docs.example.com")
         self.assertEqual("website", source_type)
         self.assertEqual("T4", tier)
         self.assertIn("unverified", basis)
+
+    def test_registered_project_domain_is_official_via_registry(self):
+        """Authority comes from the curated registry, never from the URL shape.
+
+        The basis string must name the registry so a reader can tell a checked
+        ownership record from a heuristic guess.
+        """
+        source_type, tier, basis = deep_research.infer_source_quality("docs.python.org")
+        self.assertEqual("official", source_type)
+        self.assertEqual("T1", tier)
+        self.assertIn("registry:project-owned", basis)
+
+    def test_registry_does_not_leak_to_the_parent_domain(self):
+        """docs.aws.amazon.com is listed; amazon.com must not inherit it."""
+        self.assertEqual("official", deep_research.infer_source_type("docs.aws.amazon.com"))
+        source_type, tier, basis = deep_research.infer_source_quality("amazon.com")
+        self.assertEqual("website", source_type)
+        self.assertEqual("T4", tier)
+        self.assertIn("unverified", basis)
+
+    def test_standards_body_is_t1_standards(self):
+        source_type, tier, basis = deep_research.infer_source_quality("rfc-editor.org")
+        self.assertEqual("standards", source_type)
+        self.assertEqual("T1", tier)
+        self.assertIn("registry:standards-body", basis)
+
+    def test_news_named_subdomain_of_a_forum_stays_a_forum(self):
+        """Substring heuristics run on the registrable domain, not the host."""
+        self.assertEqual(
+            "forum", deep_research.infer_source_type("news.ycombinator.com")
+        )
 
     def test_edu_is_institutional_t2_not_official_product_docs(self):
         source_type, tier, _ = deep_research.infer_source_quality("mit.edu")

@@ -1,0 +1,10 @@
+Go's `encoding/xml` package does **not** expose a user-configurable setting for maximum nesting depth. The `Decoder` struct only has configurable fields for `Strict`, `AutoClose`, `Entity`, `CharsetReader`, and `DefaultSpace` — none of which relate to nesting depth.
+
+Internally, the package does enforce a hardcoded depth limit (`maxUnmarshalDepth = 10000`, with `maxUnmarshalDepthWasm = 5000` for WebAssembly) inside `read.go`, added after CVE-2022-28131 (a stack-exhaustion DoS via `Decoder.Skip` on deeply nested XML) to prevent stack overflow. But this is a fixed internal constant baked into the standard library source — it is not an exported option, field, or parameter that a developer can set or tune. So there is no "setting" in the sense of a documented, user-facing knob to limit nesting depth.
+
+VERDICT: NO
+
+SOURCES:
+- https://github.com/golang/go/blob/master/src/encoding/xml/read.go ||| maxUnmarshalDepth = 10000
+- https://github.com/golang/go/issues/53614 ||| Calling Decoder.Skip when parsing a deeply nested XML document can cause a panic due to stack exhaustion.
+- https://pkg.go.dev/encoding/xml ||| CharsetReader

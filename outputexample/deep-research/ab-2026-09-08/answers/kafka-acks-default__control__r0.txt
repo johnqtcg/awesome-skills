@@ -1,0 +1,6 @@
+This confirms it clearly. In Apache Kafka 3.0+, `acks` defaults to `all`, not `1` — this was changed via KIP-679 to give producers the strongest delivery guarantee by default.
+
+VERDICT: NO
+
+SOURCES:
+- https://kafka.apache.org/30/getting-started/upgrade/ ||| The producer has stronger delivery guarantees by default: idempotence is enabled and acks is set to all instead of 1.

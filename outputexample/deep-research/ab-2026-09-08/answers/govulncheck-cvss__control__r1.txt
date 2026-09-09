@@ -1,0 +1,7 @@
+This confirms the answer: govulncheck's output (text, JSON, SARIF) is based on the OSV-formatted Go vulnerability database, which includes an advisory ID, affected package/versions, fixed version, summary, and call-trace information — but no CVSS score field. The Go vulnerability database's own schema documentation does not include a CVSS/severity field, and govulncheck's `Finding` struct (OSV id, FixedVersion, Trace) contains no severity/CVSS metric either.
+
+VERDICT: NO
+
+SOURCES:
+- https://pkg.go.dev/golang.org/x/vuln/internal/govulncheck ||| FixedVersion is the module version where the vulnerability was fixed, and is empty if a fix is not available.
+- https://go.dev/security/vuln/database ||| For information on other fields in the schema, refer to the OSV spec.

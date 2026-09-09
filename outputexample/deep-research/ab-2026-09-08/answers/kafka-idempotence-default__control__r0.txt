@@ -1,0 +1,8 @@
+This confirms it directly from the official Apache Kafka 3.6 producer configuration documentation.
+
+In Apache Kafka 3.x, the Java producer's `enable.idempotence` configuration defaults to `true`. This changed starting with Kafka 3.0 (via KIP-679/KIP-794-related default changes) — idempotence is enabled by default as long as there are no conflicting producer configurations (e.g., explicitly setting `acks` to something other than `all`, or setting `retries` to 0). If conflicting configs are set without explicitly enabling idempotence, it's silently disabled with a warning; if idempotence is explicitly enabled alongside conflicting configs, a `ConfigException` is thrown instead.
+
+VERDICT: YES
+
+SOURCES:
+- https://kafka.apache.org/36/configuration/producer-configs/ ||| Idempotence is enabled by default if no conflicting configurations are set.

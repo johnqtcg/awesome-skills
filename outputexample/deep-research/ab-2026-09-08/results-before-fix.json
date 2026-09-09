@@ -1,0 +1,2103 @@
+{
+  "completeness": {
+    "expected_cells": 36,
+    "observed_cells": 36,
+    "missing": [],
+    "errored": [],
+    "treatment_violations": [],
+    "cells_without_a_parsable_verdict": [],
+    "complete": true
+  },
+  "summary": {
+    "control": {
+      "cells": 18,
+      "cells_that_ran_bundled_scripts": 0,
+      "cells_that_ran_validate_or_report": 0,
+      "subcommands_seen": [],
+      "median_tool_calls": 5.0,
+      "total_web_search": 32,
+      "total_web_fetch": 62,
+      "verdict_correct": 18,
+      "accuracy": 1.0,
+      "citations_total": 27,
+      "citations_per_cell": 1.5,
+      "citations_verified": 21,
+      "citations_mismatched": 6,
+      "citations_unfetchable": 0,
+      "support_rate_of_checkable": 0.778,
+      "citations_passing_skills_own_strict_matcher": 16,
+      "strict_support_rate_of_checkable": 0.593,
+      "quotes_correct_but_rejected_on_typography": 5,
+      "citations_the_skills_own_validator_would_accept": 8,
+      "quotes_correct_but_lost_to_the_15k_extraction_cap": 8,
+      "cells_with_at_least_one_verified_quote": 15,
+      "cells_with_a_verified_primary_source": 10,
+      "median_duration_s": 35.5,
+      "total_output_tokens": 26345,
+      "median_answer_chars": 546.0
+    },
+    "skill": {
+      "cells": 18,
+      "cells_that_ran_bundled_scripts": 18,
+      "cells_that_ran_validate_or_report": 5,
+      "subcommands_seen": [
+        "fetch-content",
+        "plan",
+        "quick-check",
+        "report",
+        "reserve-budget",
+        "retrieve"
+      ],
+      "median_tool_calls": 22.0,
+      "total_web_search": 7,
+      "total_web_fetch": 45,
+      "verdict_correct": 18,
+      "accuracy": 1.0,
+      "citations_total": 40,
+      "citations_per_cell": 2.22,
+      "citations_verified": 33,
+      "citations_mismatched": 7,
+      "citations_unfetchable": 0,
+      "support_rate_of_checkable": 0.825,
+      "citations_passing_skills_own_strict_matcher": 30,
+      "strict_support_rate_of_checkable": 0.75,
+      "quotes_correct_but_rejected_on_typography": 3,
+      "citations_the_skills_own_validator_would_accept": 19,
+      "quotes_correct_but_lost_to_the_15k_extraction_cap": 11,
+      "cells_with_at_least_one_verified_quote": 18,
+      "cells_with_a_verified_primary_source": 9,
+      "median_duration_s": 146.5,
+      "total_output_tokens": 178532,
+      "median_answer_chars": 1169.0
+    }
+  },
+  "per_fixture": [
+    {
+      "fixture": "govulncheck-cvss",
+      "answer_key": "NO",
+      "control": {
+        "verdicts": [
+          "NO",
+          "NO"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 2,
+        "mismatched_quotes": 1
+      },
+      "skill": {
+        "verdicts": [
+          "NO",
+          "NO"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 3,
+        "mismatched_quotes": 0
+      }
+    },
+    {
+      "fixture": "tsetenv-parallel",
+      "answer_key": "NO",
+      "control": {
+        "verdicts": [
+          "NO",
+          "NO"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 3,
+        "mismatched_quotes": 0
+      },
+      "skill": {
+        "verdicts": [
+          "NO",
+          "NO"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 5,
+        "mismatched_quotes": 0
+      }
+    },
+    {
+      "fixture": "kafka-acks-default",
+      "answer_key": "NO",
+      "control": {
+        "verdicts": [
+          "NO",
+          "NO"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 2,
+        "mismatched_quotes": 1
+      },
+      "skill": {
+        "verdicts": [
+          "NO",
+          "NO"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 2,
+        "mismatched_quotes": 3
+      }
+    },
+    {
+      "fixture": "node-timingsafeequal",
+      "answer_key": "NO",
+      "control": {
+        "verdicts": [
+          "NO",
+          "NO"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 2,
+        "mismatched_quotes": 0
+      },
+      "skill": {
+        "verdicts": [
+          "NO",
+          "NO"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 2,
+        "mismatched_quotes": 2
+      }
+    },
+    {
+      "fixture": "go-xml-maxdepth",
+      "answer_key": "NO",
+      "control": {
+        "verdicts": [
+          "NO",
+          "NO"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 6,
+        "mismatched_quotes": 0
+      },
+      "skill": {
+        "verdicts": [
+          "NO",
+          "NO"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 3,
+        "mismatched_quotes": 1
+      }
+    },
+    {
+      "fixture": "playwright-topass",
+      "answer_key": "NO",
+      "control": {
+        "verdicts": [
+          "NO",
+          "NO"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 2,
+        "mismatched_quotes": 1
+      },
+      "skill": {
+        "verdicts": [
+          "NO",
+          "NO"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 3,
+        "mismatched_quotes": 1
+      }
+    },
+    {
+      "fixture": "http-delete-200",
+      "answer_key": "YES",
+      "control": {
+        "verdicts": [
+          "YES",
+          "YES"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 1,
+        "mismatched_quotes": 1
+      },
+      "skill": {
+        "verdicts": [
+          "YES",
+          "YES"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 5,
+        "mismatched_quotes": 0
+      }
+    },
+    {
+      "fixture": "pg-cic-no-transaction",
+      "answer_key": "YES",
+      "control": {
+        "verdicts": [
+          "YES",
+          "YES"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 2,
+        "mismatched_quotes": 0
+      },
+      "skill": {
+        "verdicts": [
+          "YES",
+          "YES"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 5,
+        "mismatched_quotes": 0
+      }
+    },
+    {
+      "fixture": "kafka-idempotence-default",
+      "answer_key": "YES",
+      "control": {
+        "verdicts": [
+          "YES",
+          "YES"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 1,
+        "mismatched_quotes": 2
+      },
+      "skill": {
+        "verdicts": [
+          "YES",
+          "YES"
+        ],
+        "correct": 2,
+        "n": 2,
+        "verified_quotes": 5,
+        "mismatched_quotes": 0
+      }
+    }
+  ],
+  "cells": [
+    {
+      "fixture": "go-xml-maxdepth",
+      "arm": "control",
+      "rep": 0,
+      "verdict": "NO",
+      "duration_s": 33,
+      "system_prompt_bytes": 0,
+      "output_tokens": 1590,
+      "tools": {
+        "tool_calls": 5,
+        "web_search": 2,
+        "web_fetch": 2,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://pkg.go.dev/encoding/xml",
+          "excerpt": "Strict defaults to true, enforcing the requirements of the XML specification.",
+          "strict_match": false,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 34152,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": true,
+          "truncation_only_failure": false,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        },
+        {
+          "url": "https://github.com/golang/go/blob/master/src/encoding/xml/read.go",
+          "excerpt": "maxUnmarshalDepth = 10000",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 16708,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        },
+        {
+          "url": "https://github.com/golang/go/issues/80481",
+          "excerpt": "encoding/xml: (*Decoder).DecodeElement bypasses recursion-depth guard",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 1666,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "go-xml-maxdepth",
+      "arm": "control",
+      "rep": 1,
+      "verdict": "NO",
+      "duration_s": 39,
+      "system_prompt_bytes": 0,
+      "output_tokens": 1649,
+      "tools": {
+        "tool_calls": 6,
+        "web_search": 2,
+        "web_fetch": 3,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://github.com/golang/go/blob/master/src/encoding/xml/read.go",
+          "excerpt": "maxUnmarshalDepth = 10000",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 16708,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        },
+        {
+          "url": "https://github.com/golang/go/issues/53614",
+          "excerpt": "Calling Decoder.Skip when parsing a deeply nested XML document can cause a panic due to stack exhaustion.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 1728,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        },
+        {
+          "url": "https://pkg.go.dev/encoding/xml",
+          "excerpt": "CharsetReader",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 34152,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        }
+      ]
+    },
+    {
+      "fixture": "go-xml-maxdepth",
+      "arm": "skill",
+      "rep": 0,
+      "verdict": "NO",
+      "duration_s": 90,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 4440,
+      "tools": {
+        "tool_calls": 13,
+        "web_search": 1,
+        "web_fetch": 8,
+        "bash": 3,
+        "bundled_subcommands": [
+          "quick-check",
+          "reserve-budget"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://github.com/golang/go/blob/master/src/encoding/xml/read.go",
+          "excerpt": "maxUnmarshalDepth = 10000",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 16708,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        },
+        {
+          "url": "https://pkg.go.dev/encoding/xml#Decoder",
+          "excerpt": "DefaultSpace sets the default name space used for unadorned tags, as if the entire XML stream were wrapped in an element containing the attribute xmlns=\"DefaultSpace\".",
+          "strict_match": false,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 34152,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": true,
+          "truncation_only_failure": false,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        }
+      ]
+    },
+    {
+      "fixture": "go-xml-maxdepth",
+      "arm": "skill",
+      "rep": 1,
+      "verdict": "NO",
+      "duration_s": 82,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 4924,
+      "tools": {
+        "tool_calls": 16,
+        "web_search": 1,
+        "web_fetch": 4,
+        "bash": 4,
+        "bundled_subcommands": [
+          "fetch-content",
+          "quick-check",
+          "reserve-budget"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://github.com/golang/go/blob/master/src/encoding/xml/read.go",
+          "excerpt": "maxUnmarshalDepth = 10000",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 16708,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        },
+        {
+          "url": "https://pkg.go.dev/encoding/xml",
+          "excerpt": "Strict, AutoClose, Entity, CharsetReader, DefaultSpace",
+          "strict_match": false,
+          "loose_match": false,
+          "visible_to_skill_validator": false,
+          "page_chars": 34152,
+          "page_exceeds_skill_cap": true,
+          "state": "mismatch",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        }
+      ]
+    },
+    {
+      "fixture": "govulncheck-cvss",
+      "arm": "control",
+      "rep": 0,
+      "verdict": "NO",
+      "duration_s": 50,
+      "system_prompt_bytes": 0,
+      "output_tokens": 1561,
+      "tools": {
+        "tool_calls": 9,
+        "web_search": 3,
+        "web_fetch": 5,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://go.dev/doc/security/vuln/",
+          "excerpt": "Why does the Go vulnerability database not use severity labels?",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 6566,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        }
+      ]
+    },
+    {
+      "fixture": "govulncheck-cvss",
+      "arm": "control",
+      "rep": 1,
+      "verdict": "NO",
+      "duration_s": 51,
+      "system_prompt_bytes": 0,
+      "output_tokens": 2144,
+      "tools": {
+        "tool_calls": 10,
+        "web_search": 3,
+        "web_fetch": 6,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://pkg.go.dev/golang.org/x/vuln/internal/govulncheck",
+          "excerpt": "FixedVersion is the module version where the vulnerability was fixed, and is empty if a fix is not available.",
+          "strict_match": false,
+          "loose_match": false,
+          "visible_to_skill_validator": false,
+          "page_chars": 11546,
+          "page_exceeds_skill_cap": false,
+          "state": "mismatch",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        },
+        {
+          "url": "https://go.dev/security/vuln/database",
+          "excerpt": "For information on other fields in the schema, refer to the OSV spec.",
+          "strict_match": false,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 10094,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": true,
+          "truncation_only_failure": false,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        }
+      ]
+    },
+    {
+      "fixture": "govulncheck-cvss",
+      "arm": "skill",
+      "rep": 0,
+      "verdict": "NO",
+      "duration_s": 182,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 12887,
+      "tools": {
+        "tool_calls": 27,
+        "web_search": 0,
+        "web_fetch": 0,
+        "bash": 20,
+        "bundled_subcommands": [
+          "fetch-content",
+          "plan",
+          "report",
+          "reserve-budget",
+          "retrieve"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": true
+      },
+      "sources": [
+        {
+          "url": "https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck",
+          "excerpt": "If no vulnerabilities are found, govulncheck will display a short message. If there are vulnerabilities, each is displayed briefly, with a summary of a call stack.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 5340,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        }
+      ]
+    },
+    {
+      "fixture": "govulncheck-cvss",
+      "arm": "skill",
+      "rep": 1,
+      "verdict": "NO",
+      "duration_s": 140,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 9209,
+      "tools": {
+        "tool_calls": 27,
+        "web_search": 0,
+        "web_fetch": 0,
+        "bash": 22,
+        "bundled_subcommands": [
+          "fetch-content",
+          "plan",
+          "quick-check",
+          "report",
+          "reserve-budget"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": true
+      },
+      "sources": [
+        {
+          "url": "https://go.dev/doc/tutorial/govulncheck",
+          "excerpt": "Vulnerability #1: GO-2021-0113",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 8171,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        },
+        {
+          "url": "https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck",
+          "excerpt": "If no vulnerabilities are found, govulncheck will display a short message. If there are vulnerabilities, each is displayed briefly, with a summary of a call stack.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 5340,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        }
+      ]
+    },
+    {
+      "fixture": "http-delete-200",
+      "arm": "control",
+      "rep": 0,
+      "verdict": "YES",
+      "duration_s": 38,
+      "system_prompt_bytes": 0,
+      "output_tokens": 1009,
+      "tools": {
+        "tool_calls": 5,
+        "web_search": 1,
+        "web_fetch": 3,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Methods/DELETE",
+          "excerpt": "A 200 OK response means the request was successful and the response body includes a representation describing the outcome:",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 2996,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "mozilla.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Mozilla-operated web platform reference; normative text remains W3C/WHATWG"
+        }
+      ]
+    },
+    {
+      "fixture": "http-delete-200",
+      "arm": "control",
+      "rep": 1,
+      "verdict": "YES",
+      "duration_s": 42,
+      "system_prompt_bytes": 0,
+      "output_tokens": 1369,
+      "tools": {
+        "tool_calls": 7,
+        "web_search": 1,
+        "web_fetch": 5,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9110.txt",
+          "excerpt": "The origin server SHOULD send 202 (Accepted) if the action will likely succeed but has not yet been enacted, 204 (No Content) if the action has been enacted and no further information is to be supplied, or 200 (OK) if the action has been enacted and the response message includes a representation describing the status.",
+          "strict_match": false,
+          "loose_match": false,
+          "visible_to_skill_validator": false,
+          "page_chars": 400003,
+          "page_exceeds_skill_cap": true,
+          "state": "mismatch",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "rfc-editor.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:standards-body:IETF and the RFC Editor publish the normative RFC series"
+        }
+      ]
+    },
+    {
+      "fixture": "http-delete-200",
+      "arm": "skill",
+      "rep": 0,
+      "verdict": "YES",
+      "duration_s": 153,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 10179,
+      "tools": {
+        "tool_calls": 18,
+        "web_search": 1,
+        "web_fetch": 1,
+        "bash": 14,
+        "bundled_subcommands": [
+          "fetch-content",
+          "plan",
+          "quick-check",
+          "reserve-budget"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://www.rfc-editor.org/rfc/rfc9110.txt",
+          "excerpt": "a 200 (OK) status code if the action has been enacted and the response message includes a representation describing the status.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 400003,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "rfc-editor.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:standards-body:IETF and the RFC Editor publish the normative RFC series"
+        },
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Methods/DELETE",
+          "excerpt": "A 200 OK response means the request was successful and the response body includes a representation describing the outcome:",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 2996,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "mozilla.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Mozilla-operated web platform reference; normative text remains W3C/WHATWG"
+        }
+      ]
+    },
+    {
+      "fixture": "http-delete-200",
+      "arm": "skill",
+      "rep": 1,
+      "verdict": "YES",
+      "duration_s": 48,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 3394,
+      "tools": {
+        "tool_calls": 8,
+        "web_search": 0,
+        "web_fetch": 0,
+        "bash": 2,
+        "bundled_subcommands": [
+          "quick-check",
+          "report"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": true
+      },
+      "sources": [
+        {
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Methods/DELETE",
+          "excerpt": "A 200 OK response means the request was successful and the response body includes a representation describing the outcome:",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 2996,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "mozilla.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Mozilla-operated web platform reference; normative text remains W3C/WHATWG"
+        },
+        {
+          "url": "https://devgex.com/en/article/00039939",
+          "excerpt": "If a DELETE method is successfully applied, the origin server SHOULD send a 202 status code if the action will likely succeed but has not yet been enacted, a 204 status code if the action has been enacted and no further information is to be supplied, or a 200 status code if the action has been enacted and the response message includes a representation describing the status.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 7412,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "devgex.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        },
+        {
+          "url": "https://http.dev/delete",
+          "excerpt": "200 OK is appropriate when the server returns the deleted resource or a confirmation message in the response body.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 5194,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "http.dev",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "kafka-acks-default",
+      "arm": "control",
+      "rep": 0,
+      "verdict": "NO",
+      "duration_s": 26,
+      "system_prompt_bytes": 0,
+      "output_tokens": 847,
+      "tools": {
+        "tool_calls": 5,
+        "web_search": 2,
+        "web_fetch": 2,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://kafka.apache.org/30/getting-started/upgrade/",
+          "excerpt": "The producer has stronger delivery guarantees by default: idempotence is enabled and acks is set to all instead of 1.",
+          "strict_match": false,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 122730,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": true,
+          "truncation_only_failure": false,
+          "final_domain": "apache.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Apache Software Foundation project documentation"
+        }
+      ]
+    },
+    {
+      "fixture": "kafka-acks-default",
+      "arm": "control",
+      "rep": 1,
+      "verdict": "NO",
+      "duration_s": 28,
+      "system_prompt_bytes": 0,
+      "output_tokens": 791,
+      "tools": {
+        "tool_calls": 4,
+        "web_search": 1,
+        "web_fetch": 2,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-679:+Producer+will+enable+the+strongest+delivery+guarantee+by+default",
+          "excerpt": "Producer config defaults will change in release version 3.0",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 10813,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "apache.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Apache Software Foundation project documentation"
+        },
+        {
+          "url": "https://issues.apache.org/jira/browse/KAFKA-10619",
+          "excerpt": "Enable producer idempotence by default (KIP-679)",
+          "strict_match": false,
+          "loose_match": false,
+          "visible_to_skill_validator": false,
+          "page_chars": 1631,
+          "page_exceeds_skill_cap": false,
+          "state": "mismatch",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "apache.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Apache Software Foundation project documentation"
+        }
+      ]
+    },
+    {
+      "fixture": "kafka-acks-default",
+      "arm": "skill",
+      "rep": 0,
+      "verdict": "NO",
+      "duration_s": 99,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 6986,
+      "tools": {
+        "tool_calls": 22,
+        "web_search": 0,
+        "web_fetch": 0,
+        "bash": 12,
+        "bundled_subcommands": [
+          "fetch-content",
+          "plan",
+          "quick-check"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://kafka.apache.org/30/generated/producer_config.html",
+          "excerpt": "tr><th>Default:</th><td>all</td></tr",
+          "strict_match": false,
+          "loose_match": false,
+          "visible_to_skill_validator": false,
+          "page_chars": 28839,
+          "page_exceeds_skill_cap": true,
+          "state": "mismatch",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "apache.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Apache Software Foundation project documentation"
+        },
+        {
+          "url": "https://kafka.apache.org/34/generated/producer_config.html",
+          "excerpt": "tr><th>Default:</th><td>all</td></tr",
+          "strict_match": false,
+          "loose_match": false,
+          "visible_to_skill_validator": false,
+          "page_chars": 38412,
+          "page_exceeds_skill_cap": true,
+          "state": "mismatch",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "apache.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Apache Software Foundation project documentation"
+        },
+        {
+          "url": "https://www.conduktor.io/kafka/kafka-producer-acks-deep-dive",
+          "excerpt": "The default value of acks has changed with Kafka v3.0 If using Kafka acks=1 If using Kafka >= v3.0, acks=all",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 4234,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "conduktor.io",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "kafka-acks-default",
+      "arm": "skill",
+      "rep": 1,
+      "verdict": "NO",
+      "duration_s": 87,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 6199,
+      "tools": {
+        "tool_calls": 13,
+        "web_search": 0,
+        "web_fetch": 0,
+        "bash": 8,
+        "bundled_subcommands": [
+          "fetch-content",
+          "plan",
+          "quick-check"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://kafka.apache.org/36/generated/producer_config.html",
+          "excerpt": "tr><th>Default:</th><td>all</td></tr",
+          "strict_match": false,
+          "loose_match": false,
+          "visible_to_skill_validator": false,
+          "page_chars": 38473,
+          "page_exceeds_skill_cap": true,
+          "state": "mismatch",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "apache.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Apache Software Foundation project documentation"
+        },
+        {
+          "url": "https://www.conduktor.io/kafka/kafka-producer-acks-deep-dive",
+          "excerpt": "The default value of acks has changed with Kafka v3.0",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 4234,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "conduktor.io",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "kafka-idempotence-default",
+      "arm": "control",
+      "rep": 0,
+      "verdict": "YES",
+      "duration_s": 53,
+      "system_prompt_bytes": 0,
+      "output_tokens": 1844,
+      "tools": {
+        "tool_calls": 9,
+        "web_search": 2,
+        "web_fetch": 6,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://kafka.apache.org/36/configuration/producer-configs/",
+          "excerpt": "Idempotence is enabled by default if no conflicting configurations are set.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 37076,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "apache.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Apache Software Foundation project documentation"
+        }
+      ]
+    },
+    {
+      "fixture": "kafka-idempotence-default",
+      "arm": "control",
+      "rep": 1,
+      "verdict": "YES",
+      "duration_s": 28,
+      "system_prompt_bytes": 0,
+      "output_tokens": 604,
+      "tools": {
+        "tool_calls": 3,
+        "web_search": 1,
+        "web_fetch": 1,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://kafka.apache.org/41/configuration/producer-configs/",
+          "excerpt": "Default Value: `true`",
+          "strict_match": false,
+          "loose_match": false,
+          "visible_to_skill_validator": false,
+          "page_chars": 51853,
+          "page_exceeds_skill_cap": true,
+          "state": "mismatch",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "apache.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Apache Software Foundation project documentation"
+        },
+        {
+          "url": "https://factorhouse.io/articles/kafka-producer-breaking-change/",
+          "excerpt": "Apache Kafka 3.2.0 implements KIP-679 that changes the default behaviour of Producer configuration to enable idempotence by default, and originally this was released in Kafka 3.0.0, but a bug in config validation meant this change was not fully implemented until Kafka 3.2.0.",
+          "strict_match": false,
+          "loose_match": false,
+          "visible_to_skill_validator": false,
+          "page_chars": 7860,
+          "page_exceeds_skill_cap": false,
+          "state": "mismatch",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "factorhouse.io",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "kafka-idempotence-default",
+      "arm": "skill",
+      "rep": 0,
+      "verdict": "YES",
+      "duration_s": 319,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 23967,
+      "tools": {
+        "tool_calls": 51,
+        "web_search": 0,
+        "web_fetch": 5,
+        "bash": 29,
+        "bundled_subcommands": [
+          "fetch-content",
+          "plan",
+          "quick-check",
+          "report",
+          "reserve-budget"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": true
+      },
+      "sources": [
+        {
+          "url": "https://cwiki.apache.org/confluence/display/KAFKA/KIP-679%3A+Producer+will+enable+the+strongest+delivery+guarantee+by+default",
+          "excerpt": "But after this KIP, we set the default enable.idempotence  to true, so we have to also set the default acks  config here to -1 for this change.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 10813,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "apache.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Apache Software Foundation project documentation"
+        },
+        {
+          "url": "https://www.conduktor.io/kafka/idempotent-kafka-producer",
+          "excerpt": "Idempotent producers are enabled by default in Kafka 3.0 and later versions.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 4906,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "conduktor.io",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "kafka-idempotence-default",
+      "arm": "skill",
+      "rep": 1,
+      "verdict": "YES",
+      "duration_s": 233,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 17658,
+      "tools": {
+        "tool_calls": 33,
+        "web_search": 0,
+        "web_fetch": 0,
+        "bash": 33,
+        "bundled_subcommands": [
+          "fetch-content",
+          "plan",
+          "quick-check"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://kafka.apache.org/39/configuration/producer-configs/",
+          "excerpt": "Idempotence is enabled by default if no conflicting configurations are set.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 40686,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "apache.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Apache Software Foundation project documentation"
+        },
+        {
+          "url": "https://kafka.apache.org/39/getting-started/upgrade/",
+          "excerpt": "The producer has stronger delivery guarantees by default: idempotence is enabled and acks is set to all instead of 1.",
+          "strict_match": false,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 180090,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": true,
+          "truncation_only_failure": false,
+          "final_domain": "apache.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Apache Software Foundation project documentation"
+        },
+        {
+          "url": "https://cwiki.apache.org/confluence/spaces/KAFKA/pages/165221843/KIP-679+Producer+will+enable+the+strongest+delivery+guarantee+by+default",
+          "excerpt": "But after this KIP, we set the default enable.idempotence to true, so we have to also set the default acks config here to -1 for this change.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 10813,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "apache.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Apache Software Foundation project documentation"
+        }
+      ]
+    },
+    {
+      "fixture": "node-timingsafeequal",
+      "arm": "control",
+      "rep": 0,
+      "verdict": "NO",
+      "duration_s": 50,
+      "system_prompt_bytes": 0,
+      "output_tokens": 1318,
+      "tools": {
+        "tool_calls": 7,
+        "web_search": 1,
+        "web_fetch": 5,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://bun.com/reference/node/crypto/timingSafeEqual",
+          "excerpt": "An error is thrown if `a` and `b` have different byte lengths.",
+          "strict_match": false,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 1379,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": true,
+          "truncation_only_failure": false,
+          "final_domain": "bun.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "node-timingsafeequal",
+      "arm": "control",
+      "rep": 1,
+      "verdict": "NO",
+      "duration_s": 31,
+      "system_prompt_bytes": 0,
+      "output_tokens": 793,
+      "tools": {
+        "tool_calls": 5,
+        "web_search": 1,
+        "web_fetch": 3,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://bun.com/reference/node/crypto/timingSafeEqual",
+          "excerpt": "An error is thrown if `a` and `b` have different byte lengths.",
+          "strict_match": false,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 1379,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": true,
+          "truncation_only_failure": false,
+          "final_domain": "bun.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "node-timingsafeequal",
+      "arm": "skill",
+      "rep": 0,
+      "verdict": "NO",
+      "duration_s": 161,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 9157,
+      "tools": {
+        "tool_calls": 32,
+        "web_search": 2,
+        "web_fetch": 9,
+        "bash": 18,
+        "bundled_subcommands": [
+          "fetch-content",
+          "plan",
+          "quick-check",
+          "report",
+          "reserve-budget"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": true
+      },
+      "sources": [
+        {
+          "url": "https://nodejs.org/api/crypto.html",
+          "excerpt": "An error is thrown if a and b have different byte lengths.",
+          "strict_match": false,
+          "loose_match": false,
+          "visible_to_skill_validator": false,
+          "page_chars": 77054,
+          "page_exceeds_skill_cap": true,
+          "state": "mismatch",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "nodejs.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domain of the Node.js project"
+        },
+        {
+          "url": "https://bun.com/reference/node/crypto/timingSafeEqual",
+          "excerpt": "An error is thrown if a and b have different byte lengths.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 1379,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "bun.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "node-timingsafeequal",
+      "arm": "skill",
+      "rep": 1,
+      "verdict": "NO",
+      "duration_s": 81,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 3744,
+      "tools": {
+        "tool_calls": 15,
+        "web_search": 1,
+        "web_fetch": 7,
+        "bash": 3,
+        "bundled_subcommands": [
+          "quick-check",
+          "reserve-budget"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://bun.com/reference/node/crypto/timingSafeEqual",
+          "excerpt": "`a` and `b` must both be `Buffer`s, `TypedArray`s, or `DataView`s, and they must have the same byte length. An error is thrown if `a` and `b` have different byte lengths.",
+          "strict_match": false,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 1379,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": true,
+          "truncation_only_failure": false,
+          "final_domain": "bun.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        },
+        {
+          "url": "https://github.com/nodejs/node/commit/4780449b4e",
+          "excerpt": "An error is thrown if `a` and `b` have different byte lengths.",
+          "strict_match": false,
+          "loose_match": false,
+          "visible_to_skill_validator": false,
+          "page_chars": 1512,
+          "page_exceeds_skill_cap": false,
+          "state": "mismatch",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "pg-cic-no-transaction",
+      "arm": "control",
+      "rep": 0,
+      "verdict": "YES",
+      "duration_s": 13,
+      "system_prompt_bytes": 0,
+      "output_tokens": 429,
+      "tools": {
+        "tool_calls": 2,
+        "web_search": 0,
+        "web_fetch": 1,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://www.postgresql.org/docs/current/sql-createindex.html",
+          "excerpt": "Another difference is that a regular CREATE INDEX command can be performed within a transaction block, but CREATE INDEX CONCURRENTLY cannot.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 26401,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "postgresql.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domain of the PostgreSQL Global Development Group"
+        }
+      ]
+    },
+    {
+      "fixture": "pg-cic-no-transaction",
+      "arm": "control",
+      "rep": 1,
+      "verdict": "YES",
+      "duration_s": 15,
+      "system_prompt_bytes": 0,
+      "output_tokens": 441,
+      "tools": {
+        "tool_calls": 2,
+        "web_search": 0,
+        "web_fetch": 1,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://www.postgresql.org/docs/current/sql-createindex.html",
+          "excerpt": "Another difference is that a regular CREATE INDEX command can be performed within a transaction block, but CREATE INDEX CONCURRENTLY cannot.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 26401,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "postgresql.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domain of the PostgreSQL Global Development Group"
+        }
+      ]
+    },
+    {
+      "fixture": "pg-cic-no-transaction",
+      "arm": "skill",
+      "rep": 0,
+      "verdict": "YES",
+      "duration_s": 88,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 5712,
+      "tools": {
+        "tool_calls": 17,
+        "web_search": 0,
+        "web_fetch": 1,
+        "bash": 9,
+        "bundled_subcommands": [
+          "fetch-content",
+          "plan",
+          "quick-check",
+          "reserve-budget"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://www.postgresql.org/docs/current/sql-createindex.html",
+          "excerpt": "Another difference is that a regular CREATE INDEX command can be performed within a transaction block, but CREATE INDEX CONCURRENTLY cannot.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 26401,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "postgresql.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domain of the PostgreSQL Global Development Group"
+        },
+        {
+          "url": "https://migrationpilot.dev/blog/create-index-concurrently-postgresql",
+          "excerpt": "CREATE INDEX CONCURRENTLY cannot run inside a transaction block.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 8933,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "migrationpilot.dev",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        },
+        {
+          "url": "https://www.alexstoica.com/blog/create-index-concurrently-locks",
+          "excerpt": "Cannot Run Inside a Transaction Block: CREATE INDEX CONCURRENTLY must be run outside of an explicit transaction ( BEGIN / COMMIT ).",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 4478,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "alexstoica.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "pg-cic-no-transaction",
+      "arm": "skill",
+      "rep": 1,
+      "verdict": "YES",
+      "duration_s": 125,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 8484,
+      "tools": {
+        "tool_calls": 22,
+        "web_search": 0,
+        "web_fetch": 1,
+        "bash": 20,
+        "bundled_subcommands": [
+          "fetch-content",
+          "plan",
+          "quick-check",
+          "reserve-budget"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://www.postgresql.org/docs/current/sql-createindex.html",
+          "excerpt": "Another difference is that a regular CREATE INDEX command can be performed within a transaction block, but CREATE INDEX CONCURRENTLY cannot.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 26401,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "postgresql.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domain of the PostgreSQL Global Development Group"
+        },
+        {
+          "url": "https://pgfence.com/blog/concurrently-in-a-transaction-silent-footgun/",
+          "excerpt": "ERROR: CREATE INDEX CONCURRENTLY cannot run inside a transaction block",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 4483,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "pgfence.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "playwright-topass",
+      "arm": "control",
+      "rep": 0,
+      "verdict": "NO",
+      "duration_s": 86,
+      "system_prompt_bytes": 0,
+      "output_tokens": 3538,
+      "tools": {
+        "tool_calls": 17,
+        "web_search": 5,
+        "web_fetch": 7,
+        "bash": 4,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://github.com/microsoft/playwright/releases/tag/v1.29.0",
+          "excerpt": "Retry blocks of code until all assertions pass:",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 4202,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        },
+        {
+          "url": "https://github.com/microsoft/playwright/pull/19463",
+          "excerpt": "feat(api): introduce expect().toPass",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 4760,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "playwright-topass",
+      "arm": "control",
+      "rep": 1,
+      "verdict": "NO",
+      "duration_s": 105,
+      "system_prompt_bytes": 0,
+      "output_tokens": 4715,
+      "tools": {
+        "tool_calls": 20,
+        "web_search": 4,
+        "web_fetch": 7,
+        "bash": 8,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://playwright.dev/docs/release-notes",
+          "excerpt": "Retry blocks of code until all assertions pass:",
+          "strict_match": false,
+          "loose_match": false,
+          "visible_to_skill_validator": false,
+          "page_chars": 31304,
+          "page_exceeds_skill_cap": true,
+          "state": "mismatch",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "playwright.dev",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "playwright-topass",
+      "arm": "skill",
+      "rep": 0,
+      "verdict": "NO",
+      "duration_s": 246,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 14663,
+      "tools": {
+        "tool_calls": 40,
+        "web_search": 0,
+        "web_fetch": 0,
+        "bash": 38,
+        "bundled_subcommands": [
+          "fetch-content",
+          "plan",
+          "reserve-budget",
+          "retrieve"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://github.com/microsoft/playwright/blob/main/docs/src/release-notes-js.md",
+          "excerpt": "Retry blocks of code until all assertions pass:",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 334424,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        },
+        {
+          "url": "https://github.com/microsoft/playwright/commit/0e2732decfb511a6d625f66deae2fac760c6d87e",
+          "excerpt": "feat(api): introduce expect().toPass (#19463)",
+          "strict_match": false,
+          "loose_match": false,
+          "visible_to_skill_validator": false,
+          "page_chars": 5473,
+          "page_exceeds_skill_cap": false,
+          "state": "mismatch",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "playwright-topass",
+      "arm": "skill",
+      "rep": 1,
+      "verdict": "NO",
+      "duration_s": 226,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 16019,
+      "tools": {
+        "tool_calls": 31,
+        "web_search": 0,
+        "web_fetch": 0,
+        "bash": 30,
+        "bundled_subcommands": [
+          "fetch-content",
+          "plan",
+          "retrieve"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://github.com/microsoft/playwright/pull/19463",
+          "excerpt": "feat(api): introduce expect().toPass",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 4760,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        },
+        {
+          "url": "https://github.com/microsoft/playwright/releases/tag/v1.20.0",
+          "excerpt": "aslushnikov released this 14 Mar 22:58",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 4276,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "tsetenv-parallel",
+      "arm": "control",
+      "rep": 0,
+      "verdict": "NO",
+      "duration_s": 25,
+      "system_prompt_bytes": 0,
+      "output_tokens": 800,
+      "tools": {
+        "tool_calls": 4,
+        "web_search": 2,
+        "web_fetch": 1,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://pkg.go.dev/testing#T.Setenv",
+          "excerpt": "Because Setenv affects the whole process, it cannot be used in parallel tests or tests with parallel ancestors.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 66118,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        },
+        {
+          "url": "https://github.com/golang/go/issues/55128",
+          "excerpt": "testing: T.Setenv can be called after T.Parallel",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 2863,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    },
+    {
+      "fixture": "tsetenv-parallel",
+      "arm": "control",
+      "rep": 1,
+      "verdict": "NO",
+      "duration_s": 29,
+      "system_prompt_bytes": 0,
+      "output_tokens": 903,
+      "tools": {
+        "tool_calls": 4,
+        "web_search": 1,
+        "web_fetch": 2,
+        "bash": 0,
+        "bundled_subcommands": [],
+        "ran_bundled_scripts": false,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://pkg.go.dev/testing",
+          "excerpt": "Because Setenv affects the whole process, it cannot be used in parallel tests or tests with parallel ancestors.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 66118,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        }
+      ]
+    },
+    {
+      "fixture": "tsetenv-parallel",
+      "arm": "skill",
+      "rep": 0,
+      "verdict": "NO",
+      "duration_s": 207,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 12237,
+      "tools": {
+        "tool_calls": 23,
+        "web_search": 1,
+        "web_fetch": 6,
+        "bash": 15,
+        "bundled_subcommands": [
+          "fetch-content",
+          "plan",
+          "quick-check",
+          "reserve-budget",
+          "retrieve"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://pkg.go.dev/testing#T.Setenv",
+          "excerpt": "Because Setenv affects the whole process, it cannot be used in parallel tests or tests with parallel ancestors.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 66118,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        },
+        {
+          "url": "https://tip.golang.org/src/testing/testing.go?s=28332:28375",
+          "excerpt": "\"testing: test using \" + op + \" can not use t.Parallel\"",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 113881,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "golang.org",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        }
+      ]
+    },
+    {
+      "fixture": "tsetenv-parallel",
+      "arm": "skill",
+      "rep": 1,
+      "verdict": "NO",
+      "duration_s": 211,
+      "system_prompt_bytes": 26387,
+      "output_tokens": 8673,
+      "tools": {
+        "tool_calls": 20,
+        "web_search": 0,
+        "web_fetch": 3,
+        "bash": 16,
+        "bundled_subcommands": [
+          "fetch-content",
+          "plan",
+          "reserve-budget",
+          "retrieve"
+        ],
+        "ran_bundled_scripts": true,
+        "ran_validate_or_report": false
+      },
+      "sources": [
+        {
+          "url": "https://pkg.go.dev/testing@go1.24.0",
+          "excerpt": "Because Setenv affects the whole process, it cannot be used in parallel tests or tests with parallel ancestors.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 59607,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        },
+        {
+          "url": "https://pkg.go.dev/testing",
+          "excerpt": "Because Setenv affects the whole process, it cannot be used in parallel tests or tests with parallel ancestors.",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": false,
+          "page_chars": 66118,
+          "page_exceeds_skill_cap": true,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": true,
+          "final_domain": "go.dev",
+          "source_tier": "T1",
+          "classification_basis": "registry:project-owned:Official domains of the Go project, maintained by the Go team"
+        },
+        {
+          "url": "https://github.com/golang/go/issues/55128",
+          "excerpt": "T.Setenv will panic if it be called after T.Parallel but it can be called in T.Run .",
+          "strict_match": true,
+          "loose_match": true,
+          "visible_to_skill_validator": true,
+          "page_chars": 2863,
+          "page_exceeds_skill_cap": false,
+          "state": "verified",
+          "typography_only_failure": false,
+          "truncation_only_failure": false,
+          "final_domain": "github.com",
+          "source_tier": "T4",
+          "classification_basis": "heuristic:unverified-domain"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+Confirmed: `expect(...).toPass()` was introduced in Playwright **1.29** (released 2022-12-16), via PR #19463 merged 2022-12-15. Version 1.20 was released 2022-03-14, roughly nine months earlier, and its release notes make no mention of `toPass` — consistent with the direct check of the v1.20.0 changelog. So `toPass()` was not available in 1.20.
+
+VERDICT: NO
+
+SOURCES:
+- https://github.com/microsoft/playwright/releases/tag/v1.29.0 ||| Retry blocks of code until all assertions pass:
+- https://github.com/microsoft/playwright/pull/19463 ||| feat(api): introduce expect().toPass

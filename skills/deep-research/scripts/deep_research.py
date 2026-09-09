@@ -42,10 +42,16 @@ from deep_research_lib.planning import (  # noqa: E402
     MODE_BUDGETS,
     VALID_MODES,
     VALID_RESEARCH_KINDS,
-    classify_research_kind,
+    classify_research_kind_name as classify_research_kind,
     normalize_mode as _normalize_mode,
     plan_research,
     select_research_mode,
+)
+from deep_research_lib.authority import classify as classify_authority  # noqa: E402
+from deep_research_lib.claim_support import (  # noqa: E402
+    review_claim_support,
+    summarize_claim_support,
+    support_reasons,
 )
 from deep_research_lib.session import (  # noqa: E402
     BudgetExceededError,
@@ -119,7 +125,19 @@ BLANK_LINES_RE = re.compile(r"\n{3,}")
 DEFAULT_REQUEST_DELAY = 1.0
 CONTENT_FETCH_WORKERS = 4
 CONTENT_MAX_BYTES = 512_000
+# The download cap is the second silent truncation on the verification path.
+# nodejs.org/api/crypto.html is 1.14 MB, so at 512 KB the timingSafeEqual
+# section is never downloaded and a correct excerpt from it cannot match. Both
+# caps have to be lifted for validation, not just the extraction cap.
+VALIDATION_MAX_BYTES = 4_000_000
 CONTENT_MAX_CHARS = 15_000
+# Verification reads the whole page. The authoring cap above exists to keep
+# content.json small for a human and for context, but applying it to the
+# validator meant a correct excerpt from the tail of a long reference page
+# could never match: pkg.go.dev/testing stops at 15,003 characters and the
+# T.Setenv paragraph sits past the cut. A live A/B measured 19 correct excerpts
+# lost this way across 67 citations.
+VALIDATION_MAX_CHARS = 600_000
 
 # ---------------------------------------------------------------------------
 # Anti-bot resilience
@@ -289,20 +307,35 @@ def infer_source_quality(hostname: str) -> Tuple[str, str, str]:
 
     Heuristics are only preclassification. They never establish that a docs.*
     host belongs to a product owner, that .edu content is official product
-    documentation, or that a paper was peer reviewed.
+    documentation, or that a paper was peer reviewed. The one non-heuristic
+    path is the curated authority registry, whose basis string always names
+    the registry so a reader can tell the two apart.
     """
-    host = (hostname or "").lower()
+    host = (hostname or "").lower().strip(".")
     if any(host.endswith(s) for s in GOVERNMENT_SUFFIXES):
         return "government", "T1", "heuristic:government-domain"
-    if any(h in host for h in ACADEMIC_HINTS):
+    # The registry matches the full hostname, because ownership is
+    # subdomain-specific: docs.aws.amazon.com is listed, amazon.com is not.
+    registered = classify_authority(host)
+    if registered:
+        return (
+            registered["source_type"],
+            registered["source_tier"],
+            registered["classification_basis"],
+        )
+    # Substring heuristics run on the registrable domain only. On a full
+    # hostname the "news" hint would swallow news.ycombinator.com, which is a
+    # forum whose subdomain happens to be named news.
+    site = registrable_domain(host)
+    if any(h in site for h in ACADEMIC_HINTS):
         return "academic", "T2", "heuristic:academic-publisher-or-repository"
-    if any(host.endswith(s) for s in EDUCATION_SUFFIXES):
+    if any(site.endswith(s) for s in EDUCATION_SUFFIXES):
         return "institutional", "T2", "heuristic:education-domain"
-    if any(h in host for h in NEWS_HINTS):
+    if any(h in site for h in NEWS_HINTS):
         return "news", "T3", "heuristic:news-domain"
-    if any(h in host for h in FORUM_HINTS):
+    if any(h in site for h in FORUM_HINTS):
         return "forum", "T4", "heuristic:community-domain"
-    if any(h in host for h in BLOG_HINTS):
+    if any(h in site for h in BLOG_HINTS):
         return "blog", "T5", "heuristic:publishing-platform"
     return "website", "T4", "heuristic:unverified-domain"
 
@@ -485,7 +518,8 @@ def parse_duckduckgo_lite(html_text: str, query: str, limit: int) -> List[Search
         normalized = normalize_url(decoded)
         if not normalized or normalized in seen_urls:
             continue
-        domain = registrable_domain(urllib.parse.urlparse(normalized).hostname or "")
+        hostname = (urllib.parse.urlparse(normalized).hostname or "").lower()
+        domain = registrable_domain(hostname)
         if not domain:
             continue
         if not title:
@@ -493,7 +527,7 @@ def parse_duckduckgo_lite(html_text: str, query: str, limit: int) -> List[Search
 
         seen_urls.add(normalized)
         snippet = snippets_map.get(decoded, "")
-        source_type, source_tier, basis = infer_source_quality(domain)
+        source_type, source_tier, basis = infer_source_quality(hostname)
 
         results.append(
             SearchResult(
@@ -572,6 +606,7 @@ def fetch_page_content(
     max_bytes: int = CONTENT_MAX_BYTES,
     *,
     capture_method: str = "deep-research-fetch",
+    max_chars: int = CONTENT_MAX_CHARS,
 ) -> ContentResult:
     """Fetch a URL and return extracted text content with anti-bot resilience."""
     try:
@@ -588,7 +623,7 @@ def fetch_page_content(
     if title_match:
         title = html.unescape(re.sub(r"<[^>]+>", "", title_match.group(1))).strip()
 
-    text = extract_text_from_html(raw)
+    text = extract_text_from_html(raw, max_chars=max_chars)
     word_count = len(text.split())
 
     # Quality check: detect likely blocked or JS-only pages
@@ -621,12 +656,16 @@ def fetch_contents_parallel(
     max_workers: int = CONTENT_FETCH_WORKERS,
     *,
     capture_method: str = "deep-research-fetch",
+    max_bytes: int = CONTENT_MAX_BYTES,
+    max_chars: int = CONTENT_MAX_CHARS,
 ) -> List[ContentResult]:
     """Fetch multiple URLs concurrently and return results in input order."""
     results: Dict[str, ContentResult] = {}
 
     def _fetch_one(target_url: str) -> ContentResult:
-        result = fetch_page_content(target_url, timeout=timeout)
+        result = fetch_page_content(
+            target_url, timeout=timeout, max_bytes=max_bytes, max_chars=max_chars
+        )
         if result.live_verified:
             result.capture_method = capture_method
         return result
@@ -705,10 +744,9 @@ def load_results(path: Path) -> List[SearchResult]:
         if not isinstance(row, dict):
             continue
         normalized = normalize_url(str(row.get("normalized_url", ""))) or normalize_url(str(row.get("url", "")))
-        domain = registrable_domain(
-            urllib.parse.urlparse(normalized).hostname or ""
-        )
-        inferred_type, inferred_tier, inferred_basis = infer_source_quality(domain)
+        hostname = (urllib.parse.urlparse(normalized).hostname or "").lower()
+        domain = registrable_domain(hostname)
+        inferred_type, inferred_tier, inferred_basis = infer_source_quality(hostname)
         out.append(
             SearchResult(
                 query=str(row.get("query", "")),
@@ -801,8 +839,27 @@ def load_code_evidence(path: Optional[Path]) -> Dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+# Typographic variants that a page renders one way and an author types another.
+# Folding these is not a loosening of the check: the word sequence still has to
+# match exactly. Before this, a page rendering "LOW," with curly quotes rejected
+# the same sentence typed with straight ones, and a live A/B measured 8 correct
+# excerpts lost this way across 67 citations.
+_TYPOGRAPHIC_FOLDS = {
+    "\u2018": "'", "\u2019": "'", "\u201a": "'", "\u201b": "'",
+    "\u201c": '"', "\u201d": '"', "\u201e": '"', "\u201f": '"',
+    "\u2032": "'", "\u2033": '"', "\u00ab": '"', "\u00bb": '"',
+    "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2013": "-",
+    "\u2014": "-", "\u2015": "-", "\u2212": "-",
+    "\u00a0": " ", "\u2007": " ", "\u202f": " ", "\u2009": " ",
+    "\u200b": "", "\ufeff": "", "\u00ad": "",
+    "\u2026": "...", "`": "",
+}
+_TYPOGRAPHIC_TABLE = str.maketrans(_TYPOGRAPHIC_FOLDS)
+
+
 def _normalized_excerpt(text: str) -> str:
-    return " ".join(str(text or "").split()).casefold()
+    folded = str(text or "").translate(_TYPOGRAPHIC_TABLE)
+    return " ".join(folded.split()).casefold()
 
 
 def _is_pinned_commit(value: Any) -> bool:
@@ -919,12 +976,17 @@ def _validate_evidence_refs(
                 if live_verified and content.final_url
                 else url
             )
-            effective_domain = registrable_domain(
+            effective_host = (
                 urllib.parse.urlparse(effective_url).hostname or ""
-            )
+            ).lower()
+            # Authority is derived from the full effective host; independence
+            # is grouped by registrable domain so two subdomains of one site
+            # never count as two independent sources.
+            effective_domain = registrable_domain(effective_host)
             source_type, source_tier, classification_basis = (
-                infer_source_quality(effective_domain)
+                infer_source_quality(effective_host)
             )
+            authority = classify_authority(effective_host) or {}
             verified.append(
                 {
                     "kind": "web",
@@ -943,6 +1005,8 @@ def _validate_evidence_refs(
                     "raw_sha256": content.raw_sha256,
                     "content_sha256": content.content_sha256,
                     "resolved_ips": list(content.resolved_ips),
+                    "authority": authority.get("authority", ""),
+                    "vendor_self": bool(authority.get("vendor_self", False)),
                     "primary": live_verified and source_tier == "T1",
                 }
             )
@@ -991,7 +1055,19 @@ def _effective_confidence(
 
     claim_type = str(finding.get("claim_type", "analysis")).strip().lower()
     kinds = {str(item.get("kind", "")) for item in verified}
+    support_review = finding.get("claim_support") or {}
+    # Fail closed: a finding that carries no claim-support verdict has not been
+    # reviewed, and an unreviewed claim is exactly what this gate exists to
+    # stop. Defaulting to eligible would let any future caller that forgets to
+    # run the review hand out High silently.
+    support_high_eligible = bool(support_review.get("high_eligible", False))
     has_primary = any(bool(item.get("primary")) for item in verified)
+    # A project's own documentation is authoritative about that project's own
+    # behavior, not an independent voice in a comparison or recommendation.
+    has_independent_primary = any(
+        bool(item.get("primary")) and not bool(item.get("vendor_self"))
+        for item in verified
+    )
     has_t1_web = any(
         item.get("kind") == "web"
         and item.get("source_tier") == "T1"
@@ -1017,11 +1093,21 @@ def _effective_confidence(
         qualifies_high = has_pinned_code and runtime_supported
         reasons.extend(runtime_reasons)
     else:
-        qualifies_high = has_primary and len(set(independence)) >= 2
+        qualifies_high = has_independent_primary and len(set(independence)) >= 2
+        if has_primary and not has_independent_primary:
+            reasons.append(
+                "the only primary source is the subject project's own "
+                "documentation; a comparison or recommendation needs an "
+                "independent primary unit"
+            )
 
     if requested == "high":
-        if qualifies_high:
+        if qualifies_high and support_high_eligible:
             return "high", reasons
+        if qualifies_high and not support_high_eligible:
+            # Citation integrity passed; claim support did not. Keep the two
+            # verdicts separate so the reason names which gate actually failed.
+            return "medium", reasons
         if claim_type == "single_fact":
             web_units = [
                 item for item in verified if item.get("kind") == "web"
@@ -1172,6 +1258,7 @@ def assess_finding(
             "effective_confidence": "low",
             "usable": False,
             "verified_evidence": [],
+            "claim_support": review_claim_support({}, []),
             "downgrade_reasons": ["finding must be an object"],
         }
         return assessed, [
@@ -1227,7 +1314,35 @@ def assess_finding(
         )
         for item in verified
     ]
-    effective, downgrade_reasons = _effective_confidence(finding, verified, independence)
+    support = review_claim_support(finding, verified)
+    support_notes = support_reasons(support)
+    if not support["publishable"]:
+        issues.append(
+            _issue(
+                "claim_not_supported_by_excerpt",
+                f"finding #{finding_index} claim support failed: "
+                + "; ".join(support_notes),
+                finding=finding_index,
+            )
+        )
+    elif support["state"] != "attested":
+        issues.append(
+            _issue(
+                "claim_support_below_attested",
+                f"finding #{finding_index} claim support is {support['state']}: "
+                + "; ".join(support_notes),
+                severity="warning",
+                finding=finding_index,
+            )
+        )
+    finding_with_support = dict(finding)
+    finding_with_support["claim_support"] = support
+    effective, downgrade_reasons = _effective_confidence(
+        finding_with_support,
+        verified,
+        independence,
+    )
+    downgrade_reasons = list(downgrade_reasons) + support_notes
     requested = str(finding.get("confidence", "low")).strip().lower()
     if requested not in {"high", "medium", "low"}:
         requested = "low"
@@ -1245,8 +1360,9 @@ def assess_finding(
         {
             "requested_confidence": requested,
             "effective_confidence": effective,
-            "usable": bool(verified),
+            "usable": bool(verified) and support["publishable"],
             "verified_evidence": verified,
+            "claim_support": support,
             "downgrade_reasons": downgrade_reasons,
         }
     )
@@ -1338,9 +1454,19 @@ def validate_research_bundle(
             finding_index=0,
         )
         issues.extend(section_issues)
+        section_support = review_claim_support(section, verified)
         assessed_section = dict(section)
         assessed_section["verified_evidence"] = verified
-        assessed_section["usable"] = bool(verified)
+        assessed_section["claim_support"] = section_support
+        assessed_section["usable"] = bool(verified) and section_support["publishable"]
+        if not section_support["publishable"]:
+            issues.append(
+                _issue(
+                    "claim_not_supported_by_excerpt",
+                    f"analysis section #{idx} claim support failed: "
+                    + "; ".join(support_reasons(section_support)),
+                )
+            )
         assessed_sections.append(assessed_section)
 
     assessed_consensus_debate: Dict[str, List[Dict[str, Any]]] = {
@@ -1377,9 +1503,19 @@ def validate_research_bundle(
                 finding_index=0,
             )
             issues.extend(row_issues)
+            row_support = review_claim_support(row, verified)
             assessed_row = dict(row)
             assessed_row["verified_evidence"] = verified
-            assessed_row["usable"] = bool(verified)
+            assessed_row["claim_support"] = row_support
+            assessed_row["usable"] = bool(verified) and row_support["publishable"]
+            if not row_support["publishable"]:
+                issues.append(
+                    _issue(
+                        "claim_not_supported_by_excerpt",
+                        f"{field} statement claim support failed: "
+                        + "; ".join(support_reasons(row_support)),
+                    )
+                )
             assessed_consensus_debate[field].append(assessed_row)
 
     successful_contents = sum(
@@ -1462,6 +1598,14 @@ def validate_research_bundle(
         "generated_at": utc_now_iso(),
         "research_kind": kind,
         "degradation": degradation,
+        # `degradation` is the citation-integrity verdict: were the required
+        # artifacts present and did every cited excerpt really come from the
+        # page it claims? `claim_support` is the separate verdict on whether
+        # those excerpts back the sentences built on them. A run can be Full
+        # on the first and unreviewed on the second, so they are never merged.
+        "claim_support": summarize_claim_support(
+            assessed_findings + supplemental_rows
+        ),
         "evidence_chain_status": (
             "satisfied"
             if degradation == "Full"
@@ -1641,12 +1785,20 @@ def render_analysis_md(
     findings: Dict,
     url_map: Dict[str, int],
     repository_map: Optional[Dict[str, int]] = None,
+    mode: str = "standard",
 ) -> str:
     sections = findings.get("analysis_sections", []) if isinstance(findings, dict) else []
     usable_sections = [
         row for row in sections if isinstance(row, dict) and row.get("usable", True)
     ]
     if not usable_sections:
+        # The nine headings are the audit contract and never disappear, but a
+        # Quick single-fact check should not have to invent prose to fill them.
+        if _normalize_mode(mode) == "quick":
+            return (
+                "### Main Analysis\nQuick mode: this run verified a narrow fact, "
+                "so no extended analysis section was authored."
+            )
         return "### Main Analysis\nNo analysis section had verified supporting evidence."
     repository_map = repository_map or {}
     out = []
@@ -1667,9 +1819,15 @@ def _render_statement_rows(
     rows: Sequence[Dict[str, Any]],
     url_map: Dict[str, int],
     repository_map: Dict[str, int],
+    mode: str = "standard",
 ) -> str:
     usable = [row for row in rows if isinstance(row, dict) and row.get("usable")]
     if not usable:
+        if _normalize_mode(mode) == "quick":
+            return (
+                "- Quick mode: no competing sources were retrieved, so agreement "
+                "and disagreement were not assessed."
+            )
         return "- None captured with verified evidence."
     out = []
     for row in usable:
@@ -1693,6 +1851,33 @@ def _source_quality_notes(
         if row.source_tier in distribution:
             distribution[row.source_tier] += 1
     tier_line = ", ".join(f"{tier}: {distribution[tier]}" for tier in VALID_TIERS)
+    support_summary = validation.get("claim_support", {})
+    support_counts = support_summary.get("counts", {})
+    all_rows = (
+        validation.get("findings", [])
+        + validation.get("analysis_sections", [])
+        + validation.get("consensus", [])
+        + validation.get("debate", [])
+    )
+    web_units = [
+        unit
+        for row in all_rows
+        if isinstance(row, dict)
+        for unit in row.get("verified_evidence", [])
+        if isinstance(unit, dict) and unit.get("kind") == "web"
+    ]
+    registry_units = sum(
+        1
+        for unit in web_units
+        if str(unit.get("classification_basis", "")).startswith("registry:")
+    )
+    vendor_units = sum(1 for unit in web_units if unit.get("vendor_self"))
+    screened = sum(
+        1
+        for row in all_rows
+        if isinstance(row, dict)
+        and (row.get("claim_support") or {}).get("screens", {}).get("polarity_conflicts")
+    )
     potential_bias = [
         row.title
         for row in results
@@ -1791,6 +1976,26 @@ def _source_quality_notes(
             ),
             f"- Sources with unknown methodology: {unknown_methodology}",
             repository_quality,
+            (
+                "- Domain authority: "
+                f"{registry_units}/{len(web_units)} cited Web units were classified "
+                "from the curated authority registry rather than a URL-shape "
+                f"heuristic; {vendor_units} are the subject project's own "
+                "documentation and cannot serve as the independent primary unit "
+                "for a comparison or recommendation."
+            ),
+            (
+                "- Claim support: "
+                f"{support_summary.get('state', 'none')} "
+                f"(attested {support_counts.get('attested', 0)}, "
+                f"qualified {support_counts.get('qualified', 0)}, "
+                f"unreviewed {support_counts.get('unreviewed', 0)}, "
+                f"disputed {support_counts.get('disputed', 0)}, "
+                f"blocked {support_counts.get('contradicted', 0)}); "
+                f"{screened} claim(s) tripped the polarity screen. "
+                "Excerpt containment is proved mechanically; entailment is an "
+                "author attestation and is not machine-verified."
+            ),
             f"- Single-source findings: {single_source}",
             f"- Unverified findings omitted from substantive sections: {unverified}",
             f"- Evidence chain status: {validation.get('evidence_chain_status', 'insufficient')}",
@@ -1823,6 +2028,37 @@ def _validated_executive_summary(validation: Dict[str, Any]) -> str:
     return summary or "Validated findings are listed below."
 
 
+def _budget_usage_line(
+    session: Optional[Dict[str, Any]],
+    validation: Dict[str, Any],
+) -> str:
+    """Render session budget consumption, including the live-verification line."""
+    live = validation.get("live_verification_budget") or {}
+    if not isinstance(session, dict) or not isinstance(session.get("usage"), dict):
+        if live:
+            return (
+                f"- Live verification: {live.get('reserved', 0)} of "
+                f"{live.get('requested', 0)} cited pages re-fetched"
+                + (" (budget exhausted)" if live.get("exhausted") else "")
+            )
+        return "- Budget ledger: not supplied to this report"
+    usage = session["usage"]
+    budget = session.get("budget", {})
+    parts = [
+        f"retrieval {usage.get('retrieval_calls', 0)}/{budget.get('retrieval_max', '?')}",
+        f"extractions {usage.get('content_extractions', 0)}/{budget.get('content_max', '?')}",
+        f"live verifications {usage.get('live_verifications', 0)}/"
+        f"{budget.get('live_verification_max', '?')}",
+    ]
+    line = "- Budget consumed: " + ", ".join(parts)
+    if live.get("exhausted"):
+        line += (
+            f"; live verification stopped at the ceiling with "
+            f"{live.get('requested', 0) - live.get('reserved', 0)} cited pages unverified"
+        )
+    return line
+
+
 def generate_report(
     question: str,
     findings: Dict,
@@ -1833,6 +2069,7 @@ def generate_report(
     code_evidence: Optional[Dict[str, Any]] = None,
     validation: Optional[Dict[str, Any]] = None,
     research_kind: str = "web",
+    session: Optional[Dict[str, Any]] = None,
 ) -> str:
     code_evidence = code_evidence or {}
     if validation is None:
@@ -1872,6 +2109,9 @@ def generate_report(
         else "- None documented."
     )
     counts = validation.get("counts", {})
+    support_summary = validation.get("claim_support", {})
+    support_counts = support_summary.get("counts", {})
+    budget_line = _budget_usage_line(session, validation)
 
     return f"""## 1) Research Question
 - Normalized question: {question}
@@ -1889,7 +2129,11 @@ def generate_report(
 - Successfully extracted: {counts.get('successfully_extracted', 0)}
 - Repository evidence units: {counts.get('repository_evidence', 0)}
 - Cited evidence units: {counts.get('cited_evidence', 0)}
-- Validation checks performed: required-input, extraction-success, exact excerpt, repository reference, confidence, and degradation checks
+- Validation checks performed: required-input, extraction-success, exact excerpt, repository reference, claim-support review, confidence, and degradation checks
+- Citation integrity (this is what `Degradation` above reports): every cited excerpt was re-read from the artifact it names
+- Claim support (a separate verdict, not implied by the one above): {support_summary.get('state', 'none')} — attested {support_counts.get('attested', 0)}, qualified {support_counts.get('qualified', 0)}, unreviewed {support_counts.get('unreviewed', 0)}, disputed {support_counts.get('disputed', 0)}, blocked {support_counts.get('contradicted', 0)}
+- Machine checks cannot decide entailment. A polarity and number screen can only remove support; the reviewed stance on each finding is an author attestation.
+{budget_line}
 
 ## 3) Executive Summary
 {executive}
@@ -1898,14 +2142,14 @@ def generate_report(
 {render_findings_md({"findings": validation.get("findings", [])}, url_map, repository_map)}
 
 ## 5) Detailed Analysis
-{render_analysis_md({"analysis_sections": validation.get("analysis_sections", [])}, url_map, repository_map)}
+{render_analysis_md({"analysis_sections": validation.get("analysis_sections", [])}, url_map, repository_map, report_mode)}
 
 ## 6) Consensus vs Debate
 ### Consensus
-{_render_statement_rows(validation.get("consensus", []), url_map, repository_map)}
+{_render_statement_rows(validation.get("consensus", []), url_map, repository_map, report_mode)}
 
 ### Debate / Contradictory Evidence
-{_render_statement_rows(validation.get("debate", []), url_map, repository_map)}
+{_render_statement_rows(validation.get("debate", []), url_map, repository_map, report_mode)}
 
 ## 7) Source Quality Notes
 {_source_quality_notes(cited_results, validation, cited_code_evidence)}
@@ -2005,6 +2249,16 @@ def cmd_plan(args: argparse.Namespace) -> int:
             print(str(exc), file=sys.stderr)
             return 2
     print(json.dumps(plan, indent=2, ensure_ascii=True))
+    if plan.get("classification_confidence") != "high":
+        # Keyword routing always returns an answer, so say when the answer came
+        # from a default rather than a matched signal. Silent determinism reads
+        # as accuracy it has not earned.
+        print(
+            f"classification confidence is {plan['classification_confidence']} "
+            f"(kind: {plan['research_kind_basis']}, mode: {plan['mode_basis']}); "
+            "confirm the routing or rerun with --research-kind / --mode",
+            file=sys.stderr,
+        )
     return 0
 
 
@@ -2103,18 +2357,44 @@ def _live_verify_web_contents(
     findings: Dict[str, Any],
     loaded_contents: Sequence[ContentResult],
     *,
+    session_path: Path,
     timeout: float,
     workers: int = CONTENT_FETCH_WORKERS,
-) -> List[ContentResult]:
-    """Replace cited serialized content with fresh safe in-process captures."""
+) -> Tuple[List[ContentResult], Dict[str, Any]]:
+    """Replace cited serialized content with fresh safe in-process captures.
+
+    Every URL fetched here is a real network request, so it is reserved in the
+    same ledger as ordinary retrieval and extraction. Without this the final
+    verification path could fetch without limit after the mode budget was
+    already spent, which made the cumulative ceiling unenforceable in exactly
+    the step that matters most.
+    """
     cited_urls = _cited_web_urls(findings)
+    reservation = {
+        "budget": "live_verifications",
+        "requested": len(cited_urls),
+        "reserved": 0,
+        "remaining": 0,
+        "exhausted": False,
+    }
     if not cited_urls:
-        return list(loaded_contents)
+        return list(loaded_contents), reservation
+    reservation = reserve_session_budget(
+        session_path,
+        "live_verifications",
+        len(cited_urls),
+        allow_partial=True,
+    )
+    verifiable = cited_urls[: reservation["reserved"]]
+    if not verifiable:
+        return list(loaded_contents), reservation
     fresh = fetch_contents_parallel(
-        cited_urls,
+        verifiable,
         timeout=timeout,
         max_workers=workers,
         capture_method="validator-live-fetch",
+        max_bytes=VALIDATION_MAX_BYTES,
+        max_chars=VALIDATION_MAX_CHARS,
     )
     merged = {
         normalize_url(item.url) or item.url: item
@@ -2122,7 +2402,7 @@ def _live_verify_web_contents(
     }
     for item in fresh:
         merged[normalize_url(item.url) or item.url] = item
-    return list(merged.values())
+    return list(merged.values()), reservation
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
@@ -2138,12 +2418,18 @@ def cmd_validate(args: argparse.Namespace) -> int:
         else {}
     )
     findings = load_findings(Path(args.findings))
+    live_reservation: Dict[str, Any] = {}
     if args.live_web and args.research_kind in {"web", "hybrid"}:
-        contents = _live_verify_web_contents(
-            findings,
-            contents,
-            timeout=args.timeout,
-        )
+        try:
+            contents, live_reservation = _live_verify_web_contents(
+                findings,
+                contents,
+                session_path=Path(args.session),
+                timeout=args.timeout,
+            )
+        except (ValueError, OSError, json.JSONDecodeError, BudgetExceededError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
     url_issues: List[Dict[str, Any]] = []
     details = []
 
@@ -2193,8 +2479,10 @@ def cmd_validate(args: argparse.Namespace) -> int:
         budget_exhausted=(
             args.budget_exhausted
             or bool(content_metadata.get("budget_exhausted", False))
+            or bool(live_reservation.get("exhausted", False))
         ),
     )
+    payload["live_verification_budget"] = live_reservation
     payload["checked_count"] = len(results)
     payload["details"] = details
     payload["issues"] = url_issues + payload["issues"]
@@ -2227,12 +2515,18 @@ def cmd_report(args: argparse.Namespace) -> int:
         else {}
     )
     findings = load_findings(Path(args.findings))
+    live_reservation: Dict[str, Any] = {}
     if args.live_web and args.research_kind in {"web", "hybrid"}:
-        contents = _live_verify_web_contents(
-            findings,
-            contents,
-            timeout=args.timeout,
-        )
+        try:
+            contents, live_reservation = _live_verify_web_contents(
+                findings,
+                contents,
+                session_path=Path(args.session),
+                timeout=args.timeout,
+            )
+        except (ValueError, OSError, json.JSONDecodeError, BudgetExceededError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
     validation = validate_research_bundle(
         research_kind=args.research_kind,
         results=results,
@@ -2242,8 +2536,10 @@ def cmd_report(args: argparse.Namespace) -> int:
         budget_exhausted=(
             args.budget_exhausted
             or bool(content_metadata.get("budget_exhausted", False))
+            or bool(live_reservation.get("exhausted", False))
         ),
     )
+    validation["live_verification_budget"] = live_reservation
     if args.validation_output:
         write_json(Path(args.validation_output), validation)
 
@@ -2263,6 +2559,7 @@ def cmd_report(args: argparse.Namespace) -> int:
             code_evidence=code_evidence,
             validation=validation,
             research_kind=args.research_kind,
+            session=load_session(Path(args.session)),
         )
     except (BudgetExceededError, ReportSourceBudgetError) as exc:
         print(str(exc), file=sys.stderr)
@@ -2274,6 +2571,168 @@ def cmd_report(args: argparse.Namespace) -> int:
         f"degradation={validation['degradation']} session={session['session_id']}"
     )
     return 2 if validation["degradation"] == "Blocked" else 0
+
+
+def cmd_quick_check(args: argparse.Namespace) -> int:
+    """Run plan, retrieve and fetch-content in one pass for a narrow fact.
+
+    A single-fact check used to cost six invocations and six intermediate
+    files, which is why simple verification felt heavier than the question
+    deserved. This collapses the collection half into one command and writes a
+    findings skeleton with the candidate evidence already filled in, so the
+    remaining work is supplying the excerpt, the support review, and one
+    `report --live-web`. Every gate still runs: the session ledger, the safe
+    transport, excerpt matching and claim support are unchanged.
+    """
+    workdir = Path(args.workdir)
+    workdir.mkdir(parents=True, exist_ok=True)
+    session_path = workdir / "session.json"
+    results_path = workdir / "results.json"
+    content_path = workdir / "content.json"
+    template_path = workdir / "findings.template.json"
+
+    plan = plan_research(args.request, explicit_mode="quick", explicit_kind="web")
+    try:
+        session = initialize_session(session_path, plan)
+    except (ValueError, OSError, FileExistsError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+    if args.url:
+        urls = list(dict.fromkeys(normalize_url(u) or u for u in args.url))
+        results = []
+        for url in urls:
+            host = (urllib.parse.urlparse(url).hostname or "").lower()
+            source_type, source_tier, basis = infer_source_quality(host)
+            results.append(
+                SearchResult(
+                    query=args.request,
+                    title=url,
+                    url=url,
+                    normalized_url=url,
+                    domain=registrable_domain(host),
+                    source_type=source_type,
+                    source_tier=source_tier,
+                    classification_basis=basis,
+                )
+            )
+    else:
+        try:
+            reservation = reserve_session_budget(
+                session_path, "retrieval_calls", 1, allow_partial=False
+            )
+        except (ValueError, OSError, BudgetExceededError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
+        del reservation
+        try:
+            results = dedupe_results(
+                fetch_duckduckgo_lite(args.request, args.limit, args.timeout)
+            )
+        except Exception as exc:  # pragma: no cover - network dependent
+            print(f"retrieval failed: {exc}", file=sys.stderr)
+            return 2
+        urls = [r.normalized_url for r in results]
+
+    if not urls:
+        print("no candidate URLs; supply --url", file=sys.stderr)
+        return 2
+
+    write_json(
+        results_path,
+        {
+            "generated_at": utc_now_iso(),
+            "session_id": session["session_id"],
+            "mode": "quick",
+            "queries": [args.request],
+            "results": [asdict(r) for r in results],
+        },
+    )
+
+    try:
+        for url in urls:
+            resolve_public_target(url)
+    except UnsafeWebTargetError as exc:
+        print(f"unsafe Web target: {exc}", file=sys.stderr)
+        return 2
+
+    try:
+        extraction = reserve_session_budget(
+            session_path, "content_extractions", len(urls), allow_partial=True
+        )
+    except (ValueError, OSError) as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    fetch_urls = urls[: extraction["reserved"]]
+    contents = fetch_contents_parallel(
+        fetch_urls,
+        timeout=args.timeout,
+        max_workers=CONTENT_FETCH_WORKERS,
+    )
+    write_json(
+        content_path,
+        {
+            "generated_at": utc_now_iso(),
+            "session_id": session["session_id"],
+            "mode": "quick",
+            "budget": dict(MODE_BUDGETS["quick"]),
+            "requested_count": len(urls),
+            "processed_count": extraction["reserved"],
+            "budget_exhausted": len(urls) > extraction["reserved"],
+            "count": len(contents),
+            "items": [asdict(c) for c in contents],
+        },
+    )
+
+    usable = [c for c in contents if c.content.strip() and not c.error]
+    write_json(
+        template_path,
+        {
+            "executive_summary": "<one sentence answering the question>",
+            "findings": [
+                {
+                    "id": "finding-1",
+                    "title": "<short title>",
+                    "claim_type": "single_fact",
+                    "confidence": "high",
+                    "analysis": args.claim or "<the narrow claim>",
+                    "support_review": {
+                        "stance": "supports",
+                        "rationale": "<why this excerpt entails the claim>",
+                        "reviewed_by": "author",
+                    },
+                    "evidence": [
+                        {
+                            "kind": "web",
+                            "url": c.url,
+                            "excerpt": "<exact text copied from content.json>",
+                        }
+                        for c in usable[:3]
+                    ],
+                }
+            ],
+            "analysis_sections": [],
+            "consensus": [],
+            "debate": [],
+            "gaps": [],
+        },
+    )
+
+    ok = len(usable)
+    print(
+        f"quick-check session={session['session_id']} candidates={len(urls)} "
+        f"extracted={ok} workdir={workdir}"
+    )
+    print(
+        "next: fill excerpt + support_review in "
+        f"{template_path}, save as findings.json, then run:\n"
+        f"  python3 {Path(__file__).name} report --question {args.request!r} "
+        f"--research-kind web --results {results_path} --content {content_path} "
+        f"--findings {workdir / 'findings.json'} --session {session_path} "
+        f"--mode quick --live-web --validation-output {workdir / 'validation.json'} "
+        f"--output {workdir / 'report.md'}"
+    )
+    return 0 if ok else 2
 
 
 def cmd_fetch_content(args: argparse.Namespace) -> int:
@@ -2522,6 +2981,15 @@ class ResearchArgumentParser(argparse.ArgumentParser):
     ) -> argparse.Namespace:
         parsed = super().parse_args(args=args, namespace=namespace)
         cmd = getattr(parsed, "cmd", "")
+        if (
+            cmd == "validate"
+            and getattr(parsed, "live_web", False)
+            and not parsed.session
+        ):
+            self.error(
+                "validate --live-web performs real network fetches and requires "
+                "--session so they are counted against the mode budget"
+            )
         if cmd in {"reserve-budget", "retrieve", "fetch-content", "report"} and not parsed.session:
             self.error(f"{cmd} requires --session")
         if cmd == "reserve-budget" and parsed.count <= 0:
@@ -2606,6 +3074,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_validate.add_argument("--content", default="", help="content extraction JSON path")
     p_validate.add_argument("--code-evidence", default="", help="repository evidence JSON path")
     p_validate.add_argument("--findings", required=True, help="findings JSON path")
+    p_validate.add_argument(
+        "--session",
+        default="",
+        help="plan/session JSON path; required with --live-web so live fetches "
+             "are counted against the mode budget",
+    )
     p_validate.add_argument("--budget-exhausted", action="store_true")
     p_validate.add_argument("--check-live", action="store_true", help="perform runtime reachability checks")
     p_validate.add_argument(
@@ -2647,6 +3121,18 @@ def build_parser() -> argparse.ArgumentParser:
     p_content.add_argument("--workers", type=int, default=CONTENT_FETCH_WORKERS, help="parallel fetch workers")
     p_content.add_argument("--output", required=True, help="output JSON path")
     p_content.set_defaults(func=cmd_fetch_content)
+
+    p_quick = sub.add_parser(
+        "quick-check",
+        help="one-shot Quick collection: plan, retrieve, extract, findings skeleton",
+    )
+    p_quick.add_argument("--request", required=True, help="the narrow question")
+    p_quick.add_argument("--claim", default="", help="the claim to verify, if known")
+    p_quick.add_argument("--url", action="append", help="skip retrieval and use these URLs")
+    p_quick.add_argument("--limit", type=int, default=5, help="candidate URLs to retrieve")
+    p_quick.add_argument("--timeout", type=float, default=15.0)
+    p_quick.add_argument("--workdir", required=True, help="directory for session and artifacts")
+    p_quick.set_defaults(func=cmd_quick_check)
 
     p_codebase = sub.add_parser("search-codebase", help="search local codebase with ripgrep")
     p_codebase.add_argument("--pattern", action="append", required=True, help="search pattern (repeatable)")

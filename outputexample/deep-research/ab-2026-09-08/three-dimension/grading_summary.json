@@ -1,0 +1,83 @@
+{
+  "per_run": [
+    {
+      "run_id": "eval-0-verifiable-single-fact-with_skill",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "run_id": "eval-0-verifiable-single-fact-without_skill",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "run_id": "eval-1-comparison-with-method-with_skill",
+      "passed": 4,
+      "total": 6
+    },
+    {
+      "run_id": "eval-1-comparison-with-method-without_skill",
+      "passed": 5,
+      "total": 6
+    },
+    {
+      "run_id": "eval-2-conflicting-official-sources-with_skill",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "run_id": "eval-2-conflicting-official-sources-without_skill",
+      "passed": 6,
+      "total": 6
+    },
+    {
+      "run_id": "eval-3-unknowable-figure-with_skill",
+      "passed": 5,
+      "total": 5
+    },
+    {
+      "run_id": "eval-3-unknowable-figure-without_skill",
+      "passed": 5,
+      "total": 5
+    }
+  ],
+  "by_arm": {
+    "with_skill": {
+      "passed": 20,
+      "total": 22
+    },
+    "without_skill": {
+      "passed": 21,
+      "total": 22
+    }
+  },
+  "assertions_that_both_arms_passed": [
+    "States that govulncheck does not output CVSS scores",
+    "Cites at least one URL for the claim",
+    "Includes at least one verbatim quotation from a cited page, not only a paraphrase",
+    "At least one quoted excerpt is found verbatim on the page it is attributed to",
+    "Labels the authority or tier of at least one source (official / primary / vendor / community), rather than listing bare URLs",
+    "Substantively covers both PostgreSQL logical replication and Debezium",
+    "Cites at least one URL per option",
+    "Distinguishes primary documentation from secondary or practitioner sources",
+    "States at least one thing it could not establish, or a limitation of the comparison",
+    "Explicitly acknowledges that the sources disagree, rather than silently presenting one version as settled",
+    "Quotes or cites both conflicting sources, not just the one it endorses",
+    "Cites at least one URL",
+    "States what remains uncertain after the analysis, or what would settle it definitively",
+    "Does not present a single confident resolution without acknowledging the residual uncertainty",
+    "Does not present a specific Fortune 500 percentage as an established fact",
+    "States explicitly that no authoritative source establishes this figure",
+    "If it mentions a vendor figure such as Confluent's Fortune 100 claim, identifies it as a vendor self-report rather than independent data",
+    "Notes that any available figure covers a different population or year than what was asked",
+    "Offers what could legitimately be said or measured instead"
+  ],
+  "assertions_that_discriminated": [
+    {
+      "text": "Includes at least one verbatim quotation from a cited page",
+      "with_skill": false,
+      "without_skill": true
+    }
+  ],
+  "checker_correction": "The first grading pass scored eval-2 with_skill as having no verifiable quote. That was a defect in the evaluation's own quote extractor, which read only double-quoted spans while that report quotes source wording with single quotes. After fixing the extractor the run has 6 quoted spans with 4 confirmed verbatim, the highest verified rate of any run, and the assertion passes."
+}

@@ -1,0 +1,7 @@
+Yes — since Apache Kafka 3.0 (KIP-679), the Java producer's `enable.idempotence` defaults to `true` (full implementation landed in 3.2.0 due to a config-validation bug in 3.0/3.1). This remains the default across current 3.x and later documentation.
+
+VERDICT: YES
+
+SOURCES:
+- https://kafka.apache.org/41/configuration/producer-configs/ ||| Default Value: `true`
+- https://factorhouse.io/articles/kafka-producer-breaking-change/ ||| Apache Kafka 3.2.0 implements KIP-679 that changes the default behaviour of Producer configuration to enable idempotence by default, and originally this was released in Kafka 3.0.0, but a bug in config validation meant this change was not fully implemented until Kafka 3.2.0.

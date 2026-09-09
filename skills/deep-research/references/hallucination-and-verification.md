@@ -63,7 +63,11 @@ Use this contract everywhere:
 | Narrow `single_fact` | One fresh validator-controlled Web capture whose effective final URL re-derives as T1 and whose content contains the exact excerpt |
 | Direct `code_fact` | Direct code reread successfully from the declared Git blob |
 | `runtime_behavior` | Every cited code item pinned to one commit/tree plus one passed, reviewed host receipt covering the finding, all code IDs, and all tested paths on that clean snapshot |
-| Any other claim | At least two independent verified evidence units, including one primary unit |
+| Any other claim | At least two independent verified evidence units, including one primary unit that is not the subject project's own documentation |
+
+Every row also requires an attested claim-support review. See Claim Support
+below: citation integrity and claim support are separate gates and High needs
+both.
 
 Then apply:
 
@@ -83,6 +87,49 @@ Then apply:
 - Do not bind a test run from a dirty or different snapshot to pinned code.
 - Do not ignore an unpinned code item because another cited item is pinned.
 - Do not combine partial coverage from multiple receipts to manufacture High.
+
+## Claim Support
+
+A matched excerpt proves the quotation was really read. It does not prove the
+quotation supports the sentence built on it: a claim that is the exact negation
+of its own excerpt passes every containment check. The two questions therefore
+get two verdicts, and a report prints both rather than letting one imply the
+other.
+
+Each finding, analysis section, consensus row and debate row carries:
+
+```json
+"support_review": {
+  "stance": "supports",
+  "rationale": "why this excerpt entails this claim",
+  "reviewed_by": "author",
+  "derived_numbers": false
+}
+```
+
+| Verdict | Cause | Effect |
+|---|---|---|
+| `attested` | `stance: supports`, no screen objection | High-eligible |
+| `unreviewed` | No `support_review` block, or a malformed one | Usable, capped below High |
+| `qualified` | `stance: partial` / `context-only`, or the claim asserts a number no excerpt contains | Usable, capped below High |
+| `disputed` | A screen flagged a polarity conflict and the author overrode it with a rationale of at least 20 characters | Usable, capped below High |
+| `contradicted` | `stance: contradicts`, or a screened conflict with no reasoned override | Unusable; omit from substantive sections and name in Gaps |
+
+Two mechanical screens run alongside the attestation. Both can only *remove*
+support, never grant it:
+
+- **Polarity** — when the claim and an excerpt share an anchor phrase but
+  disagree on negation within the clause that carries it.
+- **Unquoted numbers** — when the claim asserts a figure no cited excerpt
+  contains. Set `derived_numbers: true` when the figure is computed from
+  quoted values, and say so in the rationale.
+
+Entailment is not decidable here. The screens are high-precision filters
+measured against `scripts/tests/claim_support_corpus.json`, which also records
+the class they cannot resolve: statements that are semantically equal but
+lexically opposite ("cannot be used" versus "will panic") are reported as
+conflicts and require an attestation. Failing toward "ask the author" is the
+safe direction; passing silently is not.
 
 ## Verification Priority
 
@@ -118,10 +165,29 @@ Conservative preclassification rules:
 - Treat academic repositories/publishers as T2 until publication/review status is known.
 - Treat vendor marketing as T5 even when hosted on a first-party domain.
 - Do not let imported or manually reviewed JSON override the executable
-  authority decision. Record manual review as context only. The current
-  automatic T1 rule is deliberately fail-closed to recognized government
-  namespaces; other would-be primary sources remain below High until a trusted
-  authority registry or host execution handle exists.
+  authority decision. Record manual review as context only.
+
+Automatic T1 has exactly two sources:
+
+1. Recognized government namespaces.
+2. `references/source-authority-registry.json` — a curated registry binding a
+   domain to a standards body, government, or owning project, each entry
+   carrying a stated basis and a check date. Matching is exact host or a true
+   subdomain, never reduced to the registrable domain, so listing
+   `docs.aws.amazon.com` does not confer authority on `amazon.com`. Registry
+   classifications carry a `registry:` basis so a checked ownership record is
+   never confused with a heuristic guess. An unreadable registry yields no
+   entries, so it can only withhold authority, never grant it.
+
+An unlisted host keeps its heuristic tier. Absence from the registry says
+nothing about a source's trustworthiness; it says the ownership was not
+checked. A registry entry proves who operates a domain, never that the content
+is correct.
+
+`project-owned` entries are simultaneously T1 and `vendor_self`. They are
+authoritative about that project's own behavior, API and configuration, and
+they cannot serve as the independent primary unit for a comparison, benchmark,
+or recommendation.
 
 ## Source-Quality Assessment
 
