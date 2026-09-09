@@ -38,6 +38,31 @@ Round-2 addendum (September 2026): a second review round found that round 1 had
 Round-3 addendum (September 2026): round 3 found a false-block defect that round 2
 Round-4 addendum (September 2026): the standing objection was evidence scope, not
 Round-5 addendum (September 2026): three defects, two of them regressions from
+Round-6 addendum (September 2026): **round 5's claim that the cancellation defect
+was fixed was wrong.** A retest showed the executor still returning while the gate
+ran on: `SIGHUP` gave exit 129 in 0s with the gate alive, and a TERM-ignoring gate
+survived a cancelled executor by 12s and then continued. Cause: the perl watcher's
+child called `setpgrp(0, 0)` — measured perl `pgid 60922` vs gate `pgid 60923` — so
+the supervisor added in round 5 was signalling and escalating on a group that held
+only perl; and no `$SIG{HUP}` was set at all. Fixed by removing the child's
+`setpgrp` (isolation already comes from `set -m` one level up), so one addressable
+group holds perl, the gate and grandchildren. Grandchild cleanup on expiry and all
+exit codes (124 timeout, passthrough, 143 early signal) re-verified, on macOS/perl
+and on Debian/GNU-timeout and Alpine/BusyBox.
+
+Why round 5 believed itself is the part worth keeping: its test drove a `timeout`
+**shim that left its child in the same process group**, so it never reproduced the
+topology that breaks. A stand-in that is tidier than the real thing confirms
+fixes against a system that does not exist. The tests now drive the real watcher
+(SIGHUP, TERM-ignoring gate) and assert the invariant separately — the gate's
+group must be addressable and be neither the supervisor's nor the caller's.
+Restoring the exact pre-fix watcher is now caught.
+
+Two mutations survive and are recorded, not chased: re-adding the watcher's old
+pid-targeted handlers is equivalent once the group is shared; and deleting the
+verification behind the cancellation message cannot be caught behaviourally,
+because its branch needs a process that survives SIGKILL — it is pinned
+structurally and labelled as structural.
 round 4, one of them invalidating round 4's own eval evidence.
 (1) `if docker run … | sed` made the matrix test *sed*, so a container exiting 42
 was summarised as "all exercised implementations pass" with exit 0; a second

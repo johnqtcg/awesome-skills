@@ -37,8 +37,12 @@
 # something else kills the gate. So the tool is run as a CHILD (not exec'd) and
 # a signal death at or past the deadline is normalised to 124. Elapsed time is
 # the implementation-independent evidence that the deadline is what fired.
-# Every branch signals the whole process GROUP: GNU uses its own program group
-# unless `--foreground`, BusyBox kills the child tree, the watcher calls setpgrp.
+# Every branch is cancellable through ONE process group, created here by `set -m`
+# and shared by the tool, the gate and any grandchildren. Exactly one layer may
+# create that boundary: when the perl watcher also re-grouped its child, the two
+# layers cancelled out and the supervisor's signals landed on a group holding
+# only the watcher (measured: watcher pgid 60922, gate pgid 60923), so SIGHUP
+# returned 129 with the gate still running.
 set -u
 
 SECS=""

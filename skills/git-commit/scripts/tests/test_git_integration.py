@@ -1603,6 +1603,26 @@ class RunGateCancellationTests(_RepoTestCase):
         self.assertEqual(before, marker.exists(),
                          "gate acted again after the executor exited")
 
+    def test_cancellation_report_is_conditional_not_asserted(self):
+        """Structural, and labelled as such.
+
+        The report used to claim "then KILLed" unconditionally, so a run that
+        left the gate alive still read as cleaned up. It now checks the group
+        before saying so. The FAILING branch cannot be reached from a test —
+        it needs a process that survives SIGKILL — so this pins the presence of
+        the check rather than its behaviour. A mutation deleting the check
+        survives on purpose; recording that is more useful than pretending the
+        branch is covered.
+        """
+        script = (SCRIPTS / "run-gate.sh").read_text()
+        cancel = script.split("forward_and_exit()", 1)[1].split("run_normalised()", 1)[0]
+        self.assertIn("REMAIN", cancel,
+                      "the report must be able to say cleanup did NOT complete")
+        # The claim must come after a re-check, not before it.
+        kill_at = cancel.index("kill -KILL")
+        self.assertGreater(cancel.index("REMAIN"), kill_at,
+                           "the verification must follow the KILL it verifies")
+
     def test_cancellation_is_reported(self):
         proc, child, marker = self._launch_slow_gate()
         proc.send_signal(signal.SIGTERM)

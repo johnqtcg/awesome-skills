@@ -392,6 +392,47 @@ its grader was tightened from length alone to format **and** length: a base
 answer of `Add reconciliation matcher stub` fits in fifty characters and is not
 Conventional Commits at all.
 
+The sixth round is a correction. Round five reported the cancellation defect as
+fixed. It was not, and the retest was right: the executor still returned while
+the gate kept running, in two shapes.
+
+`SIGHUP` returned 129 in zero seconds with the gate alive, and a TERM-ignoring
+gate survived a cancelled executor by twelve seconds and then kept going. The
+cause was one line in the perl watcher that round five never looked at: the
+child called `setpgrp(0, 0)`. Measured directly — perl `pgid 60922`, gate
+`pgid 60923`. Round five had added a supervisor that signals and escalates on
+*the tool's* process group, so every one of those signals landed on a group
+containing only perl. The watcher also set no `$SIG{HUP}` at all, which is why
+HUP was instant rather than merely slow.
+
+The fix removes the child's `setpgrp`. Isolation is already provided one level
+up — `run_normalised` puts the whole invocation in its own group via `set -m` —
+so perl, the gate and any grandchildren now share one addressable group, and the
+supervisor's forward, its wait-for-empty and its KILL escalation all reach the
+gate. The watcher's own signal handlers became unnecessary and were deleted:
+escalation lives in one place instead of being half-implemented in two. What
+remains is a guard that the watcher only ever addresses a group it actually
+leads, because signalling a group it does not lead would reach the caller — a
+worse failure than the one being fixed. Grandchild cleanup on expiry, the reason
+`setpgrp` was there originally, was re-verified and still holds.
+
+The more useful lesson is why round five believed itself. Its test drove a
+`timeout` shim, and that shim left its child in the same process group — so it
+never reproduced the topology that breaks. A test built from an idealised stand-in
+confirmed a fix against a system that did not exist. The tests now exercise the
+real watcher directly, with SIGHUP and with a TERM-ignoring gate, and a separate
+test states the invariant they depend on: the gate's group must be addressable,
+and must be neither the supervisor's group nor the caller's. Restoring the exact
+pre-fix watcher is now caught.
+
+Two mutations survive, and both are recorded rather than chased. Re-adding the
+watcher's old pid-targeted handlers changes nothing, because they are redundant
+once the group is shared — an equivalent mutation, not a gap. Deleting the
+verification behind the cancellation message also survives: that message used to
+assert cleanup unconditionally and now re-checks the group before claiming it,
+but the branch where processes remain needs a process that survives SIGKILL and
+cannot be reached from a test. It is pinned structurally and labelled as such.
+
 ### 4.6.1 Timeout Overrides Are Explicit
 
 The original 120-second timeout rule was intentionally conservative, but it was too rigid for large Java and multi-module builds. The skill now treats timeout as a deterministic setting with a default and an override chain:
