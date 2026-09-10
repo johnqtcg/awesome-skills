@@ -7,6 +7,11 @@ type Item struct {
 }
 
 // ExtractIDs maps every item to its ID, preserving order and count.
+//
+// The result is always non-nil, including for a nil or empty input: callers
+// serialize it directly, and `null` instead of `[]` breaks their decoders. This
+// is part of the contract, not an implementation detail — `len() == 0` alone
+// does not verify it.
 func ExtractIDs(items []Item) []string {
 	out := make([]string, 0, len(items))
 	for i := 0; i < len(items); i++ {

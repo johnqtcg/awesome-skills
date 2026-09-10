@@ -37,7 +37,8 @@ Create and refine Go tests for this repository with table-driven cases and expli
 - For service-layer code with interfaces, focus on methods declared in the interface. For pure functions/handlers, focus on exported functions/endpoints.
 - Run with the race detector (`go test -race`). Scope is the **tested package set**, not always `./...`: PR mode narrows it to changed packages, and a Light pure-function target with no `go`/`chan`/`sync` may run `-race` on just that package rather than the whole repo. **Precedence when the rules below disagree: `race.required` config > PR scope > mode default.** `race.required: false` disables `-race` entirely (state it in the report); otherwise `-race` is required on every tested package.
 - **Killer Case hard constraint (Standard + Strict)**: each test target (interface method / exported function / handler endpoint) must include at least 1 "killer case" (fault-injection or boundary-kill case) that is expected to fail on a known bad mutation/path.
-- In the report, for each killer case, explicitly state: **"if this assertion is removed, the known bug can escape detection."**
+- In the report, for each killer case, name its critical assertion(s) and report **`Kill: Verified`** — you injected the named defect on a scratch copy, re-ran the test, observed the FAIL, and quote the failure line — or **`Kill: Unverified`** plus why you could not run it. An unverified kill is a **defect hypothesis, not a demonstrated result**: never write it as one.
+- **Do NOT claim an assertion is indispensable unless you checked that separately.** Injecting the defect shows the *case* catches it; only deleting the named assertion **while the defect is still injected** and seeing the test PASS shows that *assertion* is what catches it. Redundant assertions are normal — report `Assertion necessity` only when that removal check was actually run, never as a blanket statement. → recipe: `references/killer-case-patterns.md` § Verifying the Kill.
 
 ### Killer Case — Definition (Standard + Strict Modes)
 
@@ -46,7 +47,7 @@ A **killer case** is a test case designed to catch a specific, named defect. It 
 1. **Defect hypothesis**: a concrete statement of what could go wrong (e.g., "loop uses `i < len-1` instead of `i < len`, dropping the last element")
 2. **Fault injection or boundary setup**: test input that triggers the defect if present
 3. **Critical assertion**: the specific `assert`/`require` call that would fail if the defect exists
-4. **Removal risk statement**: "if this assertion is removed, the known bug can escape detection"
+4. **Kill verification**: `Kill: Verified` (defect injected, failure observed and quoted) or `Kill: Unverified` (+ reason it was not executed). An *assertion-necessity* claim is a separate, optional one — see Hard Rules
 
 A killer case is NOT just another edge case — it is explicitly tied to a defect hypothesis. If you cannot name the defect it catches, it is not a killer case.
 
@@ -64,6 +65,8 @@ When writing a killer case and you need concrete Go patterns or templates:
 - Mocking everything: if you mock 5+ dependencies, the test tests the mocks, not the code
 - Over-reliance on snapshot/golden files for volatile output (timestamps, UUIDs, map iteration order) — golden files are fine for stable serialization formats, but not for output that changes across runs
 - Testing implementation details instead of behavior: asserting internal method call order, private field values, or specific goroutine scheduling rather than observable outputs and side effects
+- Using `t.Skip()` to get a case to "pass" — a skipped case asserts nothing. Report it as a gap, never as coverage (see Reporting Integrity)
+- Covering an input scenario without asserting the behaviour the hypothesis promised — e.g. asserting `len(got) == 0` for empty input and calling a nil-vs-empty contract verified. `len(nil) == 0`, so that assertion cannot tell `[]` from `null`
 
 ### Coverage Gate Policy (Default + Scope)
 
@@ -75,14 +78,17 @@ When writing a killer case and you need concrete Go patterns or templates:
 
 #### Multi-Package Coverage
 
-When testing spans multiple packages:
-- Use `-coverpkg=./...` to measure cross-package coverage accurately.
-- Packages with no `_test.go` files report 0% — exclude them from gate calculations with explicit rationale.
-- Generate separate `coverprofile` per package when fine-grained analysis is needed:
-  ```bash
-  go test -coverprofile=pkg_a.out -covermode=atomic ./pkg/a
-  go test -coverprofile=pkg_b.out -covermode=atomic ./pkg/b
-  ```
+When testing spans multiple packages, **state the measurement scope, then read the number from the merged profile** — not from the per-package console line:
+
+```bash
+go test -coverpkg=./... -coverprofile=cover.out -covermode=atomic ./...
+go tool cover -func=cover.out    # per-function truth for every package in the profile
+```
+
+- Under `-coverpkg`, a package with no test binary of its own still prints `coverage: 0.0% of statements` **even when a sibling package's tests fully cover it**. That console line is not that package's coverage; the profile is.
+- **"Has no `_test.go` file" is NOT a valid exclusion reason.** The profile decides: covered by another package's tests → it counts toward the gate; genuinely uncovered → report it as a coverage gap (same rule as PR-Diff Scoped Testing), do not exclude it.
+- Valid exclusions, each stated with its reason: generated code (see Generated Code Exclusion), `cmd/**` entry points held to a smoke test, packages the task explicitly puts out of scope, vendored third-party code.
+- Use one `coverprofile` per package (`go test -coverprofile=pkg_a.out -covermode=atomic ./pkg/a`) only for fine-grained analysis of that one package — its scope is that package alone, so it cannot answer the gate question for the set.
 
 ### Go Version Gate
 
@@ -246,6 +252,10 @@ Before writing cases, produce a short **Failure Hypothesis List** from the targe
 
 Then map each hypothesis to at least one concrete test case name.
 
+For each hypothesis, also name **the change to the implementation that would violate it** (its mutation). Two consequences:
+- If you cannot name one, the hypothesis is not checkable as written — rewrite it until you can.
+- The case must carry an assertion that the named change would break. Supplying the input is **not** verification: an "empty input" case with only a length assertion leaves `out := make([]string, 0, n)` → `var out []string` passing, so a stated non-nil contract goes unverified.
+
 Then define at least one **killer case** per test target and map it to a specific defect hypothesis.
 
 If this mapping is missing, do not proceed to large test generation.
@@ -390,12 +400,13 @@ When the task is fixing failing tests or adding tests to existing code, use thes
   - `go test ./path/to/pkg -coverprofile=coverage.out -covermode=atomic -race`
   - `go tool cover -func=coverage.out`
 11. If coverage < required gate OR key hypotheses untested, add targeted cases only.
-12. **(Standard + Strict only)** Verify killer case integrity in report (required assertion present + removal risk statement).
+12. **(Standard + Strict only)** Verify each killer case *by executing it*: apply its named defect to a scratch copy of the source, re-run the test, confirm it FAILS, then revert (recipe: `references/killer-case-patterns.md` § Verifying the Kill). Report `Kill: Verified` with the observed failure line, or `Kill: Unverified` + reason if the environment cannot run it.
 
 ### Reporting Integrity (Mandatory)
 
 - Do NOT claim `-race` or coverage results unless you actually ran the commands and observed output.
 - If you cannot run commands in the current environment, say so, and output the exact commands for the user to run plus what to look for.
+- A **skipped** case is discovered, not verified. Never mark a boundary item `Covered`, a hypothesis addressed, or a killer case `Kill: Verified` on the strength of a case that reported `--- SKIP`. If a case genuinely must skip here, say which and report the item as a gap.
 
 ## Auto Scorecard (13 Checks)
 
@@ -431,7 +442,8 @@ Include:
   - case name
   - linked defect hypothesis
   - critical assertion(s)
-  - mandatory statement: "if this assertion is removed, the known bug can escape detection."
+  - `Kill: Verified` (+ the observed failure line) or `Kill: Unverified` (+ reason)
+  - `Assertion necessity` — include ONLY if the assertion-removal check was run; omit it otherwise
 - Boundary checklist per target (Covered/N/A + reason)
 - Coverage and race results (or N/A + exact commands)
 - Scorecard and final PASS/FAIL

@@ -91,6 +91,33 @@ func TestListLevels_MappingComplete(t *testing.T) {
 
 ---
 
+### `nil` vs empty is invisible to `len`
+
+`len(nil) == 0`, so a length assertion cannot tell an empty slice from a nil one — and
+for anything that gets serialized, that is the difference between `[]` and `null`, which
+breaks strict decoders on the other side.
+
+```go
+// Both of these satisfy len(got) == 0 and an empty element loop:
+out := make([]string, 0, len(items))   // returns []
+var out []string                       // returns null
+
+// So the assertion has to say it:
+if got == nil {
+    t.Fatalf("got = nil, want a non-nil slice (contract: JSON [] not null)")
+}
+```
+
+Rule: if the function's contract promises a non-nil empty result, assert `got != nil`
+explicitly. If it does not promise that, do not write the promise into the hypothesis —
+narrow the hypothesis to what the contract actually says. Deciding which applies means
+reading the contract, not the implementation: `make([]T, 0, n)` happening to be non-nil
+today is not a contract.
+
+The same asymmetry hits maps (`len(nil map) == 0`, and writing to a nil map panics while
+reading returns the zero value) and `[]byte` (`nil` and `[]byte{}` both marshal
+differently under `encoding/json`: `null` vs `""`).
+
 ## 3) Off-by-One Precision
 
 For every size/index boundary, test n=0,1,2,3. When code uses `i+1` or `n-1`, add cases that prove last-item behavior.
@@ -253,7 +280,7 @@ A killer case is a fault-injection or boundary-kill test tied to a concrete defe
 // Defect hypothesis: loop uses `i < len(levels)-1` instead of `i < len(levels)`,
 //   causing the last level to be silently dropped.
 // Critical assertion: output length equals input length AND last element ID present.
-// "If this assertion is removed, the known bug can escape detection."
+// Kill check: with the named defect injected, this case MUST fail.
 {
 	name: "killer: last level not dropped",
 	input: []Level{
@@ -281,5 +308,8 @@ For each killer case in the test output report, include:
 Killer case: [case name]
   Defect hypothesis: [H-ID] [description]
   Critical assertion(s): [what is asserted]
-  "If this assertion is removed, the known bug can escape detection."
+  Kill: Verified — [the observed failure line after injecting the defect]
+      | Unverified — [why it could not be executed]
+  Assertion necessity: [omit unless the removal check was run; see
+                        killer-case-patterns.md § Verifying the Kill]
 ```

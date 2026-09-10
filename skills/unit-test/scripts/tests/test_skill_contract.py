@@ -64,7 +64,7 @@ class UnitTestSkillContractTests(unittest.TestCase):
         self.assertIn("Defect hypothesis", skill)
         self.assertIn("Fault injection or boundary setup", skill)
         self.assertIn("Critical assertion", skill)
-        self.assertIn("Removal risk statement", skill)
+        self.assertIn("Kill verification", skill)
 
     # --- New: Defect-First Workflow ---
 
@@ -145,9 +145,7 @@ class UnitTestSkillContractTests(unittest.TestCase):
         self.assertIn("Output Expectations", skill)
         self.assertIn("Killer case list per target", skill)
         self.assertIn("linked defect hypothesis", skill)
-        self.assertIn(
-            "if this assertion is removed, the known bug can escape detection", skill
-        )
+        self.assertIn("`Kill: Verified`", skill)
 
     # --- New: Go Version Gate ---
 
@@ -458,13 +456,16 @@ class UnitTestSkillContractTests(unittest.TestCase):
     # --- Fix: Workflow step 12 gated to Standard + Strict ---
 
     def test_workflow_step_twelve_gated(self) -> None:
+        # Anchored on the step number rather than on a fixed character window and a
+        # phrase from the step's body: both broke when step 12 was reworded, reporting
+        # a substring error instead of the rule this test is about (the mode gate).
         skill = SKILL_MD.read_text()
-        workflow_start = skill.index("## Workflow")
-        workflow_section = skill[workflow_start : workflow_start + 1500]
-        # Find step 12 and verify it has mode gate
-        step12_idx = workflow_section.index("Verify killer case integrity")
-        step12_context = workflow_section[step12_idx - 40 : step12_idx + 50]
-        self.assertIn("Standard + Strict only", step12_context)
+        start = skill.index("## Workflow")
+        workflow = skill[start : skill.index("### Reporting Integrity", start)]
+        step12 = [ln for ln in workflow.splitlines() if ln.startswith("12. ")]
+        self.assertTrue(step12, "workflow step 12 not found")
+        self.assertIn("Standard + Strict only", step12[0])
+        self.assertIn("killer case", step12[0].lower())
 
     # --- Fix: Trivial commutativity excluded from mode promotion ---
 
@@ -530,9 +531,19 @@ class UnitTestSkillContractTests(unittest.TestCase):
 
     # --- New: SKILL.md line budget ---
 
+    # Budget raised 500 -> 520 in round 5. The round-4/5 correctness fixes (coverage
+    # measurement scope, and separating "the case kills the mutation" from "this
+    # assertion is indispensable") needed more precise wording, which left 2 lines of
+    # headroom under the old number — a budget that tight fires on the next edit
+    # regardless of merit. The guard's job is to bound growth, not to freeze a round
+    # number: the next addition should still trim or move content into `references/`.
+    SKILL_MD_LINE_BUDGET = 520
+
     def test_skill_md_stays_within_line_budget(self) -> None:
         lines = len(SKILL_MD.read_text().splitlines())
-        self.assertLessEqual(lines, 500, f"SKILL.md too long: {lines} lines (budget: 500)")
+        self.assertLessEqual(
+            lines, self.SKILL_MD_LINE_BUDGET,
+            f"SKILL.md too long: {lines} lines (budget: {self.SKILL_MD_LINE_BUDGET})")
 
     # --- New: boundary-scorecard.md reference integrity ---
 
@@ -632,6 +643,312 @@ class EngineeringReliabilityGuardTests(unittest.TestCase):
         self.assertIn("soft ceiling", self.skill)
         self.assertIn("NOT minimums to pad to", self.skill)
         self.assertIn("distinct logic paths", self.skill)
+
+
+class CoverageScopeGuardTests(unittest.TestCase):
+    """Round-4 review: the skill told the reader to exclude a package from the gate
+    because it "reports 0%" when it has no `_test.go`. Under `-coverpkg` that console
+    line is not the package's coverage — `test_behavioral_killer` now executes the
+    proof that a test-less package can be 100% covered by a sibling's tests. These
+    guards keep the *rule* from reverting, scoped to the section that states it so an
+    unrelated mention elsewhere cannot satisfy them."""
+
+    @classmethod
+    def setUpClass(cls):
+        skill = SKILL_MD.read_text()
+        start = skill.index("#### Multi-Package Coverage")
+        cls.section = skill[start:skill.index("### Go Version Gate", start)]
+
+    def test_gate_number_is_read_from_the_merged_profile(self):
+        self.assertIn("merged profile", self.section)
+        self.assertIn("go tool cover -func=cover.out", self.section)
+        self.assertIn("-coverpkg=./...", self.section)
+
+    def test_console_zero_percent_is_documented_as_misleading(self):
+        self.assertRegex(
+            self.section, r"no test binary of its own still prints `coverage: 0\.0%",
+            "the section must explain WHY the 0.0% console line cannot be used")
+
+    def test_absence_of_a_test_file_is_not_an_exclusion_reason(self):
+        self.assertIn("NOT a valid exclusion reason", self.section)
+        # Bound to the right subject: the sentence that rejects the reason must be the
+        # one that names `_test.go`, not some other exclusion rule in the section.
+        rejecting = [b for b in self.section.split("\n- ")
+                     if "NOT a valid exclusion reason" in b]
+        self.assertTrue(rejecting, self.section)
+        self.assertIn("_test.go", rejecting[0])
+        self.assertIn("coverage gap", rejecting[0])
+
+    def test_old_exclude_because_zero_percent_rule_is_gone(self):
+        for wrong in ("exclude them from gate calculations",
+                      "report 0% — exclude"):
+            self.assertNotIn(wrong, self.section,
+                             f"the reverted rule {wrong!r} is back in § Multi-Package Coverage")
+
+    def test_valid_exclusions_are_enumerated_by_reason(self):
+        self.assertIn("Valid exclusions", self.section)
+        for reason in ("generated code", "cmd/**", "out of scope", "vendored"):
+            self.assertIn(reason, self.section)
+
+
+class KillerCaseVerificationGuardTests(unittest.TestCase):
+    """Round-4/5 review: every killer case had to assert "if this assertion is removed,
+    the known bug can escape detection" — but nothing required running anything, so a
+    hypothesis was reported in the grammar of a result. Round 5 went further: that
+    sentence conflates two different claims. Injecting the defect shows the *case*
+    catches it; only deleting the named assertion (defect still injected) and seeing the
+    test PASS shows that *assertion* is what catches it. The repository proves the
+    difference by execution in `test_behavioral_killer`
+    (`test_removing_an_assertion_can_still_leave_the_mutation_caught`).
+
+    So the mandatory report item is now the kill status, and an assertion-necessity claim
+    is optional and only permitted after its own check."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.skill = SKILL_MD.read_text()
+        cls.patterns = (REFERENCE_DIR / "killer-case-patterns.md").read_text()
+        cls.scorecard = BOUNDARY_SCORECARD_REF.read_text()
+
+    def _section(self, start: str, end: str) -> str:
+        begin = self.skill.index(start)
+        return self.skill[begin:self.skill.index(end, begin)]
+
+    def _hard_rules(self) -> str:
+        return self._section("## Hard Rules", "### Killer Case — Definition")
+
+    def test_hard_rule_requires_a_kill_label(self):
+        rules = self._hard_rules()
+        self.assertIn("`Kill: Verified`", rules)
+        self.assertIn("`Kill: Unverified`", rules)
+
+    def test_unverified_kill_is_labelled_a_hypothesis_not_a_result(self):
+        self.assertRegex(
+            self._hard_rules(), r"defect hypothesis, not a demonstrated result",
+            "the skill must say plainly that an unverified kill is not a result")
+
+    def test_hard_rule_forbids_an_unchecked_necessity_claim(self):
+        rules = self._hard_rules()
+        self.assertIn("Do NOT claim an assertion is indispensable unless you checked that "
+                      "separately", rules)
+        # And it must explain the distinction, not merely forbid the claim.
+        for phrase in ("shows the *case* catches it",
+                       "while the defect is still injected",
+                       "Redundant assertions are normal"):
+            self.assertIn(phrase, rules, f"Hard Rules no longer explains: {phrase!r}")
+
+    def test_killer_case_definition_component_four_is_the_kill_check(self):
+        definition = self._section("### Killer Case — Definition", "### Anti-examples")
+        component = [ln for ln in definition.splitlines() if ln.startswith("4. ")]
+        self.assertTrue(component, definition)
+        self.assertIn("Kill: Verified", component[0])
+        self.assertIn("Kill: Unverified", component[0])
+        self.assertIn("separate, optional", component[0])
+
+    def test_workflow_step_twelve_requires_execution(self):
+        workflow = self._section("## Workflow", "### Reporting Integrity")
+        step = [ln for ln in workflow.splitlines() if ln.startswith("12. ")]
+        self.assertTrue(step, workflow)
+        self.assertIn("by executing it", step[0])
+        self.assertIn("revert", step[0].lower())
+        self.assertIn("Kill: Verified", step[0])
+
+    def test_output_expectations_report_the_kill_status(self):
+        output = self._section("## Output Expectations", "### Machine-Readable Summary")
+        self.assertIn("Kill: Verified", output)
+        self.assertIn("Kill: Unverified", output)
+        self.assertRegex(
+            output, r"`Assertion necessity` — include ONLY if",
+            "the report format must gate the necessity claim on having run the check")
+
+    def test_reference_separates_the_two_experiments(self):
+        self.assertIn("## Verifying the Kill", self.patterns)
+        self.assertIn("### A. Kill check — mandatory", self.patterns)
+        self.assertIn("### B. Assertion-necessity check — optional", self.patterns)
+        # The distinguishing conclusion: still failing after removal REFUTES necessity.
+        self.assertIn("so the claim is **false**", self.patterns)
+        self.assertIn("(assertion, defect) pair", self.patterns)
+        self.assertIn("Expect the negative result more often than not", self.patterns)
+        self.assertIn("Revert every mutation", self.patterns)
+        for fake in ("does not compile", "on the original", "different assertion"):
+            self.assertTrue(fake in self.patterns,
+                            f"§ Verifying the Kill no longer names the {fake!r} fake-kill mode")
+
+    def test_scorecard_item_eleven_scores_the_kill_status(self):
+        item = [ln for ln in self.scorecard.splitlines() if ln.startswith("| 11 |")]
+        self.assertTrue(item, "scorecard item 11 not found")
+        self.assertIn("Kill: Verified", item[0])
+        # An honest Unverified must not be punished; an unlabelled claim must be; and
+        # item 11 must not require a necessity claim it cannot verify.
+        self.assertIn("An honest `Kill: Unverified` with a reason still PASSES",
+                      self.scorecard)
+        self.assertIn("**unlabelled** kill claim is a FAIL", self.scorecard)
+        self.assertIn("`Assertion necessity` claim is **not** required by this item",
+                      self.scorecard)
+
+
+class KillLabelSweepTests(unittest.TestCase):
+    """Sweep every shipped asset, not the one line a review cited.
+
+    Round 4 fixed SKILL.md and left `bug-finding-techniques.md` shipping a second
+    **report template** that produced an unlabelled claim. Round 5 retired the blanket
+    "if this assertion is removed…" sentence, which had to be removed from 10 places
+    across SKILL.md and four references — and the indispensability wording may now
+    appear ONLY where the separate necessity check is defined.
+
+    Occurrences inside ```go fences are code comments, swept separately: they must state
+    the kill check, not an unverified necessity claim.
+    """
+
+    ASSETS = None
+
+    @classmethod
+    def setUpClass(cls):
+        cls.ASSETS = [SKILL_MD, *sorted(REFERENCE_DIR.glob("*.md"))]
+
+    @staticmethod
+    def _segments(text: str):
+        """Yield (kind, body): 'go' / 'fence' for fenced blocks, else the heading line."""
+        prose, section = [], "(top)"
+        lines, i = text.splitlines(), 0
+        while i < len(lines):
+            line = lines[i]
+            if line.lstrip().startswith("```"):
+                lang = line.lstrip()[3:].strip().lower()
+                body, i = [], i + 1
+                while i < len(lines) and not lines[i].lstrip().startswith("```"):
+                    body.append(lines[i])
+                    i += 1
+                yield ("go" if lang == "go" else "fence", "\n".join(body))
+                i += 1
+                continue
+            if line.startswith("#"):
+                if prose:
+                    yield (section, "\n".join(prose))
+                    prose = []
+                section = line.strip()
+            prose.append(line)
+            i += 1
+        if prose:
+            yield (section, "\n".join(prose))
+
+    def _matching_segments(self, needle: str, skip_go: bool = True):
+        found = []
+        for path in self.ASSETS:
+            for kind, body in self._segments(path.read_text()):
+                if needle.lower() in body.lower() and not (skip_go and kind == "go"):
+                    found.append((path.name, kind, body))
+        return found
+
+    def test_indispensability_wording_only_where_the_check_is_defined(self):
+        """The blanket sentence is retired. Any remaining discussion of removing an
+        assertion must sit with the necessity check that decides it — otherwise the
+        unverifiable mandate is back under a new heading."""
+        offenders = [
+            f"{name} [{kind}]"
+            for name, kind, body in self._matching_segments("assertion is removed")
+            if "necessity" not in body.lower()
+        ]
+        self.assertEqual(
+            [], offenders,
+            f"these discuss removing an assertion without the necessity check that "
+            f"establishes it: {offenders}")
+
+    def test_every_killer_case_report_template_carries_the_kill_label(self):
+        """A fenced report template (identified by `Defect hypothesis:`) shows the reader
+        the exact output shape, so it must carry the mandatory kill status."""
+        templates = self._matching_segments("Defect hypothesis:")
+        offenders = [f"{name} [{kind}]" for name, kind, body in templates
+                     if "Kill:" not in body]
+        self.assertEqual([], offenders,
+                         f"report templates missing the `Kill:` status: {offenders}")
+        self.assertGreaterEqual(
+            len(templates), 1,
+            "anti-vacuity: the sweep found no report template at all, so it would pass "
+            "no matter what those templates said")
+
+    def test_go_template_comments_state_the_kill_check(self):
+        """The 7 in-code comments used to assert indispensability, which the necessity
+        check refutes for most of them. They must state the kill check instead."""
+        claims, checks = [], 0
+        for path in self.ASSETS:
+            for kind, body in self._segments(path.read_text()):
+                if kind != "go":
+                    continue
+                if "assertion is removed" in body.lower():
+                    claims.append(path.name)
+                checks += body.count("Kill check: with the named defect injected")
+        self.assertEqual([], claims,
+                         f"go template comments still assert indispensability: {claims}")
+        self.assertGreaterEqual(checks, 7,
+                                f"expected the kill-check comment in every killer-case "
+                                f"template, found {checks}")
+
+
+class SkipIsNotCoverageGuardTests(unittest.TestCase):
+    """Round-6 review: two subtests were changed to `t.Skip()` and the grader still
+    reported the hypothesis covered — the names matched, the count matched, nothing had
+    run. The rule now exists at the skill level too, because the same confusion produces
+    a boundary item marked `Covered` by a case that asserted nothing."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.skill = SKILL_MD.read_text()
+        cls.scorecard = BOUNDARY_SCORECARD_REF.read_text()
+
+    def test_reporting_integrity_says_a_skip_is_not_verification(self):
+        start = self.skill.index("### Reporting Integrity")
+        section = self.skill[start:self.skill.index("## Auto Scorecard", start)]
+        self.assertIn("skipped** case is discovered, not verified", section)
+        self.assertIn("--- SKIP", section)
+        self.assertIn("Kill: Verified", section)
+
+    def test_anti_examples_reject_skip_as_a_pass(self):
+        start = self.skill.index("### Anti-examples")
+        section = self.skill[start:self.skill.index("### Coverage Gate Policy", start)]
+        self.assertRegex(section, r"`t\.Skip\(\)` to get a case to \"pass\"")
+
+    def test_boundary_checklist_marks_a_skipped_case_as_a_gap(self):
+        self.assertIn("does not make its item `Covered`", self.scorecard)
+        self.assertIn("--- SKIP", self.scorecard)
+
+
+class HypothesisMustBeCheckableGuardTests(unittest.TestCase):
+    """Round-6 review: the exemplar's H2 promised an empty but NON-NIL result and only
+    asserted length and elements. `len(nil) == 0`, so `var out []string` satisfied every
+    assertion — the promise was stated, given an input scenario, and never verified."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.skill = SKILL_MD.read_text()
+        cls.techniques = (REFERENCE_DIR / "bug-finding-techniques.md").read_text()
+
+    def _workflow_section(self) -> str:
+        start = self.skill.index("## Defect-First Workflow")
+        return self.skill[start:self.skill.index("## High-Signal Test Budget", start)]
+
+    def test_each_hypothesis_must_name_the_change_that_violates_it(self):
+        section = self._workflow_section()
+        self.assertIn("the change to the implementation that would violate it", section)
+        self.assertIn("not checkable as written", section)
+
+    def test_supplying_the_input_is_not_verification(self):
+        section = self._workflow_section()
+        self.assertIn("Supplying the input is **not** verification", section)
+        # And it must name the concrete counterexample, not just the abstract rule.
+        self.assertIn("var out []string", section)
+
+    def test_anti_examples_reject_length_only_nil_coverage(self):
+        start = self.skill.index("### Anti-examples")
+        section = self.skill[start:self.skill.index("### Coverage Gate Policy", start)]
+        self.assertIn("`len(nil) == 0`", section)
+
+    def test_reference_documents_the_nil_versus_empty_trap(self):
+        self.assertIn("`nil` vs empty is invisible to `len`", self.techniques)
+        self.assertIn("want a non-nil slice", self.techniques)
+        # The decision must route through the contract, not the current implementation.
+        self.assertIn("reading the contract, not the implementation", self.techniques)
+        self.assertIn("is not a contract", self.techniques)
 
 
 if __name__ == "__main__":

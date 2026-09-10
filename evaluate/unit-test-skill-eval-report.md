@@ -306,3 +306,209 @@ Core value by importance:
 - Eval viewer: `unit-test-workspace/iteration-1/eval-review.html`
 - Generated test code: `unit-test-workspace/iteration-1/*/outputs/*_test.go`
 - Generated reports: `unit-test-workspace/iteration-1/*/outputs/report.md`
+
+---
+
+## 8. Round-4 Review Remediation (2026-09-10)
+
+An external review raised four findings against the skill and its regression harness.
+All four were reproduced before any change was made, and three reproduce as executable
+facts rather than opinions.
+
+### 8.1 Reproduction, before any fix
+
+| # | Experiment | Observed | Verdict |
+|---|-----------|----------|---------|
+| 1 | Keep the good exemplar, change only the call to `UndefinedFunction` | `SkipTest: go test exited 1 without running the test` | Confirmed — a response whose Go code does not compile was classified as an environment problem |
+| 2 | Replace the `json` fence's contents with the literal `NOT JSON` | `grade() == (True, [])` | Confirmed — only the fence was checked; the block was never parsed |
+| 3 | 2-package module, `lib` has no `_test.go`, run with `-coverpkg=./...` | console: `covfix/lib coverage: 0.0% of statements`; merged profile: `lib.Add 100.0%` | Confirmed — SKILL.md's exclusion rule rested on a number that is not that package's coverage |
+| 4 | Trace the removal-risk statement through the workflow | no step required running the mutation or removing the assertion | Confirmed — a defect hypothesis was mandated in the grammar of a proven result |
+
+### 8.2 What changed
+
+| Finding | Change | Guard |
+|---------|--------|-------|
+| 1 | `_GoRunner.run` returns three states (`PASSED` / `FAILED` / `NO_RUN`). `NO_RUN` on the correct source is graded as a failure of the response; on the mutated source it is reported as an **invalid mutation** and never credited as a kill. Only a genuine environment fault skips — `preflight()` proves the toolchain builds first. `go test`'s `[no tests to run]` (exit 0, on an `ok` line) is also `NO_RUN`. | `GraderSelfTest` — 7 tests, including the reviewer's exact experiment |
+| 2 | `grade_json_summary` parses the block and cross-checks it: required sections/fields (declared in `meta.json`), `summary.score` vs the tier counts, `summary.pass` vs the tier rule, `coverage.met` vs `line_pct`/`gate`, `race.clean` implies `race.executed`, and prose/JSON agreement. Tier minimums are **parsed from `references/boundary-scorecard.md`**, so the grader keeps no second copy. | `JsonSummaryContractTests` — 14 go-free mutation tests |
+| 3 | § Multi-Package Coverage rewritten: the gate number comes from the merged profile; **"has no `_test.go`" is not a valid exclusion reason** (covered by a sibling's tests → it counts; genuinely uncovered → report a gap, matching the PR-diff rule); valid exclusions are enumerated by reason. | `CoverageScopeGuardTests` (5, section-scoped) + `test_coverpkg_console_line_lies_while_the_profile_tells_the_truth`, which **executes the shipped recipe** on a real 2-package module |
+| 4 | The removal-risk statement must carry `Verification: Verified` (defect injected, failure observed and quoted) or `Verification: Unverified` (+ reason). Workflow step 12 now says "verify by executing it", and `references/killer-case-patterns.md` § Verifying the Kill ships the recipe plus the three ways a "kill" can be fake. Scorecard #11 scores the label: an honest `Unverified` still PASSES; an **unlabelled** claim FAILS. | `KillerCaseVerificationGuardTests` (7) + a grader report-marker check |
+
+Suite: 103 → 138 tests, green. Every round-4 rule was mutation-checked — each guard
+broken in turn, the matching test required to fail: **17/17 killed** against a green
+baseline, with a *skipped* test counted as SURVIVED rather than as a kill.
+
+Two of the new tests were themselves defective and were caught by that run: one let
+`SkipTest` propagate (unittest reports a skip as green, so the guard could not detect
+the regression it existed to catch), and one asserted through a build-error branch
+because its fixture file declared a mismatched package, leaving the branch it meant to
+test unreachable.
+
+### 8.3 On finding 4: what the evidence does and does not support
+
+The review's substantive point stands and is worth stating plainly in this report: the
+A/B in §3 shows all 13 of Without-skill's failed assertions were **methodology-level**,
+with identical core-path coverage (§3.4). That supports "more auditable, more consistently
+organised output". It does **not** establish a higher defect-detection rate — no
+experiment here measured defects found. §5.1's "value map" and §6's weighted score should
+be read with that boundary in mind.
+
+The remediation narrows the gap in the one place it can be narrowed without a new
+experiment: the killer case's central claim is now either executed and quoted, or
+explicitly labelled unverified. Whether the discipline raises real defect-detection
+remains an open question that needs a defect-seeded A/B — not re-derivable from §3.
+
+### 8.4 Not re-measured
+
+Sections 2–7 were **not** re-run for round 4. Trigger accuracy (§2), the A/B assertion
+pass rates (§3), the dimension scores (§6.1) and the weighted total (§6.2) all still
+describe the 2026-03-11 evaluation. Round 4 changed the skill document and the harness;
+those numbers would need a fresh A/B — including a `Verification:`-aware rubric — to be
+claimed again.
+
+---
+
+## 9. Round-5 Review Remediation (2026-09-10)
+
+A follow-up review found three further defects, all reproduced before any change.
+
+### 9.1 Reproduction, before any fix
+
+| # | Experiment | Observed | Verdict |
+|---|-----------|----------|---------|
+| 1a | `"critical_pass": "three"` in the good exemplar | `grade_json_summary` → `[]` | Confirmed — a wrong type silently disabled the consistency rules |
+| 1b | `line_pct: 20`, `met: false`, keep `13/13 PASS` | `grade_json_summary` → `[]` | Confirmed — no link between the coverage result and the final verdict |
+| 2 | Delete the exemplar's length assertion, keep the H1 mutation | test still FAILS, via the identity assertion (`last ID = "2", want "3"`) | Confirmed — "kills the mutation" ≠ "this assertion is indispensable"; the exemplar's own mandated claim was **false** |
+| 3 | Read `good.md` against its own code | claimed 5 cases and H1+H2 covered; shipped one 3-element input, no nil/empty case, `13/13 PASS` | Confirmed — the grader's positive exemplar over-claimed |
+
+### 9.2 What changed
+
+**Finding 1 — the JSON validator now validates in ordered stages.** Types first (from
+`meta.json`'s `json_field_types`, which doubles as the required-field list so there is one
+list instead of two), then ranges, then consistency. Consistency is unconditional, so a
+wrong type can no longer disable a rule; `int` rejects `true` because `bool` is an `int`
+subclass in Python. New rules: tier totals must match the scorecard's tier sizes,
+`0 <= *_pass <= *_total`, percentages in `0..100`, `cases >= 1`, and the missing
+cross-pillar link — the coverage gate is Critical item 13, so a **measured** miss (the
+restricted N/A covers only *unmeasured* coverage) must appear as a failed Critical item and
+an overall FAIL. Nine new mutation tests in `JsonSummaryContractTests`.
+
+**Finding 2 — the two claims are now separate, and the difference is executed.** The
+mandatory report item is `Kill: Verified` / `Kill: Unverified` (defect injected, failure
+observed). An *assertion-necessity* claim requires its own experiment — delete the named
+assertion **with the defect still injected** and see the test PASS — and is optional; the
+blanket "if this assertion is removed, the known bug can escape detection" mandate is
+retired from all 10 places it appeared. `references/killer-case-patterns.md` § Verifying
+the Kill now ships both procedures with **different conclusions**, states that a
+still-failing test *refutes* necessity, and explains that necessity is a property of an
+**(assertion, defect) pair**: the identity assertion is indispensable against a reordering
+defect, the length assertion against a duplication defect, and neither against a dropped
+tail — which is exactly the reviewer's case.
+`test_behavioral_killer.test_removing_an_assertion_can_still_leave_the_mutation_caught`
+pins that fact by execution.
+
+**Finding 3 — the exemplar was rewritten to be true of its own code, and two checks now
+compare the two.** `good.md` ships a 4-case table-driven test (nil, empty, single, three
+elements), reports 4 cases, maps H1 and H2 to the cases that actually exercise them,
+includes the full boundary checklist that justifies its scorecard, records `Kill: Verified`
+with the observed failure, and states honestly that **no** assertion-necessity claim is
+supported for H1 — with the reason. The grader now runs `go test -v`, so
+`_grade_report_matches_code` can compare `sum(targets[].cases)` against the cases the
+toolchain executed, and require an executed case per fixture-declared hypothesis
+(`required_case_patterns`).
+
+Suite: 140 → 153 tests, green. `SKILL.md`'s line budget was raised 500 → 520; the reason is
+recorded in the test.
+
+### 9.3 The general lesson
+
+Findings 1 and 3 are the same defect at two levels: a check that inspects **form** while
+the claim it certifies is about **content**. A JSON fence is not a JSON document; a parsed
+document is not a coherent report; a coherent report is not a report about the code that
+ships with it. Each round of this skill's hardening has moved one boundary further from
+form toward content, and each move was found by an experiment rather than by re-reading the
+rules.
+
+Finding 2 is different in kind: the rule itself was unsound, not merely unenforced. It
+mandated a claim that its own recommended experiment could not establish, and the exemplar
+demonstrated the claim being false. A mandate that cannot be verified by the procedure it
+ships with will be satisfied by assertion — which is what happened.
+
+---
+
+## 10. Round-6 Review Remediation (2026-09-10)
+
+Two further gaps, both reproduced before any change, and both variants of the round-5
+lesson: a check that inspects form while the claim is about content.
+
+### 10.1 Reproduction, before any fix
+
+| # | Experiment | Observed | Verdict |
+|---|-----------|----------|---------|
+| 1 | Make the exemplar's `nil input` and `empty slice` subtests call `t.Skip()`; change nothing else | `grade()` → `(True, [])` | Confirmed — `executed_case_names` collected PASS, FAIL and SKIP alike, so a case that asserted nothing stood as evidence that H2 was covered |
+| 2 | Change the implementation to `var out []string` (nil for empty input) | all four exemplar cases still PASS | Confirmed — H2 promised "empty but **non-nil**" and the assertions checked only length and elements; `len(nil) == 0` |
+
+### 10.2 What changed
+
+**Discovered is not verified.** `executed_case_names` became `test_case_results`, a
+name → `PASS`/`FAIL`/`SKIP` map, with `verified_cases` dropping the skips. A hypothesis is
+covered only by a matching case that reached a verdict, and this fixture — a pure function
+with no environment dependency — reports *any* skip at all (`allow_skipped_cases: false`).
+
+**Every hypothesis owns a mutation.** One mutation per fixture was the structural cause of
+finding 2: H2 could be stated, given an input scenario, matched by name, and never
+verified, because nothing tested the behaviour it promised. The fixture's three parallel
+lists (`hypothesis_keywords` / `required_case_patterns` / `mutation`) collapsed into one
+`hypotheses` array where each entry carries its wording, its required case and its
+mutation. The emitted test must now kill *each* hypothesis's mutation.
+
+**The exemplar was corrected — by reading the contract, not the implementation.** `[]` vs
+`null` is a real observable difference for any serialized result, so the non-nil promise
+was made explicit in the system under test's doc comment and then asserted (`got == nil`
+is a separate check, because `len` cannot see it). H2 became a second killer case, K2, with
+its own executed kill. Had the contract *not* promised non-nil, the correct fix would have
+been to narrow H2 — an exemplar must not invent a requirement for the code it tests.
+
+Two exemplar details worth recording: the reported failure lines point at the
+`assertIDs(...)` call site rather than the assertion, because `t.Helper()` reattributes
+them; and the exemplar's killer-case count went from 1 to 2, since each hypothesis now has
+a defect-bound case with a verified kill.
+
+**The mutation run then found the opposite direction unguarded.** Deleting the non-nil
+sentence from `sut.go`'s doc comment left the exemplar passing — nothing bound H2's
+assertion to a promise the code actually makes, so an exemplar could invent a requirement
+as easily as it could omit a verification. Each hypothesis now declares
+`contract_evidence`, a regex that must match the source, and `validate_fixture` rejects an
+ungrounded hypothesis (or one declaring no evidence) before any response is graded. The
+two checks point in opposite directions: the mutation proves the hypothesis is *verified*,
+the evidence proves it is *legitimate*.
+
+**The same two rules were missing from the skill itself**, not just the grader: a skipped
+case would equally be marked `Covered` on a boundary checklist. Reporting Integrity now
+states that `--- SKIP` is discovered, not verified, and blocks `Kill: Verified` on it; the
+Defect-First Workflow requires each hypothesis to name the implementation change that
+would violate it ("if you cannot name one, the hypothesis is not checkable as written")
+and states that supplying the input is not verification;
+`references/bug-finding-techniques.md` documents the `len(nil) == 0` trap for slices, maps
+and `[]byte`, and routes the decision through the contract rather than the current
+implementation.
+
+Suite: 154 → 166 tests, green.
+
+### 10.3 The pattern across rounds 4–6
+
+Every finding so far has had the same shape: **the checked artifact was one step away from
+the claimed one.**
+
+| Round | Checked | Claimed | Gap |
+|-------|---------|---------|-----|
+| 4 | a `json` fence exists | the summary is ingestible | `NOT JSON` inside the fence |
+| 4 | a console coverage line | the package's coverage | the line describes a missing test binary |
+| 5 | the document parses | the report is coherent | `20%` coverage with `13/13 PASS` |
+| 5 | the report is coherent | it describes this test suite | 5 cases claimed over 1 |
+| 6 | a case exists and ran to a line | the behaviour is verified | the case skipped |
+| 6 | the input scenario is covered | the promised behaviour holds | `len(nil) == 0` |
+
+Each round closed one step and the next review found the following one. The rule that
+generalises: **for every claim, name the observation that would be different if the claim
+were false, and check that** — which is the same discipline the skill demands of a killer
+case, applied to the skill's own harness.

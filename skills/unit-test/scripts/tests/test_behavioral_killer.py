@@ -26,6 +26,7 @@ dir (e.g. a sandbox), matching the skip discipline used elsewhere in this repo.
 """
 
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -34,6 +35,8 @@ import unittest
 
 
 GO = shutil.which("go")
+SKILL_MD = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, "SKILL.md"))
 
 # --- Fixtures (embedded so nothing lands in the repo tree) ---
 
@@ -102,6 +105,16 @@ _TRANSFORM_TEST = textwrap.dedent(
     """
 )
 
+# The same killer case with ONLY the length assertion removed. Used to show that
+# injecting a defect and removing an assertion answer different questions.
+_TRANSFORM_TEST_NO_LEN = _TRANSFORM_TEST.replace(
+    """\tif len(got) != len(items) {
+\t\tt.Fatalf("length = %d, want %d (element dropped?)", len(got), len(items))
+\t}
+""",
+    "",
+)
+
 _RACE_MOD = "module racefix\n\ngo 1.22\n"
 
 _RACE_SRC = textwrap.dedent(
@@ -140,6 +153,53 @@ _RACE_TEST = textwrap.dedent(
 # Trivial known-good program for the compile precheck (see _preflight).
 _PREFLIGHT_MOD = "module preflight\n\ngo 1.22\n"
 _PREFLIGHT_SRC = "package main\n\nfunc main() {}\n"
+
+# --- Coverage-scope fixture: `lib` has NO _test.go, yet `app`'s tests fully cover it. ---
+_COV_MOD = "module covfix\n\ngo 1.22\n"
+_COV_LIB = "package lib\n\n// Add is exercised only through the app package's tests.\nfunc Add(a, b int) int { return a + b }\n"
+_COV_APP = textwrap.dedent(
+    """\
+    package app
+
+    import "covfix/lib"
+
+    func Sum(xs []int) int {
+    \ttotal := 0
+    \tfor _, x := range xs {
+    \t\ttotal = lib.Add(total, x)
+    \t}
+    \treturn total
+    }
+    """
+)
+_COV_APP_TEST = textwrap.dedent(
+    """\
+    package app
+
+    import "testing"
+
+    func TestSum(t *testing.T) {
+    \tif got := Sum([]int{1, 2, 3}); got != 6 {
+    \t\tt.Fatalf("Sum = %d, want 6", got)
+    \t}
+    }
+    """
+)
+
+
+def _skill_recipe(section: str) -> str:
+    """Return the first fenced ```bash block inside the named SKILL.md section.
+
+    The coverage rule below is validated by executing the *shipped* recipe, not a
+    hand-written copy of it. A second copy would keep passing after the documented
+    commands drift — the reader runs the doc, so the doc is what must be tested."""
+    with open(SKILL_MD, encoding="utf-8") as fh:
+        text = fh.read()
+    start = text.index(section)
+    m = re.search(r"```bash\s*\n(.*?)```", text[start:], re.S)
+    if m is None:
+        raise AssertionError(f"SKILL.md § {section} no longer ships a runnable bash recipe")
+    return m.group(1)
 
 
 def _go_env(root: str) -> dict:
@@ -286,6 +346,87 @@ class BehavioralKillerTests(unittest.TestCase):
             f"discovery pipeline failed to resolve the changed dir to its package "
             f"(the ./-prefix / xargs-d bug would show here):\n{res.stdout}\n{res.stderr}",
         )
+
+    # 7. "The case kills the mutation" and "this assertion is indispensable" are DIFFERENT
+    #    claims, and the skill used to treat injecting the defect and deleting the
+    #    assertion as two routes to the same conclusion. They are not:
+    #      * inject the defect  -> the test fails  => the TEST catches this defect;
+    #      * delete the named assertion, defect still injected -> the test PASSES
+    #                                              => that ASSERTION is what catches it.
+    #    Here the length assertion is removed and the dropped-tail mutation is *still*
+    #    caught, by the last-element identity assertion. So a mandatory "if this assertion
+    #    is removed the bug escapes" statement was factually false for this very test.
+    def test_removing_an_assertion_can_still_leave_the_mutation_caught(self):
+        self._preflight()
+        full = self._module(
+            {"go.mod": _GO_MOD, "transform.go": _TRANSFORM_MUTATION,
+             "transform_test.go": _TRANSFORM_TEST}
+        )
+        res = self._go(full, "test", "-run", "TestExtractIDs_Killer", "./...")
+        self.assertNotEqual(res.returncode, 0, "baseline: the full case must kill the mutation")
+
+        # Sanity: the removal really removed the length assertion and nothing else.
+        self.assertNotIn("len(got) != len(items)", _TRANSFORM_TEST_NO_LEN)
+        self.assertIn("got[len(got)-1]", _TRANSFORM_TEST_NO_LEN)
+
+        without_len = self._module(
+            {"go.mod": _GO_MOD, "transform.go": _TRANSFORM_MUTATION,
+             "transform_test.go": _TRANSFORM_TEST_NO_LEN}
+        )
+        res = self._go(without_len, "test", "-run", "TestExtractIDs_Killer", "./...")
+        combined = res.stdout + res.stderr
+        self.assertNotEqual(
+            res.returncode, 0,
+            "removing the length assertion did NOT let the dropped-tail bug escape — the "
+            "identity assertion still catches it, which is the whole point: 'kills the "
+            "mutation' does not imply 'this assertion is indispensable'")
+        self.assertIn("last ID", combined, f"a different assertion should fire:\n{combined}")
+
+        # And it still passes on the correct implementation, so the failure above is the
+        # mutation being caught, not a broken test.
+        correct = self._module(
+            {"go.mod": _GO_MOD, "transform.go": _TRANSFORM_CORRECT,
+             "transform_test.go": _TRANSFORM_TEST_NO_LEN}
+        )
+        self.assertEqual(
+            0, self._go(correct, "test", "-run", "TestExtractIDs_Killer", "./...").returncode)
+
+    # 8. The coverage-scope fact behind § Multi-Package Coverage, executed rather than
+    #    asserted: under -coverpkg a package with no _test.go prints 0.0% on the console
+    #    while the MERGED PROFILE shows it fully covered by a sibling's tests. The skill
+    #    used to tell the reader to exclude such a package from the gate "because it
+    #    reports 0%" — that would have silently discarded 100%-covered code, and would
+    #    equally have hidden a genuine gap. Both halves are pinned here.
+    def test_coverpkg_console_line_lies_while_the_profile_tells_the_truth(self):
+        root = self._module({
+            "go.mod": _COV_MOD,
+            "lib/lib.go": _COV_LIB,
+            "app/app.go": _COV_APP,
+            "app/app_test.go": _COV_APP_TEST,
+        })
+        self._preflight()
+        recipe = _skill_recipe("#### Multi-Package Coverage")
+        try:
+            res = subprocess.run(
+                ["bash", "-c", recipe],
+                cwd=root, env=_go_env(root), capture_output=True, text=True, timeout=180,
+            )
+        except OSError as exc:
+            self.skipTest(f"cannot exec bash/go: {exc}")
+        combined = res.stdout + res.stderr
+        self.assertEqual(res.returncode, 0, f"shipped coverage recipe failed:\n{combined}")
+
+        # Half 1 — the misleading console line for the package with no test binary.
+        self.assertRegex(
+            combined, r"covfix/lib\s+coverage: 0\.0% of statements",
+            f"expected the 0.0% console line for the test-less package:\n{combined}")
+        # Half 2 — the profile reports that same package's function as fully covered.
+        lib_lines = [ln for ln in combined.splitlines() if "lib/lib.go" in ln and "Add" in ln]
+        self.assertTrue(lib_lines, f"cover -func did not report lib/lib.go:\n{combined}")
+        self.assertRegex(
+            lib_lines[0], r"100\.0%",
+            f"lib.Add is covered only through app's tests and must read 100% in the merged "
+            f"profile — this is why 'no _test.go' is not a valid exclusion:\n{lib_lines[0]}")
 
 
 if __name__ == "__main__":

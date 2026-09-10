@@ -3,11 +3,68 @@
   "target": "ExtractIDs",
   "expected_mode": "Standard",
   "expected_mode_rationale": "collection transform over a slice — Light excludes slice/map transforms; no Strict risk trigger",
-  "hypothesis_keywords": ["off-by-one", "last element", "drop"],
-  "min_hypothesis_keywords": 2,
   "package": "sut",
-  "mutation": {
-    "find": "for i := 0; i < len(items); i++ {",
-    "replace": "for i := 0; i < len(items)-1; i++ {"
-  }
+
+  "_hypotheses": "One entry per declared hypothesis, carrying everything the grader needs to decide whether it is really covered: the wording it must be described with, the test case that must have RUN (not skipped), the mutation that case must kill, and `contract_evidence` — a regex that must match sut.go, so a hypothesis cannot assert a behaviour the code under test never promised. These previously lived in three parallel lists (hypothesis_keywords / required_case_patterns / mutation) which could disagree — and did: H2 had an input scenario and no mutation, so the behaviour it promised was never verified.",
+  "hypotheses": [
+    {
+      "id": "H1",
+      "description": "off-by-one in the range bound drops the last element",
+      "keywords": ["off-by-one", "last element", "drop"],
+      "min_keywords": 2,
+      "case_pattern": "(?i)last|tail|three|multi|preserv",
+      "contract_evidence": "preserving order and count",
+      "mutation": {
+        "find": "for i := 0; i < len(items); i++ {",
+        "replace": "for i := 0; i < len(items)-1; i++ {"
+      }
+    },
+    {
+      "id": "H2",
+      "description": "nil/empty input yields an empty but NON-NIL result (JSON [] not null)",
+      "keywords": ["non-nil", "empty"],
+      "min_keywords": 2,
+      "case_pattern": "(?i)nil|empty|zero|no_?item",
+      "contract_evidence": "always non-nil",
+      "mutation": {
+        "find": "out := make([]string, 0, len(items))",
+        "replace": "var out []string"
+      }
+    }
+  ],
+
+  "_allow_skipped_cases": "This target is a pure function with no environment dependency, so no case has a legitimate reason to skip. A skipped case is discovered, not verified.",
+  "allow_skipped_cases": false,
+
+  "_json_field_types": "Declared fields AND their JSON types. This is the single list: presence is required and the type is checked, so a wrong type can never silently disable a consistency rule. Note `int` rejects `true` (bool is an int subclass in Python).",
+  "json_field_types": {
+    "summary.pass": "bool",
+    "summary.score": "string",
+    "summary.go_version": "string",
+    "targets[].name": "string",
+    "targets[].type": "string",
+    "targets[].cases": "int",
+    "targets[].killer_cases": "int",
+    "targets[].hypothesis_covered": "array",
+    "coverage.package": "string",
+    "coverage.line_pct": "number",
+    "coverage.gate": "number",
+    "coverage.met": "bool",
+    "race.executed": "bool",
+    "race.clean": "bool",
+    "scorecard.critical_pass": "int",
+    "scorecard.critical_total": "int",
+    "scorecard.standard_pass": "int",
+    "scorecard.standard_total": "int",
+    "scorecard.hygiene_pass": "int",
+    "scorecard.hygiene_total": "int"
+  },
+
+  "_report_patterns": "Markers the report must contain. The kill verification is mandatory; an assertion-necessity claim is NOT, because it is a different claim about a different thing (see references/killer-case-patterns.md).",
+  "report_patterns": [
+    {
+      "name": "a killer-case kill verification (`Kill: Verified|Unverified`)",
+      "regex": "Kill:\\s*(Verified|Unverified)"
+    }
+  ]
 }

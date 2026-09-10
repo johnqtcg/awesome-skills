@@ -276,6 +276,138 @@ Unlike many skills, `unit-test` treats trigger accuracy as a first-class concern
 
 This belongs in the rationale because it shows that `unit-test` is not merely adding more rules. It is also solving "when should this skill activate, and when should it yield to another testing skill?"
 
+### 4.13 Two Claims About a Killer Case, Two Experiments
+
+A killer case makes two claims that read almost identically and are established by
+different experiments:
+
+| Claim | Experiment | Conclusion |
+|-------|-----------|------------|
+| **This case catches defect D** | inject D; re-run | test FAILS ⇒ holds |
+| **Assertion A is what catches D** | inject D *and* delete only A; re-run | test PASSES ⇒ holds; test still FAILS ⇒ **refuted** |
+
+The skill originally mandated the second claim — every killer case had to state "if this
+assertion is removed, the known bug can escape detection" — while its workflow verified
+neither. Two separate defects followed from that.
+
+*The claim was unfalsifiable as written.* Nothing in a green test run distinguishes an
+assertion that would catch the defect from one that would not, so the sentence was
+mandatory to write and impossible to check. It was reliably satisfied by assertion.
+
+*And the mandate was unsound.* Even run correctly, injecting the defect cannot establish
+it. The repository's own exemplar proved this: with the dropped-tail mutation applied,
+deleting its length assertion left the test **still failing**, caught by the last-element
+identity assertion. The exemplar's mandated sentence was false about its own test —
+and `test_removing_an_assertion_can_still_leave_the_mutation_caught` now pins that by
+execution.
+
+So the two claims are separated. The kill check is mandatory and reported as
+`Kill: Verified` (defect injected, failure observed and quoted) or `Kill: Unverified`
+(+ reason). An assertion-necessity claim is optional and permitted only after its own
+removal check — and the reference warns that the negative result is the common one,
+because a good case asserts cardinality *and* identity and most single defects trip both.
+
+The underlying insight is that **necessity is a property of an (assertion, defect) pair,
+not of an assertion**. The identity assertion is indispensable against a reordering
+defect that preserves length; the length assertion is indispensable against a duplication
+defect that preserves identities; neither is indispensable against a dropped tail. Keep
+both — just do not claim either is load-bearing without the experiment that shows it.
+
+Scorecard #11 scores the kill status, not the outcome: an honest `Unverified` still
+PASSES, while an unlabelled kill claim FAILS. Punishing an environment that cannot run Go
+would only teach the model to assert `Verified` falsely — the failure mode being closed,
+not a stricter version of it.
+
+### 4.14 A Check on Form Cannot Certify a Claim About Content
+
+Three separate defects in this skill's grader were the same mistake at different depths:
+
+| The check looked at | It certified | Counterexample that passed |
+|--------------------|--------------|----------------------------|
+| a ```json fence exists | "the summary is machine-readable" | a fence containing `NOT JSON` |
+| the document parses and has the fields | "the summary is coherent" | `line_pct: 20`, `met: false`, `13/13 PASS` |
+| the report is coherent | "the report describes this test suite" | "5 cases, H1+H2 covered" over a single 3-element input |
+
+Each fix moved the boundary one step from form toward content, and each gap was found by
+an experiment rather than by re-reading the rules — which is itself the argument for the
+skill's Reporting Integrity clause.
+
+Two design rules came out of it. **Validate types before consistency, and never guard a
+consistency rule with a type test** — an `isinstance` guard turns a wrong type into a
+skipped check, so `"critical_pass": "three"` graded clean. **Link the pillars that a
+verdict depends on**: the coverage gate is Critical scorecard item 13, so a measured
+coverage miss must appear as a failed Critical item and an overall FAIL. Without that
+link every field can be locally consistent while the verdict is impossible.
+
+The content-level check that closed the third row is deliberately narrow: run the emitted
+test with `go test -v` and compare the claimed case count against the cases the toolchain
+executed. That is not semantic analysis — it compares two things that already had to
+agree, which is usually where an over-claiming report breaks first.
+
+### 4.15 Discovered, Ran, Verified — Three Different Things
+
+A test case can be in three states that a naive check collapses into one:
+
+| State | Evidence | What it supports |
+|-------|----------|------------------|
+| **Discovered** | the case exists and is named | nothing |
+| **Ran** | `go test -v` printed a line for it | nothing on its own — `--- SKIP` prints a line |
+| **Verified** | it reached `PASS` or `FAIL` | its assertions executed |
+
+The skill's own harness collapsed *ran* into *verified*: it collected `PASS`, `FAIL` and
+`SKIP` alike, so changing two subtests to `t.Skip()` — names unchanged, count unchanged —
+left the grader reporting their hypothesis covered. Nothing had asserted anything.
+
+The same confusion is available to the skill's user, which is why the rule now lives in
+Reporting Integrity rather than only in the grader: a boundary item marked `Covered` by a
+skipped case is the identical error, and a `Kill: Verified` label on a skipped killer case
+is worse — it asserts an executed result for a case that did not run.
+
+The general form: **a status is data, and dropping it converts a negative result into a
+positive one.** Any check that reduces a per-item result set to a set of names has done
+this, whether the items are test cases, migrated rows, or linted files.
+
+### 4.16 A Hypothesis Is Only Checkable If You Can Name the Mutation
+
+The Failure Hypothesis List asks what could go wrong. Round 6 showed that this is not
+enough on its own: a hypothesis can be stated in prose, mapped to a case, matched by
+name — and still describe a behaviour that nothing asserts.
+
+The exemplar's H2 promised "a nil/empty slice yields an empty but **non-nil** result".
+Its case supplied the input and asserted length and elements. `len(nil) == 0`, so
+changing the implementation to `var out []string` — which returns `null` where the
+contract promises `[]` — satisfied every assertion. The hypothesis had an input scenario
+and no verification.
+
+The fix is a rule with teeth: **for each hypothesis, name the change to the
+implementation that would violate it.**
+
+- If you cannot name one, the hypothesis is not checkable as written. Rewrite it until
+  you can — that rewriting is where a vague hypothesis becomes a testable one.
+- The case must carry an assertion that the named change would break. Supplying the
+  input is not verification.
+
+In the harness this became structural: every hypothesis owns a mutation, and the emitted
+test must kill each. Before that, the fixture kept three parallel lists — the wording, the
+required case, the mutation — and H2 appeared in two of them. Two lists that must agree
+drift; three is worse. Collapsing them into one entry per hypothesis makes the omission
+that hid H2's gap impossible to express.
+
+A second lesson is about where the answer comes from. Whether non-nil is part of the
+contract is a question about the contract, not the implementation:
+`make([]T, 0, n)` happening to return non-nil today is not a promise. If the contract
+says it, assert it; if it does not, narrow the hypothesis. An exemplar that asserts more
+than the contract promises invents a requirement for the code it tests — which is the
+mirror image of the defect being fixed.
+
+That mirror image needed its own guard, and a mutation run proved it: deleting the
+non-nil sentence from the source's doc comment left everything passing. So each
+hypothesis now carries two links pointing in opposite directions — a **mutation** (kill
+it, and the hypothesis is verified) and **contract evidence** in the source (match it,
+and the hypothesis is legitimate). A hypothesis with only the first can be a fabricated
+requirement; one with only the second is an unverified promise. Both are needed, and
+neither substitutes for the other.
+
 ## 5. Problems This Design Solves
 
 Combining the current `SKILL.md`, key references, and the evaluation report, the skill solves the following problems:
@@ -290,6 +422,12 @@ Combining the current `SKILL.md`, key references, and the evaluation report, the
 | Concurrency tests are flaky | `-race` + deterministic concurrency patterns | Tests become more reliable |
 | Test organization is scattered | table-driven + `t.Run` + target adaptation | Maintenance cost goes down |
 | Test completeness is not auditable | Scorecard + Reporting Integrity | Teams can judge deliverability more clearly |
+| A killer case's central claim is asserted, never checked | Mandatory `Kill:` status (§4.13) | The kill is either executed and quoted, or explicitly a hypothesis |
+| "Kills the mutation" is read as "this assertion is indispensable" | Two claims, two experiments (§4.13) | The stronger claim is optional and requires its own removal check |
+| A format check is trusted as a content check | Types before consistency; linked pillars; report-vs-run comparison (§4.14) | A coherent-looking report that contradicts its own code is rejected |
+| A skipped case is read as coverage | Discovered / ran / verified kept distinct (§4.15) | `--- SKIP` no longer marks an item `Covered` or a kill `Verified` |
+| A hypothesis states a behaviour nothing asserts | Name the mutation per hypothesis (§4.16) | An unmutatable hypothesis is rewritten, not shipped |
+| A coverage number is read without its measurement scope | Merged-profile rule + reason-based exclusions (§4.14) | Covered code is not discarded from the gate, and a real gap cannot buy an exemption |
 
 ## 6. Key Highlights
 

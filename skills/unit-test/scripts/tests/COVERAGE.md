@@ -24,7 +24,7 @@ Maps each core rule/section in SKILL.md to its golden fixture and contract test,
 | Output killer case report | `test_output_expectations_include_killer_case_report` | ✅ |
 | Go Version Gate | `test_go_version_gate_exists`, `test_go_version_gate_covers_key_features` | ✅ |
 | Generated Code Exclusion | `test_generated_code_exclusion_patterns` | ✅ |
-| Multi-Package Coverage | `test_multi_package_coverage_guidance` | ✅ |
+| Multi-Package Coverage | `test_multi_package_coverage_guidance`, `CoverageScopeGuardTests` (5) | ✅ |
 | High-Signal Budget (mode-aware) | `test_high_signal_test_budget_range`, `test_mode_aware_case_budget` | ✅ |
 | Test Structure parallel safety | `test_test_structure_parallel_safety` | ✅ |
 | Workflow version + exclusion steps | `test_workflow_includes_version_and_exclusion_steps` | ✅ |
@@ -34,7 +34,7 @@ Maps each core rule/section in SKILL.md to its golden fixture and contract test,
 | Output includes mode | `test_output_expectations_include_mode` | ✅ |
 | Light mode output reduction | `test_light_mode_output_reduction` | ✅ |
 | Scorecard weight tiers | `test_scorecard_has_weight_tiers`, `test_scorecard_critical_items` | ✅ |
-| SKILL.md line budget (≤ 500) | `test_skill_md_stays_within_line_budget` | ✅ |
+| SKILL.md line budget (≤ 520; raised from 500 in round 5, see the test's comment) | `test_skill_md_stays_within_line_budget` | ✅ |
 | boundary-scorecard.md reference exists | `test_boundary_scorecard_reference_exists` | ✅ |
 | boundary-scorecard.md PASS criteria | `test_boundary_scorecard_has_pass_criteria` | ✅ |
 | Shuffle guidance | `test_shuffle_guidance_exists` | ✅ |
@@ -114,6 +114,8 @@ executes real Go to validate the skill's two headline claims on fixed fixtures:
 | `test_weak_assertion_misses_mutation` | an existence-only (`len != 0`) assertion **passes** on the same mutation — the concrete reason mutation-resistant assertions (Critical #5) are mandatory |
 | `test_race_detector_catches_real_race` | `go test -race` flags a genuine unsynchronised shared write (validates go-core MUST #10) |
 | `test_pr_discovery_pipeline_resolves_packages` | the SKILL.md PR-discovery pipeline body resolves a changed file → package import path for real (guards the macOS `xargs -d` / bare-path-`go list` bug) |
+| `test_removing_an_assertion_can_still_leave_the_mutation_caught` | that **"kills the mutation" and "this assertion is indispensable" are different claims**: with the dropped-tail mutation applied, deleting the length assertion still fails — the identity assertion catches it. So the old mandatory "if this assertion is removed the bug escapes" statement was false for this very test |
+| `test_coverpkg_console_line_lies_while_the_profile_tells_the_truth` | runs the **shipped** § Multi-Package Coverage recipe on a 2-package module where `lib` has no `_test.go`: the console prints `covfix/lib coverage: 0.0%` while the merged profile reports `lib.Add` at 100%. Both halves are pinned, which is why "has no `_test.go`" is no longer an exclusion reason |
 
 **What this does NOT prove — read before trusting it.** These tests validate the
 *methodology the skill prescribes*, on hand-authored fixtures. They do **not** by
@@ -150,16 +152,190 @@ Each pins a rule that was previously wrong:
 | `test_race_precedence_documented` | `race.required config > PR scope > mode default` + the `false` override are documented |
 | `test_case_budget_is_soft_ceiling_not_minimum` | budgets are soft ceilings, not minimums to pad to |
 
+### `CoverageScopeGuardTests` — round-4 coverage-scope fix
+
+The skill used to say a package with no `_test.go` "reports 0% — exclude it from gate
+calculations". Under `-coverpkg` that console line is not the package's coverage, so the
+rule discarded genuinely covered code *and* hid genuine gaps. Every guard below is scoped
+to § Multi-Package Coverage, so a mention elsewhere in SKILL.md cannot satisfy it.
+
+| Guard | Pins |
+|-------|------|
+| `test_gate_number_is_read_from_the_merged_profile` | the gate number comes from `go tool cover -func`, not the console |
+| `test_console_zero_percent_is_documented_as_misleading` | the section explains *why* the 0.0% line is unusable |
+| `test_absence_of_a_test_file_is_not_an_exclusion_reason` | the rejecting sentence is the one that names `_test.go`, and it routes to "coverage gap" |
+| `test_old_exclude_because_zero_percent_rule_is_gone` | the reverted wording cannot come back |
+| `test_valid_exclusions_are_enumerated_by_reason` | exclusions are justified by reason (generated / `cmd/**` / out of scope / vendored) |
+
+### `KillerCaseVerificationGuardTests` — round-4 evidence fix
+
+"If this assertion is removed, the known bug can escape detection" is a claim about a
+defect that is *not in the code*. Nothing required running anything, so a hypothesis was
+reported in the grammar of a result. It now carries `Verification: Verified` (defect
+injected, failure observed and quoted) or `Verification: Unverified` (+ reason).
+
+| Guard | Pins |
+|-------|------|
+| `test_hard_rule_requires_a_verification_label` | the Hard Rules bullet demands one of the two labels |
+| `test_unverified_is_labelled_a_hypothesis_not_a_result` | the skill says plainly that unverified ≠ demonstrated |
+| `test_killer_case_definition_component_four_includes_verification` | component 4 of the definition carries the label |
+| `test_workflow_step_twelve_requires_execution` | step 12 says "by executing it", and requires the revert |
+| `test_output_expectations_report_the_verification_status` | the report format carries the status |
+| `test_reference_ships_a_verification_recipe` | `killer-case-patterns.md` § Verifying the Kill exists, reverts, and names the three fake-kill modes |
+| `test_scorecard_item_eleven_scores_the_label` | scorecard #11 scores the label; an honest `Unverified` still PASSES, an **unlabelled** claim FAILS |
+
+### `KillLabelSweepTests` — every copy, not the cited one
+
+Round 4 fixed SKILL.md and left `bug-finding-techniques.md` shipping a second **report
+template** that produced an unlabelled claim. Round 5 retired the blanket "if this
+assertion is removed…" sentence from 10 places across SKILL.md and four references. The
+sweep walks every asset and splits prose, non-`go` fences and `go` fences, because the
+three carry different obligations.
+
+| Guard | Pins |
+|-------|------|
+| `test_indispensability_wording_only_where_the_check_is_defined` | any remaining discussion of removing an assertion sits with the necessity check that decides it — the unverifiable mandate cannot return under a new heading |
+| `test_every_killer_case_report_template_carries_the_kill_label` | every fenced report template (identified by `Defect hypothesis:`) carries the mandatory `Kill:` status; plus anti-vacuity that the sweep found a template at all |
+| `test_go_template_comments_state_the_kill_check` | all 7 in-code comments state the kill check instead of asserting indispensability |
+
+### `KillerCaseVerificationGuardTests` — round-4/5 evidence fix
+
+| Guard | Pins |
+|-------|------|
+| `test_hard_rule_requires_a_kill_label` | the Hard Rules bullet demands `Kill: Verified` / `Kill: Unverified` |
+| `test_unverified_kill_is_labelled_a_hypothesis_not_a_result` | the skill says plainly that unverified ≠ demonstrated |
+| `test_hard_rule_forbids_an_unchecked_necessity_claim` | the rule forbids the indispensability claim without its own check **and** explains the distinction |
+| `test_killer_case_definition_component_four_is_the_kill_check` | component 4 is the kill check; necessity is separate and optional |
+| `test_workflow_step_twelve_requires_execution` | step 12 says "by executing it" and requires the revert |
+| `test_output_expectations_report_the_kill_status` | the report format carries the kill status and gates the necessity claim |
+| `test_reference_separates_the_two_experiments` | § Verifying the Kill ships both procedures with **different conclusions**, says a still-failing test *refutes* necessity, and states that necessity is a property of an (assertion, defect) pair |
+| `test_scorecard_item_eleven_scores_the_kill_status` | scorecard #11 scores the kill status; an honest `Unverified` PASSES, an unlabelled claim FAILS, and a necessity claim is not required |
+
+### `SkipIsNotCoverageGuardTests` / `HypothesisMustBeCheckableGuardTests` — round 6
+
+Both round-6 holes were skill-level rules as well as grader bugs: the same confusion
+marks a boundary item `Covered` on the strength of a case that skipped, or writes into a
+hypothesis a contract the assertions cannot see.
+
+| Guard | Pins |
+|-------|------|
+| `test_reporting_integrity_says_a_skip_is_not_verification` | Reporting Integrity states `--- SKIP` is discovered, not verified — and blocks `Kill: Verified` on it |
+| `test_anti_examples_reject_skip_as_a_pass` | `t.Skip()`-to-pass is an anti-example |
+| `test_boundary_checklist_marks_a_skipped_case_as_a_gap` | a skipped case does not make its checklist item `Covered` |
+| `test_each_hypothesis_must_name_the_change_that_violates_it` | the workflow requires a mutation per hypothesis, and calls an unmutatable hypothesis "not checkable as written" |
+| `test_supplying_the_input_is_not_verification` | the rule names its concrete counterexample (`var out []string`), not just the abstraction |
+| `test_anti_examples_reject_length_only_nil_coverage` | `len(nil) == 0` is named as the reason a length assertion cannot verify a nil-vs-empty contract |
+| `test_reference_documents_the_nil_versus_empty_trap` | `bug-finding-techniques.md` documents the trap and routes the decision through the **contract**, not the current implementation |
+
 ## Skill-Output Eval (`test_llm_skill_eval.py`)
 
 Grades an actual **skill-driven response** — the layer the earlier ones could not
-reach. `grade(output, fixture)` scores four dimensions: correct mode, real defect
-hypotheses, a Go test that compiles + PASSES on the correct source + FAILS on the
-mutation (kills it), and a scorecard + JSON. `GraderSelfTest` proves the grader
-discriminates — it PASSES `llm_eval/slice_transform/good.md` and FAILS `bad.md`
-(runs in CI; needs `go`). `LiveSkillEval` runs a real model and grades it, gated
-on `UNIT_TEST_SKILL_EVAL_CMD` (skipped otherwise) — the remaining step to a full
-behavioral eval, now a drop-in. See `llm_eval/README.md`.
+reach. `grade(output, fixture)` scores: correct mode, real defect hypotheses, the
+report contract (scorecard + required report markers + a JSON summary), and the
+behavioral check — a Go test that compiles, PASSES on the correct source, and FAILS
+on the mutation. `LiveSkillEval` runs a real model through the same `grade()`, gated
+on `UNIT_TEST_SKILL_EVAL_CMD` (skipped otherwise). See `llm_eval/README.md`.
+
+### Round-4: two ways the grader used to pass a broken response
+
+**1. A response whose Go code did not compile came back as a SKIP.** `_GoRunner` now
+returns three states, and only a genuine environment fault skips:
+
+| Outcome | Meaning | On the correct source | On the mutated source |
+|---------|---------|----------------------|----------------------|
+| `PASSED` | the binary ran, tests passed | required | **not a kill** — weak assertion |
+| `FAILED` | the binary ran, a test failed | graded as a failure | the kill |
+| `NO_RUN` | nothing ran (build/vet error, or no test function) | graded as a failure — for a test-generation skill this is the headline defect | **invalid mutation**: a kill cannot be credited |
+| *skip* | `go` absent, no temp dir, unresolved module download, or an exit with neither a diagnostic nor a test result | not a grade | not a grade |
+
+`preflight()` builds a trivial known-good program first, so a compiler diagnostic
+afterwards is about the *code*, not the toolchain. Note also that `go test` exits 0
+and prints an `ok` line for `[no tests to run]` — success by exit status and by
+prefix, executing nothing. That is `NO_RUN`.
+
+**2. A `json` fence containing the literal text `NOT JSON` scored as a pass.** The
+block is now parsed and cross-checked by `grade_json_summary`, mutation-tested by
+`JsonSummaryContractTests` (go-free, so it runs everywhere):
+
+| Check | Rejects |
+|-------|---------|
+| parses, and is an object | `NOT JSON`, a bare array, a missing block |
+| required sections/fields (from `meta.json`, incl. every `targets[]` entry) | a summary too thin to ingest |
+| `summary.score` is `N/M` and equals the sum of the tier counts | a score that contradicts its own scorecard |
+| `summary.pass` equals the tier verdict | `pass: true` with a Critical FAIL or a tier below minimum |
+| `coverage.met` equals `line_pct >= gate` | a met-gate claim the numbers refute |
+| `race.clean` implies `race.executed` | a clean race result that was never run |
+| `summary.score` also appears in the prose | a report whose human and machine verdicts disagree |
+
+The tier minimums **and tier sizes** are **parsed out of
+`references/boundary-scorecard.md`**, not copied into the grader — a second copy of a
+documented threshold drifts silently. A reference that stops stating them, or that is
+internally inconsistent (tiers not summing to the grand total), raises rather than
+grading against a guess. Both raises have their own test, because a mutation run showed
+the second guard was unbound: the test asserting the shipped reference *is* consistent
+stayed true whether or not the guard fired, so deleting the guard survived. An `assert`
+in shipped code with no test that makes it fire is not a check.
+
+**Round 5: two more ways a semantically wrong report scored clean.**
+
+*Wrong types disabled the checks.* Every consistency rule used to be guarded by an
+`isinstance` test, so `"critical_pass": "three"` skipped the score and verdict
+comparisons entirely and graded clean. Types are now validated first, from the fixture's
+`json_field_types` (which is also the required-field list — one list, not two), and the
+consistency rules then run unconditionally. `int` rejects `true`, since `bool` is an
+`int` subclass in Python. Ranges are checked too: tier totals must match the scorecard's
+tier sizes, `*_pass` must lie in `0..total`, percentages in `0..100`, `cases >= 1`.
+
+*Coverage and the verdict were not linked.* A report could state `line_pct: 20`,
+`met: false` and `13/13 PASS` — every field locally consistent, the verdict impossible.
+The coverage gate is Critical item 13, so a **measured** miss (the restricted N/A covers
+only *unmeasured* coverage) must show as a failed Critical item and an overall FAIL.
+
+| Round-5 check | Rejects |
+|---------------|---------|
+| declared type per field | `"critical_pass": "three"`, `"critical_pass": true` |
+| tier totals vs. the scorecard's tier sizes | `standard_total: 4` when the tier has 5 items |
+| `0 <= *_pass <= *_total`, `0 <= pct <= 100`, `cases >= 1` | counts and percentages outside their range |
+| `met: false` with a measured miss ⇒ Critical FAIL ⇒ overall FAIL | 20% coverage reported as 13/13 PASS |
+
+### Round-5/6: report vs. code (`_grade_report_matches_code`, `_grade_mutations`)
+
+Format checks never look at the code, so the exemplar itself claimed 5 cases and
+hypotheses H1+H2 while shipping a single 3-element input — and passed. `run()` now uses
+`go test -v`, so what the toolchain did is observable.
+
+Round 6 then found two ways a case could satisfy the round-5 checks while verifying
+nothing, both reproduced against the shipped exemplar:
+
+| Round-6 hole | What passed | Fix |
+|--------------|-------------|-----|
+| **Skipped counted as executed** — the collector took PASS, FAIL and SKIP alike | making the two H2 subtests `t.Skip()`, changing nothing else → `(True, [])` | `test_case_results` keeps each case's **status**; `verified_cases` drops SKIPs. A hypothesis needs a matching case that reached a verdict, and this fixture reports any skip at all (`allow_skipped_cases: false`) |
+| **A hypothesis with no mutation** — H2 promised "empty but NON-NIL" and only H1 had one | changing the implementation to `var out []string` left all four exemplar cases passing: `len(nil) == 0` | **every hypothesis owns a mutation**, and the emitted test must kill each. "Covered" now means the stated behaviour is asserted, not that the input was supplied |
+
+| Check | Rejects |
+|-------|---------|
+| `sum(targets[].cases)` equals the cases that ran | "5 cases" over a file that runs 1 |
+| each hypothesis's `case_pattern` matches a **verified** case | a `t.Skip()`ped case standing in as coverage |
+| any skip, unless the fixture allows it | a case reporting `--- SKIP` for a pure function |
+| each hypothesis's mutation is killed | a hypothesis stated in prose and unasserted in code |
+
+`test_case_results` counts leaves only — a parent test containing subtests is a group,
+not a case. This is not semantic analysis; it compares things that already have to agree.
+It assumes the response's fenced Go block is the complete test for the target, which is
+what the eval prompt asks for.
+
+The fixture's three parallel lists (`hypothesis_keywords` / `required_case_patterns` /
+`mutation`) collapsed into one `hypotheses` array, each entry carrying its wording, its
+required case, its mutation and its `contract_evidence`. They could disagree — and did:
+H2 appeared in two of the three and had no mutation, which is exactly how its promise
+went unverified.
+
+**`validate_fixture` — the other direction of the same error.** Asserting a behaviour the
+code under test never promised is a defect too: it invents a requirement. The round-6
+mutation run found nothing checked this — deleting the non-nil contract from `sut.go`'s
+doc comment left the exemplar passing. Each hypothesis now declares `contract_evidence`,
+a regex that must match the source, and a fixture whose hypothesis is not grounded (or
+declares no evidence at all) fails before any response is graded.
 
 **Honesty:** the CI self-test proves the *grader* works; it does not prove a live
 model passes. Only the opt-in live run does — that is the standing ceiling.
@@ -174,10 +350,14 @@ model passes. Only the opt-in live run does — that is the standing ceiling.
 | Target types covered | 5/5 (Service, Function, Handler, CLI, Middleware) |
 | Modes covered | 3/3 (Light 1, Standard 5, Strict 4+2 excl) |
 | Reference files | 5 |
-| Contract tests (incl. 8 engineering-reliability guards) | 75 |
-| Golden scenario tests | 17 |
-| Behavioral eval tests (execute real Go; skip w/o toolchain) | 6 |
-| Skill-output grader self-tests (+ 1 opt-in live, skipped w/o backend) | 2 (+1) |
+
+Per-file test counts are deliberately **not** listed here. A hand-maintained total is
+a second copy of a number the suite already knows, and it goes stale on the next
+commit while still reading as authoritative. Get the current figures from the suite:
+
+```bash
+python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v   # names + total
+```
 
 ## Gap Analysis
 
@@ -201,3 +381,11 @@ When adding a new rule to SKILL.md or references:
 Closed since last revision: PR-diff scope now has an executable fixture
 (`test_pr_discovery_pipeline_resolves_packages`); the round-2/3 correctness fixes
 now have regression guards; skill-output grading exists (self-tested in CI).
+
+Closed in round 4: an uncompilable response is graded as a failure instead of skipped;
+an uncompilable mutation can no longer be credited as a kill; the JSON summary is
+parsed and cross-checked instead of merely fence-matched; the multi-package coverage
+rule is executed against a real 2-package module; the killer-case removal-risk
+statement carries a verification status. Every round-4 rule was mutation-checked —
+each guard was broken in turn and the matching test failed (17/17), with a skipped
+test counted as SURVIVED, not as a kill.

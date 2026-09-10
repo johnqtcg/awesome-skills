@@ -2,7 +2,7 @@
 
 ## Fixed Boundary Checklist (Standard + Strict — Per Test Target)
 
-Mark each item as `Covered` or `N/A (reason)`:
+Mark each item as `Covered` or `N/A (reason)`. **A case that reported `--- SKIP` does not make its item `Covered`** — it asserted nothing; mark the item as a gap and say which case skipped and why.
 
 1. `nil` input (only if parameter is pointer/interface/map/slice/channel/function)
 2. empty value/collection
@@ -31,7 +31,7 @@ Mark each item as `Covered` or `N/A (reason)`:
 | 8 | [Standard] | Boundary checklist items are explicitly marked Covered/N/A. |
 | 9 | [Standard] | Collection mapping completeness is asserted (length + identities + first/middle/last). |
 | 10 | [Standard] | Terminal/last-element branch behavior is asserted. |
-| 11 | [Critical] | Killer case exists for every target and is linked to a defect hypothesis. |
+| 11 | [Critical] | Killer case exists for every target, is linked to a defect hypothesis, and reports `Kill: Verified` / `Kill: Unverified` (see SKILL.md Hard Rules). |
 | 12 | [Standard] | `-race` execution result is reported (or marked N/A with rationale if not runnable here). |
 | 13 | [Critical] | Coverage meets gate for the package category (logic >= 80%; infra per rationale), OR N/A only under the restricted conditions in Final PASS Criteria below. |
 
@@ -49,5 +49,5 @@ Otherwise: FAIL — list missing items and next targeted test additions.
 **N/A handling.** Standard and Hygiene items marked N/A with an explicit rationale count as PASS for tier and total calculations. **Critical items (5, 11, 13) are NOT waivable by a generic "N/A with rationale"** — that is the difference between a real gate and a rubber stamp. A Critical item counts as satisfied only PASS, or N/A under one of these pre-defined conditions; anything else is a **FAIL**, not an N/A:
 
 - **Item 5 (mutation-resistant assertions)** — never N/A for a scored target. Any target with assertions is subject to it.
-- **Item 11 (killer case)** — not N/A-able in this Standard/Strict scorecard; a missing killer case is FAIL. (Light mode uses the separate Light Scorecard, which skips killer cases by design — that exemption lives there, not here.)
+- **Item 11 (killer case)** — not N/A-able in this Standard/Strict scorecard; a missing killer case is FAIL. (Light mode uses the separate Light Scorecard, which skips killer cases by design — that exemption lives there, not here.) An honest `Kill: Unverified` with a reason still PASSES this item — the item scores whether the killer case exists and reports its kill status, not whether the environment could run it. An **unlabelled** kill claim is a FAIL: that is the case the label exists to prevent. An `Assertion necessity` claim is **not** required by this item; asserting one without having run the removal check is a reporting defect, not a way to satisfy it.
 - **Item 13 (coverage gate)** — N/A only when (a) the package is an entry point (`cmd/**`) covered by a smoke test, (b) it is generated code excluded from scope, or (c) coverage genuinely cannot be measured in this environment **and** the exact commands to run are output per Reporting Integrity. "I chose not to measure coverage" is a FAIL, not an N/A.
