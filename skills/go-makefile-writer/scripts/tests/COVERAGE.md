@@ -64,9 +64,15 @@ Covers the 6 SKILL.md sections that previously had no independent contract tests
 
 ## Golden Fixtures (`golden/*.json`)
 
-### Behavioral Tests (`TestMakefileDefectBehavior`) — NEW
+### Fixture-contract tests (`TestGoldenFixtureContracts`)
 
-Per-scenario behavioral verification (mirrors security-review TP/FP approach).
+Per-fixture contract checks: the fixture is internally well-formed and the rule
+it exercises is written down in the docs. **These are not behavioural.** They
+read each fixture's own declared `type`/`severity` and grep the prose, so they
+pass whether or not the skill can detect anything — every error-propagation
+defect fixed in the 2026-09-09 pass existed while this class was green. Real
+behaviour, including the failure paths, is in `test_shipped_recipes.py` and
+`test_executable_assets.py` (`GoToolchainDiscoveryTests`).
 
 #### True Positives (defects)
 
@@ -94,15 +100,73 @@ Per-scenario behavioral verification (mirrors security-review TP/FP approach).
 | GOLDEN-010 | `010_gofmt_variant_fp.json` | `gofmt -w` is an acceptable variant |
 | GOLDEN-011 | `011_no_docker_targets_fp.json` | No Docker targets without Dockerfile is correct |
 
+## Shipped-recipe contracts (`test_shipped_recipes.py`)
+
+Every Makefile recipe the skill ships is extracted from **every** asset that
+carries it — both golden templates, `SKILL.md`, the quality guide, the PR
+checklist — built into a Makefile, and run against fixtures where the right
+answer is known. Both halves are asserted: the negative case must fail and the
+positive case must pass, so a recipe that always fails cannot satisfy the
+contract. Every negative case runs twice, once as shipped and once with
+`SHELL`/`.SHELLFLAGS` forced to a plain POSIX `/bin/sh`, because the templates
+exist to be copied and a recipe that only propagates failure under `pipefail`
+stops doing so on arrival.
+
+| Capability | Negative cases (must fail) | Positive cases (must pass) |
+|---|---|---|
+| `fmt-check` | unformatted file; file that does not parse | gofmt-clean tree |
+| `install-tools` | download fails (curl exit 22); download is empty | installer downloads and runs |
+| `generate-check` | rewritten tracked file; rewritten **untracked** file; further change to an already-dirty file; generator deletes a tracked file; generator itself fails | no-op generator; unrelated pre-existing dirt; unrelated pre-existing **deletion** |
+| `cover-check` | real module at 50%, threshold 90 | same module, threshold 10 |
+| `check-tools`, `lint`, `swagger` | the recipe's **own** first guarded tool absent, the rest present | every guarded tool present |
+| any `for x in $(VAR)` loop | first item fails and a later one succeeds; empty list | every item succeeds |
+
+Prerequisites are pulled from the same document, so `cover-check: cover` runs
+against a profile the shipped `cover` target produced rather than a stand-in.
+The guarded tool for each tool-presence recipe is read out of the recipe itself
+— a fixture hiding `golangci-lint` proves nothing about `swagger`, which guards
+`swag`.
+
+Three tests guard the harness rather than the skill, because a contract that
+matches nothing passes silently:
+
+| Test | Guards against |
+|---|---|
+| `RecipeExtractionTests` | the extractor finding no recipes in a source |
+| `test_every_loop_variable_has_a_fixture` | a new loop variable iterating zero times and passing |
+| `RecipeContractCoverageTests` | a new recipe shipping with neither a contract nor a written reason |
+| `test_single_command_claims_hold` | an exemption that says "single command" while the recipe composes commands |
+| `test_covered_by_claims_resolve_to_a_real_test` | an exemption naming a test class that does not exist, or never mentions the recipe |
+| `test_every_guard_recipe_names_a_tool` | a tool-presence fixture that hides nothing |
+
+Accounting is **per copy** and each category's claim is itself checked, because
+the previous table asserted in prose that `cover-check` and `check-tools` were
+covered by `GoldenMakefileExecutionTests` — which has neither a threshold test
+nor a tool-presence test. Both now have real contracts.
+
+`ModuleListAgreementTests` pins the two implementations that cannot be merged —
+`discover_go_entrypoints.sh --modules` (a generation-time tool in the skill
+directory) and the monorepo Makefile in `SKILL.md` (which ships into the user's
+repo and must stand alone) — to the same answer on five repo shapes, including
+`GOWORK=off`, which is where they had silently diverged.
+
+`DuplicatedCapabilityTests` asserts that every copy of a multi-copy recipe still
+contains the construct that decides pass/fail.
+
 ## Coverage Summary
 
 | Metric | Count |
 |--------|-------|
 | Total golden fixtures | 16 (12 TP defects + 4 FP) |
-| Contract tests (`test_skill_contract.py`) | 49 |
+| Contract tests (`test_skill_contract.py`) | 56 |
 | Golden-review tests (`test_golden_reviews.py`) | 24 |
-| Executable-asset tests (`test_executable_assets.py`) | 22 |
-| **Total** | **95** |
+| Executable-asset tests (`test_executable_assets.py`) | 32 |
+| Shipped-recipe contract tests (`test_shipped_recipes.py`) | 38 |
+| **Total** | **150** |
+
+These counts are checked against live discovery by
+`test_skill_contract.py::TestCoverageCountsAreNotStale`, so a stale figure
+fails the regression instead of quietly misreporting coverage.
 | SKILL.md lines | 264 (budget: ≤ 400) |
 
 Executable-asset tests run real `make` / `go` / `git` (skipped when a toolchain is

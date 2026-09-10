@@ -340,3 +340,108 @@ go-makefile-writer 的 SKILL.md 效费比与 git-commit 接近，但参考资料
 | 评分结果 | `/tmp/makefile-eval/workspace/iteration-1/eval-*/with_skill/grading.json` |
 | Benchmark 汇总 | `/tmp/makefile-eval/workspace/iteration-1/benchmark.json` |
 | Eval Viewer | `/tmp/makefile-eval/eval-review.html` |
+
+
+---
+
+## 9. 附录 —— 真实仓库任务验证（2026-09-10）
+
+前面的评估是三个构造场景上的 with/without-skill A/B。它没有回答另一个问题：
+**面对一个陌生的、属于本 skill 声称能处理的形态的仓库，Agent 是否真的把活干完、
+并且让仓库仍然可用？** 本附录回答这个问题，而它最有价值的结论是一个否定性结论：
+其余断言基本不具备区分度。
+
+### 9.1 方法
+
+构造了五个真实可编译、测试可通过的 Go 仓库，对应 SKILL.md 项目形态表中的每一种：
+
+| 仓库 | 形态 | 刻意埋设的陷阱 |
+|---|---|---|
+| `single` | 单模块，根目录 `package main` | —— |
+| `library` | 全仓库没有 `package main` | `cmd/internal/main.go` 声明的是 `package internal` |
+| `cgoproj` | 唯一的程序里有 `import "C"` | 要求 linux/amd64 构建，此处 `CGO_ENABLED=0` 会直接构建失败 |
+| `monorepo` | `go.work`，两个模块，根目录不是模块 | 一个程序写在 `entry.go` 里；`internal/queue/main.go` 是 `package queue` |
+| `refactor` | 已有 Makefile，其目标名被 CI 依赖 | `unit` / `vet` / `compile` 被 GitHub Actions 直接调用 |
+
+每个场景都以真实的嵌套 Agent 会话运行，skill 已安装并按名调用。评分方式是**执行**：
+运行 `make`，读它的退出码和产物。没有任何一条断言靠匹配 Makefile 里的文本；三个
+版本的评分器都因为这一点被修正过（见 §9.4）。
+
+`library` 和 `monorepo` 另外跑了**不带 skill** 的对照，提示词只去掉调用命令，
+用同一套断言评分。
+
+### 9.2 结果
+
+| 仓库 | 带 skill | 不带 skill | 轮次 | 成本 |
+|---|---|---|---|---|
+| `single` | **10/10** | — | 15 | $0.68 |
+| `library` | **10/10** | 9/10 | 17 / 10 | $1.13 / $0.39 |
+| `cgoproj` | **10/10** | — | 24 | $1.27 |
+| `monorepo` | **11/11** | 10/11 | 18 / 17 | $1.25 / $0.91 |
+| `refactor` | **10/10** | — | 15 | $1.01 |
+| **合计** | **51/51** | 19/21 | | |
+
+五种形态全部处理正确：纯库没有生成 `build-*`/`run-*` 和 `-ldflags`；cgo 项目的
+linux 目标没有设 `CGO_ENABLED=0`；monorepo 构建出了藏在 `entry.go` 里的程序，
+并跳过了 `package queue` 诱饵；重构场景保住了 `make unit`、`make vet`、`make compile`。
+
+### 9.3 诚实的部分：10 条断言里有 9 条没有区分度
+
+不带 skill 的对照组**除一条外每条断言都同分**。基础模型本来就会写出可解析、带
+`.PHONY`、自带 help 的 Makefile，本来就不会给纯库编造构建目标，本来就能找到文件名
+不是 `main.go` 的程序，本来就会跳过名为 `main.go` 的 `package queue`。在 `monorepo`
+上它用了一个动态模式规则，设计上可以说比 skill 的逐二进制显式目标更好。
+
+**只有一条断言把两组分开了，而且在两个有对照的场景里都分开了：**
+
+| | 对无法解析的源码执行 fmt-check |
+|---|---|
+| 带 skill（5/5 次） | **失败**，符合预期 |
+| 不带 skill（2/2 次） | **退出 0** —— 一棵编译不过的树上 CI 是绿的 |
+
+两个不带 skill 的 Makefile 都原样写出了这个缺陷：
+
+```make
+@out="$(gofmt -l .)"; if [ -n "$out" ]; then ... exit 1; fi
+```
+
+`gofmt -l` 遇到无法解析的源码时把错误打到 stderr、stdout **什么都不输出**、退出码
+**2**，所以这个检查会通过。两次带 skill 的运行都改成了按状态码分支——值得一提的是，
+其中一次写的是 `if ! out=$(...)` 而不是模板里的 `status=$?`。skill 传递的是**规则**，
+Agent 用自己的方式实现了它。
+
+所以这五个仓库上，本 skill 可被测量的价值窄而真实：**它是"报告成功的坏 Makefile"和
+"不报告成功的坏 Makefile"之间的差别**。输出里其余的一切，基础模型不用 skill 也能写出来。
+代价是 1.4–2.9 倍 token 和 1.1–2.3 倍墙钟时间。
+
+### 9.4 三个评分器缺陷，记录在此是因为它们差点变成"发现"
+
+每一个都是靠反问"一个正确的答案会不会被这条断言判错？"才抓到的：
+
+1. **把 Agent 自己的说明当成了代码来评分。** 纯库 Makefile 的注释写着"此处刻意没有
+   `-ldflags`"，而子串检查把它读成了"存在 `-ldflags`"。现在匹配前先剥掉注释。
+2. **评分环境里注入了 `GOFLAGS=-mod=mod`。** 它在 workspace 模式下会被 Go 拒绝，
+   于是 `go list -m` 失败、模块列表为空，monorepo 那一次看起来像 skill 的失败。
+   不过生成的 Makefile 在这里的表现值得记录：空列表守卫触发，目标带着诊断信息**响亮地
+   失败**，而不是循环零次然后报告成功——这正是那个守卫存在的理由，只是以意外的方式验证了。
+3. **按目标名断言。** 断言要求叫 `test-all`、`build-all`，而两组都叫了 `test`、`build`，
+   旁边配上逐模块目标。现在改为按产物、按一次运行访问了哪些模块来评分。
+
+### 9.5 这仍然没有证明的事
+
+- 五个仓库、每个一次、一个评分器。没有重复，运行间方差未测。
+- 其中三个没有不带 skill 的对照，所以它们的 10/10 是"skill 能用"的证据，不是
+  "需要 skill"的证据。
+- 没有一个仓库包含必然失败的构建、vendor 目录、低于 1.21 的 Go 版本，或 Windows 工具链。
+- 断言集没有覆盖工具版本固定和 Output Contract 符合度——而 §3、§4 测的正是这两项，
+  也是 skill 优势最大的地方。
+
+### 9.6 证据
+
+| 证据 | 路径 |
+|---|---|
+| 仓库生成脚本（5 个） | `outputexample/go-makefile-writer/real-repo-tasks-2026-09-10/fixtures.sh` |
+| 生成的 Makefile（带 skill） | `outputexample/go-makefile-writer/real-repo-tasks-2026-09-10/*.mk` |
+| 生成的 Makefile（不带 skill） | `outputexample/go-makefile-writer/real-repo-tasks-2026-09-10/no-skill-baseline/*.mk` |
+| 评分器（执行 `make`，读产物） | `outputexample/go-makefile-writer/real-repo-tasks-2026-09-10/grade.py` |
+| 完整评分输出 | `outputexample/go-makefile-writer/real-repo-tasks-2026-09-10/grading.txt` |

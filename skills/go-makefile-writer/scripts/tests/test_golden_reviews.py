@@ -106,16 +106,25 @@ class TestRuleCoverage(unittest.TestCase):
                             f'{fix["id"]}: reference {ref} does not exist')
 
 
-class TestMakefileDefectBehavior(unittest.TestCase):
-    """Per-scenario behavioral verification — upgrade from bulk keyword loop.
+class TestGoldenFixtureContracts(unittest.TestCase):
+    """Per-fixture CONTRACT checks — deliberately not behavioural.
 
-    Each test method maps to one fixture and explicitly asserts:
-    - Correct type (defect vs false_positive)
-    - Correct severity for defects
-    - Coverage rules present in docs
-    - Anti-example patterns present for false-positives
+    Each method maps to one fixture and asserts that the fixture is internally
+    well-formed and that the rule it exercises is actually written down:
+    - the declared type (defect vs false_positive) and, for defects, severity;
+    - every `coverage_rules` string appears somewhere in the skill docs;
+    - every `anti_example_patterns` string appears, for false-positives.
 
-    This mirrors security-review's TP/FP code-scenario approach.
+    What this does NOT do is hand a defective Makefile to a reviewer and check
+    that the defect is found. These assertions read the fixture's own metadata
+    and grep prose, so they pass whether or not the skill can detect anything —
+    every error-propagation defect fixed in this pass existed while this class
+    was green. The class was previously named `TestMakefileDefectBehavior`,
+    which advertised a guarantee it does not provide.
+
+    Executable behaviour lives in `test_executable_assets.py`: real `make`
+    invocations against the shipped templates, including the failure paths
+    (`ErrorPropagationTests`, `GoToolchainDiscoveryTests`).
     """
 
     @classmethod

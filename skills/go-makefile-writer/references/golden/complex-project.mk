@@ -14,6 +14,15 @@
 
 .DEFAULT_GOAL := help
 
+# Make runs each recipe line in /bin/sh, where a pipeline's exit status is only
+# its LAST command's — so `curl ... | sh` reports success even when the download
+# failed with nothing to pipe. `pipefail` makes the pipeline fail if any stage
+# does; `-u` catches typo'd variables. Recipes below are also written to be
+# correct under a plain POSIX sh, so copying one into a bash-less environment
+# degrades diagnostics rather than silently passing.
+SHELL       := bash
+.SHELLFLAGS := -euo pipefail -c
+
 GO         := go
 BIN_DIR    := bin
 VERSION    ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -102,9 +111,14 @@ build-linux: ## Build all binaries for Linux amd64 (static)
 fmt: ## Format Go source files
 	$(GO) fmt ./...
 
-fmt-check: ## Check formatting (no write)
-	@test -z "$$(gofmt -l .)" || \
-		(echo "gofmt needed on:" && gofmt -l . && exit 1)
+fmt-check: ## Check formatting (no write); fails on unformatted OR unparsable files
+	@out=$$(gofmt -l . 2>&1); status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		echo "gofmt could not parse the tree (exit $$status):"; echo "$$out"; exit $$status; \
+	fi; \
+	if [ -n "$$out" ]; then \
+		echo "gofmt needed on:"; echo "$$out"; exit 1; \
+	fi
 
 tidy: ## Tidy and verify module dependencies
 	$(GO) mod tidy
@@ -150,14 +164,29 @@ generate: ## Run all code generation (go generate + swagger)
 	$(GO) generate ./...
 	$(MAKE) swagger
 
+# `git status --porcelain` reports an untracked file as the same `?? path` line
+# no matter how its CONTENTS change, and `git diff` skips untracked files
+# entirely — so a generator that rewrote an already-untracked file used to pass
+# this check. Hashing every modified-or-untracked file closes that hole, and
+# `git hash-object` needs no external checksum tool (shasum/sha1sum differ
+# across platforms).
 generate-check: ## Verify generated code is up to date (fails on codegen error; ignores unrelated pre-existing dirt)
 	@set -e; \
-	before="$$(git status --porcelain)$$(git diff)"; \
+	snapshot() { \
+		git status --porcelain; \
+		git diff; \
+		git ls-files --modified --others --exclude-standard | LC_ALL=C sort | \
+			while IFS= read -r f; do \
+				if [ -f "$$f" ]; then echo "$$f $$(git hash-object "$$f")"; fi; \
+			done; \
+	}; \
+	before="$$(snapshot)"; \
 	$(MAKE) generate >/dev/null; \
-	after="$$(git status --porcelain)$$(git diff)"; \
+	after="$$(snapshot)"; \
 	if [ "$$before" != "$$after" ]; then \
 		echo "generated code is stale — run 'make generate' and commit the result:"; \
 		git status --porcelain; \
+		echo "(files whose contents changed are listed above, or were untracked)"; \
 		exit 1; \
 	fi
 
@@ -182,8 +211,11 @@ version: ## Print embedded version info
 # ---------- tools ----------
 
 install-tools: ## Install pinned dev tools (golangci-lint via its official installer)
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
-		| sh -s -- -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION)
+	@set -e; \
+	script=$$(mktemp); trap 'rm -f "$$script"' EXIT; \
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh -o "$$script"; \
+	test -s "$$script" || { echo "installer download produced an empty file"; exit 1; }; \
+	sh "$$script" -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION)
 	$(GO) install github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION)
 	$(GO) install go.uber.org/mock/mockgen@$(MOCKGEN_VERSION)
 

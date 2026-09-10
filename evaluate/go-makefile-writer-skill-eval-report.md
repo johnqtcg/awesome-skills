@@ -340,3 +340,125 @@ go-makefile-writer’s SKILL.md cost-effectiveness is close to git-commit, but r
 | Grading results | `/tmp/makefile-eval/workspace/iteration-1/eval-*/with_skill/grading.json` |
 | Benchmark summary | `/tmp/makefile-eval/workspace/iteration-1/benchmark.json` |
 | Eval viewer | `/tmp/makefile-eval/eval-review.html` |
+
+
+---
+
+## 9. Addendum — Real-Repo Task Verification (2026-09-10)
+
+The evaluation above measures a with/without-skill A/B on three constructed
+scenarios. It does not answer a different question: **on an unfamiliar
+repository of a shape the skill claims to handle, does the agent actually
+finish the job and leave the repo working?** This addendum answers that, and
+its most useful result is a negative one about the rest of the assertion set.
+
+### 9.1 Method
+
+Five genuine Go repositories were built — each compiles, each has passing
+tests — one per shape in SKILL.md's project-shape table:
+
+| Fixture | Shape | Traps deliberately planted |
+|---|---|---|
+| `single` | one module, root `package main` | — |
+| `library` | no `package main` anywhere | `cmd/internal/main.go` declaring `package internal` |
+| `cgoproj` | `import "C"` in the only program | asks for a linux/amd64 build, where `CGO_ENABLED=0` would break it |
+| `monorepo` | `go.work`, 2 modules, root is not a module | one program lives in `entry.go`; `internal/queue/main.go` is `package queue` |
+| `refactor` | existing Makefile whose target names CI depends on | `unit` / `vet` / `compile` are wired into a GitHub Actions workflow |
+
+Each ran as a real nested agent session with the skill installed and invoked
+by name. Grading is by execution — `make` is run and its exit status and
+artifacts are read. Nothing is graded by matching text in the Makefile; three
+successive versions of the grader had to be corrected for exactly that
+(details in §9.4).
+
+`library` and `monorepo` were also run **without the skill**, same prompt
+minus the invocation, graded by the same assertions.
+
+### 9.2 Result
+
+| Fixture | With skill | No skill | Turns | Cost |
+|---|---|---|---|---|
+| `single` | **10/10** | — | 15 | $0.68 |
+| `library` | **10/10** | 9/10 | 17 / 10 | $1.13 / $0.39 |
+| `cgoproj` | **10/10** | — | 24 | $1.27 |
+| `monorepo` | **11/11** | 10/11 | 18 / 17 | $1.25 / $0.91 |
+| `refactor` | **10/10** | — | 15 | $1.01 |
+| **Total** | **51/51** | 19/21 | | |
+
+All five shapes were handled correctly: the library got no `build-*`/`run-*`
+targets and no `-ldflags`; the cgo project got a linux target that does not set
+`CGO_ENABLED=0`; the monorepo built the program hidden in `entry.go` and
+skipped the `package queue` decoy; the refactor kept `make unit`, `make vet`
+and `make compile` working.
+
+### 9.3 The honest part: 9 of the 10 assertions do not discriminate
+
+The no-skill arm scored **identically on every assertion but one**. Base Claude
+already writes a parseable, `.PHONY`-declaring, self-documenting Makefile,
+already avoids inventing build targets for a library, already finds a program
+whose file is not called `main.go`, and already skips a `package queue` file
+named `main.go`. On `monorepo` it did so with a dynamic pattern rule that is
+arguably a better design than the skill's explicit per-binary targets.
+
+**One assertion separated the arms, in both scenarios that had a baseline:**
+
+| | fmt-check on a file that does not parse |
+|---|---|
+| With skill (5/5 runs) | **fails**, as it must |
+| No skill (2/2 runs) | **exits 0** — CI green on a tree that does not compile |
+
+Both no-skill Makefiles wrote the defect verbatim:
+
+```make
+@out="$(gofmt -l .)"; if [ -n "$out" ]; then ... exit 1; fi
+```
+
+`gofmt -l` on unparsable source prints to stderr, prints **nothing** to stdout
+and exits **2**, so the check passes. Both with-skill runs branched on the
+status instead — and notably, one of them wrote `if ! out=$(...)` rather than
+the template's `status=$?` form. The skill transmitted the *rule*, and the
+agent implemented it its own way.
+
+So the measured value of this skill on these five repos is narrow and real:
+**it is the difference between a Makefile that reports success on a broken tree
+and one that does not.** Everything else in the output, base Claude produces
+unaided. That cost 1.4×–2.9× the tokens and 1.1×–2.3× the wall time.
+
+### 9.4 Three grader defects, recorded because they nearly became findings
+
+Each was caught only by asking "would a correct answer fail this?":
+
+1. **Grading the agent's own explanation.** The library Makefile's comments say
+   "there is deliberately no `-ldflags` here"; a substring check read that as
+   `-ldflags` being present. Comments are now stripped before matching.
+2. **`GOFLAGS=-mod=mod` in the harness environment.** It is rejected in
+   workspace mode, so `go list -m` failed, the module list came back empty, and
+   the monorepo run looked like a skill failure. Worth recording what the
+   generated Makefile did with it: the empty-list guard fired and the target
+   failed loudly with a diagnostic instead of looping zero times and reporting
+   success — the exact accident that guard exists for, arriving by accident.
+3. **Assertions on target names.** `test-all` and `build-all` were required by
+   name; both arms had named them `test` and `build` with per-module targets
+   beside them. Now graded by artifacts and by which modules a run visits.
+
+### 9.5 What this still does not establish
+
+- Five repos, one run each, one grader. No repetition, so run-to-run variance
+  is unmeasured.
+- Three of the five have no no-skill baseline, so their 10/10 is evidence the
+  skill works, not evidence it was needed.
+- No fixture has a build that must fail, a vendored tree, a Go version below
+  1.21, or a Windows toolchain.
+- The assertion set does not cover tool-version pinning or Output Contract
+  conformance — dimensions §3 and §4 measured and where the skill's advantage
+  was largest.
+
+### 9.6 Artifacts
+
+| Artifact | Path |
+|---|---|
+| Fixture generator (5 repos) | `outputexample/go-makefile-writer/real-repo-tasks-2026-09-10/fixtures.sh` |
+| Generated Makefiles, with skill | `outputexample/go-makefile-writer/real-repo-tasks-2026-09-10/*.mk` |
+| Generated Makefiles, no skill | `outputexample/go-makefile-writer/real-repo-tasks-2026-09-10/no-skill-baseline/*.mk` |
+| Grader (executes `make`, reads artifacts) | `outputexample/go-makefile-writer/real-repo-tasks-2026-09-10/grade.py` |
+| Full grading output | `outputexample/go-makefile-writer/real-repo-tasks-2026-09-10/grading.txt` |

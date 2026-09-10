@@ -1,0 +1,99 @@
+
+### single — one module, root package main  —  10/10
+  [PASS] a Makefile was written
+  [PASS] the Makefile parses and `help` resolves
+  [PASS] `make help` runs and lists targets (listed 18)
+  [PASS] `make test` passes on the real code
+  [PASS] declares .PHONY
+  [PASS] fmt-check passes on the clean tree (no false alarm)
+  [PASS] fmt-check FAILS on a file that does not parse (gofmt exits 2 with empty stdout — an output-only check passes it)
+  [PASS] has a build target (['build-all', 'build-single'])
+  [PASS] a build target actually builds
+  [PASS] version injection reached the BINARY (not just the Makefile)
+  (turns 15, $0.68, 125s)
+
+### library — no package main anywhere  —  10/10
+  [PASS] a Makefile was written
+  [PASS] the Makefile parses and `help` resolves
+  [PASS] `make help` runs and lists targets (listed 18)
+  [PASS] `make test` passes on the real code
+  [PASS] declares .PHONY
+  [PASS] fmt-check passes on the clean tree (no false alarm)
+  [PASS] fmt-check FAILS on a file that does not parse (gofmt exits 2 with empty stdout — an output-only check passes it)
+  [PASS] no build-*/run-* targets invented for a library ([])
+  [PASS] no -ldflags version injection (there is no binary to inject into)
+  [PASS] the decoy cmd/internal/main.go (package internal) was NOT treated as a program
+  (turns 17, $1.13, 231s)
+
+### cgo — import "C" in the only program  —  10/10
+  [PASS] a Makefile was written
+  [PASS] the Makefile parses and `help` resolves
+  [PASS] `make help` runs and lists targets (listed 24)
+  [PASS] `make test` passes on the real code
+  [PASS] declares .PHONY
+  [PASS] fmt-check passes on the clean tree (no false alarm)
+  [PASS] fmt-check FAILS on a file that does not parse (gofmt exits 2 with empty stdout — an output-only check passes it)
+  [PASS] did NOT set CGO_ENABLED=0 (it would break the cgo build)
+  [PASS] has a linux target as asked (['build-linux', 'build-linux-docker', 'build-linux-zig', 'run-linux', 'verify-linux'])
+  [PASS] a native build target actually builds the cgo program (['build-all', 'build-hasher'])
+  (turns 24, $1.27, 542s)
+
+### monorepo — go.work, 2 modules, entry.go program, decoy main.go  —  11/11
+  [PASS] a Makefile was written
+  [PASS] the Makefile parses and `help` resolves
+  [PASS] `make help` runs and lists targets (listed 28)
+  [PASS] `make test` passes on the real code
+  [PASS] declares .PHONY
+  [PASS] fmt-check passes on the clean tree (no false alarm)
+  [PASS] fmt-check FAILS on a file that does not parse (gofmt exits 2 with empty stdout — an output-only check passes it)
+  [PASS] builds the cmd/api program, whose file is entry.go not main.go (['api', 'api-linux-amd64', 'api-linux-arm64', 'worker', 'worker-linux-amd64', 'worker-linux-arm64'])
+  [PASS] builds the cmd/worker program (['api', 'api-linux-amd64', 'api-linux-arm64', 'worker', 'worker-linux-amd64', 'worker-linux-arm64'])
+  [PASS] some test target runs BOTH modules (`make test`)
+  [PASS] did NOT build internal/queue/main.go (package queue) as a program (['api', 'api-linux-amd64', 'api-linux-arm64', 'worker', 'worker-linux-amd64', 'worker-linux-arm64'])
+  (turns 18, $1.25, 262s)
+
+### refactor — existing Makefile whose target names CI depends on  —  10/10
+  [PASS] a Makefile was written
+  [PASS] the Makefile parses and `help` resolves
+  [PASS] `make help` runs and lists targets (listed 25)
+  [PASS] `make test` passes on the real code
+  [PASS] declares .PHONY
+  [PASS] fmt-check passes on the clean tree (no false alarm)
+  [PASS] fmt-check FAILS on a file that does not parse (gofmt exits 2 with empty stdout — an output-only check passes it)
+  [PASS] CI target `make unit` still works
+  [PASS] CI target `make vet` still works
+  [PASS] CI target `make compile` still works
+  (turns 15, $1.01, 196s)
+
+### library — no package main anywhere  —  9/10
+  [PASS] a Makefile was written
+  [PASS] the Makefile parses and `help` resolves
+  [PASS] `make help` runs and lists targets (listed 16)
+  [PASS] `make test` passes on the real code
+  [PASS] declares .PHONY
+  [PASS] fmt-check passes on the clean tree (no false alarm)
+  [FAIL] fmt-check FAILS on a file that does not parse (gofmt exits 2 with empty stdout — an output-only check passes it)
+         zz_broken.go:2:9: expected ')', found '{'
+
+  [PASS] no build-*/run-* targets invented for a library ([])
+  [PASS] no -ldflags version injection (there is no binary to inject into)
+  [PASS] the decoy cmd/internal/main.go (package internal) was NOT treated as a program
+  (turns 10, $0.39, 102s)
+
+### monorepo — go.work, 2 modules, entry.go program, decoy main.go  —  10/11
+  [PASS] a Makefile was written
+  [PASS] the Makefile parses and `help` resolves
+  [PASS] `make help` runs and lists targets (listed 15)
+  [PASS] `make test` passes on the real code
+  [PASS] declares .PHONY
+  [PASS] fmt-check passes on the clean tree (no false alarm)
+  [FAIL] fmt-check FAILS on a file that does not parse (gofmt exits 2 with empty stdout — an output-only check passes it)
+         all files gofmt-clean
+
+  [PASS] builds the cmd/api program, whose file is entry.go not main.go (['api', 'worker'])
+  [PASS] builds the cmd/worker program (['api', 'worker'])
+  [PASS] some test target runs BOTH modules (`make test`)
+  [PASS] did NOT build internal/queue/main.go (package queue) as a program (['api', 'worker'])
+  (turns 17, $0.91, 231s)
+
+== 70/72 assertions passed ==

@@ -132,12 +132,25 @@ bench: ## Run benchmarks
 ```make
 ci: fmt-check lint test cover-check ## Run full CI pipeline locally
 
-fmt-check: ## Check formatting (no write)
-	@test -z "$$(gofmt -l .)" || \
-		(echo "gofmt needed on:" && gofmt -l . && exit 1)
+fmt-check: ## Check formatting (no write); fails on unformatted OR unparsable files
+	@out=$$(gofmt -l . 2>&1); status=$$?; \
+	if [ $$status -ne 0 ]; then \
+		echo "gofmt could not parse the tree (exit $$status):"; echo "$$out"; exit $$status; \
+	fi; \
+	if [ -n "$$out" ]; then \
+		echo "gofmt needed on:"; echo "$$out"; exit 1; \
+	fi
 ```
 
 > `gofmt -l .` recursively checks all `.go` files under the current directory without needing git. This works identically in CI containers and local dev.
+>
+> **Check gofmt's exit status, not only its output.** On a file that does not
+> parse, `gofmt -l` prints the error to **stderr**, prints **nothing** on stdout,
+> and exits **2**. A recipe written as `test -z "$(gofmt -l .)"` therefore passes
+> a tree that does not even compile: the status is discarded and the empty stdout
+> reads as "everything is formatted". Capture both, and branch on the status
+> first. This is the general shape — any check that inspects a tool's output must
+> also check whether the tool succeeded.
 
 The `ci` target should mirror CI exactly so developers catch issues before push.
 
@@ -149,15 +162,44 @@ generate: ## Run go generate
 
 generate-check: ## Verify generated code is up to date (fails on codegen error; ignores unrelated pre-existing dirt)
 	@set -e; \
-	before="$$(git status --porcelain)$$(git diff)"; \
+	snapshot() { \
+		git status --porcelain; \
+		git diff; \
+		git ls-files --modified --others --exclude-standard | LC_ALL=C sort | \
+			while IFS= read -r f; do \
+				if [ -f "$$f" ]; then echo "$$f $$(git hash-object "$$f")"; fi; \
+			done; \
+	}; \
+	before="$$(snapshot)"; \
 	$(MAKE) generate >/dev/null; \
-	after="$$(git status --porcelain)$$(git diff)"; \
+	after="$$(snapshot)"; \
 	if [ "$$before" != "$$after" ]; then \
 		echo "generated code is stale — run 'make generate' and commit the result:"; \
 		git status --porcelain; \
+		echo "(files whose contents changed are listed above, or were untracked)"; \
 		exit 1; \
 	fi
 ```
+
+> **Use `if`, not `[ -f … ] && …`, as the loop body's last command.**
+> `git ls-files --modified` lists **deleted** files too, so `[ -f "$$f" ]` is
+> false for them; as the last command in the loop body that makes the whole
+> `while` — and therefore the pipeline, and therefore the snapshot function —
+> exit non-zero, which `set -e` turns into a failed check. A repo with one
+> pre-existing deletion then reports stale codegen no matter what the generator
+> did. The deletion itself is still caught: `git status --porcelain` prints
+> ` D path` in both snapshots, and a deletion the generator *causes* shows up
+> as a difference between them.
+>
+> **Snapshot the contents, not just `git status`.** `git status --porcelain`
+> prints the same `?? path` line no matter what an untracked file *contains*,
+> and `git diff` skips untracked files entirely. So a generator that rewrites a
+> file which was already untracked — the normal state of generated output in a
+> repo that gitignores it, and of any first run — produces two byte-identical
+> snapshots and the check passes. Hashing every modified-or-untracked file is
+> what makes the comparison see content. `git hash-object` is used rather than
+> `sha1sum`/`shasum` because those two are not both present on every platform,
+> while git already is (this target cannot run without it).
 
 Add `generate` as a prerequisite of `build-all` when generated code exists.
 
@@ -195,7 +237,7 @@ build-all-platforms: ## Build for all target platforms
 		os=$${platform%/*}; arch=$${platform#*/}; \
 		echo "Building $$os/$$arch..."; \
 		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch $(GO) build -ldflags "$(LDFLAGS)" \
-			-o $(BIN_DIR)/api-$$os-$$arch ./cmd/api; \
+			-o $(BIN_DIR)/api-$$os-$$arch ./cmd/api || exit 1; \
 	done
 ```
 
@@ -203,21 +245,35 @@ build-all-platforms: ## Build for all target platforms
 
 For projects with multiple entrypoints, list them in a variable and loop:
 
+**Prefer explicit per-binary targets** — see the [complex-project golden
+example](golden/complex-project.mk). They are easier to read, to debug, and to
+run one at a time, and each gets its own exit status for free.
+
+If you do need a loop (many entrypoints, generated target lists), pair the name
+and the directory in **one** variable so the two can never drift apart, and make
+the loop stop at the first failure:
+
 ```make
-# All entrypoints discovered from cmd/
-ENTRYPOINTS := api consumer-sync cron-cleanup migrate
-ENTRYPOINT_DIRS := cmd/api cmd/consumer/sync cmd/cron/cleanup cmd/migrate
+# name:dir pairs — one token per binary keeps the two halves in lockstep.
+# `scripts/discover_go_entrypoints.sh` emits this list.
+BINARIES := api:cmd/api consumer-sync:cmd/consumer/sync cron-cleanup:cmd/cron/cleanup migrate:cmd/migrate
 
 build-linux: ## Build all binaries for Linux amd64 (static)
 	@mkdir -p $(BIN_DIR)
-	@set -- $(ENTRYPOINTS); dirs="$(ENTRYPOINT_DIRS)"; set_dirs=$$dirs; \
-	for entry in $(ENTRYPOINTS); do \
-		dir=$$(echo "$(ENTRYPOINT_DIRS)" | tr ' ' '\n' | head -n 1); \
-		echo "TODO: replace with per-binary explicit targets for clarity"; \
+	@for pair in $(BINARIES); do \
+		name=$${pair%%:*}; dir=$${pair#*:}; \
+		echo "Building $$name from $$dir..."; \
+		CGO_ENABLED=0 GOOS=linux GOARCH=amd64 $(GO) build -ldflags "$(LDFLAGS)" \
+			-o $(BIN_DIR)/$$name-linux-amd64 "./$$dir" || exit 1; \
 	done
 ```
 
-> **Recommended**: For multi-binary projects, prefer explicit per-binary targets (see [complex-project golden example](golden/complex-project.mk)) over dynamic loops. Explicit targets are easier to read, debug, and run individually.
+Two things this gets right that a naive loop does not. **`|| exit 1` inside the
+body**: without it the loop runs to completion and the target's status is only
+the *last* iteration's, so a broken first binary is masked by a working second
+one. **Paired tokens**: two parallel lists (`ENTRYPOINTS` + `ENTRYPOINT_DIRS`)
+have to be indexed in step, which POSIX `sh` cannot do cleanly — attempts to
+fake it with `head -n 1` silently build the same directory every time.
 
 Use `scripts/discover_go_entrypoints.sh` to auto-discover entrypoints and generate the target list.
 
@@ -236,8 +292,11 @@ GOLANGCI_LINT_VERSION ?= v2.12.2
 SWAG_VERSION          ?= v1.16.4
 
 install-tools: ## Install pinned dev tools (golangci-lint via its official installer)
-	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh \
-		| sh -s -- -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION)
+	@set -e; \
+	script=$$(mktemp); trap 'rm -f "$$script"' EXIT; \
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh -o "$$script"; \
+	test -s "$$script" || { echo "installer download produced an empty file"; exit 1; }; \
+	sh "$$script" -b $$(go env GOPATH)/bin $(GOLANGCI_LINT_VERSION)
 	go install github.com/swaggo/swag/cmd/swag@$(SWAG_VERSION)
 
 check-tools: ## Verify required tools are installed

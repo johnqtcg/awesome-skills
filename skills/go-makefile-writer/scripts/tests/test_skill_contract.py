@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 """Contract tests for go-makefile-writer skill structure."""
+import pathlib
+import re
 import os
 import unittest
 
@@ -287,6 +289,116 @@ class TestSkillMdSections(unittest.TestCase):
         self.assertRegex(script, r'(?m)^\s*set\s+-u',
                          'probe script must keep nounset')
 
+
+
+class TestCoverageCountsAreNotStale(unittest.TestCase):
+    """COVERAGE.md's per-file counts are claims about this suite, so check them.
+
+    A hand-maintained total drifts and then reads as coverage the suite no
+    longer has. Deriving it here makes a stale number a test failure.
+    """
+
+    FILES = (
+        ("test_skill_contract.py", "Contract tests"),
+        ("test_golden_reviews.py", "Golden-review tests"),
+        ("test_executable_assets.py", "Executable-asset tests"),
+        ("test_shipped_recipes.py", "Shipped-recipe contract tests"),
+    )
+
+    @classmethod
+    def setUpClass(cls):
+        cls.coverage = (
+            pathlib.Path(__file__).with_name("COVERAGE.md").read_text(encoding="utf-8")
+        )
+
+    def _stated(self, label):
+        # The total row bolds its number (`| **Total** | **106** |`), so the
+        # emphasis markers are optional in the pattern.
+        m = re.search(
+            rf"\|\s*{re.escape(label)}[^|]*\|\s*\*{{0,2}}(\d+)\*{{0,2}}\s*\|",
+            self.coverage,
+        )
+        self.assertIsNotNone(m, f"COVERAGE.md has no count row for {label!r}")
+        return int(m.group(1))
+
+    def test_per_file_counts_match_discovery(self):
+        here = pathlib.Path(__file__).parent
+        total = 0
+        for pattern, label in self.FILES:
+            found = unittest.defaultTestLoader.discover(
+                str(here), pattern=pattern
+            ).countTestCases()
+            total += found
+            self.assertEqual(
+                found, self._stated(label),
+                f"COVERAGE.md says {self._stated(label)} for {label}, discovery finds {found}",
+            )
+        self.assertEqual(total, self._stated("**Total**"),
+                         "COVERAGE.md total does not match the sum of its rows")
+
+
+class TestRuleForceClasses(unittest.TestCase):
+    """Rules must say how hard they are.
+
+    "always add a version target" and "a target must not exit 0 when its work
+    failed" are different kinds of claim; without a force marker an agent has no
+    basis for deviating on a project that legitimately differs, and every rule
+    reads equally mandatory.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.skill = pathlib.Path(SKILL_MD).read_text(encoding="utf-8")
+
+    def test_force_legend_defines_all_three_classes(self):
+        for tag, word in (("**[C]**", "Correctness"),
+                          ("**[D]**", "Recommended default"),
+                          ("**[T]**", "Template convention")):
+            self.assertIn(tag, self.skill, f"force legend missing {tag}")
+            self.assertIn(word, self.skill, f"force legend missing the word {word!r}")
+
+    def test_rules_actually_carry_tags(self):
+        for tag in ("[C]", "[D]", "[T]"):
+            self.assertGreaterEqual(
+                self.skill.count(tag), 3,
+                f"{tag} appears in the legend but is barely used on real rules")
+
+    def test_error_propagation_rules_are_correctness_class(self):
+        self.assertIn("### Error Propagation", self.skill)
+        section = self.skill.split("### Error Propagation", 1)[1].split("###", 1)[0]
+        self.assertNotIn("[D]", section,
+                         "an error-propagation rule is never a mere default")
+        for shape in ("exit status", "pipeline", "for` loop", "hash-object"):
+            self.assertIn(shape, section, f"error-propagation rule missing: {shape}")
+
+    def test_project_shape_branches_cover_library_only_repos(self):
+        self.assertIn("### Project shape decides the target set", self.skill)
+        section = self.skill.split("### Project shape decides", 1)[1].split("###", 1)[0]
+        self.assertIn("Library only", section)
+        for cannot_demand in ("build-*", "--version"):
+            self.assertIn(cannot_demand, section,
+                          f"library row must say {cannot_demand} does not apply")
+        for shape in ("cgo", "version mechanism", "test strategy"):
+            self.assertIn(shape, section, f"project-shape table missing: {shape}")
+
+    def test_version_injection_is_conditioned_not_absolute(self):
+        """A library has no binary to inject into, so this cannot be a bare MUST."""
+        idx = self.skill.find("Inject version metadata via `-ldflags`")
+        self.assertNotEqual(-1, idx, "version-injection rule not found")
+        # Read the whole bullet: the force tag sits BEFORE the rule text.
+        start = self.skill.rfind("\n", 0, idx) + 1
+        line = self.skill[start:self.skill.find("\n", idx)]
+        self.assertIn("[D]", line, "version injection must be a default, not correctness")
+        self.assertIn("only when", line.lower(),
+                      "version injection must state the condition it depends on")
+
+    def test_gowork_off_is_documented_as_disabled_not_a_path(self):
+        self.assertIn("off", self.skill)
+        idx = self.skill.find("go env GOWORK")
+        self.assertNotEqual(-1, idx)
+        window = self.skill[idx:idx + 400]
+        self.assertIn("disabled", window,
+                      "GOWORK=off must be described as disabling workspace mode")
 
 if __name__ == '__main__':
     unittest.main()
