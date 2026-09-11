@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import subprocess
 import tempfile
 import unittest
@@ -315,10 +316,42 @@ class CreatePRSkillContractTests(unittest.TestCase):
             "Squash and merge",
             "Create a merge commit",
             "Rebase and merge",
-            "PR title = final commit message",
             "default to treating the PR title as if it were a squash commit message",
         ):
             self.assertContainsNormalized(phrase, self.merge_text)
+
+    def test_merge_strategy_guide_states_github_squash_message_rules(self) -> None:
+        """The squash commit message depends on commit count and repo setting.
+
+        GitHub pre-fills the single commit's own title and message for a 1-commit PR,
+        and the PR title plus commit list for 2+ commits; only the "title and
+        description" format carries body text, and it carries the whole description.
+        A guide that promises "PR title becomes the commit message" or maps one body
+        section onto the commit body teaches a rule GitHub does not implement.
+        """
+        for phrase in (
+            "1 commit in the PR",
+            "that commit's title and message",
+            "2+ commits",
+            "the PR title plus the list of commits",
+            "Pull request title and description",
+            "the entire",
+            "docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/configuring-commit-squashing-for-pull-requests",
+        ):
+            self.assertContainsNormalized(phrase, self.merge_text)
+
+        forbidden = (
+            "pr title final commit message",
+            "pr body s what changed section becomes the squash commit body",
+            "what changed section becomes the squash commit body",
+        )
+        normalized = normalize(self.merge_text + "\n" + self.skill_text)
+        for phrase in forbidden:
+            self.assertNotIn(
+                phrase,
+                normalized,
+                f"squash commit message over-claim reintroduced: {phrase!r}",
+            )
 
     def test_config_example_covers_core_and_nested_settings(self) -> None:
         for phrase in (
@@ -336,6 +369,38 @@ class CreatePRSkillContractTests(unittest.TestCase):
             "scan_changed_files_only: true",
         ):
             self.assertIn(phrase, self.config_text)
+
+    def test_coverage_doc_matches_the_real_test_counts(self) -> None:
+        """COVERAGE.md is a second copy of the suite; derive it instead of trusting it."""
+        import importlib.util
+
+        coverage_text = (Path(__file__).resolve().parent / "COVERAGE.md").read_text()
+        declared = {
+            m.group(1): int(m.group(2))
+            for m in re.finditer(r"`scripts/tests/(test_\w+\.py)`\s*\|\s*(\d+)", coverage_text)
+        }
+        modules = sorted(p.name for p in Path(__file__).resolve().parent.glob("test_*.py"))
+        self.assertEqual(set(modules), set(declared), "COVERAGE.md must list every test module")
+
+        actual = {}
+        for name in modules:
+            path = Path(__file__).resolve().parent / name
+            spec = importlib.util.spec_from_file_location(f"coverage_probe_{name[:-3]}", path)
+            module = importlib.util.module_from_spec(spec)
+            assert spec and spec.loader
+            sys.modules[spec.name] = module
+            spec.loader.exec_module(module)
+            actual[name] = unittest.defaultTestLoader.loadTestsFromModule(module).countTestCases()
+
+        self.assertEqual(declared, actual, "COVERAGE.md per-module counts are stale")
+
+        total = re.search(r"\*\*Total\*\*\s*\|\s*\*\*(\d+)\*\*", coverage_text)
+        self.assertIsNotNone(total, "COVERAGE.md must state a total")
+        self.assertEqual(
+            sum(actual.values()),
+            int(total.group(1)),  # type: ignore[union-attr]
+            "COVERAGE.md total is stale",
+        )
 
     def test_run_regression_runs_validator_help_and_unittest_discovery(self) -> None:
         for phrase in (
@@ -429,6 +494,10 @@ class ProseScriptConsistencyTests(unittest.TestCase):
         cls.mod = module
         cls.skill_text = SKILL_MD.read_text()
         cls.script_src = SCRIPT.read_text()
+        cls.bundled_text = BUNDLED_SCRIPT_GUIDE.read_text()
+
+    def assertContainsNormalized(self, needle: str, haystack: str, message: str = "") -> None:
+        self.assertIn(normalize(needle), normalize(haystack), message or f"missing: {needle}")
 
     def test_canonical_implementation_declared(self) -> None:
         self.assertIn("Canonical Implementation", self.skill_text)
@@ -481,6 +550,300 @@ class ProseScriptConsistencyTests(unittest.TestCase):
         for token in ("os.Getenv", "allow_patterns", "placeholder"):
             self.assertIn(token, self.skill_text,
                           f"prose Gate E missing the script's {token!r} exemption")
+
+    def test_secret_scan_push_range_semantics_match(self) -> None:
+        """Both implementations must read the pushed commits, not only the net diff."""
+        self.assertIn("commits_to_push", self.script_src)
+        self.assertIn("collect_pushed_range_evidence", self.script_src)
+        self.assertIn('"git", "rev-list", "--reverse", f"origin/{base}..HEAD"', self.script_src)
+        self.assertIn("git rev-list origin/main..HEAD", self.skill_text)
+        self.assertIn("git show --format= --unified=0", self.skill_text)
+        self.assertContainsNormalized(
+            "Scan scope is the push range, not the net diff", self.skill_text
+        )
+
+    def test_secret_scan_range_failure_is_fail_closed_on_both_sides(self) -> None:
+        self.assertIn("SECRET_SCAN_COMMIT_LIMIT", self.script_src)
+        self.assertContainsNormalized(
+            "If the commit range cannot be enumerated or exceeds the script's commit cap",
+            self.skill_text,
+        )
+        self.assertContainsNormalized("fail closed as a hard publication blocker", self.skill_text)
+
+    def test_allow_pattern_scope_matches(self) -> None:
+        """Allow patterns are matched against the credential, never the whole line."""
+        entries = [
+            self.mod.AddedLine(
+                path="a.go",
+                line_no=1,
+                text='k = "ghp_abcdefghijklmnopqrstuvwxyz0123456789" # example',
+            )
+        ]
+        allow = self.mod.compile_regexes(self.mod.DEFAULT_SECRET_ALLOW_PATTERNS)
+        self.assertEqual(1, len(self.mod.scan_secrets_in_added_lines(entries, allow)))
+        self.assertContainsNormalized(
+            "apply to the matched credential itself", self.skill_text
+        )
+        self.assertContainsNormalized("never to the whole line", self.skill_text)
+
+    def test_push_url_verification_matches(self) -> None:
+        """Both sides must read the whole push set: --push alone returns only the first URL."""
+        self.assertIn(
+            '"git", "remote", "get-url", "--push", "--all", "origin"', self.script_src
+        )
+        self.assertIn("git remote get-url --push --all origin", self.skill_text)
+        # Every executable line of the prose fallback must read the full push set.
+        # (The single-URL form may still appear inside prose that explains why it is
+        # insufficient, so anchor the check to command lines.)
+        command_lines = re.findall(r"(?m)^git remote get-url --push.*$", self.skill_text)
+        self.assertTrue(command_lines, "Gate A prose must run the push-URL command")
+        for line in command_lines:
+            self.assertIn("--all", line, f"incomplete push-URL command in SKILL.md: {line}")
+
+    def test_path_enumeration_is_machine_readable_on_both_sides(self) -> None:
+        """Binary, empty, and renamed files carry no `+++` header in the patch."""
+        self.assertIn("list_commit_paths", self.script_src)
+        self.assertIn('"--name-only", "--format=", "-z", "--diff-filter=ACMR"', self.script_src)
+        self.assertIn("core.quotePath=false", self.script_src)
+        self.assertNotIn("parse_diff_target_paths", self.script_src)
+        self.assertIn("--name-only", self.skill_text)
+        self.assertIn("-z", self.skill_text)
+        self.assertIn("core.quotePath=false", self.skill_text)
+
+    def test_quality_dimensions_match(self) -> None:
+        for dimension in self.mod.QUALITY_DIMENSIONS:
+            self.assertIn(dimension, self.skill_text.lower())
+        self.assertContainsNormalized(
+            "Grade test, lint, and build as three independent dimensions", self.skill_text
+        )
+        self.assertContainsNormalized(
+            "A dimension with no executed evidence keeps Gate D at `SUPPRESSED`", self.skill_text
+        )
+        for flag in ("--test-cmd", "--lint-cmd", "--build-cmd", "--quality-na"):
+            self.assertIn(flag, self.skill_text + self.bundled_text)
+            self.assertIn(flag.lstrip("-"), self.script_src)
+
+    def test_non_executing_run_modes_match(self) -> None:
+        """Every flag SKILL.md promises to reject must really be rejected.
+
+        The prose is the specification; a documented rejection the script does not
+        implement is a promise the gate cannot keep.
+        """
+        self.assertIn("runs_the_check", self.script_src)
+        self.assertIn("QUALITY_NON_EXECUTING_ARGS", self.script_src)
+        self.assertContainsNormalized(
+            "a recognised tool in a mode that executes no check", self.skill_text
+        )
+
+        span = re.search(
+            r"Reject per tool:(.*?)The sets are", self.skill_text, re.DOTALL
+        )
+        self.assertIsNotNone(span, "SKILL.md must list the rejected run modes")
+        cited = set()
+        for chunk in re.findall(r"`([^`]+)`", span.group(1)):  # type: ignore[union-attr]
+            for token in re.split(r"[\s|]+", chunk):
+                if token.startswith("-"):
+                    cited.add(token.rstrip(",.…"))
+        self.assertGreaterEqual(len(cited), 10, f"expected a real list, got {cited}")
+
+        known = set(self.mod.QUALITY_UNIVERSAL_NON_EXECUTING)
+        for flags in self.mod.QUALITY_NON_EXECUTING_ARGS.values():
+            known |= set(flags)
+        prefixes = tuple(
+            prefix
+            for group in self.mod.QUALITY_NON_EXECUTING_PREFIXES.values()
+            for prefix in group
+        )
+        for flag in sorted(cited):
+            self.assertTrue(
+                flag in known or flag.startswith(prefixes),
+                f"SKILL.md promises to reject {flag!r} but no script rule does",
+            )
+
+    def test_one_execution_mode_gate_for_every_command_source(self) -> None:
+        """Prose and script must agree that a declaration is not an exemption."""
+        self.assertIn("reject_non_executing_checks", self.script_src)
+        self.assertIn("find_non_executing_segment", self.script_src)
+        # The reject pass runs inside command resolution, so no source can skip it.
+        self.assertIn(
+            "return reject_non_executing_checks(checks, env=env, env_error=env_error)",
+            self.script_src,
+        )
+        self.assertContainsNormalized(
+            "applied to every source, including explicit per-dimension declarations",
+            self.skill_text,
+        )
+        self.assertContainsNormalized(
+            "A declaration states intent; it is never a substitute for execution",
+            self.skill_text,
+        )
+        checks = self.mod.reject_non_executing_checks(
+            [self.mod.QualityCheck("make -n test", ["test"], "config:test_cmd")]
+        )
+        self.assertEqual([], checks[0].dimensions)
+
+    def test_environment_run_modes_match(self) -> None:
+        """Prose and script must agree that MAKEFLAGS-style variables are run modes."""
+        self.assertIn("QUALITY_FLAG_ENV_VARS", self.script_src)
+        self.assertIn("probe_flag_environment", self.script_src)
+        for var in ("MAKEFLAGS", "GNUMAKEFLAGS", "GOFLAGS", "PYTEST_ADDOPTS", "MAVEN_ARGS"):
+            self.assertIn(var, self.skill_text, f"{var} missing from SKILL.md")
+            self.assertIn(var, self.script_src)
+        self.assertContainsNormalized(
+            "The run mode can arrive through the environment, not only the argument list",
+            self.skill_text,
+        )
+        self.assertContainsNormalized(
+            "the value actually inherited by the shell that will run the checks",
+            self.skill_text,
+        )
+        self.assertContainsNormalized(
+            "If the execution mode cannot be determined, the dimension stays uncovered",
+            self.skill_text,
+        )
+        self.assertTrue(self.mod.find_non_executing_segment("make MAKEFLAGS=n test"))
+        self.assertTrue(self.mod.find_non_executing_segment("make test", {"MAKEFLAGS": "n"}))
+        self.assertEqual("", self.mod.find_non_executing_segment("make test", {"MAKEFLAGS": "s"}))
+
+    def test_assignment_precedence_rules_match(self) -> None:
+        """The prose must state the measured precedence, and the script must implement it."""
+        self.assertIn("flag_variable_sources", self.script_src)
+        self.assertIn("QUALITY_ARG_ASSIGNMENT_TOOLS", self.script_src)
+        # setdefault keeps the FIRST duplicate — the defect this rule replaced.
+        self.assertNotIn("assignments.setdefault", self.script_src)
+        for phrase in (
+            "Duplicates: the last one wins",
+            "A shell prefix replaces the inherited value",
+            "cumulative with the environment, not an override",
+            "refuse if either blocks",
+        ):
+            self.assertContainsNormalized(phrase, self.skill_text)
+        self.assertTrue(
+            self.mod.find_non_executing_segment("MAKEFLAGS=s MAKEFLAGS=n make test")
+        )
+        self.assertEqual(
+            "", self.mod.find_non_executing_segment("MAKEFLAGS=n MAKEFLAGS=s make test")
+        )
+        self.assertTrue(
+            self.mod.find_non_executing_segment("MAKEFLAGS=s make MAKEFLAGS=n test")
+        )
+        self.assertTrue(
+            self.mod.find_non_executing_segment("MAKEFLAGS=n make MAKEFLAGS=s test")
+        )
+
+    def test_bundled_short_option_rule_matches(self) -> None:
+        self.assertIn("QUALITY_NON_EXECUTING_SHORTS", self.script_src)
+        self.assertIn("QUALITY_VALUE_SHORTS", self.script_src)
+        self.assertContainsNormalized("Bundled short options count", self.skill_text)
+        self.assertContainsNormalized(
+            "parse a single-dash token left to right, letter by letter, over the raw token",
+            self.skill_text,
+        )
+        self.assertContainsNormalized(
+            "Do not require the token to be all letters", self.skill_text
+        )
+        # go must stay out of bundle expansion, or `-run` reads as `-r -u -n`.
+        self.assertNotIn("go", self.mod.QUALITY_NON_EXECUTING_SHORTS)
+        self.assertContainsNormalized("go is excluded from bundle expansion", self.skill_text)
+        for cmd in ("make -sn test", "make -snj2 test", "make -nf./Makefile test"):
+            self.assertEqual([], self.mod.classify_quality_dimensions(cmd), cmd)
+        for cmd in ("make -sj2 test", "go test -run TestNoop ./...", "mvn -Vq test"):
+            self.assertEqual(["test"], self.mod.classify_quality_dimensions(cmd), cmd)
+        # An all-letters precondition is exactly what missed the value-bearing bundles.
+        self.assertNotIn('re.fullmatch(r"-[A-Za-z]{2,}", name)', self.script_src)
+
+    def test_documented_run_mode_traps_stay_credited(self) -> None:
+        """The prose names three spellings that only LOOK like dry runs."""
+        self.assertContainsNormalized("pytest -n 4", self.skill_text)
+        self.assertContainsNormalized("mvn -q", self.skill_text)
+        self.assertContainsNormalized("ctest -V", self.skill_text)
+        self.assertEqual(["test"], self.mod.classify_quality_dimensions("pytest -n 4"))
+        self.assertEqual(["test"], self.mod.classify_quality_dimensions("mvn -q test"))
+        self.assertEqual(["test"], self.mod.classify_quality_dimensions("ctest -V"))
+        self.assertEqual([], self.mod.classify_quality_dimensions("make -n test"))
+
+    def test_compat_unknown_labels_match(self) -> None:
+        unknown_label = self.mod.COMPAT_BODY_LABELS["unknown"]
+        self.assertIn(unknown_label, self.skill_text)
+        self.assertIn(self.mod.COMPAT_BREAKING_LABELS["unknown"], self.skill_text)
+        self.assertContainsNormalized(
+            "Never render an unassessed change as `non-breaking`", self.skill_text
+        )
+
+    def test_prose_fallback_range_scan_actually_finds_a_transient_secret(self) -> None:
+        """Execute the SKILL.md fallback loop; a documented recipe is untested code.
+
+        Environments without Python run the prose commands, so the loop must really
+        detect a credential that exists only in an intermediate commit.
+        """
+        m = re.search(
+            r"^(for sha in \$\(git rev-list origin/main\.\.HEAD\); do\n.*?^done)$",
+            self.skill_text,
+            re.DOTALL | re.MULTILINE,
+        )
+        self.assertIsNotNone(m, "SKILL.md must contain the push-range scan loop")
+        snippet = m.group(1)  # type: ignore[union-attr]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            remote = root / "remote.git"
+            work = root / "work"
+            ident = ["-c", "user.name=contract", "-c", "user.email=contract@example.com"]
+
+            def git(*args: str, cwd: Path) -> None:
+                subprocess.run(
+                    ["git", "-C", str(cwd), *ident, *args],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+
+            subprocess.run(
+                ["git", "init", "--bare", "--initial-branch=main", str(remote)],
+                check=True,
+                capture_output=True,
+            )
+            subprocess.run(
+                ["git", "init", "--initial-branch=main", str(work)],
+                check=True,
+                capture_output=True,
+            )
+            (work / "main.go").write_text("package main\n\nfunc main() {}\n")
+            git("add", "-A", cwd=work)
+            git("commit", "-m", "chore: init", cwd=work)
+            git("remote", "add", "origin", str(remote), cwd=work)
+            git("push", "-u", "origin", "main", cwd=work)
+
+            git("checkout", "-b", "feature/leak", cwd=work)
+            (work / "cfg.go").write_text(
+                'package main\n\nvar token = "ghp_abcdefghijklmnopqrstuvwxyz0123456789"\n'
+            )
+            (work / ".env").write_text("PASSWORD=supersecretpassword\n")
+            git("add", "-A", cwd=work)
+            git("commit", "-m", "feat: add cfg", cwd=work)
+            (work / "cfg.go").write_text('package main\n\nfunc Cfg() string { return "ok" }\n')
+            (work / ".env").unlink()
+            git("add", "-A", cwd=work)
+            git("commit", "-m", "fix: drop literal", cwd=work)
+
+            net = subprocess.run(
+                ["bash", "-c", "git diff origin/main...HEAD | grep -c 'ghp_' || true"],
+                cwd=work,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(
+                "0",
+                net.stdout.strip(),
+                "precondition: the net diff must be clean, otherwise this proves nothing",
+            )
+
+            result = subprocess.run(
+                ["bash", "-c", snippet], cwd=work, capture_output=True, text=True
+            )
+            self.assertIn("ghp_abcdefghijklmnopqrstuvwxyz0123456789", result.stdout)
+            self.assertIn("found in commit", result.stdout)
+            self.assertIn(".env", result.stdout)
 
     def test_frontmatter_has_only_portable_skill_fields(self) -> None:
         fm = frontmatter(self.skill_text)

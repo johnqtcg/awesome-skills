@@ -6,12 +6,17 @@
   "expected_pr_mode": "ready",
   "expected_publish": true,
   "gate_results": [
-    {"gate": "Gate G", "status": "PASS", "evidence": "title valid"}
+    {
+      "gate": "Gate G",
+      "status": "PASS",
+      "evidence": "title valid"
+    }
   ],
   "skill_rules_that_must_fire": [
     "PR title must follow Conventional Commits format",
-    "PR title = final commit message",
-    "default to treating the PR title as if it were a squash commit message"
+    "default to treating the PR title as if it were a squash commit message",
+    "No individual PR body section is ever promoted to the commit body.",
+    "A single-commit PR under the default setting ignores the PR title entirely"
   ],
   "reference_files": [
     "SKILL.md",

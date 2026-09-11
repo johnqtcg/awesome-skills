@@ -12,7 +12,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 try:
@@ -28,6 +28,25 @@ NA = "N/A"
 
 SIZE_THRESHOLD_WARN = 400    # lines: review quality degrades above this
 SIZE_THRESHOLD_STRONG = 800  # lines: strong recommendation to split
+
+# git push transmits every commit in the range, so the secret scan must read the
+# whole pushed history, not only its net diff. The cap keeps a pathological range
+# from stalling the gate; exceeding it is a hard blocker, never a silent pass.
+SECRET_SCAN_COMMIT_LIMIT = 500
+
+QUALITY_DIMENSIONS = ("test", "lint", "build")
+
+# The rendered body must not turn an unassessed compatibility status into a verdict.
+COMPAT_BODY_LABELS = {
+    "compatible": "non-breaking",
+    "breaking": "breaking",
+    "unknown": "unknown (not assessed)",
+}
+COMPAT_BREAKING_LABELS = {
+    "compatible": "no",
+    "breaking": "yes",
+    "unknown": "unknown — not assessed",
+}
 
 CONVENTIONAL_RE = re.compile(
     r"^(feat|fix|chore|docs|refactor|perf|test|build|ci|style|revert)(\([^)]+\))?!?: ([^\r\n]+)$"
@@ -188,6 +207,8 @@ class Settings:
     compat_status: str
     check_cmd: List[str]
     quality_enabled: bool
+    quality_dimension_cmds: Dict[str, List[str]]
+    quality_not_applicable: List[str]
     security_tools_enabled: bool
     branch_protection_enabled: bool
     branch_protection_require_pr_reviews: bool
@@ -224,6 +245,7 @@ class Context:
     high_risk_areas: List[str] = field(default_factory=list)
     pr_meta: Dict[str, Any] = field(default_factory=dict)
     pr_title: str = ""
+    quality_coverage: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -231,6 +253,18 @@ class AddedLine:
     path: str
     line_no: int
     text: str
+    commit: str = ""  # empty when the line comes from the net origin/base...HEAD diff
+
+
+@dataclass
+class QualityCheck:
+    cmd: str
+    dimensions: List[str]  # which of QUALITY_DIMENSIONS this command produces evidence for
+    source: str
+    # Set when the command is in a mode that executes no check. The dimensions it
+    # would have covered move to rejected_dimensions so the gate can name the gap.
+    rejected: str = ""
+    rejected_dimensions: List[str] = field(default_factory=list)
 
 
 def run_cmd(cmd: Sequence[str], cwd: Path, timeout: int = 1200) -> CommandResult:
@@ -252,6 +286,20 @@ def run_cmd(cmd: Sequence[str], cwd: Path, timeout: int = 1200) -> CommandResult
 
 def run_shell(cmd: str, cwd: Path, timeout: int = 1800) -> CommandResult:
     return run_cmd(["/bin/zsh", "-lc", cmd], cwd, timeout=timeout)
+
+
+def git_paths_cmd(*args: str) -> List[str]:
+    """A git command whose output contains paths.
+
+    ``core.quotePath=true`` (the default) renders a non-ASCII path as its escaped
+    display form (``"\351\205\215.go"``). Comparing that against a path read from
+    another git command silently never matches, which drops the file from the scan.
+    """
+    return ["git", "-c", "core.quotePath=false", *args]
+
+
+def split_nul(payload: str) -> List[str]:
+    return [chunk for chunk in payload.split("\0") if chunk]
 
 
 def short_output(result: CommandResult, limit: int = 220) -> str:
@@ -360,9 +408,25 @@ def resolve_settings(args: argparse.Namespace, repo: Path, branch: str) -> Setti
 
     check_cmd = args.check_cmd if args.check_cmd else as_list(config.get("check_cmd"), default=[])
 
-    quality_enabled = config.get("quality", {}).get("enabled", True)
+    quality_cfg = config.get("quality", {}) or {}
+    quality_enabled = quality_cfg.get("enabled", True)
     if args.quality is not None:
         quality_enabled = args.quality
+
+    quality_dimension_cmds: Dict[str, List[str]] = {}
+    for dimension in QUALITY_DIMENSIONS:
+        cli_value = getattr(args, f"{dimension}_cmd", None) or []  # --test-cmd/--lint-cmd/--build-cmd
+        quality_dimension_cmds[dimension] = (
+            [str(x) for x in cli_value]
+            if cli_value
+            else as_list(quality_cfg.get(f"{dimension}_cmd"), [])
+        )
+
+    quality_not_applicable = [
+        str(x).strip().lower()
+        for x in (getattr(args, "quality_na", None) or as_list(quality_cfg.get("not_applicable"), []))
+        if str(x).strip()
+    ]
 
     security_enabled = config.get("security_tools", {}).get("enabled", True)
     if args.security_tools is not None:
@@ -430,6 +494,8 @@ def resolve_settings(args: argparse.Namespace, repo: Path, branch: str) -> Setti
         compat_status=compat_status,
         check_cmd=check_cmd,
         quality_enabled=bool(quality_enabled),
+        quality_dimension_cmds=quality_dimension_cmds,
+        quality_not_applicable=quality_not_applicable,
         security_tools_enabled=bool(security_enabled),
         branch_protection_enabled=bool(branch_protection_enabled),
         branch_protection_require_pr_reviews=bool(branch_protection_require_pr_reviews),
@@ -508,14 +574,32 @@ def parse_github_slug(remote_url: str) -> str:
 
 def list_changed_files(repo: Path, base: str, timeout: int) -> Tuple[List[Path], CommandResult]:
     result = run_cmd(
-        ["git", "diff", "--name-only", "--diff-filter=ACMR", f"origin/{base}...HEAD"],
+        git_paths_cmd(
+            "diff", "--name-only", "-z", "--diff-filter=ACMR", f"origin/{base}...HEAD"
+        ),
         repo,
         timeout,
     )
     if result.rc != 0:
         return [], result
-    files = [Path(line.strip()) for line in result.stdout.splitlines() if line.strip()]
-    return files, result
+    return [Path(x) for x in split_nul(result.stdout)], result
+
+
+def list_commit_paths(repo: Path, sha: str, timeout: int) -> Tuple[List[str], CommandResult]:
+    """Paths that a single commit adds, copies, modifies, or renames into place.
+
+    Read from git's own machine-readable name list rather than from the patch text:
+    a binary patch ("Binary files ... differ"), an empty new file, and a pure rename
+    all carry no ``+++`` header, so parsing the patch would silently skip them.
+    """
+    result = run_cmd(
+        git_paths_cmd("show", "--name-only", "--format=", "-z", "--diff-filter=ACMR", sha),
+        repo,
+        timeout,
+    )
+    if result.rc != 0:
+        return [], result
+    return split_nul(result.stdout), result
 
 
 def detect_high_risk_areas(paths: Sequence[Path]) -> List[str]:
@@ -605,6 +689,7 @@ def parse_diff_added_lines(diff_text: str) -> List[AddedLine]:
             if path_part == "/dev/null":
                 current_file = None
             else:
+                path_part = unquote_git_path(path_part)
                 if path_part.startswith("b/"):
                     path_part = path_part[2:]
                 current_file = path_part
@@ -635,6 +720,138 @@ def parse_diff_added_lines(diff_text: str) -> List[AddedLine]:
     return entries
 
 
+def normalize_path(value: str) -> str:
+    return value.replace("\\", "/")
+
+
+GIT_QUOTE_ESCAPES = {
+    "a": 0x07, "b": 0x08, "t": 0x09, "n": 0x0A,
+    "v": 0x0B, "f": 0x0C, "r": 0x0D, '"': 0x22, "\\": 0x5C,
+}
+
+
+def unquote_git_path(value: str) -> str:
+    """Decode git's C-style quoted path form.
+
+    git quotes a path that contains a double quote, a backslash, or a control
+    character — and, unless ``core.quotePath=false``, any non-ASCII byte. A patch
+    header carries that quoted form, so leaving it encoded means the path never
+    matches the same file read from git's name list, and the file drops out of the
+    scan without a trace.
+    """
+    if len(value) < 2 or not (value.startswith('"') and value.endswith('"')):
+        return value
+    body = value[1:-1]
+    out = bytearray()
+    index = 0
+    while index < len(body):
+        char = body[index]
+        if char != "\\":
+            out.extend(char.encode("utf-8"))
+            index += 1
+            continue
+        if index + 1 >= len(body):
+            break
+        escape = body[index + 1]
+        if escape in GIT_QUOTE_ESCAPES:
+            out.append(GIT_QUOTE_ESCAPES[escape])
+            index += 2
+            continue
+        octal = body[index + 1 : index + 4]
+        if len(octal) == 3 and all(c in "01234567" for c in octal):
+            out.append(int(octal, 8))
+            index += 4
+            continue
+        out.extend(escape.encode("utf-8"))
+        index += 2
+    return out.decode("utf-8", errors="replace")
+
+
+def commits_to_push(repo: Path, base: str, timeout: int) -> Tuple[List[str], CommandResult]:
+    """Commits that ``git push`` would transmit: reachable from HEAD, not from origin/base."""
+    result = run_cmd(["git", "rev-list", "--reverse", f"origin/{base}..HEAD"], repo, timeout)
+    if result.rc != 0:
+        return [], result
+    return [line.strip() for line in result.stdout.splitlines() if line.strip()], result
+
+
+def collect_pushed_range_evidence(
+    repo: Path,
+    base: str,
+    timeout: int,
+) -> Tuple[List[AddedLine], List[str], List[str], List[str]]:
+    """Added lines and content paths for every commit in the push range.
+
+    Scanning only the net ``origin/base...HEAD`` diff is not sufficient: a commit
+    that adds a credential and a later commit that deletes it cancel out in the net
+    diff, yet ``git push`` still transmits the first commit and the credential
+    becomes reachable in the remote repository's history.
+
+    Returns ``(entries, paths, details, errors)``. A non-empty ``errors`` means the
+    scan could not be proven complete and the caller must fail closed.
+    """
+    entries: List[AddedLine] = []
+    paths: List[str] = []
+    details: List[str] = []
+    errors: List[str] = []
+
+    commits, rev = commits_to_push(repo, base, timeout)
+    details.append(f"{rev.cmd}: rc={rev.rc} ({short_output(rev, limit=200)})")
+    if rev.rc != 0:
+        errors.append("unable to enumerate commits in the push range for secret scan")
+        return entries, paths, details, errors
+    if len(commits) > SECRET_SCAN_COMMIT_LIMIT:
+        errors.append(
+            f"push range has {len(commits)} commits (limit {SECRET_SCAN_COMMIT_LIMIT}); "
+            "cannot prove the pushed history is secret-free"
+        )
+        return entries, paths, details, errors
+
+    for sha in commits:
+        named, name_cmd = list_commit_paths(repo, sha, timeout)
+        if name_cmd.rc != 0:
+            errors.append(f"unable to list paths for pushed commit {sha[:12]}")
+            continue
+        for path in named:
+            normalized = normalize_path(path)
+            if normalized not in paths:
+                paths.append(normalized)
+
+        show = run_cmd(
+            git_paths_cmd("show", "--format=", "--unified=0", "--no-color", sha),
+            repo,
+            timeout,
+        )
+        if show.rc != 0:
+            errors.append(f"unable to read patch for pushed commit {sha[:12]}")
+            continue
+        for item in parse_diff_added_lines(show.stdout):
+            entries.append(
+                AddedLine(path=item.path, line_no=item.line_no, text=item.text, commit=sha[:12])
+            )
+
+    details.append(
+        f"push range scan: {len(commits)} commit(s), "
+        f"{len(entries)} added line(s), {len(paths)} content path(s)"
+    )
+    return entries, paths, details, errors
+
+
+def dedupe_added_lines(entries: Sequence[AddedLine]) -> List[AddedLine]:
+    """Collapse the same added text in the same file; earlier entries win.
+
+    Callers pass net-diff entries first so a secret still present at HEAD is
+    reported at its current line number, while one that only ever existed inside
+    the pushed history keeps its commit attribution.
+    """
+    seen: Dict[Tuple[str, str], AddedLine] = {}
+    for entry in entries:
+        key = (entry.path, entry.text.strip())
+        if key not in seen:
+            seen[key] = entry
+    return list(seen.values())
+
+
 def scan_secrets_in_added_lines(
     entries: Sequence[AddedLine],
     allow_regex: Sequence[re.Pattern[str]],
@@ -659,12 +876,12 @@ def scan_secrets_in_added_lines(
         line = entry.text.strip()
         if not line:
             continue
-        if match_any(allow_regex, line):
-            continue
 
         matched = None
+        matched_text = ""
         for name, pattern in SECRET_PATTERNS.items():
-            if not pattern.search(line):
+            hit = pattern.search(line)
+            if not hit:
                 continue
             if name == "generic_secret":
                 m = SECRET_ASSIGNMENT_RE.search(line)
@@ -673,13 +890,25 @@ def scan_secrets_in_added_lines(
                 value = m.group(2)
                 if not likely_real_secret_value(value):
                     continue
+                matched_text = value
+            else:
+                matched_text = hit.group(0)
             matched = name
             break
 
-        if matched:
-            findings.append(f"{entry.path}:{entry.line_no} [{matched}] {line[:180]}")
-            if len(findings) >= 30:
-                return findings
+        if not matched:
+            continue
+
+        # Allow patterns are evaluated against the matched credential itself, never
+        # against the surrounding line: an unrelated "example"/"sample" word on the
+        # same line must not suppress a real token sitting next to it.
+        if match_any(allow_regex, matched_text):
+            continue
+
+        origin = f" (commit {entry.commit})" if entry.commit else ""
+        findings.append(f"{entry.path}:{entry.line_no}{origin} [{matched}] {line[:180]}")
+        if len(findings) >= 30:
+            return findings
 
     return findings
 
@@ -690,6 +919,8 @@ def gate_a_preflight(ctx: Context, settings: Settings) -> GateResult:
     suppressed = False
     repo_meta: Dict[str, Any] = {}
     origin_slug = ""
+    push_slugs: Dict[str, str] = {}
+    gh_slug = ""
 
     r = run_cmd(["git", "rev-parse", "--is-inside-work-tree"], ctx.repo, settings.timeout)
     details.append(f"{r.cmd}: rc={r.rc} ({short_output(r)})")
@@ -709,6 +940,26 @@ def gate_a_preflight(ctx: Context, settings: Settings) -> GateResult:
         origin_slug = parse_github_slug(r.stdout)
         if not origin_slug:
             blockers.append("cannot verify origin repository identity as github.com owner/repo")
+
+    # `git push origin` writes to remote.origin.pushurl when set, which git keeps
+    # independent of the fetch URL — and a remote may carry SEVERAL push URLs, in
+    # which case one push writes to all of them. `--push --all` is the only form that
+    # returns the complete write set (without --all git returns just the first URL).
+    r = run_cmd(
+        ["git", "remote", "get-url", "--push", "--all", "origin"], ctx.repo, settings.timeout
+    )
+    details.append(f"{r.cmd}: rc={r.rc} ({short_output(r)})")
+    if r.rc != 0 or not r.stdout.strip():
+        blockers.append("cannot read origin push targets")
+    else:
+        push_urls = [line.strip() for line in r.stdout.splitlines() if line.strip()]
+        for index, url in enumerate(push_urls):
+            slug = parse_github_slug(url)
+            push_slugs[f"push[{index}]"] = slug
+            if not slug:
+                blockers.append(
+                    f"cannot verify origin push target #{index} as github.com owner/repo: {url}"
+                )
 
     r = run_cmd(["gh", "auth", "status", "-h", "github.com"], ctx.repo, settings.timeout)
     details.append(f"{r.cmd}: rc={r.rc} ({short_output(r)})")
@@ -730,12 +981,23 @@ def gate_a_preflight(ctx: Context, settings: Settings) -> GateResult:
             if perm in {"READ", "TRIAGE", ""}:
                 blockers.append(f"insufficient permission for push/PR ({perm})")
             gh_slug = str(repo_meta.get("nameWithOwner", "")).lower()
-            if origin_slug and gh_slug and origin_slug != gh_slug:
-                blockers.append(
-                    f"origin repository identity mismatch: origin={origin_slug}, gh={gh_slug}"
-                )
         except json.JSONDecodeError:
             blockers.append("unable to parse repository metadata")
+
+    # fetch URL, push URL, and gh must all name the same repository. One comparison
+    # over the three keeps every source load-bearing: pairwise checks would mask each
+    # other, so removing any single one would still look correct.
+    identities = {"fetch": origin_slug, **push_slugs, "gh": gh_slug}
+    known = {label: slug for label, slug in identities.items() if slug}
+    if len(set(known.values())) > 1:
+        blockers.append(
+            "repository identity mismatch: "
+            + ", ".join(f"{label}={slug}" for label, slug in sorted(known.items()))
+        )
+    details.append(
+        "repository identity: "
+        + ", ".join(f"{label}={slug or '(unresolved)'}" for label, slug in identities.items())
+    )
 
     r = run_cmd(["git", "ls-remote", "--heads", "origin", ctx.base], ctx.repo, settings.timeout)
     details.append(f"{r.cmd}: rc={r.rc} ({short_output(r)})")
@@ -995,29 +1257,563 @@ def detect_affected_go_modules(repo: Path, changed_files: Sequence[Path]) -> Lis
     return sorted(module_dirs)
 
 
-def default_quality_commands(repo: Path, changed_files: Optional[Sequence[Path]] = None) -> List[str]:
-    cmds: List[str] = []
+# Automatic classification is deliberately narrow. It reads the command's argv, not
+# its text: a regex search over the whole string credits
+# `printf '%s' 'go test ./...; golangci-lint run'` — a command that runs nothing — with
+# every dimension. Anything not matched here stays unclassified and must be declared.
+# Shell operators that could chain a second, unclassified command. Detected as
+# lexer tokens rather than by substring search, so a quoted argument such as
+# `-run 'TestBuild;lint'` does not disqualify an otherwise simple command.
+QUALITY_SHELL_OPERATORS = {";", "&", "&&", "|", "||", "<", ">", ">>", "(", ")", ";;", "|&"}
+
+# The one compound shape that is recognised, because monorepo discovery emits it.
+QUALITY_CD_PREFIX_RE = re.compile(r"^cd\s+(?P<dir>[A-Za-z0-9._/+-]+)\s+&&\s+(?P<rest>.+)$")
+
+# tool -> subcommand -> dimension
+QUALITY_SUBCOMMAND_TOOLS: Dict[str, Dict[str, str]] = {
+    "go": {"test": "test", "build": "build", "vet": "lint", "fmt": "lint"},
+    "cargo": {"test": "test", "build": "build", "clippy": "lint", "fmt": "lint"},
+    "mvn": {"test": "test", "package": "build", "compile": "build"},
+    "gradle": {"test": "test", "build": "build", "assemble": "build"},
+    "dotnet": {"test": "test", "build": "build"},
+    # These print help when invoked bare, so the subcommand is what runs the check.
+    "golangci-lint": {"run": "lint"},
+    "ruff": {"check": "lint", "format": "lint"},
+}
+
+# tool -> dimension, regardless of arguments
+QUALITY_BARE_TOOLS: Dict[str, str] = {
+    "staticcheck": "lint",
+    "revive": "lint",
+    "gofmt": "lint",
+    "goimports": "lint",
+    "eslint": "lint",
+    "flake8": "lint",
+    "pylint": "lint",
+    "shellcheck": "lint",
+    "mypy": "lint",
+    "pytest": "test",
+    "ctest": "test",
+    "tsc": "build",
+}
+
+# A correctly named command still runs nothing in a dry-run, help, version, or
+# list-only mode: `make -n test lint build` prints the recipes and executes none of
+# them. These sets are deliberately PER TOOL because the same spelling flips meaning:
+# `make -n` is dry-run but `pytest -n 4` runs tests in parallel; `make -q` asks a
+# question but `mvn -q` is merely quiet; `cargo -V` prints a version but `ctest -V`
+# is verbose. A match here makes the command unclassified, never credited.
+QUALITY_UNIVERSAL_NON_EXECUTING = frozenset({"--help", "-h", "--version", "--usage"})
+
+QUALITY_NON_EXECUTING_ARGS: Dict[str, frozenset] = {
+    "make": frozenset({"-n", "--dry-run", "--just-print", "--recon", "-q", "--question",
+                       "-t", "--touch", "-v", "--print-data-base"}),
+    "go": frozenset({"-n", "-list", "-c", "-i"}),
+    "golangci-lint": frozenset(),
+    "staticcheck": frozenset({"-explain", "-list-checks", "-debug.version"}),
+    "revive": frozenset({"-version"}),
+    "pytest": frozenset({"--collect-only", "--co", "--fixtures", "--markers",
+                         "--setup-only", "--setup-plan"}),
+    "ruff": frozenset({"--show-settings", "--show-files"}),
+    "eslint": frozenset({"--print-config", "--env-info", "-v"}),
+    "mypy": frozenset({"-V"}),
+    "tsc": frozenset({"--showConfig", "--init", "--listFilesOnly", "-v"}),
+    "ctest": frozenset({"-N", "--show-only"}),
+    "cargo": frozenset({"--no-run", "--dry-run", "--list", "-V"}),
+    "mvn": frozenset({"-v"}),
+    "gradle": frozenset({"-m", "--dry-run", "-x", "-v"}),
+    "dotnet": frozenset({"--info", "--list-sdks", "--list-runtimes"}),
+    "npm": frozenset({"--dry-run", "--if-present", "-v"}),
+    "pnpm": frozenset({"--dry-run", "--if-present", "-v"}),
+    "yarn": frozenset({"--dry-run", "-v"}),
+    "just": frozenset({"-n", "--dry-run", "--list", "-l", "--summary"}),
+    "task": frozenset({"--dry", "--list", "-l", "--summary"}),
+}
+
+# Prefix forms whose value cannot be split off a fixed flag name.
+QUALITY_NON_EXECUTING_PREFIXES: Dict[str, Tuple[str, ...]] = {
+    "mvn": ("-DskipTests", "-Dmaven.test.skip", "-Dtest=none"),
+}
+
+# Short options bundle: `make -sn test` is `-s -n`, a silent DRY RUN, so matching whole
+# tokens misses it. The bundle is parsed left to right and the scan stops at the first
+# letter that consumes the remainder of the token as its value — that stop rule is what
+# keeps `make -fMakefile.test` from "containing -t" and `mvn -Pdev` from "containing -v".
+# The scan must NOT require the token to be all letters: `make -snj2` and
+# `make -nf./Makefile` carry a value after the bundled flags and still execute nothing.
+# `go` is absent on purpose — Go's flag package has no bundling at all, so `-run` is
+# one flag and must never be read as `-r -u -n`.
+QUALITY_NON_EXECUTING_SHORTS: Dict[str, frozenset] = {
+    "make": frozenset("nqtv"),
+    "gradle": frozenset("mvx"),
+    "mvn": frozenset("v"),
+    "cargo": frozenset("V"),
+    "ctest": frozenset("N"),
+    "just": frozenset("nl"),
+    "task": frozenset("l"),
+    "npm": frozenset("v"),
+    "pnpm": frozenset("v"),
+    "yarn": frozenset("v"),
+}
+QUALITY_UNIVERSAL_NON_EXECUTING_SHORTS = frozenset("h")
+
+# Short options that take the remainder of the token as their value.
+# Only genuinely value-taking letters belong here: listing one that takes no value
+# would end the scan early and hide a later dry-run letter. (`mvn -o` is offline and
+# takes nothing, so it is absent; `mvn -T` takes a thread count, so it is present.)
+QUALITY_VALUE_SHORTS: Dict[str, frozenset] = {
+    "make": frozenset("CfIjloWO"),
+    "gradle": frozenset("DPIbcgp"),
+    "mvn": frozenset("DPfsltbT"),
+    "cargo": frozenset("jpFZC"),
+    "ctest": frozenset("RELjISCDMTO"),
+    "just": frozenset("fdsc"),
+    "task": frozenset("dot"),
+    "npm": frozenset("wC"),
+    "pnpm": frozenset("wC"),
+    "yarn": frozenset("wC"),
+}
+
+# Task runners whose target/script names carry the meaning.
+QUALITY_SCRIPT_RUNNERS = {"make", "npm", "pnpm", "yarn", "just", "task"}
+
+# A run mode can also arrive through the environment instead of the argument list:
+# `MAKEFLAGS=n` is exactly `make -n`, whether it is exported in the shell or assigned on
+# the command line (`make MAKEFLAGS=n test`). These variables are therefore parsed as
+# flag lists and fed through the same argument check.
+QUALITY_FLAG_ENV_VARS: Dict[str, Tuple[str, ...]] = {
+    "make": ("MAKEFLAGS", "GNUMAKEFLAGS"),
+    "go": ("GOFLAGS",),
+    "pytest": ("PYTEST_ADDOPTS",),
+    "mvn": ("MAVEN_ARGS",),
+}
+ALL_QUALITY_FLAG_ENV_VARS = tuple(
+    sorted({var for group in QUALITY_FLAG_ENV_VARS.values() for var in group})
+)
+# make treats a leading word without a dash as a bundle of single-letter switches, so
+# `MAKEFLAGS=n` means `-n` and `MAKEFLAGS=sn` means `-s -n`.
+QUALITY_BARE_LETTER_ENV_VARS = frozenset({"MAKEFLAGS", "GNUMAKEFLAGS"})
+
+SHELL_ASSIGNMENT_RE = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)=(.*)$", re.DOTALL)
+
+# Tools that accept `VAR=value` as an argument. For anything else such a token is a
+# plain operand (a path, a package pattern), not an assignment.
+QUALITY_ARG_ASSIGNMENT_TOOLS = frozenset({"make", "just", "task"})
+
+# Tools whose run mode this script can judge at all.
+QUALITY_KNOWN_TOOLS = (
+    set(QUALITY_SUBCOMMAND_TOOLS)
+    | set(QUALITY_BARE_TOOLS)
+    | QUALITY_SCRIPT_RUNNERS
+    | {"python", "python3"}
+)
+
+QUALITY_NAME_HINTS = (
+    ("test", ("test", "spec")),
+    ("lint", ("lint", "vet", "fmt", "format", "check-style")),
+    ("build", ("build", "compile", "package")),
+)
+
+
+def dimensions_from_target_name(name: str) -> List[str]:
+    """Dimensions implied by a make target / npm script name."""
+    lowered = name.lower()
+    return [dim for dim, needles in QUALITY_NAME_HINTS if any(n in lowered for n in needles)]
+
+
+def non_executing_argument(tool: str, args: Sequence[str]) -> str:
+    """The first argument that puts *tool* into a mode executing no check, else "".
+
+    A command naming the right target is not evidence the target ran.
+    """
+    blocked = QUALITY_UNIVERSAL_NON_EXECUTING | QUALITY_NON_EXECUTING_ARGS.get(tool, frozenset())
+    prefixes = QUALITY_NON_EXECUTING_PREFIXES.get(tool, ())
+    shorts = QUALITY_NON_EXECUTING_SHORTS.get(tool, frozenset())
+    if shorts:
+        shorts = shorts | QUALITY_UNIVERSAL_NON_EXECUTING_SHORTS
+    value_shorts = QUALITY_VALUE_SHORTS.get(tool, frozenset())
+
+    for arg in args:
+        if not arg.startswith("-"):
+            continue
+        name = arg.split("=", 1)[0]
+        if name in blocked:
+            return arg
+        if prefixes and arg.startswith(prefixes):
+            return arg
+        if shorts:
+            # Parse the bundle left to right over the RAW token: requiring all letters
+            # would skip `-snj2` and `-nf./Makefile`, whose `-n` still suppresses
+            # execution. The first value-taking letter ends the bundle, and so does any
+            # non-letter, because from there on the token is an option's value — that
+            # one rule also keeps long options out (`--no-print-directory` stops at its
+            # second dash), so no separate shape precondition is needed.
+            for letter in arg[1:]:
+                if letter in shorts:
+                    return arg
+                if letter in value_shorts:
+                    break
+                if not letter.isalpha():
+                    break
+    return ""
+
+
+def runs_the_check(tool: str, args: Sequence[str]) -> bool:
+    return not non_executing_argument(tool, args)
+
+
+def env_flag_arguments(var: str, value: str) -> List[str]:
+    """Flag tokens a flag-carrying variable contributes to the command line."""
+    args: List[str] = []
+    for index, word in enumerate(value.split()):
+        if word.startswith("-"):
+            args.append(word)
+        elif index == 0 and var in QUALITY_BARE_LETTER_ENV_VARS:
+            args.append("-" + word)
+    return args
+
+
+def flag_variable_sources(
+    var: str,
+    prefix_assignments: Dict[str, str],
+    arg_assignments: Dict[str, str],
+    env: Optional[Dict[str, str]],
+) -> List[Tuple[str, str]]:
+    """Every value of *var* that reaches the tool, with where it came from.
+
+    Two independent layers, measured against GNU make rather than assumed:
+
+    * The **process environment** — the inherited value, *replaced* by a shell-prefix
+      assignment (`MAKEFLAGS=s make …` with `MAKEFLAGS=n` exported runs the targets;
+      `MAKEFLAGS=` clears it). Among duplicate prefixes the last one wins.
+    * A **command-line variable assignment** (`make MAKEFLAGS=n test`) — for switch
+      variables these switches are **cumulative** with the first layer, not an override:
+      `MAKEFLAGS=n make MAKEFLAGS=s test` and `MAKEFLAGS=s make MAKEFLAGS=n test` both
+      execute nothing, because whichever layer carries `n` applies it. Among duplicate
+      arguments the last one wins.
+
+    So both layers are returned and the caller must refuse if *either* blocks.
+    """
+    sources: List[Tuple[str, str]] = []
+    if var in prefix_assignments:
+        sources.append(("in the command", prefix_assignments[var]))
+    elif env and var in env:
+        sources.append(("inherited", env[var]))
+    if var in arg_assignments:
+        sources.append(("in the command", arg_assignments[var]))
+    return sources
+
+
+def probe_flag_environment(
+    repo: Path, timeout: int, variables: Sequence[str] = ALL_QUALITY_FLAG_ENV_VARS
+) -> Tuple[Dict[str, str], str]:
+    """Effective values of the flag-carrying variables in the shell that runs the checks.
+
+    Read from the same ``zsh -lc`` the quality commands use, because a login profile can
+    export one that this process never sees. Returns ``(values, error)``; a non-empty
+    error means the execution environment could not be determined, which the caller must
+    treat as uncovered rather than as clean.
+    """
+    if not variables:
+        return {}, ""
+    quoted = " ".join(f'"{var}=${{{var}-}}"' for var in variables)
+    result = run_cmd(["/bin/zsh", "-lc", f"printf '%s\\n' {quoted}"], repo, min(timeout, 60))
+    if result.rc != 0:
+        return {}, f"cannot read the execution environment: {short_output(result, limit=120)}"
+    values: Dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        name, sep, value = line.partition("=")
+        if sep and name in set(variables) and value.strip():
+            values[name] = value.strip()
+    return values, ""
+
+
+def shell_segments(cmd: str) -> List[List[str]]:
+    """Split a command line into argv segments at shell operators."""
+    try:
+        lexer = shlex.shlex(cmd, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        tokens = list(lexer)
+    except ValueError:
+        return []
+    segments: List[List[str]] = []
+    current: List[str] = []
+    for token in tokens:
+        if token in QUALITY_SHELL_OPERATORS:
+            if current:
+                segments.append(current)
+                current = []
+            continue
+        current.append(token)
+    if current:
+        segments.append(current)
+    return segments
+
+
+def find_non_executing_segment(cmd: str, env: Optional[Dict[str, str]] = None) -> str:
+    """Describe the first recognised tool invocation in *cmd* that executes no check.
+
+    This is the **execution-mode** question, kept separate from the dimension question:
+    declaring `quality.test_cmd` states what a command is *meant* to cover, which is
+    never a substitute for the command actually running. Every source of commands —
+    explicit per-dimension config, `check_cmd`, and repository discovery — goes through
+    here, and a declared dry run is refused exactly like a classified one.
+
+    Unknown commands (wrapper scripts, opaque runners) return "": the declaration
+    stands, because there is nothing here to contradict it.
+    """
+    for argv in shell_segments(cmd):
+        # A segment may start with shell-level assignments (`MAKEFLAGS=n make test`) and
+        # may carry make-style assignments among its arguments (`make MAKEFLAGS=n test`).
+        # Duplicates resolve the way the shell and make resolve them: the LAST one wins.
+        prefix_assignments: Dict[str, str] = {}
+        while argv:
+            match = SHELL_ASSIGNMENT_RE.match(argv[0])
+            if not match:
+                break
+            prefix_assignments[match.group(1)] = match.group(2)
+            argv = argv[1:]
+        if not argv:
+            continue
+
+        tool = PurePosixPath(argv[0]).name.lower()
+        if tool not in QUALITY_KNOWN_TOOLS:
+            continue
+        args = list(argv[1:])
+        arg_assignments: Dict[str, str] = {}
+        if tool in QUALITY_ARG_ASSIGNMENT_TOOLS:
+            for arg in args:
+                match = SHELL_ASSIGNMENT_RE.match(arg)
+                if match:
+                    arg_assignments[match.group(1)] = match.group(2)
+
+        operands = [
+            arg for arg in args
+            if not arg.startswith("-") and not SHELL_ASSIGNMENT_RE.match(arg)
+        ]
+        mode_tool = tool
+        if tool in {"python", "python3"} and operands:
+            mode_tool = operands[0].lower()
+
+        blocker = non_executing_argument(mode_tool, args)
+        if blocker:
+            return f"`{mode_tool} {blocker}` executes no check"
+
+        for var in QUALITY_FLAG_ENV_VARS.get(mode_tool, ()):
+            for origin, value in flag_variable_sources(
+                var, prefix_assignments, arg_assignments, env
+            ):
+                blocker = non_executing_argument(mode_tool, env_flag_arguments(var, value))
+                if blocker:
+                    return (
+                        f"{origin} {var}={value} applies `{blocker}` to {mode_tool}, "
+                        "which executes no check"
+                    )
+    return ""
+
+
+def classify_quality_dimensions(cmd: str) -> List[str]:
+    """Dimensions a command demonstrably exercises, judged from its argv.
+
+    Returns ``[]`` — "cannot tell, declare it" — for every shape not explicitly
+    supported: shell expressions, wrappers (``make ci``, ``./scripts/verify.sh``),
+    anything whose keywords live in a quoted argument rather than in argv[0], and any
+    recognised tool put into a non-executing mode (``make -n``, ``pytest --collect-only``,
+    ``cargo test --no-run``, ``--help``, ``--version``).
+    Under-crediting keeps the dimension uncovered, which is honest; over-crediting
+    would report a check that never ran as executed.
+    """
+    text = cmd.strip()
+    prefix = QUALITY_CD_PREFIX_RE.match(text)
+    if prefix:
+        text = prefix.group("rest").strip()
+    if not text or "\n" in text or "\r" in text:
+        return []
+    try:
+        lexer = shlex.shlex(text, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        argv = list(lexer)
+    except ValueError:
+        return []
+    if not argv or any(token in QUALITY_SHELL_OPERATORS for token in argv):
+        return []
+    # An environment prefix (`CGO_ENABLED=0 go test ./...`, `MAKEFLAGS= make test`) is
+    # not the command; the tool is the first token that is not an assignment.
+    while argv and SHELL_ASSIGNMENT_RE.match(argv[0]):
+        argv = argv[1:]
+    if not argv:
+        return []
+
+    tool = PurePosixPath(argv[0]).name.lower()
+    # `make TESTS=1 build` passes a variable, not a `test` target.
+    operands = [
+        arg for arg in argv[1:]
+        if not arg.startswith("-") and not SHELL_ASSIGNMENT_RE.match(arg)
+    ]
+
+    # `python -m pytest` must be judged by pytest's run modes, not python's: otherwise
+    # `python3 -m pytest --collect-only` collects nothing and still earns test coverage.
+    mode_tool = tool
+    if tool in {"python", "python3"} and operands:
+        mode_tool = operands[0].lower()
+    if not runs_the_check(mode_tool, argv[1:]):
+        return []
+
+    found: List[str] = []
+
+    if tool in QUALITY_BARE_TOOLS:
+        found.append(QUALITY_BARE_TOOLS[tool])
+    elif tool in QUALITY_SUBCOMMAND_TOOLS:
+        mapping = QUALITY_SUBCOMMAND_TOOLS[tool]
+        if operands and operands[0] in mapping:
+            found.append(mapping[operands[0]])
+    elif tool in {"python", "python3"}:
+        # only the `-m <module>` form is recognisable
+        if operands and operands[0] in {"pytest", "unittest", "nose2"}:
+            found.append("test")
+        elif operands and operands[0] == "build":
+            found.append("build")
+    elif tool in QUALITY_SCRIPT_RUNNERS:
+        targets = [x for x in operands if x != "run"] if tool != "make" else list(operands)
+        for target in targets:
+            found.extend(dimensions_from_target_name(target))
+
+    return [dim for dim in QUALITY_DIMENSIONS if dim in found]
+
+
+def makefile_targets(repo: Path) -> set:
+    """Target names declared in the repository Makefile.
+
+    Probing by text keeps discovery side-effect free; invoking ``make -n <target>``
+    would run recursive make and ``$(shell ...)`` expansions. A Makefile that builds
+    its targets dynamically simply falls through to the language defaults.
+    """
     makefile = repo / "Makefile"
-    if makefile.exists():
-        cmds.extend(["make test", "make lint"])
+    if not makefile.exists():
+        return set()
+    try:
+        text = makefile.read_text(errors="ignore")
+    except OSError:
+        return set()
+    return {m.group(1) for m in re.finditer(r"(?m)^([A-Za-z0-9_.\-]+)\s*:(?!=)", text)}
+
+
+def discover_quality_checks(repo: Path, changed_files: Optional[Sequence[Path]] = None) -> List[QualityCheck]:
+    """Per-dimension quality commands discovered from the repository itself."""
+    checks: List[QualityCheck] = []
+    targets = makefile_targets(repo)
+    for dimension in QUALITY_DIMENSIONS:
+        if dimension in targets:
+            checks.append(QualityCheck(f"make {dimension}", [dimension], "makefile"))
+    covered = {d for check in checks for d in check.dimensions}
+
     if (repo / "go.mod").exists():
-        if changed_files:
-            mod_dirs = detect_affected_go_modules(repo, changed_files)
-        else:
+        mod_dirs = detect_affected_go_modules(repo, changed_files) if changed_files else [Path(".")]
+        if not mod_dirs:
             mod_dirs = [Path(".")]
         for mod_dir in mod_dirs:
             prefix = f"cd {mod_dir} && " if str(mod_dir) != "." else ""
-            cmds.append(f"{prefix}go test ./...")
-            if shutil.which("golangci-lint"):
-                cmds.append(f"{prefix}golangci-lint run")
-    seen = set()
-    uniq = []
-    for cmd in cmds:
-        if cmd in seen:
+            if "test" not in covered:
+                checks.append(QualityCheck(f"{prefix}go test ./...", ["test"], "language-default"))
+            if "build" not in covered:
+                checks.append(QualityCheck(f"{prefix}go build ./...", ["build"], "language-default"))
+            if "lint" not in covered and shutil.which("golangci-lint"):
+                checks.append(QualityCheck(f"{prefix}golangci-lint run", ["lint"], "language-default"))
+    return merge_quality_checks(checks)
+
+
+def merge_quality_checks(checks: Sequence[QualityCheck]) -> List[QualityCheck]:
+    """One entry per distinct command, with the union of the dimensions it covers."""
+    merged: Dict[str, QualityCheck] = {}
+    for check in checks:
+        existing = merged.get(check.cmd)
+        if existing is None:
+            merged[check.cmd] = QualityCheck(check.cmd, list(check.dimensions), check.source)
             continue
-        seen.add(cmd)
-        uniq.append(cmd)
-    return uniq
+        for dimension in check.dimensions:
+            if dimension not in existing.dimensions:
+                existing.dimensions.append(dimension)
+        if check.source not in existing.source:
+            existing.source = f"{existing.source}+{check.source}"
+    return list(merged.values())
+
+
+def resolve_quality_checks(
+    settings: Settings,
+    repo: Path,
+    changed_files: Sequence[Path],
+    timeout: int = 1200,
+) -> List[QualityCheck]:
+    """Explicit per-dimension declarations first, then --check-cmd, then discovery.
+
+    Dimension attribution and execution-mode validation are two separate steps: the
+    first answers "what is this command for", the second "can this command run a check
+    at all". Every source passes through the second one.
+    """
+    checks: List[QualityCheck] = []
+    for dimension in QUALITY_DIMENSIONS:
+        for cmd in settings.quality_dimension_cmds.get(dimension, []):
+            checks.append(QualityCheck(cmd, [dimension], f"config:{dimension}_cmd"))
+    for cmd in settings.check_cmd:
+        checks.append(QualityCheck(cmd, classify_quality_dimensions(cmd), "check_cmd"))
+    if not checks:
+        checks = discover_quality_checks(repo, changed_files)
+    checks = merge_quality_checks(checks)
+
+    # The run mode can come from the environment the commands will inherit, so read it
+    # from the same shell before deciding what the commands prove.
+    env: Dict[str, str] = {}
+    env_error = ""
+    if any(uses_flag_environment(check.cmd) for check in checks):
+        env, env_error = probe_flag_environment(repo, timeout)
+    return reject_non_executing_checks(checks, env=env, env_error=env_error)
+
+
+def uses_flag_environment(cmd: str) -> bool:
+    """True when some segment runs a tool that reads flags from the environment."""
+    for argv in shell_segments(cmd):
+        while argv and SHELL_ASSIGNMENT_RE.match(argv[0]):
+            argv = argv[1:]
+        if not argv:
+            continue
+        tool = PurePosixPath(argv[0]).name.lower()
+        operands = [
+            arg for arg in argv[1:]
+            if not arg.startswith("-") and not SHELL_ASSIGNMENT_RE.match(arg)
+        ]
+        if tool in {"python", "python3"} and operands:
+            tool = operands[0].lower()
+        if tool in QUALITY_FLAG_ENV_VARS:
+            return True
+    return False
+
+
+def reject_non_executing_checks(
+    checks: Sequence[QualityCheck],
+    env: Optional[Dict[str, str]] = None,
+    env_error: str = "",
+) -> List[QualityCheck]:
+    """Strip the dimensions of any command that cannot be shown to execute a check.
+
+    An undetermined execution environment counts as "cannot be shown": the dimension
+    stays uncovered with the reason, instead of passing on an unverified assumption.
+    """
+    for check in checks:
+        if not check.dimensions:
+            continue
+        reason = find_non_executing_segment(check.cmd, env)
+        if not reason and env_error and uses_flag_environment(check.cmd):
+            reason = env_error
+        if reason:
+            check.rejected = reason
+            check.rejected_dimensions = list(check.dimensions)
+            check.dimensions = []
+    return list(checks)
+
+
+def default_quality_commands(repo: Path, changed_files: Optional[Sequence[Path]] = None) -> List[str]:
+    """Backwards-compatible view of :func:`discover_quality_checks`."""
+    return [check.cmd for check in discover_quality_checks(repo, changed_files)]
 
 
 def gate_d_quality(ctx: Context, settings: Settings) -> GateResult:
@@ -1034,31 +1830,92 @@ def gate_d_quality(ctx: Context, settings: Settings) -> GateResult:
         )
         return GateResult("Gate D", SUPPRESSED, "quality checks skipped", details, blocks_ready=True)
 
-    commands = settings.check_cmd[:] if settings.check_cmd else default_quality_commands(ctx.repo, ctx.changed_files)
-    if not commands:
-        add_uncovered(
-            ctx,
-            "quality checks",
-            "no quality command discovered",
-            "behavior regressions may not be detected",
-            "configure check_cmd in .create-pr.yaml",
-            "change author",
-        )
-        return GateResult(
-            "Gate D",
-            SUPPRESSED,
-            "no quality commands configured",
-            details,
-            blocks_ready=True,
+    declared_na = [d for d in settings.quality_not_applicable if d in QUALITY_DIMENSIONS]
+    unknown_na = [d for d in settings.quality_not_applicable if d not in QUALITY_DIMENSIONS]
+    if unknown_na:
+        details.append(
+            "ignored unknown quality.not_applicable entries: " + ", ".join(sorted(set(unknown_na)))
         )
 
-    failures = []
-    for cmd in commands:
-        r = run_shell(cmd, ctx.repo, timeout=settings.timeout)
+    checks = resolve_quality_checks(settings, ctx.repo, ctx.changed_files, settings.timeout)
+    lint_tool_missing = (
+        (ctx.repo / "go.mod").exists() and not shutil.which("golangci-lint")
+    )
+
+    failures: List[str] = []
+    executed: Dict[str, str] = {}  # dimension -> command that produced passing evidence
+    for check in checks:
+        r = run_shell(check.cmd, ctx.repo, timeout=settings.timeout)
         ctx.test_results.append(r)
-        details.append(f"{cmd}: rc={r.rc} ({short_output(r, limit=320)})")
+        dimension_label = ",".join(check.dimensions) if check.dimensions else "unclassified"
+        details.append(
+            f"{check.cmd} [{dimension_label} via {check.source}]: rc={r.rc} ({short_output(r, limit=320)})"
+        )
         if r.rc != 0:
-            failures.append(cmd)
+            failures.append(check.cmd)
+            continue
+        for dimension in check.dimensions:
+            executed.setdefault(dimension, check.cmd)
+
+    unclassified = [check.cmd for check in checks if not check.dimensions and not check.rejected]
+    rejected_by_dimension: Dict[str, QualityCheck] = {}
+    for check in checks:
+        for dimension in check.rejected_dimensions:
+            rejected_by_dimension.setdefault(dimension, check)
+    rejected_checks = [check for check in checks if check.rejected]
+    if rejected_checks:
+        details.append(
+            "rejected non-executing commands: "
+            + " | ".join(f"{c.cmd} [{c.source}] {c.rejected}" for c in rejected_checks)
+        )
+
+    # Coverage is reported per dimension: a dimension with no executed command is an
+    # uncovered risk, never a silent pass. "All discovered commands succeeded" is not
+    # evidence that testing, linting, and building were all verified.
+    coverage: Dict[str, str] = {}
+    uncovered_dimensions: List[str] = []
+    for dimension in QUALITY_DIMENSIONS:
+        if dimension in executed:
+            coverage[dimension] = f"executed: {executed[dimension]}"
+            continue
+        if dimension in declared_na:
+            coverage[dimension] = "N/A (declared by quality.not_applicable)"
+            continue
+        if dimension in {c for check in checks for c in check.dimensions}:
+            coverage[dimension] = "FAILED (see failing command)"
+            continue
+
+        if dimension in rejected_by_dimension:
+            check = rejected_by_dimension[dimension]
+            reason = (
+                f"{dimension} was declared via {check.source} but the command runs no "
+                f"check: {check.cmd} — {check.rejected}"
+            )
+        elif dimension == "lint" and lint_tool_missing:
+            reason = "no lint command discovered (golangci-lint not installed)"
+        elif unclassified:
+            reason = (
+                f"no {dimension} command recognised; "
+                f"unclassified command(s) may or may not cover it: {', '.join(unclassified)}"
+            )
+        else:
+            reason = f"no {dimension} command configured or discovered"
+        coverage[dimension] = f"uncovered: {reason}"
+        uncovered_dimensions.append(dimension)
+        add_uncovered(
+            ctx,
+            f"quality: {dimension}",
+            reason,
+            f"{dimension} regressions in this change are not detected by any executed command",
+            f"add a {dimension} command via quality.{dimension}_cmd / --{dimension}-cmd, "
+            f"or declare it not applicable via quality.not_applicable",
+            "change author",
+        )
+
+    ctx.quality_coverage = coverage
+    details.append(
+        "coverage: " + " | ".join(f"{dim}={coverage[dim]}" for dim in QUALITY_DIMENSIONS)
+    )
 
     if failures:
         return GateResult(
@@ -1068,7 +1925,31 @@ def gate_d_quality(ctx: Context, settings: Settings) -> GateResult:
             details,
             blocks_ready=True,
         )
-    return GateResult("Gate D", PASS, "all quality commands passed", details)
+
+    if not checks:
+        return GateResult(
+            "Gate D",
+            SUPPRESSED,
+            "no quality commands configured",
+            details,
+            blocks_ready=True,
+        )
+
+    if uncovered_dimensions:
+        return GateResult(
+            "Gate D",
+            SUPPRESSED,
+            "quality coverage incomplete: " + ", ".join(uncovered_dimensions),
+            details,
+            blocks_ready=True,
+        )
+
+    return GateResult(
+        "Gate D",
+        PASS,
+        "all quality commands passed; test/lint/build evidence complete",
+        details,
+    )
 
 
 def gate_e_security(ctx: Context, settings: Settings) -> GateResult:
@@ -1085,25 +1966,52 @@ def gate_e_security(ctx: Context, settings: Settings) -> GateResult:
         elif not ctx.changed_files:
             ctx.changed_files = scan_files
 
-        candidate_files = filter_files(scan_files, settings.secret_include_extensions, settings.secret_exclude_regex)
-        filename_findings = scan_sensitive_filenames(scan_files, settings.secret_allow_regex)
+        range_entries, range_paths, range_details, range_errors = collect_pushed_range_evidence(
+            ctx.repo, ctx.base, settings.timeout
+        )
+        details.extend(range_details)
+        blockers.extend(range_errors)
+
+        # Union of "present at HEAD" and "introduced anywhere in the pushed range".
+        all_paths = list(
+            dict.fromkeys([normalize_path(str(p)) for p in scan_files] + range_paths)
+        )
+        path_objs = [Path(x) for x in all_paths]
+
+        filename_findings = scan_sensitive_filenames(path_objs, settings.secret_allow_regex)
         if filename_findings:
             blockers.append(f"sensitive filename scan matched {len(filename_findings)} file(s)")
             details.extend(filename_findings[:10])
-        diff = run_cmd(["git", "diff", "--unified=0", "--no-color", f"origin/{ctx.base}...HEAD"], ctx.repo, settings.timeout)
+
+        candidate_files = filter_files(
+            path_objs, settings.secret_include_extensions, settings.secret_exclude_regex
+        )
+        allowed_set = {normalize_path(str(p)) for p in candidate_files}
+
+        diff = run_cmd(
+            git_paths_cmd("diff", "--unified=0", "--no-color", f"origin/{ctx.base}...HEAD"),
+            ctx.repo,
+            settings.timeout,
+        )
         details.append(f"{diff.cmd}: rc={diff.rc} ({short_output(diff, limit=280)})")
         if diff.rc != 0:
             blockers.append("unable to collect patch for secret scan")
         else:
-            added = parse_diff_added_lines(diff.stdout)
-            allowed_set = {str(p).replace('\\\\', '/') for p in candidate_files}
-            scoped = [x for x in added if x.path in allowed_set]
+            net_entries = parse_diff_added_lines(diff.stdout)
+            scoped = [
+                x
+                for x in dedupe_added_lines(list(net_entries) + range_entries)
+                if normalize_path(x.path) in allowed_set
+            ]
             findings = scan_secrets_in_added_lines(scoped, settings.secret_allow_regex)
             if findings:
                 blockers.append(f"content secret scan matched {len(findings)} line(s)")
                 details.extend(findings[:10])
             else:
-                details.append("secret scan: no high-signal matches on added lines")
+                details.append(
+                    f"secret scan: no high-signal matches on {len(scoped)} added line(s) "
+                    "across the net diff and every commit in the push range"
+                )
     else:
         suppressed = True
         add_uncovered(
@@ -1413,6 +2321,16 @@ def build_body(settings: Settings, ctx: Context, gates: Sequence[GateResult], co
     if not test_rows:
         test_rows = "| `(none)` | N/A | no explicit test command executed |"
 
+    if ctx.quality_coverage:
+        coverage_rows = "\n".join(
+            f"| {dim} | {ctx.quality_coverage.get(dim, 'uncovered: not evaluated')} |"
+            for dim in QUALITY_DIMENSIONS
+        )
+    else:
+        coverage_rows = "\n".join(
+            f"| {dim} | uncovered: quality gate did not run |" for dim in QUALITY_DIMENSIONS
+        )
+
     uncovered = "\n".join(
         f"- Area: {u['area']}\n  Why uncovered: {u['why']}\n  Potential impact: {u['impact']}\n  Follow-up action: {u['action']}\n  Suggested owner: {u['owner']}"
         for u in ctx.uncovered_risks
@@ -1422,7 +2340,10 @@ def build_body(settings: Settings, ctx: Context, gates: Sequence[GateResult], co
 
     changed_preview = "\n".join(f"- `{p}`" for p in ctx.changed_files[:40]) or "- (none detected)"
     risk_text = ", ".join(ctx.high_risk_areas) if ctx.high_risk_areas else "no high-risk heuristics triggered"
-    compat_line = "breaking" if settings.compat_status == "breaking" else "non-breaking"
+    compat_line = COMPAT_BODY_LABELS.get(settings.compat_status, COMPAT_BODY_LABELS["unknown"])
+    breaking_line = COMPAT_BREAKING_LABELS.get(
+        settings.compat_status, COMPAT_BREAKING_LABELS["unknown"]
+    )
     issue_line = settings.issue if settings.issue else "N/A"
     title = ctx.pr_title or settings.title or "<type(scope): concise summary>"
     problem = settings.problem or "Not provided — add concrete user/system impact before marking ready."
@@ -1432,8 +2353,17 @@ def build_body(settings: Settings, ctx: Context, gates: Sequence[GateResult], co
     monitoring = settings.monitoring or "Not provided — identify post-merge signals or state why monitoring is unnecessary."
     if settings.compat_status == "breaking":
         migration = settings.migration_notes or "Not provided — breaking changes require executable migration steps."
-    else:
+    elif settings.compat_status == "compatible":
         migration = settings.migration_notes or "No migration required; compatibility assessed as non-breaking."
+    else:
+        # compat_status=unknown keeps Gate F suppressed, so the body must report the
+        # gap instead of asserting a compatibility verdict nobody reached.
+        migration = settings.migration_notes or (
+            "Unconfirmed — compatibility was not assessed, so migration impact is unknown. "
+            "Still to confirm: whether existing callers, persisted data, and wire/config "
+            "formats keep working unchanged. Set --compat-status compatible|breaking "
+            "(with migration notes when breaking) before this PR can be marked ready."
+        )
 
     return f"""# PR Title
 
@@ -1467,6 +2397,12 @@ def build_body(settings: Settings, ctx: Context, gates: Sequence[GateResult], co
 | --- | --- | --- |
 {test_rows}
 
+Quality coverage (a dimension without executed evidence is an uncovered risk, not a pass):
+
+| Dimension | Evidence |
+| --- | --- |
+{coverage_rows}
+
 ## 6) Security Notes
 
 | Gate | Status | Evidence |
@@ -1478,6 +2414,7 @@ Uncovered Risk List:
 
 ## 7) Breaking Changes / Migration Notes
 
+- Breaking change: {breaking_line}
 - Compatibility: `{compat_line}`
 - Migration notes: {migration}
 
@@ -1776,6 +2713,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--docs-status", choices=["yes", "no", "na"], default=None)
     parser.add_argument("--compat-status", choices=["compatible", "breaking", "unknown"], default=None)
     parser.add_argument("--check-cmd", action="append", default=[], help="quality command; repeatable")
+    parser.add_argument("--test-cmd", action="append", default=[], help="command that provides TEST evidence; repeatable")
+    parser.add_argument("--lint-cmd", action="append", default=[], help="command that provides LINT evidence; repeatable")
+    parser.add_argument("--build-cmd", action="append", default=[], help="command that provides BUILD evidence; repeatable")
+    parser.add_argument(
+        "--quality-na",
+        action="append",
+        default=[],
+        choices=list(QUALITY_DIMENSIONS),
+        help="declare a quality dimension not applicable to this repository; repeatable",
+    )
     parser.add_argument("--timeout", type=int, default=None, help="timeout seconds per command")
 
     quality_group = parser.add_mutually_exclusive_group()

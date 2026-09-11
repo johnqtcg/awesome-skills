@@ -16,13 +16,34 @@ rollback: ""
 monitoring: ""
 migration_notes: ""
 
+# Generic quality commands. Each entry is classified from its argv into the
+# test / lint / build dimensions: only simple known commands (`go test ./...`,
+# `golangci-lint run`, `make test`, `npm run lint`, optionally prefixed by
+# `cd <dir> &&`) are recognised. Wrappers (`make ci`), shell expressions
+# (`a && b`), commands whose tool names appear only inside arguments, and known
+# tools in non-executing modes (`make -n`, `pytest --collect-only`, `--help`)
+# earn no dimension credit — declare those under quality.<dimension>_cmd instead.
 check_cmd:
   - make test
   - make lint
   - go test ./...
+  - go build ./...
 
 quality:
   enabled: true
+  # Explicit per-dimension declarations. Use these when a single opaque command
+  # (for example `make ci`) covers a dimension the classifier cannot recognise.
+  # A declaration states which dimension a command is FOR; it does not exempt it from
+  # the execution-mode check. A declared `make -n test` is still refused — as is any
+  # command whose run mode comes from the environment (an exported MAKEFLAGS=n makes
+  # every `make` target a dry run, including the auto-discovered ones).
+  test_cmd: []
+  lint_cmd: []
+  build_cmd: []
+  # Dimensions that genuinely do not apply to this repository. Declaring one keeps
+  # Gate D honest without inventing evidence; leaving a dimension undeclared and
+  # uncovered keeps the PR in draft.
+  not_applicable: []
 
 security_tools:
   enabled: true
@@ -40,6 +61,9 @@ secret_scan:
   # Empty lists are the secure defaults: scan all added text lines and paths.
   include_extensions: []
   exclude_paths: []
+  # Matched against the credential value / token itself, never the whole added line:
+  # a real token is not exempt because the word "example" appears in a comment next
+  # to it. To exempt whole files (fixtures, testdata), use exclude_paths.
   allow_patterns:
     - "(?i)(dummy|example|placeholder|redacted)"
 

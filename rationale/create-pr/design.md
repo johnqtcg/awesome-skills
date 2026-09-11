@@ -121,11 +121,109 @@ This solves two common failures:
 
 The skill is not asking only for checks to run. It is asking for check results to be converted into evidence a reviewer can directly consume.
 
+This principle only holds if coverage is graded per dimension. "Every command that was discovered succeeded" is a statement about the commands, not about the change: on a repository without `golangci-lint` installed, a gate that only aggregates exit codes reports a clean pass while nothing was linted at all. Gate D therefore resolves **test**, **lint**, and **build** independently and assigns each one of three verdicts — executed (with the command), declared not applicable, or uncovered (with the reason). An uncovered dimension is an entry in the Uncovered Risk List and keeps the PR in draft. For the same reason an opaque wrapper such as `make ci` earns no dimension credit: the script cannot observe what it ran, so the author has to declare it. Guessing here would reproduce exactly the failure the gate exists to prevent.
+
+Classification reads a command's **argv**, never its text. A regex over the command
+string credits `printf '%s' 'go test ./...; golangci-lint run; go build ./...'` — a
+command that prints three tool names and verifies nothing — with all three
+dimensions, producing precisely the false "已执行" this gate exists to eliminate.
+Only argv[0] and its subcommand or task-runner target are trusted; shell expressions
+and wrappers stay unclassified. Under-crediting leaves a dimension uncovered and the
+PR in draft, which is a recoverable inconvenience; over-crediting reports a check
+that never ran as executed, which is the defect.
+
+Reading argv is necessary but not sufficient: **the right command name in the wrong
+run mode still executes nothing.** `make -n test lint build` names all three
+dimensions and prints all three recipes without running any of them — verified by
+giving each target a marker file and observing that none appears. So a recognised
+tool is also rejected when an argument puts it into a dry-run, list-only, skip, help,
+or version mode. Those sets are maintained **per tool**, not globally, because the
+same spelling reverses meaning across tools: `make -n` is a dry run while `pytest -n 4`
+runs the suite in parallel; `make -q` asks a question while `mvn -q` is merely quiet;
+`cargo -V` prints a version while `ctest -V` is verbose. A global flag list would be
+wrong in both directions at once.
+
+Two consequences of that design, both learned the hard way:
+
+- **The unit of inspection is the option letter, not the argument token.** `make -sn test`
+  bundles `-s` and `-n` into one token, so whole-token matching reports a silent dry run
+  as three executed dimensions. Expanding a bundle letter by letter is only sound with a
+  stop rule: the first letter that consumes the rest of the token as its value ends the
+  scan, otherwise `make -fMakefile.test` "contains `-t`" and `mvn -Pdev` "contains `-v`".
+  And bundling itself is a per-tool convention — Go's flag package has none, so `-run`
+  must never be read as `-r -u -n`.
+
+  The first version of that expansion guarded itself with "the token must be all
+  letters", which is a **precondition that silently disables the check** on exactly the
+  inputs that need it: `make -snj2` and `make -nf./Makefile` carry a value after the
+  bundled flags, fail the all-letters test, and were never scanned — so the `-n` in
+  front went unseen and three dimensions were credited to a command that ran nothing.
+  Parse left to right over the raw token and let the stop rule do the deciding; never
+  let a shape test decide whether to look at all. The mirror-image risk lives in the
+  stop set: a letter listed as value-taking that actually takes no value (`mvn -o` is
+  offline) ends the scan early and hides whatever follows it, so that table is asserted
+  by its own test.
+- **An explicit declaration is not an exemption.** `quality.test_cmd` exists so an author
+  can say what an opaque wrapper covers; it says nothing about whether the command runs.
+  Attribution ("which dimension is this for") and execution-mode validation ("can this
+  run a check at all") are therefore two separate steps, and *every* source — explicit
+  declaration, `check_cmd`, repository discovery — passes through the second one. The
+  refusal is reported against the declared dimension, so the author sees exactly which
+  claim was rejected and why. An unrecognised wrapper still stands: there is nothing in
+  it to contradict the declaration, which is the whole point of allowing one.
+
+And the mode need not be in the command at all. `MAKEFLAGS=n` *is* `make -n` — make
+documents that variable as a switch list, and a leading bare word in it is a bundle of
+single letters. That gives two more producers of the same verdict: an assignment written
+in the command (`make MAKEFLAGS=n test`, or as a shell prefix) and the value the
+executing shell simply **inherits**. The second one needs no custom command whatsoever:
+with `MAKEFLAGS=n` exported, the auto-discovered `make test` / `make lint` / `make build`
+are three dry runs, and the command text is spotless. So the check reads the effective
+value from the same `zsh -lc` that will run the commands — a login profile can export
+one this process never sees — and treats a command assignment as overriding it, including
+`MAKEFLAGS=` which deliberately clears it. When that environment cannot be read at all,
+the affected dimensions stay uncovered with the reason: an unverified assumption is not
+evidence, and "the variable was probably unset" is an assumption.
+
+Once several layers can set the same variable, their **precedence becomes part of the
+check**, and it has to be measured rather than assumed. Against GNU make:
+
+- duplicates resolve **last wins** in both layers (`MAKEFLAGS=s MAKEFLAGS=n make …` runs
+  nothing; reversed, it runs everything) — an implementation that keeps the *first*
+  duplicate reads the harmless value and clears a dry run;
+- a shell prefix **replaces** the inherited variable (`MAKEFLAGS=s make …` runs even with
+  `MAKEFLAGS=n` exported);
+- a command-line variable assignment is **cumulative** with the environment rather than an
+  override: `MAKEFLAGS=n make MAKEFLAGS=s test` and `MAKEFLAGS=s make MAKEFLAGS=n test`
+  both execute nothing, because whichever layer carries `n` has already applied it.
+
+The third rule is the one that would have been wrong by intuition — "the command line beats
+the environment" is the usual convention, and for switch variables it does not hold. So the
+check evaluates every layer and refuses if any of them blocks, and the test matrix asserts
+the marker count *before* the verdict in both directions (`s → n` and `n → s`), so a
+precedence model that merely sounds right cannot pass.
+
+The boundary is worth stating plainly, because it is where this gate stops: the table
+claims that *a command whose documented purpose is this dimension ran and exited 0*.
+It cannot claim that the command was meaningful — a `test:` target whose recipe is
+`@echo skipping` is indistinguishable from a real one without running it. Detectable
+dishonesty (a documented no-execute mode) is rejected; undetectable dishonesty (a
+target that lies about what it does) is a repository-honesty problem that no
+classifier can settle, and the PR body's per-dimension command text is what lets a
+reviewer notice it.
+
 ### 4.6 Security Checking Is Its Own Gate and Multi-Tool Validation Matters
 
 Gate E groups filename risk scans, content risk scans, and Go-specific tools such as `gosec` and `govulncheck`.
 
 This is one of `create-pr`'s strongest design choices. A PR is the last point before risky code enters shared team attention. If a high-confidence security issue is not stopped here, then by the time a reviewer catches it, team time has already been wasted.
+
+The scan scope follows from what `git push` actually does. Pushing a branch transmits every commit in the range, not the net result of those commits — so a credential added in one commit and deleted in the next still lands in the remote repository's history, where deleting it again cannot remove it. Scoping the scan to the `origin/main...HEAD` diff would make that case report clean. Gate E therefore scans the union of the net diff and every commit in `git rev-list origin/main..HEAD`, attributes such a finding to its commit, and fails closed when the range cannot be read in full. The same reasoning applies to the allow list: exemptions are matched against the credential value itself, because matching the whole added line lets an unrelated word ("example", "sample") in a trailing comment exempt the real token sitting next to it. A scope wider than its subject fails open.
+
+Two further consequences fall out of "gate what the operation actually transmits":
+
+- **Path lists come from git, not from the patch text.** A binary patch says only `Binary files ... differ`; an empty new file and a pure rename produce no hunk at all. None of them carry the `+++` header a text parser needs, so a `.p12` keystore or an `id_rsa` in the pushed history is invisible to patch parsing. The gate reads `--name-only -z --diff-filter=ACMR` instead, and `-c core.quotePath=false` on every path-printing command, because git's default renders a non-ASCII name as an escaped display form that matches nothing. Names that git quotes regardless of that setting — containing `"`, `\`, or a newline — are decoded when the patch header is parsed. A path that fails to match is not a loud error; the file simply leaves the scan.
+- **Every push URL is an identity.** A remote may hold several push URLs and one `git push` writes to all of them, yet `git remote get-url --push origin` returns only the first. Verifying the first URL and the `gh` metadata proves nothing about the second. `--push --all` is the write set, and all of it is compared in one check.
 
 Scenario 3 in the evaluation report makes this concrete: with-skill did not merely notice a hardcoded `ghp_` token. It built a stronger evidence chain through regex scanning and tooling, and explicitly advised against pushing or creating the PR. Without the skill, the issue could still be recognized, but the result looked more like a normal review comment than a formal blocking security conclusion.
 
@@ -156,7 +254,7 @@ Gate G checks both the commit set and the PR title, and requires both to follow 
 - subject length of at most 50 characters,
 - imperative mood, no trailing period.
 
-This has a very practical reason: in many teams, squash merge turns the PR title into the final commit message on `main`. If the PR title is left uncontrolled, the team can care deeply about commit quality beforehand and still end up with poor main-branch history.
+This has a very practical reason, and the reason is why *both* are checked rather than one. Under GitHub's default squash message, a PR with two or more commits lands as the PR title plus the commit list, while a **single-commit PR lands as that commit's own title and message** — the PR title is not used at all. A repository can also switch the format to the PR title, the title plus commit details, or the title plus the whole description. Checking only one of the two therefore leaves a real path to poor main-branch history, whichever one you pick. See `references/merge-strategy-guide.md` for the documented matrix.
 
 So the skill effectively extends commit hygiene from the commit level to the PR level. It prevents situations such as:
 
