@@ -77,6 +77,8 @@ command -v node >/dev/null 2>&1 || note_skip "Node example verification (node no
 # CVE-2026-41066 version gates and vanishes silently without the package.
 python3 -c "import lxml" >/dev/null 2>&1 || \
   note_skip "lxml XML-fact verification (pip install lxml; CVE-2026-41066 gates unverified)"
+python3 -c "import jinja2" >/dev/null 2>&1 || \
+  note_skip "Jinja SSTI-fact verification (pip install jinja2; § SSTI autoescape-vs-sandbox rows unverified)"
 # The `jsonschema` cross-check is attributed inside run_suite "report schema" above, so it is
 # deliberately not probed again here — one gap, one line.
 

@@ -32,8 +32,12 @@ LAYERS = {
     "Report-schema tests": "test_report_schema.py",
 }
 # Collected by pytest via its *_test.py pattern but driven as a subprocess by the layer above,
-# so it is counted separately rather than folded into the layer totals.
-NESTED = TESTS / "examples" / "python" / "xml_facts_test.py"
+# so these are counted separately rather than folded into the layer totals. DISCOVERED, not
+# listed: naming one file left the next one unaccounted for — `jinja_ssti_facts_test.py` was
+# added with 6 tests that neither this script nor COVERAGE.md knew about, and the sync would
+# have kept writing back the stale total.
+def nested_matrices():
+    return sorted((TESTS / "examples" / "python").glob("*_test.py"), key=lambda q: q.name)
 
 
 def count_tests(path: Path) -> int:
@@ -72,10 +76,17 @@ def main() -> int:
                   f"| SKILL.md lines | {lines} (budget: ≤ {budget}, "
                   f"{budget - lines} lines headroom) |", text)
 
-    nested_count = count_tests(NESTED)
+    nested_count = 0
+    for path in nested_matrices():
+        n = count_tests(path)
+        nested_count += n
+        pattern = rf"{re.escape(path.name)}` adds \d+ more:"
+        if not re.search(pattern, text):
+            print(f"COVERAGE.md does not declare nested matrix {path.name} "
+                  f"({n} tests) — add a row for it", file=sys.stderr)
+            return 1
+        text = re.sub(pattern, f"{path.name}` adds {n} more:", text)
     collected = total + nested_count
-    text = re.sub(r"xml_facts_test\.py` adds \d+ more:",
-                  f"xml_facts_test.py` adds {nested_count} more:", text)
     text = re.sub(r"collects it directly and reports \d+\.",
                   f"collects it directly and reports {collected}.", text)
 

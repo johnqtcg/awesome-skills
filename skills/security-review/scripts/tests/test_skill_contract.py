@@ -6,6 +6,9 @@ only verifies that the rule surface is present and well-formed.
 """
 
 import re
+import sys
+import subprocess
+import importlib.util
 import json
 import unittest
 from pathlib import Path
@@ -588,24 +591,39 @@ class TestCoverageDocAccuracy(unittest.TestCase):
         self.assertIn("test_forward_eval.py", text)
         self.assertIn("forward_eval/README.md", text)
 
-    def test_nested_xml_test_count_is_accurate(self) -> None:
-        """Reported hole: the prose said `xml_facts_test.py` adds 11 more tests and pytest
-        collects N total, while five tests were added to that file without either number being
-        updated — a hand-typed count with no test behind it, the exact failure mode this whole
-        class exists to catch for the five layer modules."""
+    def test_every_nested_example_matrix_declares_its_count(self) -> None:
+        """Reported hole: the prose said `xml_facts_test.py` adds 11 more tests while five had
+        been added to that file — a hand-typed count with no test behind it.
+
+        Generalised from that one filename to EVERY nested matrix on disk. Naming a single file
+        left the next one undeclared and unnoticed: `jinja_ssti_facts_test.py` was added with 6
+        tests that no number in this document accounted for. Discovered from disk, so a new
+        matrix cannot be added without declaring it here."""
         text = self.COVERAGE.read_text(encoding="utf-8")
-        nested = self.TESTS / "examples" / "python" / "xml_facts_test.py"
-        actual_nested = self._count_tests(nested)
-        m = re.search(r"xml_facts_test\.py` adds (\d+) more:", text)
-        self.assertIsNotNone(m, "COVERAGE.md must state how many tests xml_facts_test.py adds")
-        self.assertEqual(actual_nested, int(m.group(1)),
-                         f"COVERAGE.md says {m.group(1)}, xml_facts_test.py defines {actual_nested}")
+        nested_files = sorted(
+            (self.TESTS / "examples").rglob("*_test.py"),
+            key=lambda p: p.name)
+        nested_files = [p for p in nested_files if p.suffix == ".py"
+                        and p.name.endswith("_test.py")
+                        and "python" in p.parts]  # only pytest-collectable Python matrices
+        self.assertTrue(nested_files, "expected at least one nested Python matrix")
+        declared_total = 0
+        for path in nested_files:
+            actual = self._count_tests(path)
+            declared_total += actual
+            m = re.search(rf"{re.escape(path.name)}` adds (\d+) more:", text)
+            self.assertIsNotNone(
+                m, f"COVERAGE.md must state how many tests {path.name} adds "
+                   f"(it defines {actual})")
+            self.assertEqual(actual, int(m.group(1)),
+                             f"COVERAGE.md says {m.group(1)} for {path.name}, the file defines "
+                             f"{actual}")
         total = sum(self._count_tests(self.TESTS / mod) for mod in self.LAYER_LABELS.values())
         m2 = re.search(r"collects it directly and reports (\d+)\.", text)
         self.assertIsNotNone(m2, "COVERAGE.md must state pytest's direct collection count")
-        self.assertEqual(total + actual_nested, int(m2.group(1)),
+        self.assertEqual(total + declared_total, int(m2.group(1)),
                          "COVERAGE.md's pytest-collection number disagrees with layer total + "
-                         "nested xml_facts_test.py count")
+                         "every nested matrix's count")
 
 
 class TestLanguageReferenceNavigation(unittest.TestCase):
@@ -622,6 +640,360 @@ class TestLanguageReferenceNavigation(unittest.TestCase):
     def test_go_reference_has_contents(self) -> None:
         text = (SKILL_DIR / "references" / "go-secure-coding.md").read_text(encoding="utf-8")
         self.assertIn("## Contents", text)
+
+
+class TestCoverageSyncScript(unittest.TestCase):
+    """The sync script regenerates COVERAGE.md's counts, and had no test that could fire.
+
+    A mutation reverting it from *discovering* nested matrices to *listing* one filename
+    survived: the accuracy guard reads COVERAGE.md against disk, and COVERAGE.md was already
+    correct, so nothing exercised the generator. An `assert` with no test that trips it is not
+    a check — so the script's own contract is asserted here."""
+
+    SYNC = SKILL_DIR / "scripts" / "sync_coverage_counts.py"
+    TESTS = SKILL_DIR / "scripts" / "tests"
+
+    def _module(self):
+        spec = importlib.util.spec_from_file_location("security_review_sync_counts", self.SYNC)
+        mod = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = mod
+        spec.loader.exec_module(mod)
+        return mod
+
+    def test_check_mode_reports_the_document_as_current(self) -> None:
+        """`--check` is the CI half. If it is red, COVERAGE.md is stale on disk."""
+        proc = subprocess.run([sys.executable, str(self.SYNC), "--check"],
+                              capture_output=True, text=True, timeout=120)
+        self.assertEqual(0, proc.returncode,
+                         f"COVERAGE.md counts are stale; run the sync script:\n"
+                         f"{proc.stdout}{proc.stderr}")
+
+    def test_nested_matrices_are_discovered_from_disk(self) -> None:
+        found = {p.name for p in self._module().nested_matrices()}
+        on_disk = {p.name for p in (self.TESTS / "examples" / "python").glob("*_test.py")}
+        self.assertTrue(on_disk, "expected nested Python matrices on disk")
+        self.assertEqual(on_disk, found,
+                         "the sync script must discover every nested matrix, not list one — "
+                         "a hardcoded filename left the next matrix unaccounted for")
+
+    def test_an_undeclared_nested_matrix_is_refused(self) -> None:
+        """The generator must fail loudly rather than silently write a total that omits a
+        matrix COVERAGE.md never declared."""
+        extra = self.TESTS / "examples" / "python" / "zz_probe_facts_test.py"
+        extra.write_text("import unittest\n\n\nclass T(unittest.TestCase):\n"
+                         "    def test_probe(self):\n        pass\n", encoding="utf-8")
+        self.addCleanup(extra.unlink)
+        proc = subprocess.run([sys.executable, str(self.SYNC), "--check"],
+                              capture_output=True, text=True, timeout=120)
+        self.assertNotEqual(0, proc.returncode,
+                            "an undeclared nested matrix must be refused")
+        self.assertIn("does not declare nested matrix", proc.stdout + proc.stderr)
+
+
+class TestImpactEvidenceSeparation(unittest.TestCase):
+    """A review found the Java deserialization golden answer rating the finding P0 /
+    `confirmed` while the same report recorded "whether a known gadget library is on the
+    classpath is unresolved".
+
+    The `confirmed` label was defensible — SKILL.md defines it as the vulnerable PATH proven
+    from code, and § Active Verification says static proof suffices. What was missing was a
+    rule separating that from the maximum IMPACT: the title and Impact line asserted achieved
+    RCE in the indicative, which this review did not establish. Severity does not move for an
+    unverified aggravating condition in either direction; the impact wording must."""
+
+    SKILL = SKILL_MD
+    ANTI = SKILL_DIR / "references" / "anti-examples.md"
+    JAVA_REF = SKILL_DIR / "references" / "lang-java.md"
+    GOLDEN = (SKILL_DIR / "scripts" / "tests" / "forward_eval" /
+              "java_deserialization_true_positive" / "good.md")
+
+    def _confidence_section(self) -> str:
+        text = self.SKILL.read_text(encoding="utf-8")
+        start = text.index("## Evidence Confidence")
+        return text[start:text.index("## False-Positive Suppression Rules", start)]
+
+    def test_confidence_covers_the_path_not_the_maximum_impact(self) -> None:
+        section = self._confidence_section()
+        self.assertIn("covers the vulnerable path, not the maximum impact", section)
+        self.assertIn("assessed", section)
+
+    def test_the_rule_names_what_must_accompany_an_assessed_impact(self) -> None:
+        section = self._confidence_section()
+        self.assertIn("name the unverified", section)
+        self.assertRegex(section, r"(?i)list the check that would settle it")
+
+    def test_the_three_axes_are_stated_separately(self) -> None:
+        """A review found the rule ("an unverified aggravating condition does not lower the
+        severity") contradicting the grader (which accepted a downgrade for exactly that
+        condition). The rule now separates the axes so both can be right."""
+        section = self._confidence_section()
+        for axis in ("**Severity**", "**Evidence**", "**Impact basis**"):
+            self.assertIn(axis, section, f"§ Evidence Confidence must name the {axis} axis")
+        self.assertIn("demonstrated`/`assessed", section)
+
+    def test_uncertainty_routes_to_the_axis_it_belongs_to(self) -> None:
+        """The distinction that resolves the contradiction: uncertain REACHABILITY may lower
+        severity; an uncertain AGGRAVATING condition may not."""
+        section = self._confidence_section()
+        self.assertRegex(section, r"(?s)Uncertain \*\*reachability.*?may lower\s*\n?\s*the "
+                                  r"\*\*severity\*\*")
+        self.assertRegex(section, r"(?s)Uncertain \*\*aggravating\*\* condition.*?severity "
+                                  r"does \*\*not\*\* move")
+        self.assertIn("Absence of a known", section)
+
+    def test_confirmed_may_not_be_reinterpreted_to_keep_a_conclusion(self) -> None:
+        section = self._confidence_section()
+        self.assertIn("Do not reinterpret `confirmed` to keep a conclusion", section)
+        self.assertIn("`confirmed` + `assessed`", section)
+
+    def test_anti_example_five_exists_and_shows_the_split(self) -> None:
+        anti = self.ANTI.read_text(encoding="utf-8")
+        self.assertIn("AE-5: Demonstrated Impact Asserted From an Unverified Condition", anti)
+        self.assertIn("`Confirmed`", anti)
+        self.assertIn("Assessed (not demonstrated here)", anti)
+        self.assertIn("mvn dependency:tree", anti)
+
+    def test_the_golden_answer_separates_established_from_assessed(self) -> None:
+        """The exemplar has to demonstrate the rule; it was the report that broke it."""
+        good = self.GOLDEN.read_text(encoding="utf-8")
+        self.assertIn("Impact — established here", good)
+        self.assertIn("Impact — assessed, not demonstrated by this review", good)
+        self.assertIn("What would move the RCE impact from assessed to demonstrated", good)
+        # And the severity is still P0 with its basis stated, not hedged away.
+        self.assertRegex(good, r"(?m)^> - \*\*Severity\*\*: P0 Critical")
+
+    def test_the_golden_answer_title_does_not_assert_achieved_rce(self) -> None:
+        """Round 1 split the Impact lines and left the TITLE saying "Remote code execution
+        via ...". The headline is the part most readers keep, and it was still asserting the
+        consequence the review could not establish."""
+        good = self.GOLDEN.read_text(encoding="utf-8")
+        title = next(l for l in good.splitlines() if l.startswith("> **SEC-001:"))
+        self.assertNotRegex(
+            title, r"(?i)remote code execution",
+            f"the finding title asserts the assessed consequence as the headline: {title}")
+        self.assertRegex(title, r"(?i)deserializ", f"the title must still name the class: {title}")
+
+    def test_the_golden_answer_scopes_the_unfiltered_claim(self) -> None:
+        """The report listed JEP 290 filter configuration as unresolved in § 4 while the
+        Confidence line said the path reaches `readObject()` "with no filter" — a claim about
+        the JVM, from evidence about one class."""
+        good = self.GOLDEN.read_text(encoding="utf-8")
+        flat = re.sub(r"\s*\n>?\s*", " ", good)
+        self.assertIn("No per-stream filter is set *in the code under review*", flat)
+        self.assertIn('"unfiltered" is asserted of this class, not of the JVM', flat)
+
+    def test_the_schema_declares_the_impact_basis_axis(self) -> None:
+        """The third axis has to be machine-readable, or a CI consumer cannot tell a
+        demonstrated impact from an assessed one."""
+        schema = json.loads(
+            (SKILL_DIR / "references" / "report-schema.json").read_text(encoding="utf-8"))
+        props = schema["properties"]["findings"]["items"]["properties"]
+        self.assertIn("impact_basis", props)
+        self.assertEqual(["demonstrated", "assessed"], props["impact_basis"]["enum"])
+        self.assertIn("impact_condition", props)
+        for field in ("impact_basis", "impact_condition"):
+            self.assertGreater(len(props[field].get("description", "")), 80,
+                               f"{field} needs a definition, not just a name")
+
+    def test_the_golden_answer_states_impact_that_needs_no_gadget(self) -> None:
+        """The reason P0 survives the unverified condition: arbitrary Serializable
+        instantiation and unbounded graph expansion are established from the code alone. Without
+        this the rating would rest on the very assumption the review could not check."""
+        good = self.GOLDEN.read_text(encoding="utf-8")
+        self.assertIn("Independent of any known gadget", good,
+                      "the golden answer must state the impact that needs no gadget")
+        # Wrap-tolerant: the exemplar is a blockquote, so a wrapped phrase is split by a
+        # newline AND a `>` continuation marker. Collapsing whitespace alone leaves the `>`
+        # inside the phrase — the first version of this assertion failed on exactly that.
+        flat = re.sub(r"\s*\n>?\s*", " ", good)
+        self.assertRegex(flat, r"(?i)unbounded graph expansion",
+                         "the no-gadget impact must name unbounded graph expansion")
+
+    def test_the_java_reference_tables_what_the_code_does_and_does_not_establish(self) -> None:
+        ref = self.JAVA_REF.read_text(encoding="utf-8")
+        self.assertIn("What is established from the code, and what is not", ref)
+        self.assertIn("not** established by the code", ref)
+
+    def test_the_jep290_filter_api_is_version_gated(self) -> None:
+        """Verified by execution on this repo's toolchain (JDK 1.8.0_461): `javac` rejects
+        `java.io.ObjectInputFilter` outright. Recommending the Java 9 call to a Java 8 service
+        is advice that does not build."""
+        ref = self.JAVA_REF.read_text(encoding="utf-8")
+        self.assertIn("does not exist", ref)
+        self.assertIn("jdk.serialFilter", ref)
+        self.assertIn("sun.misc.ObjectInputFilter", ref)
+        self.assertIn("1.8.0_461", ref)
+        good = self.GOLDEN.read_text(encoding="utf-8")
+        self.assertIn("Java 9+", good)
+        self.assertIn("jdk.serialFilter", good)
+
+    def test_the_filter_is_labelled_a_mitigation_not_a_fix(self) -> None:
+        for path in (self.JAVA_REF, self.GOLDEN):
+            with self.subTest(path=path.name):
+                self.assertIn("mitigation", path.read_text(encoding="utf-8"))
+
+
+class TestSSTIAutoescapeIsNotASandbox(unittest.TestCase):
+    """A review found the § SSTI "GOOD" example labelled `sandboxed environment with
+    autoescape` while constructing a plain `Environment(autoescape=...)` — and with no
+    `loader`, so `get_template()` could not have worked either. Autoescape escapes output; it
+    does not restrict attribute traversal. Jinja's sandbox is `SandboxedEnvironment`."""
+
+    PY_REF = SKILL_DIR / "references" / "lang-python.md"
+
+    def _ssti_section(self) -> str:
+        text = self.PY_REF.read_text(encoding="utf-8")
+        start = text.index("### SSTI")
+        return text[start:text.index("### TLS Configuration", start)]
+
+    def test_the_section_states_autoescape_is_not_a_sandbox(self) -> None:
+        section = self._ssti_section()
+        self.assertIn("`autoescape` is not a sandbox", section)
+
+    @staticmethod
+    def _code_blocks(section: str):
+        """Yield each fenced code block's body. The unit of analysis has to be the block, not
+        the line: the original defect put `# GOOD: sandboxed environment with autoescape` on
+        the comment line ABOVE `env = Environment(autoescape=...)`, so a same-line scan — the
+        first version of this guard — reproduced the defect and missed it. A mutation run
+        caught that."""
+        inside, buf = False, []
+        for line in section.splitlines():
+            if line.lstrip().startswith("```"):
+                if inside:
+                    yield "\n".join(buf)
+                    buf = []
+                inside = not inside
+                continue
+            if inside:
+                buf.append(line)
+        if buf:
+            yield "\n".join(buf)
+
+    def test_no_code_block_calls_a_plain_environment_sandboxed(self) -> None:
+        """A block that advertises a sandbox must construct `SandboxedEnvironment`.
+
+        The anti-vacuity assertion is that the scan REACHED the sandbox-labelled blocks — not
+        that one of them constructs a plain Environment, which is the defect itself. Getting
+        that backwards made the first version of this guard fail on correct content."""
+        sandbox_blocks = [b for b in self._code_blocks(self._ssti_section())
+                          if re.search(r"(?i)sandbox", b)]
+        self.assertTrue(sandbox_blocks,
+                        "anti-vacuity: the scan found no § SSTI block mentioning a sandbox")
+        for block in sandbox_blocks:
+            if not re.search(r"(?<![.\w])Environment\(", block):
+                continue  # names the sandbox but constructs nothing — nothing to mislabel
+            self.assertIn(
+                "SandboxedEnvironment(", block,
+                "a § SSTI code block advertises a sandbox while constructing a plain "
+                f"Environment:\n{block}")
+
+    def test_the_untrusted_template_path_uses_the_real_sandbox(self) -> None:
+        section = self._ssti_section()
+        self.assertIn("from jinja2.sandbox import SandboxedEnvironment", section)
+
+    def test_every_get_template_block_configures_a_loader(self) -> None:
+        """`Environment()` with no loader cannot serve `get_template()`, so a snippet without
+        one is not a working control.
+
+        Scoped to the block that makes the call. Asserting `"FileSystemLoader" in section` was
+        satisfied by the IMPORT line alone: a mutation deleting the actual
+        `loader=FileSystemLoader(...)` argument left the guard green."""
+        checked = 0
+        for block in self._code_blocks(self._ssti_section()):
+            if "get_template(" not in block:
+                continue
+            checked += 1
+            self.assertRegex(
+                block, r"loader\s*=",
+                f"a § SSTI block calls get_template() with no loader configured:\n{block}")
+        self.assertGreater(checked, 0,
+                           "anti-vacuity: no § SSTI block calls get_template at all")
+
+    def test_the_sandbox_resource_table_is_specific_and_correct(self) -> None:
+        """The first version claimed `range(10**9)` "still runs" in the sandbox. It does not:
+        `range` is replaced by `safe_range`, capped at `MAX_RANGE = 100_000`. The conclusion
+        was right and the example was wrong — so the section must now name the bound that
+        DOES exist alongside the ones that do not, and must not deny resource limits wholesale."""
+        section = self._ssti_section()
+        self.assertIn("safe_range", section)
+        self.assertIn("MAX_RANGE", section)
+        self.assertIn("intercepted_binops", section)
+        self.assertRegex(section, r"(?i)nested loops")
+        self.assertIn("Do **not** write that the sandbox has no resource limits at all",
+                      section)
+        # And the retired claim must not come back.
+        self.assertNotRegex(section, r"range\(10\*\*9\)[^|]*still runs")
+
+    def test_the_section_gives_a_review_verdict_per_case(self) -> None:
+        """A reviewer needs the decision, not just the fixed code: which of the two cases
+        applies decides whether "autoescape is on" answers the finding."""
+        section = self._ssti_section()
+        self.assertIn("Review rule", section)
+        self.assertIn("Not SSTI", section)
+        self.assertRegex(section, r"(?i)do not call it closed")
+
+
+class TestRunNumbersAreNotReadAsDetectionRates(unittest.TestCase):
+    """A review warned that `1 / 8` must not be read as a 12.5% detection rate: most of those
+    failures were report-format defects on scenarios that had detected their vulnerability."""
+
+    LIVE = (SKILL_DIR / "scripts" / "tests" / "forward_eval" / "LIVE_RESULTS.md")
+    EVAL = SKILL_DIR / "scripts" / "tests" / "test_forward_eval.py"
+
+    def test_the_record_states_what_the_number_is_not(self) -> None:
+        text = self.LIVE.read_text(encoding="utf-8")
+        self.assertIn("fully-compliant-report rate, not a detection rate", text)
+
+    def test_the_record_documents_every_grader_category(self) -> None:
+        text = self.LIVE.read_text(encoding="utf-8")
+        source = self.EVAL.read_text(encoding="utf-8")
+        m = re.search(r"CATEGORIES = \(([^)]*)\)", source)
+        self.assertIsNotNone(m, "test_forward_eval.py must declare CATEGORIES")
+        names = re.findall(r"\b(DETECTION|SUPPRESSION|CALIBRATION|INTEGRITY|CONTRACT)\b",
+                           m.group(1))
+        self.assertEqual(5, len(names), names)
+        for name in names:
+            # A table ROW, not any backticked mention: the first version of this guard was
+            # satisfied by the prose sentence "the `asvs: TBD` cases are `calibration`, not
+            # detection" — so deleting the row that explains the category left it green. A
+            # mutation run caught that.
+            row = re.search(rf"(?m)^\|\s*`{name.lower()}`\s*\|\s*(.+?)\s*\|\s*$", text)
+            self.assertIsNotNone(
+                row, f"LIVE_RESULTS.md must carry a table row explaining the "
+                     f"{name.lower()} category")
+            self.assertGreater(len(row.group(1)), 15,
+                               f"the {name.lower()} row must say what it measures")
+
+    def test_the_record_requires_future_runs_to_report_the_breakdown(self) -> None:
+        text = self.LIVE.read_text(encoding="utf-8")
+        self.assertIn("rather than a bare", text)
+        self.assertIn("summarize()", text)
+
+    def test_the_record_states_the_grader_changes_since_run_4(self) -> None:
+        """A run's numbers are only comparable if what changed between runs is recorded."""
+        text = self.LIVE.read_text(encoding="utf-8")
+        self.assertIn("impact_basis", text)
+        self.assertIn("scoped to the claim", text)
+        self.assertIn("Severity is exact again", text)
+        self.assertIn("Validation precedes grading", text)
+
+    def test_the_record_refuses_to_infer_outcomes_from_the_instrument(self) -> None:
+        """Three consecutive rounds fixed the instrument. The record must say that this
+        licenses no claim about the thing being measured."""
+        text = self.LIVE.read_text(encoding="utf-8")
+        self.assertIn("A grader that stops crashing is not a reviewer that stops erring",
+                      text)
+        self.assertRegex(text, r"(?i)unsupported until Run 5 exists")
+
+    def test_the_record_separates_instrument_change_from_outcome_change(self) -> None:
+        """A bigger green offline suite is not a better reviewer. The record must say which
+        column each claim belongs in, and that the right-hand one needs a live run."""
+        text = self.LIVE.read_text(encoding="utf-8")
+        self.assertIn("What the offline work does and does not establish", text)
+        self.assertIn("| Established | Not established |", text)
+        self.assertIn("the measuring instrument\nchanged", text)
+        self.assertRegex(text, r"(?i)categories explain results; they do not improve")
 
 
 if __name__ == "__main__":

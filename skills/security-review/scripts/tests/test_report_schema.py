@@ -852,5 +852,369 @@ class GenericInvariantEnforcementTests(unittest.TestCase):
                          f"SKILL.md's documented set {sorted(documented)}")
 
 
+class ValidatorNeverRaisesTests(unittest.TestCase):
+    """`validate_report` must RETURN errors, never raise.
+
+    A review took the documented example and changed one count to a string:
+    `"security_domains": {"pass": "7", ...}`. The schema layer flagged the type, then
+    `_check_invariants` evaluated `"7" + 3` and the call died with
+    `TypeError: can only concatenate str (not "int") to str` — no error list at all. The
+    forward-eval grader calls this function on live model output, which is exactly where
+    malformed reports come from, so a crash there loses the run rather than grading it.
+
+    Presence was being mistaken for type: `all(k in dom for k in (...))` is satisfied by a
+    string value. Types are now validated before the arithmetic that depends on them, and
+    the type error names the invariant it makes uncheckable."""
+
+    def _canonical(self) -> dict:
+        return json.loads(json.dumps(documented_example()))
+
+    # Every field that feeds arithmetic, against every wrong type that reaches it.
+    ARITHMETIC_FIELDS = [
+        ("security_domains", "pass"),
+        ("security_domains", "fail"),
+        ("security_domains", "na"),
+        ("security_domains", "total"),
+        ("counts", "p0"),
+        ("counts", "p1"),
+        ("counts", "p2"),
+        ("counts", "p3"),
+        ("counts", "overflow"),
+        ("changes", "new"),
+        ("changes", "regressed"),
+        ("changes", "unchanged"),
+    ]
+    WRONG_VALUES = ["7", True, 7.5, None, [], {}]
+
+    def test_a_wrong_type_in_any_counted_field_returns_errors(self) -> None:
+        for section, key in self.ARITHMETIC_FIELDS:
+            for value in self.WRONG_VALUES:
+                with self.subTest(section=section, key=key, value=value):
+                    data = self._canonical()
+                    data.setdefault(section, {})[key] = value
+                    try:
+                        errors = validate(data)
+                    except Exception as exc:  # noqa: BLE001 — the defect under test
+                        self.fail(f"validate_report raised {type(exc).__name__} for "
+                                  f"{section}.{key}={value!r}: {exc}")
+                    self.assertTrue(
+                        errors,
+                        f"{section}.{key}={value!r} must be reported, not accepted")
+
+    def test_the_type_error_names_the_field_and_the_blocked_invariant(self) -> None:
+        data = self._canonical()
+        data["security_domains"]["pass"] = "7"
+        errors = validate(data)
+        typed = [e for e in errors if "must be an integer" in e]
+        self.assertTrue(typed, f"expected an explicit type error, got: {errors}")
+        self.assertIn("$.security_domains.pass", typed[0])
+        self.assertIn("every invariant that reads it is skipped", typed[0],
+                      "the type error must say what it blocks, not just that it is wrong")
+
+    def test_bool_is_not_accepted_as_a_count(self) -> None:
+        """`bool` is an `int` subclass, so `true` would arithmetically count as 1."""
+        data = self._canonical()
+        data["counts"]["p0"] = True
+        errors = validate(data)
+        self.assertTrue(any("$.counts.p0 must be an integer" in e for e in errors), errors)
+
+    def test_string_zero_does_not_satisfy_the_absent_baseline_rule(self) -> None:
+        """`if changes.get(k, 0)` is satisfied by the truthy STRING "0"."""
+        data = self._canonical()
+        data["summary"]["baseline"] = "absent"
+        data["changes"] = {"new": 1, "regressed": "0", "unchanged": 0, "resolved": 0}
+        errors = validate(data)
+        self.assertFalse(
+            any("baseline is 'absent' but ['regressed']" in e for e in errors),
+            f"'0' as a string must not be read as a non-zero count: {errors}")
+        self.assertTrue(any("$.changes.regressed must be an integer" in e for e in errors),
+                        errors)
+
+    # --- The precondition layer, pinned directly -----------------------------------
+    # A mutation run found every mutation INSIDE `typed_view` surviving: the older
+    # isinstance belts in `_check_invariants` still held, so removing the view did not
+    # make anything crash, and a "does not raise" matrix cannot tell the two layers
+    # apart. Defence in depth is fine; an untested layer is not. Both are pinned now —
+    # the view here, and `_check_invariants` over RAW input below.
+
+    def test_typed_view_drops_a_wrongly_typed_scalar(self) -> None:
+        schema = load_schema()
+        data = self._canonical()
+        data["security_domains"]["pass"] = "7"
+        view, errors, degraded = report_validator.typed_view(data, schema)
+        self.assertNotIn("pass", view["security_domains"],
+                         "a wrongly-typed value must not appear in the view")
+        self.assertTrue(any("$.security_domains.pass" in e for e in errors), errors)
+        self.assertIn("$.security_domains", degraded)
+
+    def test_typed_view_derives_types_from_enum_and_const(self) -> None:
+        """Most scalars in this schema are spelled as `enum`/`const`, not `type` —
+        `severity` is an enum, `security_domains.total` is a const. Deriving only from
+        `type` would leave every one of them unchecked."""
+        self.assertEqual((str,), report_validator._declared_types({"enum": ["P0", "P1"]}))
+        self.assertEqual((int,), report_validator._declared_types({"const": 10}))
+        data = self._canonical()
+        data["findings"][0]["severity"] = []
+        _, errors, _ = report_validator.typed_view(data, load_schema())
+        self.assertTrue(any("$.findings[0].severity" in e for e in errors), errors)
+
+    def test_typed_view_rejects_bool_for_an_integer_field(self) -> None:
+        self.assertFalse(report_validator._type_ok(True, (int,)))
+        self.assertTrue(report_validator._type_ok(True, (bool,)))
+        data = self._canonical()
+        data["counts"]["p0"] = True
+        _, errors, _ = report_validator.typed_view(data, load_schema())
+        self.assertTrue(any("$.counts.p0" in e for e in errors), errors)
+
+    def test_typed_view_drops_an_invalid_array_element_and_marks_it_degraded(self) -> None:
+        data = self._canonical()
+        data["findings"] = [None]
+        view, errors, degraded = report_validator.typed_view(data, load_schema())
+        self.assertEqual([], view["findings"])
+        self.assertIn("$.findings", degraded)
+        self.assertTrue(any("$.findings[0]" in e for e in errors), errors)
+
+    def test_a_degraded_findings_list_skips_the_cardinality_invariants(self) -> None:
+        """The shortened list must not be counted: a declared count against a findings list
+        one element was dropped from is not a mismatch, it is unknown.
+
+        The counts must DISAGREE with the shortened list, or the test cannot tell the skip
+        from a coincidence — the first version appended `None` to a 1-element list whose
+        count was 1, so the reconciliation happened to pass either way and a mutation
+        disabling the skip survived."""
+        data = self._canonical()
+        data["findings"].append(None)          # dropped by the view -> len(view) == 1
+        data["counts"]["p1"] = 2               # declares 2: would mismatch if counted
+        data["changes"]["new"] = 2
+        errors = report_validator.validate_report(data)
+        self.assertFalse(any("p0+p1+p2+p3" in e for e in errors),
+                         f"a reconciliation was computed over a degraded list: {errors}")
+        self.assertFalse(any("$.counts.p1: declared" in e for e in errors),
+                         f"a severity tally was computed over a degraded list: {errors}")
+        self.assertTrue(any("$.findings[" in e for e in errors), errors)
+
+    def test_the_skip_is_not_a_blanket_amnesty(self) -> None:
+        """Anti-vacuity for the test above: with the list INTACT, the same disagreement is
+        reported. Otherwise "skipped when degraded" could be "never checked"."""
+        data = self._canonical()
+        data["counts"]["p1"] = 2
+        errors = report_validator.validate_report(data)
+        self.assertTrue(any("p0+p1+p2+p3" in e for e in errors), errors)
+
+    def test_validated_view_returns_a_sanitised_view_not_the_instance(self) -> None:
+        """The public helper's contract is the VIEW, not just the errors: a caller that
+        traverses what it returns must not be handed back the raw instance. A mutation
+        returning `(instance, errors)` left the error list identical, so every test that
+        only inspected errors stayed green."""
+        data = self._canonical()
+        data["findings"].append(None)
+        data["security_domains"]["pass"] = "7"
+        view, errors = report_validator.validated_view(data)
+        self.assertIsNot(view, data, "the caller must not receive the raw instance")
+        self.assertEqual([f for f in view["findings"] if f is None], [],
+                         f"the view still contains an unratable element: {view['findings']}")
+        self.assertNotIn("pass", view["security_domains"])
+        self.assertTrue(errors)
+        # And the invariants still ran through it.
+        self.assertEqual(report_validator.validate_report(data), errors)
+
+    def test_validate_report_actually_uses_the_view(self) -> None:
+        """Anti-vacuity for the tests above: the entry point must route through them."""
+        data = self._canonical()
+        data["findings"][0]["status"] = {}
+        errors = report_validator.validate_report(data)
+        self.assertTrue(any("$.findings[0].status must be" in e for e in errors), errors)
+
+    def test_check_invariants_survives_raw_unvalidated_input(self) -> None:
+        """`_check_invariants` keeps its own isinstance belts, so a direct caller — and a
+        future refactor that moves the view — cannot resurrect the crashes. Pinned
+        explicitly, because a mutation run showed the belts were invisible behind the view."""
+        hostile = [
+            {"security_domains": {"pass": "7", "fail": 0, "na": 3, "total": 10}},
+            {"counts": {"p0": "1", "p1": 0, "p2": 0, "p3": 0}, "findings": []},
+            {"findings": [None, 7, {"severity": []}, {"status": {}}],
+             "summary": {"baseline": "absent"}},
+            # The severity/status tallies only run when `counts` is a dict, so a hostile
+            # instance without one never reaches them — a mutation reinstating the
+            # unhashable dict-key write survived for exactly that reason.
+            {"counts": {"p0": 0, "p1": 1, "p2": 0, "p3": 0},
+             "findings": [{"severity": [], "status": {}}]},
+            {"counts": {"p0": 0, "p1": 1, "p2": 0, "p3": 0},
+             "changes": {"new": 1, "regressed": 0, "unchanged": 0},
+             "findings": [{"severity": {"a": 1}, "status": ["new"]}]},
+            {"changes": {"new": "1", "regressed": 0, "unchanged": 0}, "findings": []},
+        ]
+        for instance in hostile:
+            with self.subTest(instance=instance):
+                try:
+                    result = report_validator._check_invariants(instance)
+                except Exception as exc:  # noqa: BLE001 — the defect under test
+                    self.fail(f"_check_invariants raised {type(exc).__name__} on "
+                              f"{instance!r}: {exc}")
+                self.assertIsInstance(result, list)
+
+    # --- The error-type MATRIX -----------------------------------------------------
+    # Round 1 of this fix hardened the arithmetic sites and left the adjacent ones: a
+    # `severity` of `[]` was still used as a dict key, a `findings` element of `null`
+    # still had `.get()` called on it, and the eval entry still ran `int()` on a count.
+    # Enumerating by hand is what produced that gap, so the paths are now DERIVED from
+    # the schema and crossed with every wrong type. A new field cannot be added without
+    # entering this matrix.
+
+    # Genuinely WRONG-TYPE values, used where the assertion is "this must be reported".
+    WRONG_VALUES = ["x", True, 7.5, None, [], {}]
+    # Anything at all, used where the assertion is only "this must not raise". Keeping the
+    # two lists apart matters: `0` is a legal count, and folding it into the wrong-type list
+    # made the reject-assertions demand an error for a valid value.
+    MATRIX_VALUES = WRONG_VALUES + [-1, 0, "", [None], {"k": "v"}, 10 ** 9]
+
+    @classmethod
+    def _leaf_paths(cls, subschema: dict, prefix=()):
+        """Yield (path_tuple, declared_subschema) for every leaf the schema declares."""
+        props = subschema.get("properties") or {}
+        for key, child in props.items():
+            if not isinstance(child, dict):
+                continue
+            if child.get("properties") or child.get("items"):
+                yield from cls._leaf_paths(child, prefix + (key,))
+                yield prefix + (key,), child
+            else:
+                yield prefix + (key,), child
+        items = subschema.get("items")
+        if isinstance(items, dict):
+            yield from cls._leaf_paths(items, prefix + ("[]",))
+
+    @staticmethod
+    def _assign(doc: dict, path, value) -> bool:
+        """Set `path` in `doc`, descending into the first element of any array. Returns
+        False when the canonical example has no such node to overwrite."""
+        node = doc
+        for part in path[:-1]:
+            if part == "[]":
+                if not isinstance(node, list) or not node:
+                    return False
+                node = node[0]
+            else:
+                if not isinstance(node, dict) or part not in node:
+                    return False
+                node = node[part]
+        if path[-1] == "[]":
+            return False
+        if not isinstance(node, dict):
+            return False
+        node[path[-1]] = value
+        return True
+
+    def test_the_error_type_matrix_never_raises(self) -> None:
+        """Every schema-declared leaf × every wrong type: `validate_report` returns a list."""
+        schema = load_schema()
+        paths = [p for p, _ in self._leaf_paths(schema)]
+        self.assertGreater(len(paths), 20, f"expected the schema to declare leaves: {paths}")
+        checked = 0
+        for path in paths:
+            for value in self.MATRIX_VALUES:
+                data = self._canonical()
+                if not self._assign(data, path, value):
+                    continue
+                checked += 1
+                label = ".".join(path)
+                with self.subTest(path=label, value=value):
+                    try:
+                        result = report_validator.validate_report(data)
+                    except Exception as exc:  # noqa: BLE001 — the defect under test
+                        self.fail(f"validate_report raised {type(exc).__name__} for "
+                                  f"{label}={value!r}: {exc}")
+                    self.assertIsInstance(result, list)
+        self.assertGreater(checked, 100,
+                           f"the matrix must actually reach the schema's leaves: {checked}")
+
+    def test_the_matrix_rejects_as_well_as_survives(self) -> None:
+        """Anti-vacuity: "returns a list" is satisfied by returning `[]`. For a declared
+        scalar, a wrong type must be REPORTED, not merely survived."""
+        schema = load_schema()
+        for path, sub in self._leaf_paths(schema):
+            if sub.get("properties") or sub.get("items"):
+                continue          # containers: a wrong member type is reported one level down
+            types = report_validator._declared_types(sub)
+            if types is None:
+                continue          # the schema declares no type for this leaf
+            for value in ("x", True, [], {}, None, 7.5):
+                if report_validator._type_ok(value, types):
+                    continue
+                data = self._canonical()
+                if not self._assign(data, path, value):
+                    continue
+                label = ".".join(path)
+                with self.subTest(path=label, value=value):
+                    self.assertTrue(
+                        report_validator.validate_report(data),
+                        f"{label}={value!r} violates the declared type and must be reported")
+
+    def test_a_null_finding_does_not_reach_attribute_access(self) -> None:
+        """`findings = [null]` under an absent baseline died with AttributeError inside the
+        status scan. The precondition layer drops the element and marks the array degraded,
+        so the cardinality invariants are skipped rather than computed over a short list."""
+        data = self._canonical()
+        data["summary"]["baseline"] = "absent"
+        data["findings"] = [None]
+        errors = report_validator.validate_report(data)
+        self.assertTrue(errors)
+        self.assertTrue(any("$.findings[0]" in e for e in errors), errors)
+
+    def test_an_unhashable_enum_value_does_not_reach_a_dict_key(self) -> None:
+        """`severity: []` and `status: {}` were used as dict keys while tallying, raising
+        "cannot use 'list' as a dict key"."""
+        for field, value in (("severity", []), ("status", {}), ("confidence", [1])):
+            with self.subTest(field=field):
+                data = self._canonical()
+                data["findings"][0][field] = value
+                errors = report_validator.validate_report(data)
+                self.assertTrue(
+                    any(f"$.findings[0].{field}" in e for e in errors), errors)
+
+    def test_the_grader_entry_never_converts_an_unvalidated_count(self) -> None:
+        """`int(counts.get(k, 0) or 0)` at the eval entry died on `"one"` before the
+        validator could report it. Read through `safe_int`, which cannot raise."""
+        self.assertIsNone(report_validator.safe_int("one"))
+        self.assertIsNone(report_validator.safe_int(True))
+        self.assertIsNone(report_validator.safe_int(1.5))
+        self.assertIsNone(report_validator.safe_int(None))
+        self.assertEqual(3, report_validator.safe_int(3))
+
+    def test_structurally_hostile_instances_do_not_raise(self) -> None:
+        """The grader hands this function whatever a model emitted. None of it may crash."""
+        hostile = [
+            None, [], "a string", 42,
+            {}, {"security_domains": "not a dict"}, {"counts": []},
+            {"findings": "not a list"}, {"changes": None},
+            {"security_domains": {"pass": 1}},                       # partial
+            # The reviewer's exact input: every key PRESENT, one of them a string. A mutation
+            # run showed the battery was missing it — reverting `_ints` to a presence-only
+            # `all(k in dom ...)` check survived, because no hostile case had all four keys
+            # with a non-integer value.
+            {"security_domains": {"pass": "7", "fail": 0, "na": 3, "total": 10}},
+            {"counts": {"p0": "1", "p1": 0, "p2": 0, "p3": 0}, "findings": []},
+            {"changes": {"new": "1", "regressed": 0, "unchanged": 0}, "findings": []},
+            {"counts": {"p0": 1, "p1": 1, "p2": 1, "p3": 1}, "findings": None},
+            {"stack": "go,java", "per_stack": {"go": {"pass": "x", "fail": 0, "na": 0}}},
+            {"stack": "go,java", "per_stack": {"go": {}, "java": {}},
+             "security_domains": {"pass": 0, "fail": 0, "na": 0, "total": "ten"}},
+            {"suppressed": [{"rule": "2"}, None, 7]},
+            {"summary": {"baseline": "absent"}, "changes": {"regressed": "0"}},
+        ]
+        for instance in hostile:
+            with self.subTest(instance=instance):
+                try:
+                    result = report_validator.validate_report(instance)
+                except Exception as exc:  # noqa: BLE001 — the defect under test
+                    self.fail(f"validate_report raised {type(exc).__name__} on "
+                              f"{instance!r}: {exc}")
+                self.assertIsInstance(result, list)
+
+    def test_the_canonical_example_is_still_clean(self) -> None:
+        """Anti-vacuity: the checks above must be rejecting the mutation, not the example."""
+        self.assertEqual([], validate(self._canonical()))
+
+
 if __name__ == "__main__":
     unittest.main()

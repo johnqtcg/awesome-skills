@@ -9,10 +9,20 @@ Stack detected: `java` (Spring Boot) — Gate D evaluated against the same ten d
 
 ## 1) Findings
 
-> **SEC-001: Remote code execution via Java native deserialization of the request body**
+> **SEC-001: Unfiltered Java native deserialization of the request body (CWE-502)**
 >
-> - **Severity**: P0 Critical
-> - **Confidence**: confirmed — the untrusted-input-to-sink path is complete and unconditional
+> - **Severity**: P0 Critical — unfiltered Java-native deserialization of network input, by
+>   class and reachability. The unresolved classpath question below does not move this in
+>   either direction.
+> - **Confidence**: confirmed — this labels the **path**: `@RequestBody byte[]` reaches
+>   `readObject()` unconditionally, proven from the code below. No per-stream filter is set
+>   *in the code under review*; a process-wide `jdk.serialFilter` or a Java 17+ filter
+>   factory was not in scope, so "unfiltered" is asserted of this class, not of the JVM
+>   (see § 4).
+> - **Impact basis**: assessed — the maximum consequence (RCE) depends on a gadget chain
+>   reachable on the classpath, which was not verified. Severity is unaffected: an
+>   unverified *aggravating* condition moves neither the severity nor the confidence,
+>   only this axis (SKILL.md § Evidence Confidence).
 > - **Mapping**: CWE-502 (Deserialization of Untrusted Data) / ASVS 4.0.3 V5.5.1
 > - **File/line**: `SessionController.restore` — `new ObjectInputStream(...).readObject()`
 > - **Domain**: 8 — Language-Specific Injection Sinks
@@ -27,8 +37,22 @@ Stack detected: `java` (Spring Boot) — Gate D evaluated against the same ten d
 >   side-effected the graph — a `ClassCastException` is thrown too late to prevent execution. The
 >   `try`-with-resources block is likewise correct resource handling and irrelevant to the
 >   vulnerability.
-> - **Impact**: remote code execution as the service account — full host compromise, credential
->   and environment theft, lateral movement. P0.
+> - **Impact — established here**: `readObject()` reconstructs an arbitrary object graph from
+>   attacker bytes. Independent of any known gadget, that already permits instantiation of
+>   arbitrary `Serializable` types on the classpath, invocation of their
+>   `readObject`/`readResolve`/`validateObject` during reconstruction, and unbounded graph
+>   expansion (a self-referential or hash-colliding graph is a DoS with no code execution
+>   needed).
+> - **Impact — assessed, not demonstrated by this review**: remote code execution as the
+>   service account, with full host compromise and lateral movement, **if** a gadget chain is
+>   reachable on the classpath. That condition was **not verified here** — see § 4. Stated as
+>   assessed per § Evidence Confidence: the label `confirmed` covers the path, not the
+>   maximum impact.
+> - **What would move the RCE impact from assessed to demonstrated**: (1) `mvn dependency:tree`
+>   showing a known-gadget library; (2) the absence of a JEP 290 filter — check
+>   `ObjectInputFilter.Config.getSerialFilter()`, the `jdk.serialFilter` system property, and
+>   any per-stream filter; (3) with authorization, the reproducer below against a build you
+>   control.
 > - **Reproducer** (NOT executed — active verification not permitted; confirmed statically):
 >   ```bash
 >   # Local instance only, against a classpath you control.
@@ -50,11 +74,20 @@ Stack detected: `java` (Spring Boot) — Gate D evaluated against the same ten d
 >   }
 >   ```
 >   If a binary format is unavoidable, set a JEP 290 filter that allowlists exactly the expected
->   classes and bounds depth/refs — and treat it as a mitigation, not a fix:
+>   classes and bounds depth/refs — and treat it as a mitigation, not a fix. **Check the target's
+>   Java version before recommending the API**, because the two are not interchangeable:
 >   ```java
+>   // Java 9+ — java.io.ObjectInputFilter
 >   in.setObjectInputFilter(ObjectInputFilter.Config.createFilter(
 >       "com.example.SessionState;java.lang.String;java.util.List;!*"));
 >   ```
+>   On **Java 8** `java.io.ObjectInputFilter` does not exist (verified: `javac` on 1.8.0_461
+>   rejects it). There, the equivalents are the `-Djdk.serialFilter=...` system property
+>   (8u121+, accepted by that JVM) or the internal
+>   `sun.misc.ObjectInputFilter.Config.setObjectInputFilter(stream, filter)` — note the static
+>   two-argument form, not a method on the stream, and an internal API that compiles with a
+>   proprietary-API warning. Recommending the Java 9 call to an 8 service is advice that will
+>   not build.
 >   Note Jackson `DefaultTyping` reintroduces the same class if enabled — check it is off.
 > - **Regression test**: POST a serialized `java.util.HashMap` and assert the request is rejected
 >   before any object is constructed.
@@ -89,9 +122,18 @@ The commands that would settle Domains 9 and 10, not run here:
 
 - Assumes the endpoint is reachable without authentication; no `@PreAuthorize` or filter chain
   was in scope. An authenticated RCE is still P0.
-- Whether a known gadget library is on the classpath is unresolved. This does **not** lower the
-  severity: absence of a known chain today is not a control, and the classpath changes with every
-  dependency bump.
+- **Unverified condition, and what it does and does not change.** Whether a known gadget library
+  is on the classpath is unresolved: no dependency inventory was provided. This does **not** lower
+  the severity — absence of a known chain today is not a control, and the classpath changes with
+  every dependency bump — and it does **not** raise it either. What it does change is the
+  *impact wording*: the RCE consequence is recorded as assessed rather than demonstrated (see
+  SEC-001's two Impact lines). Settle it with `mvn dependency:tree` plus a check of
+  `jdk.serialFilter` / `ObjectInputFilter.Config.getSerialFilter()` / any per-stream filter.
+- No JEP 290 filter configuration was in scope — neither a per-stream
+  `setObjectInputFilter` call, a `jdk.serialFilter` property, nor (Java 17+) a filter factory.
+  Absence of evidence is recorded as unresolved, not as absence of a filter.
+- Target Java version unknown. It does not affect the finding, but it decides which filter API
+  the remediation can name (see the fix above).
 
 ## 5) Risk Acceptance Register
 
@@ -129,7 +171,9 @@ A P0 must not be accepted without VP-level or equivalent sign-off. None recorded
     {
       "id": "SEC-001", "severity": "P0", "confidence": "confirmed", "status": "new",
       "origin": "introduced", "cwe": "CWE-502", "asvs": "ASVS 4.0.3 V5.5.1",
-      "domain": 8, "file": "web/SessionController.java:restore"
+      "domain": 8, "file": "web/SessionController.java:restore",
+      "impact_basis": "assessed",
+      "impact_condition": "RCE requires a gadget chain reachable on the classpath; not verified — no dependency inventory was provided. Settle with `mvn dependency:tree` plus a check of jdk.serialFilter / ObjectInputFilter.Config.getSerialFilter()."
     }
   ]
 }

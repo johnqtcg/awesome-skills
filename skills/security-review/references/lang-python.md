@@ -263,18 +263,70 @@ def load_session(token: str):
 
 ### SSTI (Server-Side Template Injection)
 
+**`autoescape` is not a sandbox.** Autoescaping escapes the *output* of an expression;
+it does not restrict which attributes the template may reach. A template body under
+attacker control still evaluates `{{ ''.__class__.__mro__ }}` and walks to
+`subprocess`/`os` regardless of `autoescape`. The two questions are independent, so
+answer them separately:
+
+**Is the template body itself trusted?** If yes — the normal case — load templates from
+disk and never build one from a request. This needs a `loader`; an `Environment()` with
+no loader raises `TypeError: no loader for this environment specified` on
+`get_template()`, so a snippet without one is not a working control.
+
 ```python
-# BAD: user string rendered as template
+# BAD: user string compiled as a template body
 from jinja2 import Template
 def render(user_input: str):
-    return Template(user_input).render()  # SSTI: {{ config }}
+    return Template(user_input).render()  # SSTI: {{ config }}, {{ ''.__class__ }}
 
-# GOOD: sandboxed environment with autoescape
-from jinja2 import Environment, select_autoescape
-env = Environment(autoescape=select_autoescape(["html"]))
+# GOOD: template body comes from the repo; only the DATA is user-controlled.
+from jinja2 import Environment, FileSystemLoader, select_autoescape
+env = Environment(
+    loader=FileSystemLoader("templates"),          # required for get_template()
+    autoescape=select_autoescape(["html", "xml"]),  # XSS control, NOT an SSTI control
+)
+
 def render(template_name: str, **kwargs):
+    if template_name not in {"invoice.html", "welcome.html"}:  # no path from user input
+        raise ValueError("unknown template")
     return env.get_template(template_name).render(**kwargs)
 ```
+
+**Must untrusted template bodies be supported?** Then a sandbox is mandatory, and
+`jinja2.sandbox.SandboxedEnvironment` is the only in-library answer — plus limits the
+sandbox does not provide.
+
+```python
+# GOOD (only if untrusted template bodies are a real requirement)
+from jinja2.sandbox import SandboxedEnvironment
+
+env = SandboxedEnvironment(autoescape=True)
+```
+
+`SandboxedEnvironment` blocks unsafe attribute access and unsafe callables, and it does
+bound **one** resource — be precise about which, because the sandbox's own limit is easy to
+mistake for a general one (source: `jinja2/sandbox.py` at the 3.1.6 tag):
+
+| Resource | Bounded by the sandbox? |
+|---|---|
+| `range(...)` size | **Yes** — `range` is replaced by `safe_range`, which raises `OverflowError` above `MAX_RANGE = 100_000` |
+| Nested loops | **No** — `range(100000)` inside `range(100000)` is 10^10 iterations, and each range is individually legal |
+| Arithmetic and string growth | **No** — `intercepted_binops` is empty by default, so `*` runs natively: `{{ 'x' * 100000000 }}` allocates ~100 MB |
+| Render wall-clock, output size, recursion | **No** — nothing in the sandbox measures them |
+
+So cap render time and output size out of band, and treat the sandbox as one layer rather
+than the control. Do **not** write that the sandbox has no resource limits at all: it caps
+`range`, and a review claiming otherwise is wrong on a checkable fact.
+
+**Review rule.** A finding is *not* answered by "autoescape is on". Establish which of
+the two cases applies, and say so:
+
+| Observed | Verdict |
+|---|---|
+| Template body from request/DB + `Environment` (any `autoescape`) | SSTI, `confirmed` if reachable |
+| Template body from request/DB + `SandboxedEnvironment` | Sandbox escapes are still found periodically; report residual risk and check for resource limits — do not call it closed |
+| Template body from repo, only variables user-controlled | Not SSTI. Check `autoescape` for XSS instead, and check the template *name* is not user-controlled (path traversal into an attacker-writable file) |
 
 ### TLS Configuration
 

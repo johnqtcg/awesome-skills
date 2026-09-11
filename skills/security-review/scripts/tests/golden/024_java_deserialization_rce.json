@@ -13,6 +13,13 @@
     "ObjectInputStream.readObject` on untrusted input",
     "Language-Specific Injection Sinks"
   ],
-  "note": "The cast to SessionState happens AFTER readObject has already constructed the graph, so it is not a control: gadget chains on the classpath execute during deserialization. P0, and the fix is not a try-with-resources tweak (which the code already has) but refusing Java-native deserialization of untrusted bytes, or an ObjectInputFilter allowlist.",
-  "reference": "references/lang-java.md"
+  "note": "The cast to SessionState happens AFTER readObject has already constructed the graph, so it is not a control: gadget chains on the classpath execute during deserialization. P0, and the fix is not a try-with-resources tweak (which the code already has) but refusing Java-native deserialization of untrusted bytes, or an ObjectInputFilter allowlist. Impact wording matters as much as the rating: the PATH is confirmed, the RCE IMPACT is assessed until the classpath is inventoried (see AE-5). Remediation must also name the right filter API for the target's Java version — java.io.ObjectInputFilter is 9+; on 8 it is -Djdk.serialFilter (8u121+) or the internal sun.misc.ObjectInputFilter.",
+  "reference": "references/lang-java.md",
+  "severity_note": "P0, exactly — no band. The unverified condition here (the classpath gadget inventory) is an AGGRAVATING one, and SKILL.md § Evidence Confidence says an unverified aggravating condition moves the severity in neither direction. A band would have made the grader reward the downgrade the document forbids; that contradiction is what the first fix shipped. Conservatism about this condition belongs in `impact_basis`, graded below. A band is legitimate only where the uncertainty is about REACHABILITY or an upstream control, and such a fixture must also declare `severity_deviation_condition`.",
+  "impact_depends_on_unverified": {
+    "condition_pattern": "(?i)classpath|gadget|dependency (inventory|tree)",
+    "why": "Arbitrary Serializable instantiation and unbounded graph expansion are established from the code alone; remote code execution additionally needs a gadget chain reachable on this classpath, which a static review cannot see.",
+    "required_impact_basis": "assessed",
+    "_note": "`required_impact_basis` is compared to the FIELD's value. The retired `basis_pattern` was a regex over the finding's joined text, which accepted impact_basis=demonstrated as long as some sentence contained the word \"assessed\"."
+  }
 }

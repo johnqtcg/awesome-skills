@@ -289,6 +289,34 @@ positives still carry adjacent CWEs the fixtures have not declared. These are th
 skill-adherence gaps Run 3 already found — class-scoped grading correctly kept measuring them
 underneath the new `suppressed[]` noise.
 
+### How to read a run's number (added after a review misread risk was pointed out)
+
+**`1 / 8` is a fully-compliant-report rate, not a detection rate.** Reading it as "the
+reviewer found 12.5% of the vulnerabilities" is wrong, and the Run 4 table shows why: all
+four true-positive scenarios detected their vulnerability. Six of the seven failures were one
+malformed `suppressed[]` field name — a report-shape defect that says nothing about whether
+the bug was found.
+
+The grader no longer permits that conflation. Every reason is now recorded under the
+competence it came from, structurally (by where in `grade()` it was produced, not by matching
+its text afterwards):
+
+| Category | Question it answers |
+|---|---|
+| `detection` | did the review find the real vulnerability at all |
+| `suppression` | did it correctly NOT report the safe pattern, and not over-report |
+| `calibration` | severity / confidence / CWE / ASVS / domain attribution |
+| `integrity` | did it claim execution it was not authorised to perform |
+| `contract` | report shape: mandatory sections, JSON schema and invariants, stack |
+
+`summarize()` renders the breakdown, and a future run **must** record it rather than a bare
+N/8. Re-scored under the categories, Run 4 reads roughly: detection clean in 8/8, contract
+clean in 1/8 — the same evidence, without the misreading available.
+
+Two other things the record already showed and that the categories now make legible: the
+`ssrf_false_positive` scenario really did report the tested class (a `suppression` failure, and
+a genuine skill-adherence gap), and the `asvs: "TBD"` cases are `calibration`, not detection.
+
 ### Run 5 has not been executed
 
 The `suppressed[]` fix is a documentation change to what the model is shown; it has not been
@@ -296,6 +324,57 @@ validated against a live run, because doing so costs another ~40-70 minutes and 
 model calls. Treat Run 4's specific numbers (1/8) as superseded by the fix above but **unverified**
 until Run 5 runs. If Run 5 still shows `class`/`residual` in `suppressed[]`, the fix did not work
 and the root cause was mis-diagnosed.
+
+### What the offline work does and does not establish
+
+Stated plainly, because the temptation is to read a bigger green suite as a better reviewer:
+
+| Established | Not established |
+|---|---|
+| the grader now rejects reports it used to accept (wrong types, incoherent verdicts, a fabricated execution claim laundered by an unrelated label, a report contradicting its own test run) | that a live reviewer emits fewer of those |
+| the offline suite is larger and its guards are mutation-checked | any change in the false-positive rate |
+| `suppressed[]`'s literal field names are now shown in the template a model copies from | that the model stops writing `class`/`residual` |
+| a run's number can be decomposed per competence | that any competence improved |
+| `grade()` itself is total: 2 552 schema-leaf × wrong-type variants, zero exceptions | that a live model emits fewer malformed reports |
+| `impact_basis` is read as a field value and its paired `impact_condition` is schema-enforced | that a live model fills either correctly |
+
+Every row on the right needs a live run. Categories explain results; they do not improve
+them. Until Run 5 exists, the honest summary of this round is "the measuring instrument
+changed", and any statement about adherence, format drift or false positives is a
+prediction, not a finding.
+
+**A grader that stops crashing is not a reviewer that stops erring.** Every fix in the last
+three rounds was to the *instrument*: the thing being measured has not been observed since
+Run 4. Any sentence of the form "the skill now produces fewer false positives / more stable
+reports" is unsupported until Run 5 exists, and this file should be read as refusing to make
+it.
+
+Four grader changes since Run 4 also change what a Run 5 measures, and all must be stated
+when it is recorded:
+
+- **Severity is exact again, and conservatism moved axis.** Round 1 of this fix banded the
+  Java fixture `["P0","P1"]` because its gadget inventory is unverified — while SKILL.md said
+  an unverified *aggravating* condition does not lower the severity. The grader was rewarding
+  what the document forbade. Severity is back to an exact `P0`; the reviewer who notices the
+  unverified condition is credited on the new `findings[].impact_basis` axis
+  (`demonstrated`/`assessed`) instead. A band now exists only for uncertainty about
+  reachability, and only when the fixture declares the condition that licenses a deviation —
+  matched against the finding's own fields, because a whole-document keyword search accepted
+  "Severity P1. Documentation owner is unknown."
+- **Validation precedes grading, and `impact_basis` is read by value.** `grade()` walked
+  the raw `findings` before the validator ran, so a malformed report crashed the grader
+  rather than being graded — 48 of 2 552 matrix variants. Both branches now traverse the
+  validated typed view, and what cannot be rated is recorded as a contract error. Separately,
+  `impact_basis` was checked by matching the finding's joined text, so
+  `impact_basis: "demonstrated"` with an `impact_condition` sentence containing the word
+  "assessed" passed; it is compared to the field's value now, and the
+  `assessed` ⇒ `impact_condition` pair is enforced by an allOf/if-then rule in the schema
+  rather than by its description.
+- **The fabricated-execution check is scoped to the claim.** It was a document-wide
+  `not re.search("NOT executed", output)`, satisfied by the one correctly-labelled reproducer
+  every compliant report contains — so a report could keep that label and assert "I ran the
+  request and it returned 200" elsewhere, undetected. The exemption now applies only within
+  two lines of the claim.
 
 ### Operational note: background execution in this environment
 

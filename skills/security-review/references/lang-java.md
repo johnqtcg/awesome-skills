@@ -44,7 +44,7 @@ by default. Do not carry the Go XML exemption across (`go-secure-coding.md` §Go
 ```java
 // BAD: ObjectInputStream on untrusted data
 ObjectInputStream ois = new ObjectInputStream(request.getInputStream());
-Object obj = ois.readObject(); // RCE via gadget chains
+Object obj = ois.readObject(); // reconstructs an arbitrary object graph from attacker bytes
 
 // GOOD: use JSON with type validation
 ObjectMapper mapper = new ObjectMapper();
@@ -52,6 +52,35 @@ ObjectMapper mapper = new ObjectMapper();
 // mapper.enableDefaultTyping(); // DANGEROUS
 MyDTO dto = mapper.readValue(request.getInputStream(), MyDTO.class);
 ```
+
+**What is established from the code, and what is not.** `readObject` on untrusted bytes is
+CWE-502 and reachability is provable statically. Two claims often get merged into one:
+
+| Claim | Established by | Note |
+|---|---|---|
+| untrusted input reaches `readObject` unfiltered | the code | this is the finding; rate it from class + reachability |
+| arbitrary `Serializable` types are instantiated and their `readObject`/`readResolve`/`validateObject` run; an adversarial graph can exhaust CPU/heap | the code | no gadget library needed |
+| **remote code execution** | a gadget chain reachable on **this** classpath | **not** established by the code — report as assessed and name the check (`mvn dependency:tree`) |
+
+Do not lower the severity because no gadget was found: absence of a known chain is not a
+control and the classpath moves with every dependency bump. Do not state the RCE impact in
+the indicative either — see `references/anti-examples.md` AE-5 and SKILL.md § Evidence
+Confidence.
+
+**JEP 290 filter — check the target's Java version before recommending an API.** The two
+forms are not interchangeable, and naming the wrong one produces advice that does not build:
+
+| Target | Filter API |
+|---|---|
+| Java 9+ | `java.io.ObjectInputFilter`; per-stream `in.setObjectInputFilter(ObjectInputFilter.Config.createFilter("com.example.Dto;java.lang.String;!*"))` |
+| Java 8 (8u121+) | `java.io.ObjectInputFilter` **does not exist**. Use `-Djdk.serialFilter=...`, or the internal `sun.misc.ObjectInputFilter.Config.setObjectInputFilter(stream, filter)` — a **static two-argument** call, not a method on the stream, and an internal API that compiles with a proprietary-API warning |
+| Java 17+ | additionally a filter factory: `ObjectInputFilter.Config.setSerialFilterFactory(...)` for per-context filters |
+
+Verified on this repo's toolchain (JDK 1.8.0_461): `javac` rejects `java.io.ObjectInputFilter`
+outright, `sun.misc.ObjectInputFilter` compiles with a warning, and the JVM accepts
+`-Djdk.serialFilter`. When reviewing, read the `<maven.compiler.release>` / `sourceCompatibility`
+before writing the remediation, and treat any filter as a **mitigation**: an allowlist bounds
+which classes may be constructed, it does not make native deserialization of network input safe.
 
 ### SQL Injection
 

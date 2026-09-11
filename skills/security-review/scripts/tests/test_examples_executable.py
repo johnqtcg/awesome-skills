@@ -164,6 +164,36 @@ class PythonExampleTests(unittest.TestCase):
             f"{proc.stdout[-3000:]}\n{proc.stderr[-3000:]}",
         )
 
+    MATRIX_SSTI = EXAMPLES / "python" / "jinja_ssti_facts_test.py"
+
+    def test_jinja_ssti_facts_pass_or_skip_loudly(self) -> None:
+        """Execute `lang-python.md § SSTI`'s claims, or report that they did not run.
+
+        Added after a review found the section's "GOOD" example labelled "sandboxed
+        environment" while building a plain `Environment(autoescape=...)` with no loader.
+        `autoescape` escapes output; it does not restrict attribute traversal, so that
+        snippet was not an SSTI control and `get_template()` could not have worked at all.
+        The matrix asserts both facts plus the `SandboxedEnvironment` behaviour against the
+        installed Jinja.
+
+        Jinja is optional here, so the matrix skips rather than fails without it — but a
+        skip is surfaced, never folded into a pass."""
+        self.assertTrue(self.MATRIX_SSTI.is_file(), f"missing {self.MATRIX_SSTI}")
+        proc = subprocess.run(
+            [sys.executable, str(self.MATRIX_SSTI)], cwd=self.MATRIX_SSTI.parent,
+            capture_output=True, text=True, timeout=120, errors="replace")
+        combined = proc.stdout + proc.stderr
+        self.assertEqual(
+            0, proc.returncode,
+            "the documented Jinja SSTI behaviour no longer matches the installed Jinja; "
+            f"re-measure before editing lang-python.md:\n{combined[-3000:]}")
+        if importlib.util.find_spec("jinja2") is None:
+            self.assertIn("skipped", combined.lower(),
+                          "without jinja2 the SSTI rows must report as skipped, not as a "
+                          f"silent pass:\n{combined[-2000:]}")
+            self.skipTest("jinja2 not installed: § SSTI rows are documentation-verified "
+                          "only in this environment (no package index reachable)")
+
     @unittest.skipIf(importlib.util.find_spec("lxml") is None,
                      "lxml not installed (optional): the lxml half of the XML matrix did not run")
     def test_lxml_layer_actually_ran(self) -> None:
@@ -780,8 +810,8 @@ class RunnerFailsClosedTests(unittest.TestCase):
     def test_runner_accounts_for_the_skippable_layers(self) -> None:
         """Each layer that can silently vanish must be named in the skip accounting."""
         text = self.RUNNER.read_text(encoding="utf-8")
-        for probe in ("command -v go", "command -v node", "import lxml", "import jsonschema",
-                      "SECURITY_REVIEW_EVAL_CMD", "SKILL_CREATOR_VALIDATOR"):
+        for probe in ("command -v go", "command -v node", "import lxml", "import jinja2",
+                      "import jsonschema", "SECURITY_REVIEW_EVAL_CMD", "SKILL_CREATOR_VALIDATOR"):
             self.assertIn(probe, text,
                           f"runner must account for a possible skip of: {probe}")
 

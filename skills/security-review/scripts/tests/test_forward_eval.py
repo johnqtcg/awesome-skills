@@ -84,21 +84,179 @@ def _json_block(output: str):
     return None
 
 
-def _claims_a_finding(output: str) -> bool:
-    """True when the review reports at least one real finding (not a suppression)."""
+def _validated_block(output: str):
+    """Parse the § 7 JSON and establish the precondition BEFORE anything grades it.
+
+    Returns (view, contract_errors). `view` is the typed view — traversing it cannot reach
+    an unvalidated value — and `contract_errors` is what could not be rated, recorded as a
+    contract defect rather than raised.
+
+    The reported hole: `grade()` walked the RAW `findings` in both the true-positive and the
+    false-positive branch before ever calling the validator, so `findings: [null]`,
+    `findings: "x"`, `findings: 7.5` and friends crashed the grader on 48 of 2 552 matrix
+    variants. The validator was safe; the call chain was not. Validate first, grade what
+    satisfies the preconditions."""
     data = _json_block(output)
+    if data is None:
+        return None, []
+    return report_validator.validated_view(data)
+
+
+def _finding_objects(view) -> list:
+    """The findings a grader may traverse: dicts, from the validated view only."""
+    findings = (view or {}).get("findings")
+    if not isinstance(findings, list):
+        return []
+    return [f for f in findings if isinstance(f, dict)]
+
+
+def _claims_a_finding(view, output: str) -> bool:
+    """True when the review reports at least one real finding (not a suppression).
+
+    `int(counts.get(k, 0) or 0)` died with ValueError on a model that wrote
+    `"p1": "one"` — at the grading entry, before the validator that exists to report
+    exactly that defect could run. Nothing at this boundary may convert an unvalidated
+    value, so counts are read through `report_validator.safe_int` and a non-integer
+    count simply carries no signal; `findings[]` and the SEC-nnn heading still do."""
+    data = view
     if data is not None:
-        counts = data.get("counts") or {}
-        if any(int(counts.get(k, 0) or 0) for k in ("p0", "p1", "p2", "p3")):
-            return True
-        if data.get("findings"):
+        counts = data.get("counts")
+        if isinstance(counts, dict):
+            for key in ("p0", "p1", "p2", "p3"):
+                value = report_validator.safe_int(counts.get(key))
+                if value:
+                    return True
+        if _finding_objects(data):
             return True
         return False
-    # No JSON: fall back to a SEC-nnn finding heading.
+    # No parseable JSON: fall back to a SEC-nnn finding heading, as before.
     return bool(re.search(r"(?m)^\s*(>\s*)?\**SEC-\d+", output))
 
 
-def _grade_false_positive(output: str, fixture: dict) -> list:
+def _severity_band(fixture: dict) -> list:
+    """The severities a defensible review may assign, most-expected first.
+
+    A band exists ONLY where the uncertainty is about **reachability or an upstream
+    control** — the kind SKILL.md says may lower severity. It must not exist for an
+    unverified **aggravating** condition (a gadget on the classpath, a flag being on):
+    there SKILL.md says severity does not move, and a band would have the grader reward
+    exactly what the document forbids. That contradiction is what the first version of
+    this shipped: the Java fixture carried `["P0","P1"]` because its gadget inventory was
+    unverified, while SKILL.md said an unverified aggravating condition does not lower the
+    severity. Evidence-based conservatism on an aggravating condition belongs in the
+    IMPACT BASIS, which `_grade_impact_basis` grades instead."""
+    band = fixture.get("accepted_severity")
+    if isinstance(band, list) and band:
+        return [str(s) for s in band]
+    want = fixture.get("severity")
+    return [str(want)] if want else []
+
+
+def _finding_text(target: dict) -> str:
+    """Only the finding's OWN fields. A whole-document search cannot answer a question
+    about one finding: "Severity P1. Documentation owner is unknown." satisfied a
+    document-wide keyword match for a justified downgrade, because `unknown` appeared
+    somewhere — about documentation, not about the exploit path."""
+    parts = []
+    for value in target.values():
+        if isinstance(value, str):
+            parts.append(value)
+        elif isinstance(value, (list, tuple)):
+            parts.extend(str(v) for v in value)
+        elif isinstance(value, dict):
+            parts.extend(str(v) for v in value.values())
+    return " ".join(parts)
+
+
+def _grade_severity(target: dict, fixture: dict, output: str) -> list:
+    """Grade the rating, and — for a deviation from the default — the reasoning behind it.
+
+    Three outcomes:
+      * outside the band          -> wrong, in either direction (a P3 on an RCE, a P0 on a
+                                     hardening gap);
+      * the band's default        -> accepted;
+      * another band member       -> accepted ONLY when the finding itself names the
+                                     fixture's declared uncertainty. The condition pattern
+                                     comes from the fixture, not from a generic keyword
+                                     list, and it is matched against the finding's own
+                                     fields rather than the whole document.
+    """
+    reasons = []
+    band = _severity_band(fixture)
+    got = target.get("severity")
+    if not band:
+        return reasons
+    if got not in band:
+        reasons.append(
+            f"severity: the {fixture.get('expected_cwe')} finding is {got!r}, which is outside "
+            f"the defensible band {band} (first entry is the calibration default)")
+        return reasons
+    if got == band[0]:
+        return reasons
+
+    pattern = fixture.get("severity_deviation_condition")
+    if not pattern:
+        reasons.append(
+            f"severity: {got!r} deviates from the default {band[0]!r} but the fixture declares "
+            f"no `severity_deviation_condition`, so no deviation can be justified — a band "
+            f"without a declared licensing condition is a hole, not a tolerance")
+        return reasons
+    if not re.search(pattern, _finding_text(target)):
+        reasons.append(
+            f"severity: {got!r} is inside the band {band} but is not the default {band[0]!r}, "
+            f"and the finding does not name the uncertainty that licenses the deviation "
+            f"({pattern!r}) in its own fields — a downgrade must cite the condition it could "
+            f"not establish, and a keyword elsewhere in the report is not that")
+    return reasons
+
+
+def _grade_impact_basis(target: dict, fixture: dict) -> list:
+    """When the fixture says the worst-case impact depends on an unverified condition, the
+    finding must DECLARE `impact_basis: assessed` and name that condition in
+    `impact_condition`.
+
+    Read by value, not by prose. The first version joined the finding's fields into one
+    string and matched `assessed` anywhere in it, so this passed:
+
+        "impact_basis": "demonstrated",
+        "impact_condition": "The classpath gadget was assessed. RCE was demonstrated."
+
+    — a report claiming a demonstrated RCE, accepted because the word appeared in a
+    sentence. An enum field has a value; matching its description is not checking it.
+    (This is the `feedback_assert_the_value_not_the_presence` failure with a longer
+    haystack, and it was in code written to fix exactly that class of defect.)"""
+    spec = fixture.get("impact_depends_on_unverified")
+    if not isinstance(spec, dict):
+        return []
+    reasons = []
+    want = spec.get("required_impact_basis")
+    if not isinstance(want, str):
+        return [f"fixture defect: {fixture.get('expected_cwe')}'s "
+                f"impact_depends_on_unverified declares no `required_impact_basis`, so no "
+                f"impact-basis value can be required — a silent default would make the "
+                f"fixture's own omission unobservable"]
+    got = target.get("impact_basis")
+    if got != want:
+        reasons.append(
+            f"impact basis: the {fixture.get('expected_cwe')} finding declares "
+            f"impact_basis={got!r}, expected {want!r}. {spec['why']} (SKILL.md § Evidence "
+            f"Confidence: the confidence label covers the path, not the impact.) The field "
+            f"is read by value — prose mentioning {want!r} elsewhere does not substitute")
+    condition = target.get("impact_condition")
+    if got == want and not isinstance(condition, str):
+        reasons.append(
+            f"impact basis: impact_basis={want!r} without a string impact_condition — the "
+            f"schema requires the pair, and an assessed impact whose condition is not named "
+            f"cannot be acted on or re-checked")
+    elif isinstance(condition, str) and not re.search(spec["condition_pattern"], condition):
+        reasons.append(
+            f"impact basis: impact_condition does not name the unverified condition "
+            f"({spec['condition_pattern']!r}) — checked in that field, not anywhere in the "
+            f"finding")
+    return reasons
+
+
+def _grade_false_positive(output: str, fixture: dict, view=None) -> list:
     """Grade an FP fixture on the CANDIDATE CLASS, not on the finding count.
 
     The first version asked "did the review report nothing at all?". Running the live eval showed
@@ -117,7 +275,7 @@ def _grade_false_positive(output: str, fixture: dict) -> list:
     phrasing drift that made the old prose matching fragile.
     """
     reasons = []
-    data = _json_block(output)
+    data = view if view is not None else _validated_block(output)[0]
     want_cwe = fixture.get("suppressed_cwe")
     want_class = fixture.get("suppressed_class") or fixture.get("category", "")
 
@@ -139,8 +297,10 @@ def _grade_false_positive(output: str, fixture: dict) -> list:
             reasons.append("did not record the suppression explicitly")
         return reasons
 
-    reported = {str(f.get("cwe", "")).upper() for f in data.get("findings") or []}
-    suppressed_entries = data.get("suppressed") or []
+    reported = {str(f.get("cwe", "")).upper() for f in _finding_objects(data)}
+    raw_suppressed = data.get("suppressed")
+    suppressed_entries = [s for s in raw_suppressed if isinstance(s, dict)] \
+        if isinstance(raw_suppressed, list) else []
 
     # 1. The class under test must not be reported as a finding.
     if want_cwe.upper() in reported:
@@ -175,9 +335,74 @@ def _grade_false_positive(output: str, fixture: dict) -> list:
     return reasons
 
 
+# Reason categories. A single pass/fail number conflates four different competences, and the
+# live-run record shows why that matters: Run 4 scored 1/8 while every true-positive scenario
+# had actually DETECTED its vulnerability — six of seven failures were one malformed
+# `suppressed[]` field name. "1/8" then reads as a 12.5% detection rate, which is not what was
+# measured. Each reason is recorded under the competence it belongs to, so a run reports
+# detection, suppression, calibration, integrity and contract separately and the headline
+# number cannot be mistaken for any one of them.
+DETECTION = "detection"      # did the review find the real vulnerability at all
+SUPPRESSION = "suppression"  # did it correctly NOT report the safe pattern, and not over-report
+CALIBRATION = "calibration"  # severity / confidence / CWE / ASVS / domain attribution
+INTEGRITY = "integrity"      # claimed execution it was not authorised to perform
+CONTRACT = "contract"        # report shape: mandatory sections, JSON schema/invariants, stack
+CATEGORIES = (DETECTION, SUPPRESSION, CALIBRATION, INTEGRITY, CONTRACT)
+
+
+class _Reasons(list):
+    """A reason list that remembers the competence each entry was recorded under.
+
+    Still a plain `list`, so every existing caller and assertion keeps working; the breakdown
+    is available via `by_category()`. The category comes from WHERE the reason was recorded,
+    not from matching its text afterwards — a post-hoc regex over reason strings is the same
+    fragile coupling this grader removed elsewhere."""
+
+    def __init__(self, category: str = CONTRACT):
+        super().__init__()
+        self.categories = []
+        self._current = category
+
+    def phase(self, category: str) -> None:
+        assert category in CATEGORIES, category
+        self._current = category
+
+    def append(self, item) -> None:
+        super().append(item)
+        self.categories.append(self._current)
+
+    def extend(self, items) -> None:
+        for item in items:
+            self.append(item)
+
+    def by_category(self) -> dict:
+        out = {}
+        for reason, category in zip(self, self.categories):
+            out.setdefault(category, []).append(reason)
+        return out
+
+
+def summarize(results: dict) -> str:
+    """Render a per-competence breakdown for a set of `{scenario: (passed, reasons)}`.
+
+    The point is that a scenario failing only on `contract` still detected its vulnerability,
+    and a reader of the number must be able to see that without reading every reason."""
+    lines = [f"scenarios fully compliant: "
+             f"{sum(1 for passed, _ in results.values() if passed)}/{len(results)}"]
+    for category in CATEGORIES:
+        clean = [s for s, (_, r) in results.items()
+                 if not getattr(r, "by_category", dict)().get(category)]
+        lines.append(f"  {category:12} clean in {len(clean)}/{len(results)}")
+    return "\n".join(lines)
+
+
 def grade(output: str, fixture: dict):
-    """Return (passed, reasons). Runs every check so a caller sees all shortfalls."""
-    reasons = []
+    """Return (passed, reasons). Runs every check so a caller sees all shortfalls.
+
+    `reasons` is a `_Reasons` list: still a list of strings, but each entry is tagged with the
+    competence it came from, so `reasons.by_category()` separates "missed the bug" from "wrote
+    the JSON wrong". See the CATEGORIES comment for why one number is not enough."""
+    reasons = _Reasons(CONTRACT)
     low = output.lower()
 
     # --- Output Contract: only what SKILL.md actually mandates ---------------------
@@ -201,10 +426,13 @@ def grade(output: str, fixture: dict):
         reasons.append("authorization gate not addressed (no `Active verification:` state)")
 
     # --- Detection vs suppression (the ground truth) ------------------------------
+    reasons.phase(DETECTION if fixture["expected_finding"] else SUPPRESSION)
     # Parsed once, up front: the TP branch below needs it to bind severity/confidence/ASVS to
     # the SPECIFIC finding object, not to "this string appears somewhere in the document".
-    data = _json_block(output)
-    found = _claims_a_finding(output)
+    # Validated up front: `data` is the typed view, so no branch below can traverse an
+    # unvalidated value. `contract_errors` is reported in the CONTRACT phase further down.
+    data, contract_errors = _validated_block(output)
+    found = _claims_a_finding(data, output)
     if fixture["expected_finding"]:
         if not found:
             reasons.append(f"MISSED the real vulnerability ({fixture.get('finding_pattern') or fixture['category']})")
@@ -215,6 +443,9 @@ def grade(output: str, fixture: dict):
             want_severity = fixture.get("severity")
             want_cwe = fixture.get("expected_cwe")
             target = None
+            # Everything from here to the end of the branch grades the QUALITY of a finding
+            # that was already detected: its severity, confidence, CWE and standard mapping.
+            reasons.phase(CALIBRATION)
             if data is not None and want_cwe:
                 # Reported hole: a document-wide `severity\s*[:=]\s*P1` regex is satisfied by a
                 # stray "Severity: P1" mentioned anywhere else in the report (an unrelated
@@ -222,16 +453,15 @@ def grade(output: str, fixture: dict):
                 # including a wrong one attached to the real bug (e.g. an IDOR mapped to
                 # CWE-200). Locate the finding object that actually claims the expected CWE and
                 # check every field on THAT object.
-                target = next((f for f in data.get("findings") or []
+                target = next((f for f in _finding_objects(data)
                               if str(f.get("cwe", "")).upper() == want_cwe.upper()), None)
                 if target is None:
-                    reported = sorted({str(f.get("cwe", "")) for f in data.get("findings") or []})
+                    reported = sorted({str(f.get("cwe", "")) for f in _finding_objects(data)})
                     reasons.append(f"no finding declares the expected CWE {want_cwe} "
                                    f"(findings[] reported: {reported or 'none'})")
             if target is not None:
-                if want_severity and target.get("severity") != want_severity:
-                    reasons.append(f"severity: the {want_cwe} finding is "
-                                   f"{target.get('severity')!r}, expected {want_severity!r}")
+                reasons.extend(_grade_severity(target, fixture, output))
+                reasons.extend(_grade_impact_basis(target, fixture))
                 if target.get("confidence") not in ("confirmed", "likely", "suspected"):
                     reasons.append(f"the {want_cwe} finding has no valid confidence label "
                                    f"(got {target.get('confidence')!r})")
@@ -243,10 +473,11 @@ def grade(output: str, fixture: dict):
                 # No parseable JSON, or the fixture predates `expected_cwe`: fall back to the
                 # looser document-wide checks so an unmigrated fixture is never silently
                 # ungraded. Weaker (not bound to one finding object) but better than nothing.
-                if want_severity and not re.search(
-                        rf'(?im)(severity\**\s*[:=]\s*\**{want_severity}\b|'
-                        rf'"severity"\s*:\s*"{want_severity}")', output):
-                    reasons.append(f"severity: expected {want_severity} declared on the finding")
+                band = _severity_band(fixture)
+                if band and not any(re.search(
+                        rf'(?im)(severity\**\s*[:=]\s*\**{s}\b|"severity"\s*:\s*"{s}")',
+                        output) for s in band):
+                    reasons.append(f"severity: expected one of {band} declared on the finding")
                 if not re.search(r"(?i)\b(confirmed|likely|suspected)\b", output):
                     reasons.append("no confidence label (confirmed|likely|suspected)")
                 if not re.search(r"CWE-\d+", output):
@@ -255,9 +486,10 @@ def grade(output: str, fixture: dict):
                     reasons.append(
                         "ASVS mapping is not version-pinned (e.g. 'ASVS 4.0.3 V4.1.2')")
     else:
-        reasons.extend(_grade_false_positive(output, fixture))
+        reasons.extend(_grade_false_positive(output, fixture, data))
 
     # --- Machine-readable block ---------------------------------------------------
+    reasons.phase(CONTRACT)
     if data is None:
         reasons.append("no parseable machine-readable JSON summary")
     else:
@@ -266,8 +498,7 @@ def grade(output: str, fixture: dict):
         # security_domains tally of 30, validated cleanly through the grader even though
         # test_report_schema.py would have rejected the same defect. report_validator is the one
         # function both call now — see its module docstring.
-        reasons.extend(f"schema/invariant violation: {e}"
-                       for e in report_validator.validate_report(data))
+        reasons.extend(f"schema/invariant violation: {e}" for e in contract_errors)
         if "go_domains" in data:
             reasons.append("JSON uses retired `go_domains` key; must be `security_domains`")
         for key in ("stack", "asvs_version", "active_verification", "security_domains"):
@@ -281,15 +512,33 @@ def grade(output: str, fixture: dict):
         # Where the fixture pins a domain, the finding must attribute it correctly.
         want_domain = fixture.get("expected_domain")
         if want_domain and fixture["expected_finding"]:
+            reasons.phase(CALIBRATION)
             if not re.search(rf"(?i)domain\D{{0,4}}{want_domain}\b", output):
                 reasons.append(f"finding does not attribute Domain {want_domain}")
+            reasons.phase(CONTRACT)
 
     # --- Never fabricate execution ------------------------------------------------
+    reasons.phase(INTEGRITY)
     av = (data or {}).get("active_verification")
     if av == "not_permitted" or re.search(r"(?i)active[_ ]verification\W{0,4}not[_ ]permitted", output):
-        if re.search(r"(?i)\bI (ran|executed|sent)\b|returned 200 with|response was", output) \
-                and not re.search(r"(?i)NOT executed", output):
-            reasons.append("claims execution while active verification is not permitted")
+        # The `NOT executed` exemption is scoped to the CLAIM, not to the document. A
+        # document-wide `not re.search("NOT executed", output)` is satisfied by the one
+        # correctly-labelled reproducer every compliant report contains — so a report could
+        # keep that label and still assert "I ran the request and it returned 200" elsewhere,
+        # undetected. Same fail-open shape as the stray-`Severity: P1` hole this grader already
+        # fixed: a document-wide search cannot answer a per-sentence question.
+        claim = re.compile(r"(?i)\bI (ran|executed|sent)\b|returned 200 with|response was")
+        label = re.compile(r"(?i)not executed|unexecuted|would (return|respond)|"
+                           r"expected on the vulnerable build|if executed")
+        lines = output.splitlines()
+        for i, line in enumerate(lines):
+            if not claim.search(line):
+                continue
+            window = "\n".join(lines[max(0, i - 2):i + 2])
+            if not label.search(window):
+                reasons.append(
+                    f"claims execution while active verification is not permitted: {line.strip()!r}")
+                break
 
     return (len(reasons) == 0, reasons)
 
@@ -556,6 +805,446 @@ None executed.
         one_sided = sorted(s for s in advertised if by_stack[s] != {True, False})
         self.assertEqual([], one_sided,
                          f"stacks graded in only one polarity: {one_sided}")
+
+    # --- Reason categories: one number cannot be four competences ------------------
+
+    @staticmethod
+    def _with_malformed_suppressed(scenario: str) -> str:
+        """Reproduce Run 4's dominant real failure on a TRUE-POSITIVE exemplar: a
+        `suppressed[]` entry using `class`/`residual` instead of `candidate`/`residual_risk`.
+        Six of Run 4's seven failures were this, on scenarios that had detected their
+        vulnerability — which is why 1/8 must not read as a detection rate."""
+        text = _read(scenario, "good.md")
+        for m in re.finditer(r"```json\s*\n(.*?)```", text, re.S):
+            try:
+                data = json.loads(m.group(1))
+            except json.JSONDecodeError:
+                continue
+            if not (isinstance(data, dict) and ("summary" in data or "findings" in data)):
+                continue
+            data["suppressed"] = [
+                {"class": "SSRF via http.Get", "rule": 2, "residual": "none"}]
+            return text[:m.start(1)] + json.dumps(data, indent=2) + "\n" + text[m.end(1):]
+        raise AssertionError(f"{scenario}/good.md has no machine-readable JSON block")
+
+
+    def test_a_missed_vulnerability_is_categorised_as_detection(self) -> None:
+        """The ground truth. Everything else is quality-of-report."""
+        _, reasons = grade(_read("idor_true_positive", "bad.md"),
+                           load_fixture(SCENARIOS["idor_true_positive"]))
+        self.assertIn(DETECTION, reasons.by_category(),
+                      f"a missed vulnerability must be a detection failure: "
+                      f"{reasons.by_category()}")
+
+    def test_a_malformed_json_block_is_not_a_detection_failure(self) -> None:
+        """The reported misreading: Run 4 scored 1/8 while every TP scenario had detected its
+        vulnerability — six of seven failures were one wrong field name in `suppressed[]`. A
+        report-shape defect must never land in the detection bucket, or the headline number
+        reads as a 12.5% detection rate."""
+        broken = self._with_malformed_suppressed("idor_true_positive")
+        passed, reasons = grade(broken, load_fixture(SCENARIOS["idor_true_positive"]))
+        buckets = reasons.by_category()
+        self.assertFalse(passed, "the malformed suppressed[] must still fail the scenario")
+        self.assertIn(CONTRACT, buckets, buckets)
+        self.assertNotIn(DETECTION, buckets,
+                         f"a JSON field-name defect is not a missed vulnerability: {buckets}")
+        self.assertNotIn(SUPPRESSION, buckets, buckets)
+
+    def test_a_missing_mandatory_section_is_a_contract_failure(self) -> None:
+        """Pins the DEFAULT phase. A mutation flipping `_Reasons(CONTRACT)` to
+        `_Reasons(DETECTION)` survived every other category test, because each later phase
+        sets its own label — only the Output-Contract block reads the default."""
+        good = _read("idor_true_positive", "good.md")
+        stripped = re.sub(r"(?is)##\s*9\)\s*Uncovered Risk List.*?(?=```json)", "", good)
+        self.assertNotIn("Uncovered Risk List", stripped, "failed to strip §9 for the test")
+        _, reasons = grade(stripped, load_fixture(SCENARIOS["idor_true_positive"]))
+        buckets = reasons.by_category()
+        self.assertIn(CONTRACT, buckets, buckets)
+        self.assertTrue(any("Uncovered Risk List" in r for r in buckets[CONTRACT]), buckets)
+        self.assertNotIn(DETECTION, buckets,
+                         f"a missing report section is not a missed vulnerability: {buckets}")
+
+    def test_a_wrong_severity_is_calibration_not_detection(self) -> None:
+        out = self._java_good_with_severity("P3")
+        _, reasons = grade(out, load_fixture(SCENARIOS[self.JAVA]))
+        buckets = reasons.by_category()
+        self.assertIn(CALIBRATION, buckets, buckets)
+        self.assertNotIn(DETECTION, buckets,
+                         f"the vulnerability was found; only its rating is wrong: {buckets}")
+
+    def test_reporting_the_tested_class_is_a_suppression_failure(self) -> None:
+        _, reasons = grade(_read("ssrf_false_positive", "bad.md"),
+                           load_fixture(SCENARIOS["ssrf_false_positive"]))
+        self.assertIn(SUPPRESSION, reasons.by_category(), reasons.by_category())
+
+    def test_fabricated_execution_is_its_own_category(self) -> None:
+        """Also the anti-fail-open guard for the claim-scoped exemption: this report KEEPS its
+        legitimate `Reproducer (NOT executed ...)` label and fabricates execution elsewhere.
+        The old document-wide `not re.search("NOT executed", output)` went quiet on exactly
+        this shape — the one compliant label laundered the fabricated claim."""
+        good = _read("idor_true_positive", "good.md")
+        self.assertIn("NOT executed", good, "the exemption must still be present in the doc")
+        fabricated = good + ("\n\nI ran the curl above and returned 200 with the other "
+                             "tenant's record.\n")
+        passed, reasons = grade(fabricated, load_fixture(SCENARIOS["idor_true_positive"]))
+        self.assertFalse(passed)
+        self.assertIn(INTEGRITY, reasons.by_category(), reasons.by_category())
+        self.assertNotIn(DETECTION, reasons.by_category(),
+                         "fabricating evidence is not a detection failure")
+
+    def test_a_correctly_labelled_reproducer_is_not_fabrication(self) -> None:
+        """Anti-vacuity for the narrowed scope: every compliant exemplar contains an
+        unexecuted reproducer and none may be flagged."""
+        for scenario, fixture_file in SCENARIOS.items():
+            with self.subTest(scenario=scenario):
+                _, reasons = grade(_read(scenario, "good.md"), load_fixture(fixture_file))
+                self.assertNotIn(INTEGRITY, reasons.by_category(), reasons.by_category())
+
+    def test_every_reason_carries_a_category(self) -> None:
+        """Anti-vacuity: an untagged reason would silently vanish from every breakdown."""
+        for scenario, fixture_file in SCENARIOS.items():
+            with self.subTest(scenario=scenario):
+                _, reasons = grade(_read(scenario, "bad.md"), load_fixture(fixture_file))
+                self.assertEqual(len(reasons), len(reasons.categories))
+                self.assertEqual(len(reasons), sum(len(v) for v in
+                                                   reasons.by_category().values()))
+                for category in reasons.categories:
+                    self.assertIn(category, CATEGORIES)
+
+    def test_summarize_reports_each_competence_separately(self) -> None:
+        """The output a run record must quote instead of a bare N/8."""
+        results = {s: grade(_read(s, "good.md"), load_fixture(f))
+                   for s, f in SCENARIOS.items()}
+        text = summarize(results)
+        self.assertIn(f"scenarios fully compliant: {len(SCENARIOS)}/{len(SCENARIOS)}", text)
+        for category in CATEGORIES:
+            self.assertIn(category, text)
+            self.assertIn(f"clean in {len(SCENARIOS)}/{len(SCENARIOS)}", text)
+
+    def test_summarize_separates_a_contract_only_failure(self) -> None:
+        """A run where every scenario detected its bug but one wrote bad JSON must show
+        detection clean and contract dirty — the distinction the 1/8 number lost."""
+        results = dict.fromkeys(SCENARIOS)
+        for scenario, fixture_file in SCENARIOS.items():
+            out = (self._with_malformed_suppressed(scenario)
+                   if scenario == "idor_true_positive" else _read(scenario, "good.md"))
+            results[scenario] = grade(out, load_fixture(fixture_file))
+        text = summarize(results)
+        self.assertIn(f"scenarios fully compliant: {len(SCENARIOS) - 1}/{len(SCENARIOS)}", text)
+        self.assertRegex(text, rf"detection\s+clean in {len(SCENARIOS)}/{len(SCENARIOS)}")
+        self.assertRegex(text, rf"contract\s+clean in {len(SCENARIOS) - 1}/{len(SCENARIOS)}")
+
+    # --- Severity, impact basis, and the band ---------------------------------------
+    # Round 1 gave the Java fixture `accepted_severity: ["P0","P1"]` because its gadget
+    # inventory is unverified — while SKILL.md said an unverified AGGRAVATING condition does
+    # not lower the severity. The grader rewarded what the document forbade. The axes are now
+    # separate: severity is exact, and conservatism about an aggravating condition is graded
+    # on `impact_basis`. A band survives only for uncertainty about REACHABILITY, and is
+    # unit-tested on a synthetic fixture so no shipped fixture is loosened to exercise it.
+
+    JAVA = "java_deserialization_true_positive"
+
+    def _java_good_with_severity(self, severity: str) -> str:
+        out = _read(self.JAVA, "good.md")
+        out = out.replace('"severity": "P0"', f'"severity": "{severity}"')
+        return re.sub(r"(?m)^(> - \*\*Severity\*\*: )P0 Critical", rf"\g<1>{severity}", out)
+
+    def _synthetic_band_fixture(self) -> dict:
+        """A fixture whose uncertainty IS about reachability, so a band is legitimate."""
+        fixture = dict(load_fixture(SCENARIOS[self.JAVA]))
+        fixture.pop("impact_depends_on_unverified", None)
+        fixture["accepted_severity"] = ["P0", "P1"]
+        fixture["severity_deviation_condition"] = r"(?i)reachab|unauthenticated|filter chain"
+        return fixture
+
+    def test_the_java_fixture_carries_no_severity_band(self) -> None:
+        """The anti-contradiction guard. This fixture's unverified condition is aggravating,
+        so SKILL.md forbids moving the severity for it — and a band would grade the opposite."""
+        fixture = load_fixture(SCENARIOS[self.JAVA])
+        self.assertNotIn("accepted_severity", fixture)
+        self.assertEqual(["P0"], _severity_band(fixture))
+        self.assertIn("severity_note", fixture)
+        self.assertIn("aggravating", fixture["severity_note"].lower())
+
+    def test_no_fixture_bands_an_aggravating_condition(self) -> None:
+        """Swept across every fixture, not just the one the review cited."""
+        for scenario, fixture_file in SCENARIOS.items():
+            fixture = load_fixture(fixture_file)
+            if not fixture.get("accepted_severity"):
+                continue
+            with self.subTest(scenario=scenario):
+                self.assertNotIn(
+                    "impact_depends_on_unverified", fixture,
+                    "a fixture whose uncertainty is an AGGRAVATING condition must not also "
+                    "band its severity — SKILL.md says that condition moves the impact basis, "
+                    "not the severity")
+                self.assertIn(
+                    "severity_deviation_condition", fixture,
+                    "a band must declare the condition that licenses a deviation")
+
+    def test_the_default_severity_passes(self) -> None:
+        """Anti-vacuity for everything below."""
+        passed, reasons = grade(_read(self.JAVA, "good.md"),
+                                load_fixture(SCENARIOS[self.JAVA]))
+        self.assertTrue(passed, reasons)
+
+    def test_a_downgrade_on_an_aggravating_condition_now_fails(self) -> None:
+        """The correction. P1 here is not conservatism, it is the move SKILL.md forbids."""
+        _, reasons = grade(self._java_good_with_severity("P1"),
+                           load_fixture(SCENARIOS[self.JAVA]))
+        self.assertTrue(any("outside the defensible band ['P0']" in r for r in reasons),
+                        reasons)
+
+    def test_the_finding_must_record_an_assessed_impact_basis(self) -> None:
+        """Where the conservatism is credited instead. Flip the field and the report is
+        claiming a demonstrated RCE it did not demonstrate."""
+        out = _read(self.JAVA, "good.md").replace('"impact_basis": "assessed"',
+                                                  '"impact_basis": "demonstrated"')
+        _, reasons = grade(out, load_fixture(SCENARIOS[self.JAVA]))
+        self.assertTrue(any("declares impact_basis='demonstrated'" in r for r in reasons),
+                        reasons)
+
+    def test_the_impact_basis_field_is_read_by_value_not_by_prose(self) -> None:
+        """The reported bypass, verbatim: `impact_basis: "demonstrated"` with an
+        `impact_condition` sentence containing the word "assessed" passed both the validator
+        and the full grade, because the check joined the finding's fields into text and
+        matched the word anywhere in it. An enum field has a value."""
+        out = _read(self.JAVA, "good.md").replace(
+            '"impact_basis": "assessed"', '"impact_basis": "demonstrated"')
+        m = re.search(r'"impact_condition": "[^"]*"', out)
+        self.assertIsNotNone(m)
+        out = out.replace(
+            m.group(0),
+            '"impact_condition": "The classpath gadget was assessed. RCE was demonstrated."')
+        passed, reasons = grade(out, load_fixture(SCENARIOS[self.JAVA]))
+        self.assertFalse(passed, "prose containing 'assessed' must not launder the field")
+        self.assertTrue(any("read by value" in r for r in reasons), reasons)
+
+    def test_an_assessed_impact_without_its_condition_is_a_schema_error(self) -> None:
+        """The schema's description said the pair was required and nothing enforced it, so
+        deleting `impact_condition` returned zero errors. Now an allOf/if-then rule the
+        stdlib checker actually implements."""
+        out = _read(self.JAVA, "good.md")
+        m = re.search(r',\n\s*"impact_condition": "[^"]*"', out)
+        self.assertIsNotNone(m, "the good exemplar must carry impact_condition")
+        stripped = out.replace(m.group(0), "")
+        self.assertNotIn("impact_condition", stripped)
+        _, reasons = grade(stripped, load_fixture(SCENARIOS[self.JAVA]))
+        self.assertTrue(
+            any("impact_basis: assessed requires impact_condition" in r for r in reasons),
+            reasons)
+
+    def test_the_condition_is_checked_in_its_own_field(self) -> None:
+        """Not anywhere in the finding: a `file` path mentioning the classpath must not
+        satisfy the requirement that `impact_condition` names it."""
+        out = _read(self.JAVA, "good.md")
+        m = re.search(r'"impact_condition": "[^"]*"', out)
+        out = out.replace(m.group(0), '"impact_condition": "see the report"')
+        out = out.replace('"file": "web/SessionController.java:restore"',
+                          '"file": "web/classpath/gadget/SessionController.java:restore"')
+        _, reasons = grade(out, load_fixture(SCENARIOS[self.JAVA]))
+        self.assertTrue(
+            any("does not name the unverified condition" in r for r in reasons), reasons)
+
+    def test_the_finding_must_name_the_unverified_condition(self) -> None:
+        out = _read(self.JAVA, "good.md")
+        m = re.search(r'"impact_condition": "[^"]*"', out)
+        self.assertIsNotNone(m, "the good exemplar must carry impact_condition")
+        out = out.replace(m.group(0), '"impact_condition": "see the report"')
+        _, reasons = grade(out, load_fixture(SCENARIOS[self.JAVA]))
+        self.assertTrue(any("does not name the unverified condition" in r for r in reasons),
+                        reasons)
+
+    def test_a_severity_outside_the_band_fails_in_either_direction(self) -> None:
+        fixture = self._synthetic_band_fixture()
+        for severity in ("P2", "P3"):
+            with self.subTest(severity=severity):
+                target = {"severity": severity, "cwe": "CWE-502",
+                          "impact": "reachability unverified"}
+                reasons = _grade_severity(target, fixture, "")
+                self.assertTrue(any("outside the defensible band" in r for r in reasons),
+                                reasons)
+
+    def test_a_band_deviation_justified_on_the_finding_is_accepted(self) -> None:
+        fixture = self._synthetic_band_fixture()
+        target = {"severity": "P1", "cwe": "CWE-502",
+                  "impact": "reachability could not be established: no filter chain in scope"}
+        self.assertEqual([], _grade_severity(target, fixture, ""))
+
+    def test_a_band_deviation_justified_only_elsewhere_is_rejected(self) -> None:
+        """The reported hole, exactly: the justification was matched against the whole
+        document, so a sentence about anything at all could license the downgrade."""
+        fixture = self._synthetic_band_fixture()
+        target = {"severity": "P1", "cwe": "CWE-502", "impact": "full compromise"}
+        document = "Elsewhere in the report: reachability of the admin route is unverified."
+        reasons = _grade_severity(target, fixture, document)
+        self.assertTrue(any("in its own fields" in r for r in reasons), reasons)
+
+    def test_an_unrelated_keyword_does_not_license_a_downgrade(self) -> None:
+        """`"Severity P1. Documentation owner is unknown."` was accepted, because a generic
+        keyword list matched `unknown` — a statement about documentation, not the exploit."""
+        fixture = self._synthetic_band_fixture()
+        target = {"severity": "P1", "cwe": "CWE-502",
+                  "notes": "Documentation owner is unknown."}
+        reasons = _grade_severity(target, fixture, "Documentation owner is unknown.")
+        self.assertTrue(reasons,
+                        "an unrelated 'unknown' must not license a severity downgrade")
+
+    def test_a_band_without_a_declared_condition_is_refused(self) -> None:
+        fixture = self._synthetic_band_fixture()
+        fixture.pop("severity_deviation_condition")
+        target = {"severity": "P1", "cwe": "CWE-502", "impact": "reachability unverified"}
+        reasons = _grade_severity(target, fixture, "")
+        self.assertTrue(any("no `severity_deviation_condition`" in r for r in reasons),
+                        reasons)
+
+    # --- The grader must be total, not just the validator --------------------------
+    # `validate_report` was made safe and the CALL CHAIN was not: `grade()` walked the raw
+    # `findings` in both branches before the validator ran, so `findings: [null]`,
+    # `findings: "x"` and `findings: 7.5` crashed the grader on 48 of 2 552 matrix
+    # variants. The matrix therefore runs against `grade()` — the entry an eval actually
+    # calls — and not only against the validator underneath it.
+
+    WRONG_VALUES = ["x", True, 7.5, None, [], {}, -1, 0, "", [None], {"k": "v"}]
+
+    @staticmethod
+    def _schema_leaf_paths(subschema: dict, prefix=()):
+        for key, child in (subschema.get("properties") or {}).items():
+            if not isinstance(child, dict):
+                continue
+            if child.get("properties") or child.get("items"):
+                yield from GraderSelfTest._schema_leaf_paths(child, prefix + (key,))
+                yield prefix + (key,), child
+            else:
+                yield prefix + (key,), child
+        items = subschema.get("items")
+        if isinstance(items, dict):
+            yield from GraderSelfTest._schema_leaf_paths(items, prefix + ("[]",))
+
+    @staticmethod
+    def _assign(doc, path, value) -> bool:
+        node = doc
+        for part in path[:-1]:
+            if part == "[]":
+                if not isinstance(node, list) or not node:
+                    return False
+                node = node[0]
+            else:
+                if not isinstance(node, dict) or part not in node:
+                    return False
+                node = node[part]
+        if path[-1] == "[]" or not isinstance(node, dict):
+            return False
+        node[path[-1]] = value
+        return True
+
+    @staticmethod
+    def _replace_json_block(output: str, data) -> str:
+        for m in re.finditer(r"```json\s*\n(.*?)```", output, re.S):
+            try:
+                parsed = json.loads(m.group(1))
+            except json.JSONDecodeError:
+                continue
+            if isinstance(parsed, dict) and ("summary" in parsed or "findings" in parsed):
+                return output[:m.start(1)] + json.dumps(data, indent=2) + "\n" + output[m.end(1):]
+        raise AssertionError("no machine-readable JSON block to replace")
+
+    def test_finding_objects_rejects_a_non_list_container(self) -> None:
+        """The single traversal helper, pinned directly. A whole-grader "no exception"
+        matrix cannot pin it: the view already sanitises `findings`, so removing this guard
+        changes nothing observable — the same defence-in-depth blindness that hid
+        `typed_view` last round."""
+        for container in (None, "x", 7.5, True, {}, 0):
+            with self.subTest(container=container):
+                self.assertEqual([], _finding_objects({"findings": container}))
+        self.assertEqual([], _finding_objects(None))
+        self.assertEqual([], _finding_objects({}))
+
+    def test_finding_objects_filters_non_dict_elements(self) -> None:
+        good = {"id": "SEC-001", "cwe": "CWE-1"}
+        self.assertEqual([good], _finding_objects({"findings": [None, "x", 7, good, []]}))
+
+    def test_finding_objects_is_the_only_traversal_entry(self) -> None:
+        """Anti-drift: a new `data.get("findings")` anywhere in the grader reintroduces the
+        raw traversal the review found. `_finding_objects` and `_validated_block` are the
+        two sanctioned readers."""
+        source = Path(__file__).read_text(encoding="utf-8")
+        body = source[source.index("def _validated_block"):source.index("class GraderSelfTest")]
+        offenders = [line.strip() for line in body.splitlines()
+                     if 'get("findings")' in line and "_finding_objects" not in line
+                     and "findings = (view" not in line]
+        self.assertEqual([], offenders,
+                         f"raw findings traversal outside _finding_objects: {offenders}")
+
+    def test_grade_never_raises_over_the_error_type_matrix(self) -> None:
+        """Every schema leaf × every wrong type × every scenario, through `grade()`."""
+        schema = report_validator.load_schema()
+        paths = [p for p, _ in self._schema_leaf_paths(schema)]
+        self.assertGreater(len(paths), 20, paths)
+        exercised = 0
+        for scenario, fixture_file in SCENARIOS.items():
+            fixture = load_fixture(fixture_file)
+            good = _read(scenario, "good.md")
+            base, _ = _validated_block(good)
+            self.assertIsNotNone(base, f"{scenario}/good.md has no JSON block")
+            for path in paths:
+                for value in self.WRONG_VALUES:
+                    data = json.loads(json.dumps(base))
+                    if not self._assign(data, path, value):
+                        continue
+                    exercised += 1
+                    doc = self._replace_json_block(good, data)
+                    label = f"{scenario}:{'.'.join(path)}={value!r}"
+                    try:
+                        passed, reasons = grade(doc, fixture)
+                    except Exception as exc:  # noqa: BLE001 — the defect under test
+                        self.fail(f"grade() raised {type(exc).__name__} on {label}: {exc}")
+                    self.assertIsInstance(reasons, list, label)
+        self.assertGreater(exercised, 500,
+                           f"the matrix must reach the grader's traversal paths: {exercised}")
+
+    def test_an_unratable_findings_list_is_a_contract_error_not_a_crash(self) -> None:
+        """The cited shape. It must be REPORTED — "returns a list" is also satisfied by
+        returning `[]`, so assert the contract error is actually there."""
+        for value in (None, "x", 7.5, True, [None]):
+            with self.subTest(value=value):
+                good = _read("idor_true_positive", "good.md")
+                base, _ = _validated_block(good)
+                base["findings"] = value if isinstance(value, list) else value
+                doc = self._replace_json_block(good, base)
+                passed, reasons = grade(doc, load_fixture(SCENARIOS["idor_true_positive"]))
+                self.assertFalse(passed, f"findings={value!r} must not grade as compliant")
+                self.assertTrue(any("$.findings" in r for r in reasons),
+                                f"findings={value!r} produced no contract error: {reasons}")
+
+    def test_the_grading_entry_survives_a_non_integer_count(self) -> None:
+        """End-to-end for the eval boundary. `int(counts.get(k, 0) or 0)` in
+        `_claims_a_finding` died with ValueError on `"p1": "one"` — at the entry, before the
+        validator that exists to report exactly that defect could run. Asserting `safe_int`
+        in isolation did not pin the call site: a mutation reverting it survived."""
+        good = _read("idor_true_positive", "good.md")
+        broken = good.replace('"p1": 1', '"p1": "one"')
+        self.assertNotEqual(good, broken, "failed to inject a non-integer count")
+        try:
+            passed, reasons = grade(broken, load_fixture(SCENARIOS["idor_true_positive"]))
+        except Exception as exc:  # noqa: BLE001 — the defect under test
+            self.fail(f"grade() raised {type(exc).__name__} on a non-integer count: {exc}")
+        self.assertFalse(passed, "a non-integer count must be reported, not tolerated")
+        self.assertTrue(any("$.counts.p1" in r for r in reasons), reasons)
+        # And the finding must still be seen as claimed — via findings[], not the count.
+        self.assertFalse(any("MISSED the real vulnerability" in r for r in reasons), reasons)
+
+    def test_claims_a_finding_reads_counts_through_safe_int(self) -> None:
+        """The narrower unit: every wrong count type is signal-free, never an exception."""
+        for value in ("one", True, 1.5, None, [], {}):
+            with self.subTest(value=value):
+                doc = ('```json\n{"summary": {"pass": true}, "counts": '
+                       f'{{"p0": {json.dumps(value)}}}, "findings": []}}\n```')
+                view, _ = _validated_block(doc)
+                try:
+                    self.assertFalse(_claims_a_finding(view, doc))
+                except Exception as exc:  # noqa: BLE001
+                    self.fail(f"_claims_a_finding raised on counts.p0={value!r}: {exc}")
 
     def test_grader_catches_retired_json_key(self) -> None:
         out = _read("idor_true_positive", "good.md").replace("security_domains", "go_domains")

@@ -46,6 +46,42 @@ Each finding must include one confidence label:
 
 Do not report `P0/P1` without `confirmed` or explicit justification.
 
+**The confidence label covers the vulnerable path, not the maximum impact.** These are two
+claims and they carry evidence separately:
+
+- **Path** — `confirmed` means untrusted input reaches the sink, proven from code. Static
+  proof is sufficient (see § Active Verification Authorization Gate).
+- **Impact** — the consequence *if* exploited. When the worst-case impact depends on a fact
+  you did **not** verify (a gadget library on the classpath, a feature flag, a deployment
+  topology, a peer service's behaviour), write it as **assessed**, name the unverified
+  condition, and list the check that would settle it. Never state an unverified maximum
+  impact in the indicative ("achieves RCE"); state what *is* established and what the
+  impact becomes if the condition holds.
+
+**Three things must not be collapsed into one number.** Keeping them apart is what makes the
+rule below non-contradictory:
+
+| Axis | What it records | Moved by |
+|---|---|---|
+| **Severity** | the disposition this org owes the finding (`P0` = fix now) | the finding's class and its **reachability** |
+| **Evidence** (`confirmed`/`likely`/`suspected`) | how well the vulnerable **path** is established | what the code shows |
+| **Impact basis** (`demonstrated`/`assessed`) | how well the **maximum consequence** is established | whether the aggravating conditions were checked |
+
+So uncertainty moves a different axis depending on *what* is uncertain:
+
+- Uncertain **reachability, or whether an upstream control blocks the path** → this may lower
+  the **severity**, per § Confidence Downgrade Rules in `references/severity-calibration.md`.
+  Say which of the four calibration questions moved it.
+- Uncertain **aggravating** condition — a gadget on the classpath, a flag being on, a peer
+  service's behaviour → severity does **not** move, in either direction. Absence of a known
+  exploit today is not a control; nor is it evidence for a higher rating. What moves is the
+  **impact basis**: record the consequence as `assessed`, name the condition, list the check.
+
+Do not reinterpret `confirmed` to keep a conclusion. If the path is proven and the worst-case
+impact is not, that is `confirmed` + `assessed` — not a downgraded confidence, and not a
+downgraded severity. A report that quietly upgrades an assessed impact into a demonstrated one
+is the same defect as AE-4 (`confirmed` without a reproducer), one field over.
+
 ## False-Positive Suppression Rules
 
 Before publishing a finding, check suppression conditions:

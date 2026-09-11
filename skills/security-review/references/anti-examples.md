@@ -16,6 +16,27 @@ For the core anti-examples (style findings, over-reporting false positives, miss
 **Wrong**: `SEC-003: P0 confirmed — SQL injection in search handler` with no reproducer, no exploit path, and no evidence beyond seeing string concatenation.
 **Correct**: Either provide a reproducer (`curl` command + expected response) for `confirmed`, or downgrade to `likely`/`suspected` with a clear statement of what assumption remains unproven.
 
+## AE-5: Demonstrated Impact Asserted From an Unverified Condition
+
+**Wrong**: `SEC-001: P0 confirmed — remote code execution via Java native deserialization`,
+with `Impact: remote code execution as the service account — full host compromise`, while the
+same report records "whether a known gadget library is on the classpath is unresolved". The
+path is genuinely confirmed; the RCE *impact* was not established by this review, and the
+report states it in the indicative anyway.
+
+**Correct**: keep the severity (unfiltered native deserialization of network input is P0 by
+class and reachability), and split the two claims:
+
+- `Confirmed`: untrusted bytes reach `ObjectInputStream.readObject` with no filter — CWE-502.
+  Independent of any gadget, this already permits instantiation of arbitrary `Serializable`
+  types on the classpath and unbounded object-graph expansion.
+- `Assessed (not demonstrated here)`: remote code execution, **if** a gadget chain is present.
+  Unverified condition: the classpath inventory. Checks that would settle it:
+  `mvn dependency:tree`, and whether a JEP 290 filter is configured.
+
+The severity does not move for the unverified condition in either direction — but the reader
+must be able to tell which sentence is evidence and which is inference.
+
 ## AE-6: Accepting P0 Without Escalation
 
 **Wrong**: Adding a P0 finding to the Risk Acceptance Register with approver: "tech lead."

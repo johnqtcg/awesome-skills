@@ -98,24 +98,31 @@ direction — see `../../references/lang-python.md § Python XML` and the execut
 | False positives | 8 |
 | Categories covered | auth, secrets, injection, concurrency, resource_lifecycle, session, container, endpoint, ssrf, crypto, deserialization, prototype_pollution, xxe |
 | Stacks with both polarities | go, python, nodejs, java (enforced by `test_every_supported_stack_has_a_behavioural_fixture`) |
-| Contract tests | 60 |
+| Contract tests | 89 |
 | Golden-fixture tests | 37 |
-| Executable-example tests | 48 |
-| Forward-eval tests | 40 |
-| Report-schema tests | 60 |
-| **Total tests** | **245** |
-| SKILL.md lines | 410 (budget: ≤ 500, 90 lines headroom) |
+| Executable-example tests | 49 |
+| Forward-eval tests | 71 |
+| Report-schema tests | 80 |
+| **Total tests** | **326** |
+| SKILL.md lines | 446 (budget: ≤ 500, 54 lines headroom) |
 
 These counts are **self-checking** — `test_skill_contract.py::TestCoverageDocAccuracy` recomputes
 them from disk and fails if this table drifts. They previously read 46 tests / 494 lines while the
 real values were 48 / 500.
 
 **Why `pytest` reports more than `Total tests`.** The number above counts the five `test_*.py`
-layer modules. `examples/python/xml_facts_test.py` adds 18 more: it is driven as a subprocess by
-`test_examples_executable.py` (so it participates in the layer accounting through that one test),
-but its filename also matches pytest's `*_test.py` pattern, so `python3 -m pytest
-skills/security-review` collects it directly and reports 263. Both numbers are correct for what
-they count; neither is the other's error.
+layer modules. The nested `examples/python/*_test.py` matrices add more on top: each is driven as
+a subprocess by `test_examples_executable.py` (so it participates in the layer accounting through
+that one test), but their filenames also match pytest's `*_test.py` pattern, so `python3 -m pytest
+skills/security-review` collects them directly.
+
+| Nested matrix | Tests | Runs here? |
+|---|---|---|
+| `examples/python/xml_facts_test.py` adds 18 more: | 18 | yes (lxml installed; Expat rows always) |
+| `examples/python/jinja_ssti_facts_test.py` adds 10 more: | 6 | **no** — jinja2 is not installed and no package index is reachable, so § SSTI is documentation-verified here and execution-verified wherever Jinja exists. `run_regression.sh` reports it as a named skip |
+
+`pytest` collects it directly and reports 354. Both numbers are correct for what they count;
+neither is the other's error.
 
 ## Test Layers
 
