@@ -1,0 +1,22 @@
+{
+  "id": "json_roundtrip",
+  "description": "JSON-backed round-trip codec (Template B) whose contract holds only for valid UTF-8. Grades the direction seed replay cannot see: an oracle that asserts raw equality over the whole mutated domain fails on the CORRECT implementation within a second, because encoding/json rewrites invalid UTF-8 to U+FFFD. The mutation adds silent truncation so the same fixture still grades real bug-finding power.",
+  "expected_verdict": "suitable",
+  "expected_fuzz_mode": "round-trip",
+  "expected_template": "Template B",
+  "min_seeds": 3,
+  "requires_size_guard": true,
+  "mutation": {
+    "find": "func Encode(d Doc) ([]byte, error) { return json.Marshal(d) }",
+    "replace": "func Encode(d Doc) ([]byte, error) {\n\tif len(d.Name) > 8 {\n\t\td.Name = d.Name[:8] // silent truncation\n\t}\n\treturn json.Marshal(d)\n}",
+    "defect": "Encode silently truncates Name to 8 bytes, so any longer Name round-trips wrong",
+    "witness": "Doc{Name: \"a-name-longer-than-eight\", Size: 1}"
+  },
+  "fuzztime_kill": "10s",
+  "fuzztime_clean": "5s",
+  "bad_expected_reasons": [
+    "FAILS under fuzzing on the CORRECT implementation"
+  ],
+  "notes": "This fixture exists because grading a harness only against the MUTANT cannot distinguish 'finds the bug' from 'fails on everything'. The bad exemplar here is the skill's pre-fix Template B: it detects the mutation and is still wrong, because it also fails on correct code. Only fuzz_stays_clean separates the two.",
+  "witness_corpus": "go test fuzz v1\nstring(\"a-name-longer-than-eight\")\nint32(1)\n"
+}

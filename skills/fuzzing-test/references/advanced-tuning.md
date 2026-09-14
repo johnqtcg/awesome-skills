@@ -6,18 +6,40 @@ Load this file only when diagnosing ineffective fuzz runs, debugging OOM/leak/fl
 
 ### Evaluating Fuzz Effectiveness
 
-After a fuzz run, check whether coverage is actually growing:
+**`-coverprofile` cannot be combined with `-fuzz`.** The toolchain rejects it outright
+(verified on Go 1.26.1, same on 1.25.x):
+
+```
+$ go test -run=^$ -fuzz=^FuzzXxx$ -fuzztime=30s -coverprofile=fuzz_cover.out .
+cannot use -coverprofile flag with -fuzz flag
+```
+
+So coverage analysis is **two steps**, not one — explore first, then profile what the
+exploration produced:
 
 ```bash
-# run fuzz with coverage profile
-go test -run=^$ -fuzz=^FuzzXxx$ -fuzztime=30s -coverprofile=fuzz_cover.out .
+# 1. EXPLORE. `-cover` (no profile) IS accepted with -fuzz and prints a console summary.
+go test -run=^$ -fuzz=^FuzzXxx$ -fuzztime=30s -cover .
 
-# inspect coverage
+# 2. PROFILE by replaying the corpus. `-run` mode takes every coverage flag.
+#    This covers the committed corpus in testdata/fuzz; add the cached interesting
+#    inputs first if you want the exploration's reach (see below).
+go test -run='^FuzzXxx$' -coverprofile=fuzz_cover.out .
+
 go tool cover -func=fuzz_cover.out | grep -E "total:|<target_package>"
-
-# visualize uncovered paths
 go tool cover -html=fuzz_cover.out -o fuzz_cover.html
 ```
+
+To profile what the *fuzzer* reached rather than only the committed corpus, copy the
+cached inputs into the corpus directory before step 2:
+
+```bash
+CACHE="$(go env GOCACHE)/fuzz/<module>/<pkg>/FuzzXxx"
+mkdir -p testdata/fuzz/FuzzXxx && cp "$CACHE"/* testdata/fuzz/FuzzXxx/   # do NOT commit these
+go test -run='^FuzzXxx$' -coverprofile=fuzz_cover.out .
+```
+
+Those copies are throwaway analysis inputs — only a crasher belongs in git.
 
 ### Signs of Ineffective Fuzzing
 
@@ -111,9 +133,9 @@ f.Fuzz(func(t *testing.T, data []byte) {
 |-----------|---------------------|
 | < 1.18 | No native fuzzing — use `go-fuzz` (dvyukov) or skip. Judge by `go version` (effective toolchain), **not** by the `go` directive in `go.mod` — a `go 1.16` module fuzzes fine under a modern toolchain |
 | 1.18+ | `testing.F` available, supported types: `[]byte`, `string`, `bool`, `int`/`uint` variants, `float32`/`float64` |
-| 1.20+ | Improved corpus minimization, better coverage instrumentation |
-| 1.21+ | Enhanced fuzz worker stability, reduced memory overhead |
-| 1.22+ | Range function support in tests; fuzz cache improvements |
+| 1.20+ | Current corpus layout and CI patterns apply as written here |
+| 1.22+ | Per-iteration loop variables ([Go 1.22 release notes](https://go.dev/doc/go1.22)) — older examples that copy the loop variable no longer need to |
+| 1.23+ | Range-over-function iterators are a **language feature** ([Go 1.23 release notes](https://go.dev/doc/go1.23)). In 1.22 they were a preview requiring `GOEXPERIMENT=rangefunc`, so a harness using them is not portable to 1.22 |
 
 ## Race Detection + Fuzz
 
@@ -126,6 +148,8 @@ Caveats:
 - `-race` increases per-iteration cost ~2-10x — reduce `-fuzztime` accordingly.
 - Race detector + fuzz is most valuable for targets that use goroutines internally.
 - If the target is a pure function with no concurrency, `-race` adds cost with no benefit.
+- Document it when `-race` is skipped because the package is too slow for a bounded fuzz
+  window — an unexplained omission reads as an oversight.
 
 ## Fuzz Worker Parallelism
 
@@ -189,3 +213,6 @@ go test -run=^$ -fuzz=^FuzzXxx$ -fuzztime=5s . 2>&1 | tail -1
 | execs/sec | >1000 | <100 | Profile target, add size bounds |
 | new interesting | Growing | Plateaued at 0 | Check seeds, relax guards |
 | total interesting | >10 in 30s | <5 | Target may have low branch diversity |
+
+If `execs/sec` is too low for meaningful exploration, simplify the harness before asking for
+a longer fuzz window: a slow harness does not get better by running longer.

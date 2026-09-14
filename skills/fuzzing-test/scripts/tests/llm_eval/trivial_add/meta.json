@@ -1,0 +1,14 @@
+{
+  "id": "trivial_add",
+  "description": "Trivial arithmetic \u2014 applicability gate item 1 (meaningful input space) fails, which is a hard stop. Grades the REFUSAL path: the skill's first rule is to stop without writing fuzz code, and every other fixture grades what happens after the gate passes.",
+  "expected_verdict": "not_suitable",
+  "expected_refusal_signals": [
+    "unit test",
+    "input space"
+  ],
+  "bad_expected_reasons": [
+    "verdict: declared 'suitable', expected 'not_suitable'",
+    "emitted a fuzz harness for a target the gate must refuse"
+  ],
+  "notes": "Without this fixture the offline eval only ever graded suitable targets, so 'fuzz everything you are shown' scored as well as running the gate. A live A/B needs both arms: a target to accept and a target to refuse."
+}

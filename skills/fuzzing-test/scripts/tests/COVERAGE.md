@@ -6,8 +6,8 @@ Four test layers, in increasing strength of evidence:
 |-------|------|----------------|----------------------------|
 | 1. Contract | `test_skill_contract.py` | The skill document contains the required sections, rules, and thresholds, and its rules do not contradict each other | Nothing about behaviour |
 | 2. Golden fixtures | `test_golden_scenarios.py` | Each scenario's expected verdict/mode/template is internally consistent, and the rules it depends on exist in the text | That a model driven by the skill actually produces those verdicts |
-| 3. Template compile + replay | `test_templates_compile.py` | The four harness templates are valid Go, satisfy the regex-decidable scorecard items, and **every seed passes against a correct implementation** | That they find bugs |
-| 4. **Behavioral eval** | `test_llm_fuzz_eval.py` | A graded response's emitted harness **compiles, passes on correct code, and actually finds a seeded defect** | That a live model passes — that needs the opt-in live hook |
+| 3. Template compile + replay + **short fuzz** | `test_templates_compile.py` | The four harness templates are valid Go, satisfy the regex-decidable scorecard items, every seed passes **and actually runs** (no guard-skipped dead seeds), and a 5s fuzz run against a correct implementation **stays clean** | That they find bugs |
+| 4. **Behavioral eval** | `test_llm_fuzz_eval.py` | A graded response's emitted harness **compiles, passes seed replay, stays clean under fuzzing on the correct implementation, and finds a seeded defect** | That a live model passes — that needs the opt-in live hook |
 
 Layer 2 is keyword- and structure-level by construction: it reads fixture JSON and the
 skill text, with no model in the loop. Layer 4 is where behaviour is actually verified.
@@ -76,7 +76,7 @@ skill text, with no model in the loop. Layer 4 is where behaviour is actually ve
 | CoverageDocConsistencyTests | test_declared_anti_example_count_matches_reference | This document's anti-example count is not hand-drifted |
 | CoverageDocConsistencyTests | test_skill_md_anti_example_count_matches_reference | SKILL.md's cited anti-example count matches the reference |
 
-**Contract test count: 59**
+**Contract test count: 70**
 
 ## Golden Fixture Tests (test_golden_scenarios.py)
 
@@ -122,7 +122,7 @@ Cross-cutting guards in this layer:
 | test_all_template_seeds_pass_on_correct_implementation | **Every `f.Add` seed passes on a correct implementation** |
 | test_seed_replay_would_catch_a_bad_seed | Anti-vacuity: an invalid-UTF-8 seed is actually rejected |
 
-**Template test count: 7** (3 skip without the `go` toolchain)
+**Template test count: 11** (5 skip without the `go` toolchain)
 
 Why seed replay exists: `go vet` type-checks but does not run. A Template B seed containing
 invalid UTF-8 once shipped green — `encoding/json` rewrites it to U+FFFD, so the round-trip
@@ -131,36 +131,51 @@ immediately-red test. Replay closes that hole; the anti-vacuity test proves it c
 
 ## Behavioral Eval (test_llm_fuzz_eval.py)
 
-Two fixtures, one per fuzz mode with a compile-and-kill scenario:
+Five fixtures: four suitable targets and — since a skill whose first rule is "stop when
+the target is unsuitable" must be graded on stopping — one that must be refused. Each
+fixture grades a **distinct defect** — sharing a mode is allowed only when the graded
+failure differs (enforced by `test_each_fixture_grades_a_distinct_defect`):
 
 | Fixture | Mode / Template | Mutation | Why it discriminates |
 |---------|-----------------|----------|----------------------|
 | `llm_eval/frame_parser/` | parser robustness / A | Bounds check widened so the payload slice reads past the input | Silent (slices are capacity-bounded, no panic) — needs an explicit domain-constraint assertion |
 | `llm_eval/kv_codec/` | round-trip / B | `Decode` drops the value's most-significant byte | Silent corruption — `Value:-1` decodes as `16777215`; only a round-trip assertion catches it |
+| `llm_eval/json_roundtrip/` | round-trip / B | `Encode` silently truncates `Name` to 8 bytes | Grades the **other** direction: the codec normalizes (invalid UTF-8 → U+FFFD), so an oracle without a domain guard fails on the CORRECT implementation. Its bad exemplar *does* detect the mutation and is still wrong |
+| `llm_eval/split_differential/` | **differential** / C | index advances by 1 instead of `len(sep)` after a match | Grades the third fuzz mode: the oracle is agreement with `strings.Split`, so a harness that calls both implementations and drops a result cannot see a divergence |
+| `llm_eval/trivial_add/` | **refusal** (gate items 1+3 fail) | none — no harness may exist | Grades the path every other fixture skips: a correct response writes no harness, names no fuzz command, and points at unit/property tests. Without it, "always write a harness" scored as well as running the gate |
 
-Both mutations are non-panicking on purpose: a no-assertion "the runtime catches panics"
-harness cannot kill either, so the kill check genuinely measures oracle strength.
+The first two mutations are non-panicking on purpose: a no-assertion "the runtime catches
+panics" harness cannot kill either, so the kill check genuinely measures oracle strength.
+The third fixture exists because killing the mutant is **not sufficient** — a harness that
+fails on every input also kills it. Only `fuzz_stays_clean` separates the two.
 
 | Test | Validates |
 |------|-----------|
 | GraderSelfTest.test_grader_passes_good_exemplars | The grader accepts a correct response, for both fixtures |
-| GraderSelfTest.test_grader_fails_bad_exemplars | It rejects weak ones for mode, seed count, and kill failure |
+| GraderSelfTest.test_grader_fails_bad_exemplars | It rejects weak ones for the defect each fixture declares in `bad_expected_reasons` |
 | GraderSelfTest.test_mutation_is_reachable_at_all | Anti-vacuity: each good harness really does find its defect |
 | GraderSelfTest.test_good_harness_seeds_are_representable | Exemplar seeds pass on correct code (the Template B trap) |
 | GraderUnitTests.test_extracts_harness_from_fenced_block | Harness extraction from markdown |
 | GraderUnitTests.test_ignores_non_fuzz_go_blocks | `func Test` blocks are not mistaken for harnesses |
 | GraderUnitTests.test_target_name_parsed | Target name parsing |
 | GraderUnitTests.test_fixture_metadata_is_self_consistent | `mutation.find` exists verbatim in each `sut.go` |
-| GraderUnitTests.test_fixtures_cover_distinct_fuzz_modes | No two fixtures grade the same mode |
+| GraderUnitTests.test_fixtures_cover_every_fuzz_mode | Parser + round-trip are both graded |
+| GraderUnitTests.test_each_fixture_grades_a_distinct_defect | A fixture must add a grading axis, not repeat one |
+| GraderUnitTests.test_every_fixture_declares_expected_bad_reasons | Each fixture pins why its bad exemplar must fail |
 | GraderUnitTests.test_every_fixture_dir_is_registered | A fixture on disk but absent from `FIXTURES` is never silently ungraded |
 | LiveSkillEval.test_live_model_output_passes_grader | Opt-in live model run over both fixtures (skipped unless configured) |
 
-**Behavioral eval count: 11** (4 need `go`; 1 is opt-in via `FUZZING_TEST_SKILL_EVAL_CMD`)
+**Behavioral eval count: 22** (6 need `go`; 1 is opt-in via `FUZZING_TEST_SKILL_EVAL_CMD`)
 
-What the grader checks, in order: declared applicability verdict → fuzz mode → scorecard
-present → harness extractable → ≥3 seeds → size guard → **compiles** → **passes on the
-correct implementation** → **fails on the mutated implementation**. The last check is the
-one that cannot be satisfied by text alone.
+What the grader checks, in order: declared applicability verdict → (for a refusal target:
+no harness, no fuzz command, an alternative named — and stop) → fuzz mode → scorecard
+present → harness extractable → ≥3 seeds → size guard → **compiles** → **seed replay passes
+on the correct implementation** → **a bounded fuzz run stays clean on the correct
+implementation** → **a known defect-exposing input fails on the mutated implementation**.
+The kill check replays a declared witness rather than searching for one: a 10s search made
+the grade intermittently credit a no-oracle harness with a detection it had not made. The last three cannot be
+satisfied by text alone, and the middle one was the gap: grading only the mutant scores a
+harness that fails on *everything* as a successful detection.
 
 The mutation is deliberately silent rather than a panic (a Go slice expression is
 capacity-bounded, so reading past `len` does not reliably crash). A no-assertion harness
@@ -186,7 +201,7 @@ the distinction scorecard C2 draws.
 | Behavioral: harness compiles | 2 | 2 | 100% |
 | Behavioral: harness kills a real defect | 2 | 2 | 100% |
 
-**Total tests: 115** (59 contract + 38 golden + 7 template + 11 behavioral)
+**Total tests: 141** (70 contract + 38 golden + 11 template + 22 behavioral)
 
 Runtime is ~40s; the `go` build cache is shared across the session, since a per-module
 `GOCACHE` forced a cold stdlib recompile per invocation and doubled the wall clock.
@@ -195,10 +210,15 @@ Runtime is ~40s; the `go` build cache is shared across the session, since a per-
 
 1. The live model eval (`LiveSkillEval`) is wired but unconfigured — the honest remaining
    boundary between "grader validated" and "skill behaviour validated" for a real model.
-2. Two of four fuzz modes have a compile-and-kill fixture (parser robustness, round-trip).
-   **Differential** and **struct-aware / multi-parameter** do not.
-3. The behavioral harness is compiled with only `testing` imported, so responses needing
-   extra imports (notably Template D, which uses `encoding/json`) cannot be graded as-is.
+2. Three of four fuzz modes have a compile-and-kill fixture (parser robustness, round-trip —
+   the latter twice, grading opposite failure directions — and differential).
+   **Struct-aware / multi-parameter** does not. The refusal path is covered separately by
+   `trivial_add`.
+3. ~~Only `testing` is imported when compiling a graded response.~~ **Closed**: the runner
+   now derives the import block from the harness text (`test_file_for`), so a response using
+   `unicode/utf8` (the round-trip domain guard), `encoding/json` (Template D), `bytes`, and
+   the other common stdlib helpers compiles as-is. A response that emits its own `import`
+   block is used verbatim.
 4. Anti-example coverage is thematic (5 of 9), not one test per mistake.
 5. No fixture exercises `-race` combined with a fuzz run end to end.
 6. Crash-artifact and cache behaviour is pinned by string assertions on the YAML, not by

@@ -106,7 +106,8 @@ class TemplateCompileTests(unittest.TestCase):
         mod = Path(tmp)
         (mod / "go.mod").write_text("module tpl\n\ngo 1.18\n", encoding="utf-8")
         (mod / "stubs.go").write_text(STUBS, encoding="utf-8")
-        test_src = "package tpl\n\nimport (\n\t\"encoding/json\"\n\t\"testing\"\n)\n\n"
+        test_src = ("package tpl\n\nimport (\n\t\"encoding/json\"\n\t\"testing\"\n"
+                    "\t\"unicode/utf8\"\n)\n\n")
         test_src += "\n".join(fuzz_templates())
         (mod / "templates_test.go").write_text(test_src, encoding="utf-8")
         return mod
@@ -144,25 +145,109 @@ class TemplateCompileTests(unittest.TestCase):
                 f"template would fail immediately:\n{proc.stdout}\n{proc.stderr}",
             )
 
-    def test_seed_replay_would_catch_a_bad_seed(self) -> None:
-        """Anti-vacuity: prove the replay check above can actually fail, by injecting the
-        invalid-UTF-8 seed that originally slipped through `go vet`."""
+    def test_templates_stay_clean_under_short_fuzz(self) -> None:
+        """Seeds passing is only half the contract: the FUZZER invents inputs too.
+
+        Template B shipped an oracle that asserted raw equality across the whole mutated
+        domain. Its seeds replayed fine, and a 1s fuzz run against the correct stub codec
+        (encoding/json) failed immediately on invalid UTF-8, which Marshal rewrites to
+        U+FFFD. Seed replay cannot see that; only fuzzing the correct implementation can."""
+        with tempfile.TemporaryDirectory() as tmp:
+            mod = self._module(tmp)
+            for target in self._template_targets():
+                with self.subTest(target=target):
+                    proc = self._run(mod, "test", "-run=^$", f"-fuzz=^{target}$",
+                                     "-fuzztime=5s", "./...", timeout=180)
+                    if proc.returncode == 0:
+                        continue
+                    combined = f"{proc.stdout}\n{proc.stderr}"
+                    # `--- FAIL` alone is not a result: go prints it for a saturated
+                    # machine too ("context deadline exceeded"), with no failing input.
+                    reported = ("Failing input written to" in combined
+                                or re.search(r"^\s*\S+_test\.go:\d+: ", combined, re.M))
+                    if not reported:
+                        self.skipTest(f"environment failure while fuzzing {target}: "
+                                      f"{combined.strip()[-300:]}")
+                    self.fail(
+                        f"{target} FAILS under a 5s fuzz run against the correct stub "
+                        f"implementation — a copied template would report a bug that is not "
+                        f"there:\n{combined[-800:]}")
+
+    def test_short_fuzz_check_would_catch_a_missing_domain_guard(self) -> None:
+        """Anti-vacuity: prove the fuzz-clean check above can fail, by deleting the domain
+        guard from the round-trip template — exactly the pre-fix shape."""
         with tempfile.TemporaryDirectory() as tmp:
             mod = self._module(tmp)
             path = mod / "templates_test.go"
-            poisoned = path.read_text(encoding="utf-8").replace(
-                'f.Add("seed", int32(1))',
-                'f.Add("seed", int32(1))\n\tf.Add("bad\\xff", int32(1))',
+            src = path.read_text(encoding="utf-8")
+            guard = "if !utf8.ValidString(a) {\n\t\t\tt.Skip()\n\t\t}"
+            self.assertIn(guard, src, "round-trip template no longer carries a domain guard")
+            # keep the import used so the file still compiles
+            path.write_text(src.replace(guard, "_ = utf8.ValidString", 1), encoding="utf-8")
+            proc = self._run(mod, "test", "-run=^$", "-fuzz=^FuzzRoundTripXxx$",
+                             "-fuzztime=10s", "./...", timeout=180)
+            self.assertNotEqual(
+                0, proc.returncode,
+                "removing the domain guard did NOT make the round-trip template fail on the "
+                "correct implementation — the fuzz-clean check is vacuous")
+
+    def _template_targets(self) -> list[str]:
+        return re.findall(r"func (Fuzz\w+)\(", "\n".join(fuzz_templates()))
+
+    def test_seed_replay_would_catch_a_broken_implementation(self) -> None:
+        """Anti-vacuity for the replay check: break the stub codec and require a red run.
+
+        (The older form of this test injected an invalid-UTF-8 seed. Template B now carries
+        a domain guard, so such a seed is SKIPPED rather than failed — which is the point of
+        the guard. Dead seeds are covered by the next test instead.)"""
+        with tempfile.TemporaryDirectory() as tmp:
+            mod = self._module(tmp)
+            stubs = mod / "stubs.go"
+            src = stubs.read_text(encoding="utf-8")
+            broken = src.replace(
+                "func Decode(b []byte) (Obj, error)   { var o Obj; err := json.Unmarshal(b, &o); return o, err }",
+                "func Decode(b []byte) (Obj, error)   { var o Obj; err := json.Unmarshal(b, &o); o.B = 0; return o, err }",
                 1,
             )
-            self.assertIn("bad", poisoned, "failed to inject the poison seed")
-            path.write_text(poisoned, encoding="utf-8")
+            self.assertNotEqual(src, broken, "failed to break the stub decoder")
+            stubs.write_text(broken, encoding="utf-8")
             proc = self._run(mod, "test", "-run=^Fuzz", "./...")
             self.assertNotEqual(
                 0, proc.returncode,
-                "seed replay did not reject an invalid-UTF-8 round-trip seed — the check "
-                "is vacuous",
+                "seed replay passed against a decoder that drops a field — the check is vacuous")
+
+    def test_no_template_seed_is_dead(self) -> None:
+        """A seed the harness skips exercises nothing, yet still counts toward S1.
+
+        Skips are invisible without `-v` (the package still prints `ok`), so this is the
+        only place the shipped seeds are checked for actually running."""
+        with tempfile.TemporaryDirectory() as tmp:
+            mod = self._module(tmp)
+            proc = self._run(mod, "test", "-run=^Fuzz", "-v", "./...")
+            self.assertEqual(0, proc.returncode, f"seed replay failed:\n{proc.stdout[-800:]}")
+            skipped = re.findall(r"--- SKIP: (Fuzz\w+/seed#\d+)", proc.stdout)
+            self.assertEqual([], skipped,
+                             f"template seeds are skipped by their own guards (dead seeds): {skipped}")
+
+    def test_dead_seed_detection_is_not_vacuous(self) -> None:
+        """Prove the dead-seed check can fail: a guard-skipped seed must show up as SKIP."""
+        with tempfile.TemporaryDirectory() as tmp:
+            mod = self._module(tmp)
+            path = mod / "templates_test.go"
+            src = path.read_text(encoding="utf-8")
+            poisoned = src.replace(
+                'f.Add("seed", int32(1))',
+                'f.Add("seed", int32(1))\n\tf.Add("dead\\xff", int32(7))',
+                1,
             )
+            self.assertNotEqual(src, poisoned, "failed to inject the dead seed")
+            path.write_text(poisoned, encoding="utf-8")
+            proc = self._run(mod, "test", "-run=^Fuzz", "-v", "./...")
+            self.assertEqual(0, proc.returncode,
+                             "the domain guard should SKIP an invalid-UTF-8 seed, not fail it")
+            self.assertTrue(re.search(r"--- SKIP: Fuzz\w+/seed#\d+", proc.stdout),
+                            "a guard-skipped seed produced no SKIP line — the dead-seed check "
+                            "cannot detect one")
 
 
 if __name__ == "__main__":

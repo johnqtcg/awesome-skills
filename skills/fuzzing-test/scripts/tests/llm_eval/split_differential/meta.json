@@ -1,0 +1,22 @@
+{
+  "id": "split_differential",
+  "description": "Hand-rolled Split vs strings.Split. Differential scenario (Template C): the oracle is agreement between two implementations, so the harness must compare results rather than restate either implementation. The mutation makes the new implementation skip the overlap case, which only differs for certain separator/\u200binput combinations.",
+  "expected_verdict": "suitable",
+  "expected_fuzz_mode": "differential",
+  "expected_template": "Template C",
+  "min_seeds": 3,
+  "requires_size_guard": true,
+  "mutation": {
+    "find": "\t\t\ti += len(sep)\n\t\t\tstart = i\n\t\t\tcontinue",
+    "replace": "\t\t\ti++\n\t\t\tstart = i\n\t\t\tcontinue",
+    "defect": "after a match the index advances by 1 instead of len(sep), so a multi-byte separator splits at the wrong offsets",
+    "witness": "SplitNew(\"a..b\", \"..\") != SplitRef(\"a..b\", \"..\")"
+  },
+  "witness_corpus": "go test fuzz v1\nstring(\"a..b\")\nstring(\"..\")\n",
+  "fuzztime_kill": "10s",
+  "fuzztime_clean": "5s",
+  "bad_expected_reasons": [
+    "does NOT find the seeded defect"
+  ],
+  "notes": "Differential is the one mode where the oracle needs no domain knowledge: whatever the reference does is correct by definition. The bad exemplar here calls both implementations and drops one result, which is the C2 mismatch failure."
+}

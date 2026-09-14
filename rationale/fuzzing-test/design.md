@@ -90,17 +90,23 @@ It requires a target to be judged on five conditions:
 
 This is critical because the biggest source of waste in fuzzing is not ugly code. It is choosing the wrong target from the start. The evaluation report's `Eval 2` delta makes this especially visible: with-skill rejects a network-dependent target outright, while without-skill creatively constructs a workaround that may run but no longer reflects the best bug-finding path.
 
-### 4.2 Check 2 and Check 3 Are Hard Stops
+### 4.2 Checks 1, 2 and 3 Are Hard Stops
 
-The most important Applicability checks are:
+Three Applicability checks are independently blocking:
 
+- Check 1: whether the target has a meaningful input space,
 - Check 2: whether the target can be driven effectively by native Go fuzz parameter types,
 - Check 3: whether a clear oracle exists.
 
-The skill treats both as hard stops. If either fails, the workflow stops. That is a very strong and very intentional design choice:
+If any one fails, the workflow stops. That is a very strong and very intentional design choice:
 
+- without a meaningful input space, a fuzzer explores one path and finds nothing a
+  table-driven test would not,
 - without fuzz-compatible types, the native harness cannot explore the real input space,
 - without an oracle, even millions of iterations cannot reliably detect logic bugs.
+
+(Check 1 was added to this list after the gate and this document disagreed about it; the
+golden fixtures now pin all three against the checklist so the two cannot drift again.)
 
 This is also the root cause of many "looks like fuzzing, but is really just no-panic smoke testing" outcomes. `fuzzing-test` explicitly refuses to normalize that pattern.
 

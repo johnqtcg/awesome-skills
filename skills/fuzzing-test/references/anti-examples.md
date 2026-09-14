@@ -1,6 +1,6 @@
 # Anti-Examples: Common Fuzzing Mistakes
 
-Seven concrete code patterns showing what NOT to do, with corrections.
+Nine concrete code patterns showing what NOT to do, with corrections.
 
 ### Mistake 1: Fuzzing a trivial function (Gate 1 failure)
 
@@ -18,16 +18,46 @@ func FuzzAdd(f *testing.F) {
 // GOOD: don't fuzz — write table-driven unit tests instead.
 ```
 
-### Mistake 2: No oracle (Gate 3 failure)
+### Mistake 2: Declaring an invariant, then dropping the result (Gate 3 / C2 failure)
+
+The defect is the **mismatch**, not the missing `t.Fatal`. A harness that declared
+round-trip or a domain constraint at the gate and then discards the value cannot fail for
+the reason it was written.
 
 ```go
-// BAD: no assertion — only catches panics, misses logic bugs
+// BAD: the gate declared "output is always a valid Transform result", and the
+// harness then throws the result away — the invariant is never checked.
 f.Fuzz(func(t *testing.T, data []byte) {
 	result, _ := Transform(data)
 	_ = result // never checked
 })
-// GOOD: always assert an invariant (round-trip, domain constraint, valid set).
+// GOOD: assert the invariant that was declared.
+f.Fuzz(func(t *testing.T, data []byte) {
+	result, err := Transform(data)
+	if err != nil {
+		return
+	}
+	if !isValid(result) {
+		t.Fatalf("invalid result: %+v", result)
+	}
+})
 ```
+
+**A no-panic / robustness harness is NOT this mistake.** If the declared oracle is "no
+panic, hang, or OOM for any input", the runtime is the assertion and no `t.Fatal` is
+required — state it in a one-line comment so the omission reads as deliberate. `No t.Fatal
+is required` is the same wording SKILL.md `C2` and `applicability-checklist.md` use, on
+purpose: this rule must read identically wherever an agent loads it.
+
+```go
+// OK: declared oracle is no-panic robustness; the fuzzer fails the target on any panic.
+f.Fuzz(func(t *testing.T, data []byte) {
+	_, _ = Transform(data)
+})
+```
+
+See SKILL.md scorecard `C2` and `applicability-checklist.md` §Oracle Forms — C2 is graded
+against the declared oracle, never by searching for an API token.
 
 ### Mistake 3: Skip rate explosion from bad seeds
 

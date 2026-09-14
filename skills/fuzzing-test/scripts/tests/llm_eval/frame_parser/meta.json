@@ -9,9 +9,16 @@
   "mutation": {
     "find": "\tif n > len(data)-2 {",
     "replace": "\tif n > len(data) {",
-    "defect": "slice bounds out of range — data[2:2+n] reads past the input when 2+n > len(data)",
+    "defect": "slice bounds out of range \u2014 data[2:2+n] reads past the input when 2+n > len(data)",
     "witness": "[]byte{0x00, 0x03, 0x00, 0x00}"
   },
   "fuzztime_kill": "10s",
-  "notes": "The emitted harness is compiled as `package eval` with only `testing` imported, so a harness needing extra imports will not compile here by design — Template A does not need any."
+  "notes": "The emitted harness is compiled as `package eval` with only `testing` imported, so a harness needing extra imports will not compile here by design \u2014 Template A does not need any.",
+  "bad_expected_reasons": [
+    "fuzz mode",
+    "seeds",
+    "does NOT find the seeded defect"
+  ],
+  "fuzztime_clean": "5s",
+  "witness_corpus": "go test fuzz v1\n[]byte(\"\\x00\\x03\\x00\\x00\")\n"
 }

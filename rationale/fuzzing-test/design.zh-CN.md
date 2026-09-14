@@ -90,17 +90,22 @@ applicable_versions: current repository version
 
 这层设计非常关键，因为 fuzz 的最大浪费，不是“写得不够漂亮”，而是从一开始就选错目标。评估报告里 `Eval 2` 的巨大差异，正是由这一层带来的：with-skill 会明确拒绝 network-dependent target，而 without-skill 会创造性地构造 workaround，结果虽然“能跑”，但方向已经偏离最佳 bug-finding 路径。
 
-### 4.2 Check 2 和 Check 3 要作为 Hard Stop
+### 4.2 Check 1、Check 2 和 Check 3 都是 Hard Stop
 
-适用性门禁 里最重要的两项是：
+适用性门禁里有三项各自独立的阻断条件：
 
+- Check 1：目标是否有有意义的输入空间
 - Check 2：目标能否被 Go fuzz 原生参数类型有效驱动
 - Check 3：目标是否存在明确 oracle
 
-skill 把这两项设为 Hard Stop，不通过就直接停止。这是一个非常强的设计决策，因为：
+任意一项不通过就直接停止。这是一个非常强的设计决策，因为：
 
+- 没有有意义的输入空间，fuzzer 只会反复走同一条路径，找不到表驱动单测找不到的东西
 - 没有 fuzz-compatible type，说明 native fuzz harness 根本抓不住输入空间
 - 没有 oracle，说明就算跑了很多轮，也无法判断逻辑错误
+
+（Check 1 是在门禁与本文档出现分歧后补进这份清单的；现在 golden fixture 会把三项与 checklist
+钉在一起，两边不会再各说各话。）
 
 这也是很多“看似有 fuzz test，实际上只有 no panic smoke test”的根源。`fuzzing-test` 明确拒绝这种表面化 fuzz。
 

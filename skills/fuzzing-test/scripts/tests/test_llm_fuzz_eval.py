@@ -32,15 +32,44 @@ import shutil
 import subprocess
 import tempfile
 import unittest
+from pathlib import Path
 
 GO = shutil.which("go")
 EVAL_ROOT = os.path.join(os.path.dirname(__file__), "llm_eval")
 SKILL_MD = os.path.join(os.path.dirname(__file__), os.pardir, os.pardir, "SKILL.md")
 LIVE_CMD = os.environ.get("FUZZING_TEST_SKILL_EVAL_CMD")
 
-# One fixture per fuzz mode that has a compile-and-kill scenario.
-# frame_parser -> parser robustness (Template A); kv_codec -> round-trip (Template B).
-FIXTURES = ("frame_parser", "kv_codec")
+# frame_parser -> parser robustness (Template A); kv_codec -> round-trip, byte-exact codec;
+# json_roundtrip -> round-trip, NORMALIZING codec (grades false positives on correct code);
+# trivial_add -> the refusal path, where the correct output is no harness at all.
+FIXTURES = ("frame_parser", "kv_codec", "json_roundtrip", "split_differential", "trivial_add")
+
+# A harness may legitimately need stdlib helpers (a domain guard needs unicode/utf8). The
+# runner assembles the test file, so it must supply the imports the emitted code uses --
+# otherwise a correct harness is graded as "does not compile".
+_IMPORT_HINTS = {
+    "utf8.": "unicode/utf8",
+    "utf16.": "unicode/utf16",
+    "json.": "encoding/json",
+    "bytes.": "bytes",
+    "strings.": "strings",
+    "fmt.": "fmt",
+    "errors.": "errors",
+    "reflect.": "reflect",
+    "sort.": "sort",
+    "time.": "time",
+    "math.": "math",
+}
+
+
+def test_file_for(harness: str) -> str:
+    """Wrap an emitted harness into a compilable _test.go file."""
+    if re.search(r"^\s*import\s*[(\"]", harness, re.M):
+        return harness if harness.lstrip().startswith("package ") else "package eval\n\n" + harness
+    pkgs = ["testing"] + sorted(
+        {pkg for token, pkg in _IMPORT_HINTS.items() if token in harness})
+    block = "\n".join(f'\t"{pkg}"' for pkg in pkgs)
+    return f"package eval\n\nimport (\n{block}\n)\n\n" + harness
 
 # Environment probe result, computed once: True, or a skip reason string.
 _PREFLIGHT = None
@@ -98,6 +127,31 @@ def extract_fuzz_harness(output: str):
     return None
 
 
+# Go prints `--- FAIL: <target>` for BOTH a real finding and an infrastructure failure
+# ("context deadline exceeded" / "fuzzing process hung or terminated unexpectedly" when the
+# machine is saturated). Only a real finding also reports the input. Treating `--- FAIL`
+# alone as a result made the suite fail about 1 run in 4 while every fixture was correct.
+_FUZZ_INFRA_MARKERS = (
+    "context deadline exceeded",
+    "fuzzing process hung or terminated unexpectedly",
+    "communicating with fuzzing process",
+)
+
+
+def fuzz_finding(output: str, target: str):
+    """Return (verdict, detail): True = real finding, False = clean, None = environment."""
+    if not re.search(rf"^\s*--- FAIL: {re.escape(target)}\b", output, re.M):
+        # No failure attributed to this target: a failure reported for another target is
+        # not this harness's result.
+        return (False, "")
+    assertion = re.search(r"^\s*\S+_test\.go:\d+: (.+)$", output, re.M)
+    if "Failing input written to" in output or assertion:
+        return (True, assertion.group(1)[:160] if assertion else "failing input reported")
+    if any(marker in output for marker in _FUZZ_INFRA_MARKERS):
+        return (None, next(m for m in _FUZZ_INFRA_MARKERS if m in output))
+    return (None, "test failed without reporting a failing input")
+
+
 def harness_target_name(harness: str):
     m = re.search(r"func (Fuzz\w+)\(", harness)
     return m.group(1) if m else None
@@ -118,7 +172,7 @@ class _GoRunner:
         files = {
             "go.mod": "module eval\n\ngo 1.18\n",
             "sut.go": source,
-            "sut_test.go": 'package eval\n\nimport "testing"\n\n' + harness,
+            "sut_test.go": test_file_for(harness),
         }
         for name, content in files.items():
             with open(os.path.join(root, name), "w", encoding="utf-8") as fh:
@@ -170,6 +224,53 @@ class _GoRunner:
         root = self._mod(source, harness)
         return self._run(root, "test", f"-run=^{target}$", ".").returncode == 0
 
+    def fuzz_stays_clean(self, source: str, harness: str, target: str, fuzztime: str):
+        """Return (clean, detail) for a bounded fuzz run against the CORRECT source.
+
+        Seed replay only proves the seeds are representable. The fuzzer generates inputs the
+        author never wrote, and an oracle that is wrong for the codec fails on those — the
+        skill's own Template B asserted raw equality on an `encoding/json` round trip and
+        failed in under a second on a correct implementation, with a captured input of
+        `string("\x9f")` (invalid UTF-8, which Marshal rewrites to U+FFFD).
+
+        Grading only the mutant cannot see that class of defect: a false-positive harness
+        also fails on the mutant, so it scores as a successful detection."""
+        root = self._mod(source, harness)
+        secs = int(re.sub(r"\D", "", fuzztime) or 10)
+        proc = self._run(root, "test", "-run=^$", f"-fuzz=^{target}$",
+                         f"-fuzztime={fuzztime}", ".", timeout=secs + 120)
+        if proc.returncode == 0:
+            return (True, "")
+        verdict, detail = fuzz_finding(f"{proc.stdout}\n{proc.stderr}", target)
+        if verdict is True:
+            return (False, detail)
+        self.tc.skipTest(
+            f"fuzzing {target} on the correct source exited {proc.returncode} without a "
+            f"reported failing input — environment, not result: {detail}")
+
+    def kills_witness(self, source: str, harness: str, target: str, corpus_body: str) -> bool:
+        """True iff replaying one KNOWN defect-exposing input fails on this source.
+
+        Deterministic by construction: the input is written into the harness's corpus
+        directory and replayed with `-run`, so the grade measures the ORACLE, not whether a
+        10s coverage-guided search happened to reach the defect this time. Searching for the
+        input made this check intermittently report that a no-oracle harness had 'detected'
+        silent corruption (seen twice across full-suite runs)."""
+        root = self._mod(source, harness)
+        corpus = os.path.join(root, "testdata", "fuzz", target)
+        os.makedirs(corpus, exist_ok=True)
+        with open(os.path.join(corpus, "witness"), "w", encoding="utf-8") as fh:
+            fh.write(corpus_body)
+        proc = self._run(root, "test", f"-run=^{target}$", ".")
+        if proc.returncode == 0:
+            return False
+        combined = f"{proc.stdout}\n{proc.stderr}"
+        if re.search(rf"^\s*--- FAIL: {re.escape(target)}\b", combined, re.M):
+            return True
+        self.tc.skipTest(
+            f"replaying the witness for {target} exited {proc.returncode} without a test "
+            f"failure — an environment failure, not a grading result: {combined[-300:]}")
+
     def fuzz_finds_defect(self, source: str, harness: str, target: str, fuzztime: str) -> bool:
         """True iff a bounded fuzz run finds a defect in this source.
 
@@ -190,14 +291,12 @@ class _GoRunner:
                          f"-fuzztime={fuzztime}", ".", timeout=secs + 120)
         if proc.returncode == 0:
             return False
-        combined = f"{proc.stdout}\n{proc.stderr}"
-        if re.search(rf"^\s*--- FAIL: {re.escape(target)}\b", combined, re.M):
-            return True
-        if "Failing input written to" in combined:
+        verdict, detail = fuzz_finding(f"{proc.stdout}\n{proc.stderr}", target)
+        if verdict is True:
             return True
         self.tc.skipTest(
-            f"go test exited {proc.returncode} without reporting a failing input for {target} — "
-            f"an environment failure, not a fuzzing result: {combined.strip()[-400:]}")
+            f"fuzzing {target} exited {proc.returncode} without a reported failing input — "
+            f"environment, not result: {detail}")
 
 
 def grade(output: str, fixture: dict, runner: "_GoRunner"):
@@ -215,6 +314,20 @@ def grade(output: str, fixture: dict, runner: "_GoRunner"):
         declared = "not_suitable" if re.search(r"not[ _]suitable", m.group(0), re.I) else "suitable"
         if declared != fixture["expected_verdict"]:
             reasons.append(f"verdict: declared {declared!r}, expected {fixture['expected_verdict']!r}")
+
+    # 1b. Refusal path. A correct response to an unsuitable target writes NO fuzz code, so
+    # every check below (mode, scorecard, harness, kill) grades something that must not
+    # exist. Without this branch the eval could only ever grade suitable targets, and
+    # "always write a harness" scored the same as running the gate.
+    if fixture["expected_verdict"] == "not_suitable":
+        if extract_fuzz_harness(output) is not None:
+            reasons.append("emitted a fuzz harness for a target the gate must refuse")
+        for phrase in fixture.get("expected_refusal_signals", []):
+            if phrase.lower() not in low:
+                reasons.append(f"refusal does not point at an alternative ({phrase!r} absent)")
+        if "fuzztime" in low:
+            reasons.append("suggested a fuzz command for a target that failed the gate")
+        return (len(reasons) == 0, reasons)
 
     # 2. Fuzz mode.
     modes = ["parser robustness", "round-trip", "differential", "multi-parameter"]
@@ -255,11 +368,32 @@ def grade(output: str, fixture: dict, runner: "_GoRunner"):
     if not runner.replay_passes(fixture["source"], harness, target):
         reasons.append("emitted harness fails on the CORRECT implementation (false positive)")
 
+    # Seeds passing is not enough: the oracle must also hold for inputs the FUZZER invents.
+    clean, detail = runner.fuzz_stays_clean(
+        fixture["source"], harness, target, fixture.get("fuzztime_clean", "10s"))
+    if not clean:
+        reasons.append(
+            "emitted harness FAILS under fuzzing on the CORRECT implementation "
+            f"(false positive — wrong oracle or missing domain guard): {detail}")
+
     mutated = fixture["source"].replace(mut["find"], mut["replace"])
-    if not runner.fuzz_finds_defect(mutated, harness, target, fixture["fuzztime_kill"]):
+    # Graded deterministically against a known defect-exposing input: this measures the
+    # oracle. Whether the harness's own seeds plus a bounded search REACH the defect is a
+    # separate (stochastic) property, asserted in the fixture self-tests, not here.
+    if not runner.kills_witness(mutated, harness, target, fixture["witness_corpus"]):
         reasons.append(
             f"emitted harness does NOT find the seeded defect ({mut['defect']}) "
-            f"within {fixture['fuzztime_kill']} — weak seeds, over-tight guard, or no oracle"
+            f"even when the defect-exposing input is replayed — no oracle, or the guard "
+            f"skips it"
+        )
+
+    # BOTH directions, for the graded candidate and not only for the built-in exemplars:
+    # the witness must fail on the mutant AND pass on the correct source. Checking only the
+    # first half scored a harness that `t.Fatal`s on that exact legal input as (True, []).
+    if runner.kills_witness(fixture["source"], harness, target, fixture["witness_corpus"]):
+        reasons.append(
+            "emitted harness FAILS on the CORRECT implementation for the defect-exposing "
+            "input (false positive: it rejects an input the contract requires to work)"
         )
 
     return (len(reasons) == 0, reasons)
@@ -286,6 +420,60 @@ class GraderSelfTest(unittest.TestCase):
                 passed, reasons = grade(self._read(fx, "good.md"), fx, self.runner)
                 self.assertTrue(passed, f"{name}: good exemplar should pass; reasons: {reasons}")
 
+    # A harness that is correct in every graded respect EXCEPT that it rejects one legal
+    # input. Constructed as a counter-example to mutant-only grading: it kills the mutation,
+    # compiles, has enough seeds, and declares the right mode — and it is still wrong.
+    REJECTS_A_LEGAL_INPUT = """`Applicability Verdict: Suitable for fuzzing`
+
+Fuzz mode: **round-trip**. Scorecard below.
+
+```go
+func FuzzRoundTripRecord(f *testing.F) {
+	f.Add("", int32(0))
+	f.Add("key", int32(1))
+	f.Add("other", int32(7))
+
+	f.Fuzz(func(t *testing.T, key string, value int32) {
+		if len(key) > 255 {
+			t.Skip()
+		}
+		if key == "k" && value == -1 {
+			t.Fatalf("rejects a legal input")
+		}
+		orig := Record{Key: key, Value: value}
+		enc, err := Encode(orig)
+		if err != nil {
+			t.Skip()
+		}
+		got, err := Decode(enc)
+		if err != nil {
+			t.Fatalf("decode(encode(x)) failed: %v", err)
+		}
+		if got != orig {
+			t.Fatalf("round-trip mismatch: got=%+v want=%+v", got, orig)
+		}
+	})
+}
+```
+
+## Quality Scorecard
+| C1 | ok | Pass |
+"""
+
+    def test_grader_rejects_a_harness_that_fails_the_witness_on_correct_code(self) -> None:
+        """The witness must be checked in BOTH directions for the graded candidate.
+
+        Before this, the grader replayed the witness only against the mutant, so a harness
+        that `t.Fatal`s on that exact legal input graded `(True, [])` while failing on the
+        correct implementation."""
+        fx = _load_fixture("kv_codec")
+        passed, reasons = grade(self.REJECTS_A_LEGAL_INPUT, fx, self.runner)
+        self.assertFalse(passed, "a harness that rejects a legal input must not pass")
+        joined = " | ".join(reasons)
+        self.assertIn("FAILS on the CORRECT implementation for the defect-exposing input",
+                      joined,
+                      f"expected the deterministic witness complaint; got {joined}")
+
     def test_grader_fails_bad_exemplars(self) -> None:
         for name in FIXTURES:
             with self.subTest(fixture=name):
@@ -293,12 +481,11 @@ class GraderSelfTest(unittest.TestCase):
                 passed, reasons = grade(self._read(fx, "bad.md"), fx, self.runner)
                 self.assertFalse(passed, f"{name}: bad exemplar must not pass")
                 joined = " | ".join(reasons)
-                # And for the RIGHT reasons: wrong mode, too few seeds, and a harness
-                # that cannot find the defect.
-                self.assertIn("fuzz mode", joined, f"{name}: expected a mode complaint; got {joined}")
-                self.assertIn("seeds", joined, f"{name}: expected a seed complaint; got {joined}")
-                self.assertIn("does NOT find the seeded defect", joined,
-                              f"{name}: expected a kill-failure complaint; got {joined}")
+                # And for the RIGHT reasons -- each fixture declares which defect its bad
+                # exemplar demonstrates, so a fixture cannot pass on an unrelated complaint.
+                for expected in fx["bad_expected_reasons"]:
+                    self.assertIn(expected, joined,
+                                  f"{name}: expected {expected!r} in the grade; got {joined}")
 
     def test_mutation_is_reachable_at_all(self) -> None:
         """Guard against a fixture that can never fail: the good harness must find the
@@ -307,6 +494,8 @@ class GraderSelfTest(unittest.TestCase):
         for name in FIXTURES:
             with self.subTest(fixture=name):
                 fx = _load_fixture(name)
+                if fx["expected_verdict"] == "not_suitable":
+                    continue  # no harness to grade
                 harness = extract_fuzz_harness(self._read(fx, "good.md"))
                 target = harness_target_name(harness)
                 mutated = fx["source"].replace(
@@ -322,6 +511,25 @@ class GraderSelfTest(unittest.TestCase):
                     self.runner.replay_passes(fx["source"], harness, target),
                     f"{name}: good harness fails on the correct source",
                 )
+
+    def test_witness_is_a_defect_exposer_not_a_universal_failure(self) -> None:
+        """The graded kill check replays a witness input. If that input also failed on the
+        CORRECT source, every harness would 'kill' the mutation and the check would be
+        vacuous in the opposite direction."""
+        for name in FIXTURES:
+            with self.subTest(fixture=name):
+                fx = _load_fixture(name)
+                if fx["expected_verdict"] == "not_suitable":
+                    continue  # no harness to grade
+                harness = extract_fuzz_harness(self._read(fx, "good.md"))
+                target = harness_target_name(harness)
+                mutated = fx["source"].replace(fx["mutation"]["find"], fx["mutation"]["replace"])
+                self.assertTrue(
+                    self.runner.kills_witness(mutated, harness, target, fx["witness_corpus"]),
+                    f"{name}: witness does not expose the defect — kill check is vacuous")
+                self.assertFalse(
+                    self.runner.kills_witness(fx["source"], harness, target, fx["witness_corpus"]),
+                    f"{name}: witness fails on the CORRECT source — every harness would pass")
 
     def test_build_failure_is_not_reported_as_a_finding(self) -> None:
         """A nonzero `go test` exit is not evidence the fuzzer found anything.
@@ -345,12 +553,86 @@ class GraderSelfTest(unittest.TestCase):
         for name in FIXTURES:
             with self.subTest(fixture=name):
                 fx = _load_fixture(name)
+                if fx["expected_verdict"] == "not_suitable":
+                    self.assertIsNone(
+                        extract_fuzz_harness(self._read(fx, "good.md")),
+                        f"{name}: a correct refusal must emit no harness at all")
+                    continue
                 harness = extract_fuzz_harness(self._read(fx, "good.md"))
                 self.assertTrue(
                     self.runner.replay_passes(fx["source"], harness,
                                               harness_target_name(harness)),
                     f"{name}: exemplar seeds fail on the correct implementation",
                 )
+
+
+class FuzzOutputClassificationTests(unittest.TestCase):
+    """`--- FAIL` is not a fuzzing result on its own.
+
+    Go prints it both for a real finding and for its own infrastructure giving up under a
+    saturated machine ("context deadline exceeded"), with no failing input. Reading the
+    second as the first made the suite red about 1 run in 4 while every fixture was
+    correct. These cases are synthetic on purpose: the real thing is not reproducible on
+    demand, so the classifier is unit-tested instead of waited for."""
+
+    REAL = (
+        "fuzz: elapsed: 0s, gathering baseline coverage: 3/3 completed\n"
+        "--- FAIL: FuzzRoundTripRecord (0.05s)\n"
+        "    sut_test.go:21: round-trip mismatch: got={Key:k Value:16777215} want={Key:k Value:-1}\n"
+        "    Failing input written to testdata/fuzz/FuzzRoundTripRecord/9a1b\n"
+    )
+    INFRA = (
+        "fuzz: elapsed: 3s, execs: 1515207 (504999/sec), new interesting: 1 (total: 4)\n"
+        "--- FAIL: FuzzRoundTripRecord (5.10s)\n"
+        "    context deadline exceeded\n"
+    )
+    HUNG = (
+        "--- FAIL: FuzzRoundTripRecord (7.02s)\n"
+        "    fuzzing process hung or terminated unexpectedly: exit status 2\n"
+    )
+    CLEAN = "fuzz: elapsed: 5s, execs: 2641878 (536618/sec)\nPASS\nok  \teval\t5.4s\n"
+
+    def test_real_finding_is_reported(self) -> None:
+        verdict, detail = fuzz_finding(self.REAL, "FuzzRoundTripRecord")
+        self.assertIs(True, verdict)
+        self.assertIn("round-trip mismatch", detail)
+
+    def test_infrastructure_failure_is_not_a_finding(self) -> None:
+        for output, label in ((self.INFRA, "deadline"), (self.HUNG, "hung")):
+            with self.subTest(case=label):
+                verdict, detail = fuzz_finding(output, "FuzzRoundTripRecord")
+                self.assertIsNone(verdict, f"{label}: infra failure graded as a finding")
+                self.assertTrue(detail)
+
+    def test_clean_run_is_clean(self) -> None:
+        self.assertEqual((False, ""), fuzz_finding(self.CLEAN, "FuzzRoundTripRecord"))
+
+    def test_finding_for_another_target_is_not_this_target(self) -> None:
+        other = self.REAL.replace("FuzzRoundTripRecord", "FuzzSomethingElse")
+        verdict, _ = fuzz_finding(other, "FuzzRoundTripRecord")
+        self.assertIsNot(True, verdict)
+
+
+class GraderDeterminismTests(unittest.TestCase):
+    """The graded kill check must not depend on a coverage-guided search finding the
+    defect in N seconds; it replays a declared witness input."""
+
+    SOURCE = (Path(__file__).resolve().parent.parent.parent / "scripts" / "tests"
+              / "test_llm_fuzz_eval.py").read_text(encoding="utf-8")
+
+    def test_grade_uses_the_witness_replay_for_the_kill_check(self) -> None:
+        m = re.search(r"\ndef grade\(.*?(?=\n(?:@|class |def ))", self.SOURCE, re.S)
+        self.assertIsNotNone(m, "could not isolate grade()")
+        grade_src = m.group(0)
+        self.assertIn("kills_witness(", grade_src,
+                      "the graded kill check must replay the declared witness")
+        self.assertNotIn("fuzz_finds_defect(", grade_src,
+                         "grading on a timed search reintroduces a stochastic verdict")
+
+    def test_witness_replay_uses_run_not_fuzz(self) -> None:
+        body = self.SOURCE.split("def kills_witness(", 1)[1].split("\n    def ", 1)[0]
+        self.assertIn("-run=^", body, "the witness check must replay, not search")
+        self.assertNotIn("-fuzz=", body, "the witness check must not start a fuzzing search")
 
 
 class GraderUnitTests(unittest.TestCase):
@@ -372,16 +654,44 @@ class GraderUnitTests(unittest.TestCase):
         for name in FIXTURES:
             with self.subTest(fixture=name):
                 fx = _load_fixture(name)
+                if fx["expected_verdict"] == "not_suitable":
+                    # A refusal fixture has no harness to grade, so it declares no mutation.
+                    self.assertNotIn("mutation", fx, f"{name}: refusal fixture needs no mutation")
+                    self.assertTrue(fx.get("expected_refusal_signals"),
+                                    f"{name}: must declare what a good refusal points at")
+                    continue
                 self.assertIn(fx["mutation"]["find"], fx["source"],
                               f"{name}: mutation.find must appear verbatim in sut.go")
                 self.assertGreaterEqual(fx["min_seeds"], 3, f"{name}: S1 requires >=3 seeds")
-                self.assertEqual("suitable", fx["expected_verdict"])
+                self.assertTrue(fx.get("witness_corpus"),
+                                f"{name}: needs a witness corpus entry for the kill check")
 
-    def test_fixtures_cover_distinct_fuzz_modes(self) -> None:
-        """Two fixtures asserting the same mode would add runtime without adding coverage."""
-        modes = {_load_fixture(n)["expected_fuzz_mode"] for n in FIXTURES}
-        self.assertEqual(len(FIXTURES), len(modes),
-                         f"fixtures must cover distinct fuzz modes, got {modes}")
+    def test_fixtures_cover_every_fuzz_mode(self) -> None:
+        """Each fuzz mode with a compile-and-kill scenario must be graded at least once."""
+        modes = {_load_fixture(n).get("expected_fuzz_mode") for n in FIXTURES
+                 if _load_fixture(n)["expected_verdict"] == "suitable"}
+        self.assertEqual({"parser robustness", "round-trip", "differential"}, modes,
+                         f"fixtures must cover parser + round-trip + differential, got {modes}")
+
+    def test_each_fixture_grades_a_distinct_defect(self) -> None:
+        """A fixture costs a fuzz run, so it must add a grading axis, not repeat one.
+
+        Sharing a mode is allowed -- json_roundtrip and kv_codec are both round-trip, but
+        one grades 'finds real corruption' and the other 'does not false-positive on the
+        correct implementation'. Repeating BOTH the mode and the expected defect would not."""
+        seen = {}
+        for name in FIXTURES:
+            fx = _load_fixture(name)
+            key = (fx.get("expected_fuzz_mode", "n/a"), tuple(sorted(fx["bad_expected_reasons"])))
+            self.assertNotIn(key, seen,
+                             f"{name} duplicates {seen.get(key)}: same mode and same graded defect")
+            seen[key] = name
+
+    def test_every_fixture_declares_expected_bad_reasons(self) -> None:
+        for name in FIXTURES:
+            fx = _load_fixture(name)
+            self.assertTrue(fx.get("bad_expected_reasons"),
+                            f"{name}: meta.json must declare bad_expected_reasons")
 
     def test_every_fixture_dir_is_registered(self) -> None:
         """A fixture directory added on disk but not listed in FIXTURES is never graded."""
@@ -411,8 +721,9 @@ class LiveSkillEval(unittest.TestCase):
                 fixture = _load_fixture(name)
                 prompt = (
                     "Follow this fuzzing-test skill exactly and produce its full output "
-                    "(applicability verdict, why, action, harness, scorecard, commands). "
-                    "The harness must be a single ```go block importing nothing but testing.\n\n"
+                    "(applicability verdict, why, action, and — only if the gate passes — "
+                    "harness, scorecard, commands). Put any harness in a single ```go block; "
+                    "the runner supplies the imports it detects.\n\n"
                     f"{skill}\n\n---\nTarget source (package eval):\n"
                     f"```go\n{fixture['source']}```\n"
                 )

@@ -10,6 +10,7 @@ CI_REF = SKILL_DIR / "references" / "ci-strategy.md"
 CRASH_REF = SKILL_DIR / "references" / "crash-handling.md"
 TARGET_REF = SKILL_DIR / "references" / "target-priority.md"
 ANTI_EXAMPLES_REF = SKILL_DIR / "references" / "anti-examples.md"
+TUNING_REF = SKILL_DIR / "references" / "advanced-tuning.md"
 
 
 def frontmatter(text: str) -> str:
@@ -124,10 +125,176 @@ class AntiExampleTests(unittest.TestCase):
     def test_key_anti_examples_present(self) -> None:
         content = ANTI_EXAMPLES_REF.read_text()
         self.assertIn("trivial function", content.lower())
-        self.assertIn("No oracle", content)
+        self.assertIn("dropping the result", content.lower())
+        # A robustness harness legitimately has no assertion: the reference must not
+        # contradict scorecard C2 by demanding one unconditionally.
+        self.assertNotIn("always assert an invariant", content.lower())
+        self.assertIn("no-panic / robustness harness is NOT this mistake", content)
         self.assertIn("Skip rate", content)
         self.assertIn("OOM", content)
         self.assertIn("global/external state", content)
+
+
+class ExecutableCommandTests(unittest.TestCase):
+    """Commands in the docs are copied verbatim, so a command that cannot run is a defect.
+    These pin the ones that were wrong."""
+
+    def test_coverage_workflow_does_not_combine_coverprofile_with_fuzz(self) -> None:
+        """`go test -fuzz=... -coverprofile=...` is rejected by the toolchain:
+        'cannot use -coverprofile flag with -fuzz flag' (verified on Go 1.25/1.26)."""
+        tuning = TUNING_REF.read_text()
+        for line in tuning.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#") or not stripped.startswith("go test"):
+                continue
+            if "-fuzz=" in stripped or "-fuzz " in stripped:
+                self.assertNotIn("-coverprofile", stripped,
+                                 f"command combines -fuzz with -coverprofile: {stripped}")
+        self.assertIn("cannot use -coverprofile flag with -fuzz flag", tuning,
+                      "the reference must show the error so the reader recognises it")
+        self.assertIn("-run='^FuzzXxx$' -coverprofile=", tuning,
+                      "the replay-based profiling step must be spelled out")
+
+    def test_pr_lane_preserves_and_surfaces_a_quick_fuzz_finding(self) -> None:
+        """continue-on-error keeps the merge queue moving; without an artifact upload it
+        also destroys the crasher and reports green."""
+        ci = CI_REF.read_text()
+        self.assertIn("continue-on-error: true", ci)
+        self.assertIn("steps.quickfuzz.outcome == 'failure'", ci,
+                      "the swallowed failure must drive follow-up steps")
+        self.assertIn("pr-fuzz-crash-", ci, "the PR lane must upload the crashing input")
+        # Present is not enough: a disabled step still matches a keyword search.
+        pr_lane = ci.split("## Scheduled Lane")[0]
+        self.assertNotIn("if: false", pr_lane, "the crash-upload step is disabled")
+        upload = pr_lane[pr_lane.index("- name: Upload crash corpus"):]
+        upload_block = upload[:upload.index("- name: Report")]
+        self.assertIn("if: steps.quickfuzz.outcome == 'failure'", upload_block,
+                      "the upload must be conditioned on the quick-fuzz failure")
+        self.assertIn("uses: actions/upload-artifact", upload_block)
+        self.assertNotIn("DISABLED", pr_lane)
+        self.assertIn("::warning", ci, "a swallowed crash must still be visible")
+        self.assertIn("merge-queue", ci.lower(),
+                      "the reference must say what continue-on-error does and does not mean")
+
+
+class RuleConsistencyTests(unittest.TestCase):
+    """Rules that appear in more than one file must not contradict each other: an agent
+    that loads a different reference would otherwise reach a different decision."""
+
+    def test_external_dependency_rule_has_one_stated_precedence(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("Soft warning ≠ fuzz the live dependency", skill)
+        self.assertIn("this is the binding statement", skill.lower())
+        # Gate item 4 stays a soft warning; the guardrail still bans live I/O in the harness.
+        self.assertIn("soft warnings", skill.lower())
+        self.assertIn("Do not fuzz targets requiring live DB/network unless fully stubbed.", skill)
+
+    @staticmethod
+    def _flat(text: str) -> str:
+        """Collapse whitespace: a rule can be re-wrapped without changing its meaning."""
+        return re.sub(r"\s+", " ", text.lower())
+
+    def test_oracle_rule_is_identical_in_all_three_places(self) -> None:
+        skill = SKILL_MD.read_text()
+        app = APP_REF.read_text()
+        anti = ANTI_EXAMPLES_REF.read_text()
+        for text, name in ((skill, "SKILL.md"), (app, "applicability-checklist.md"),
+                           (anti, "anti-examples.md")):
+            self.assertNotIn("always assert an invariant", self._flat(text),
+                             f"{name} contradicts C2's no-panic form")
+        self.assertIn("needs no assertion", self._flat(skill))
+        for text, name in ((app, "applicability-checklist.md"), (anti, "anti-examples.md")):
+            self.assertIn("no `t.fatal` is required", self._flat(text),
+                          f"{name} must state the no-panic exemption in the same words")
+
+
+def flat_text(path) -> str:
+    """Lowercase, emphasis-free, whitespace-collapsed text.
+
+    Prose assertions pinned exact sentences, so a rewording read as a missing rule. What
+    these tests must pin is the RULE, not its layout."""
+    return re.sub(r"\s+", " ", path.read_text().lower().replace("*", "").replace("`", ""))
+
+
+class RoundTripOracleTests(unittest.TestCase):
+    """The round-trip template is the most-copied artefact with a wrong-oracle failure mode."""
+
+    def test_template_b_ships_a_domain_guard(self) -> None:
+        skill = SKILL_MD.read_text()
+        flat = flat_text(SKILL_MD)
+        self.assertIn("domain guard", flat)
+        # The guard must be in the TEMPLATE, not only described in prose around it.
+        template = [b for b in re.findall(r"```go\n(.*?)```", skill, re.DOTALL)
+                    if "func FuzzRoundTrip" in b]
+        self.assertEqual(1, len(template), "expected exactly one round-trip template")
+        self.assertIn("utf8.ValidString", template[0],
+                      "the round-trip template must carry the guard, not just mention it")
+        self.assertIn("t.Skip()", template[0])
+        self.assertIn("u+fffd", flat)
+
+    def test_template_b_documents_the_normalizing_variant_and_its_weakness(self) -> None:
+        flat = flat_text(SKILL_MD)
+        self.assertIn("value-level idempotence", flat)
+        self.assertIn("decoded values", flat)
+        self.assertIn("never encoded bytes", flat)
+        self.assertIn("strictly weaker", flat)
+
+    def test_template_b_requires_verifying_the_oracle(self) -> None:
+        skill = SKILL_MD.read_text()
+        self.assertIn("-fuzztime=10s .  # must stay clean", skill)
+
+    def test_failure_triage_does_not_presume_the_implementation_is_correct(self) -> None:
+        """A rule that reads "you believe the code is correct, so the test is wrong" pushes
+        an agent to widen guards until the suite is green again — the opposite of why
+        fuzzing exists. Triage must be decided from the contract, with the reproducer kept
+        either way.
+
+        Matched on normalized text so a rewording is not a failure: what is pinned is that
+        both verdicts stay reachable, that belief is explicitly rejected as evidence, and
+        that the reproducer survives."""
+        # Strip emphasis as well as whitespace: **implementation** and implementation are
+        # the same rule, and a test that cannot see that pins formatting, not meaning.
+        flat = re.sub(r"\s+", " ", SKILL_MD.read_text().lower().replace("*", ""))
+        self.assertIn("triage against the contract", flat)
+        self.assertIn("is not evidence", flat)
+        self.assertIn("the harness is wrong", flat)
+        self.assertIn("the implementation is wrong", flat)
+        self.assertIn("keep the reproducer", flat)
+        for banned in ("means the oracle or the guard is wrong, not the code",
+                       "fix the harness before filing a bug"):
+            self.assertNotIn(banned, flat,
+                             f"reinstated a rule that presumes the code is correct: {banned}")
+
+
+class SeedRuleTests(unittest.TestCase):
+    def test_seed_mining_has_a_fallback_for_projects_with_no_corpus(self) -> None:
+        """'Mine real data, never invent seeds' is unactionable in a new package. Without a
+        stated fallback the two rules cannot both be satisfied.
+
+        Pinned as a rule, not a sentence: a fallback must exist, derive seeds from the
+        declared contract, label them, and require verification."""
+        flat = flat_text(SKILL_MD)
+        self.assertIn("nothing to mine", flat)
+        self.assertIn("constructed (no corpus available)", flat)
+        self.assertIn("declared contract", flat)
+        self.assertIn("go test -run='^fuzz' .", flat)
+
+    def test_dead_seed_rule_is_documented(self) -> None:
+        flat = flat_text(SKILL_MD)
+        self.assertIn("dead weight", flat)
+        self.assertIn("--- skip:", flat)
+
+
+class MeasuredClaimTests(unittest.TestCase):
+    def test_deserialization_costs_state_their_conditions(self) -> None:
+        """Absolute per-op numbers without a machine, a Go version, and a payload are not
+        reproducible. The prior table's figures were wrong by 10-100x and mis-ordered."""
+        skill = SKILL_MD.read_text()
+        self.assertIn("ns/op", skill)
+        self.assertIn("Conditions:", skill)
+        self.assertIn("go test -run='^$' -bench=. -benchmem", skill)
+        self.assertNotIn("~10-50 μs/op", skill)
+        self.assertIn("Re-measure", skill)
 
 
 class ScorecardTests(unittest.TestCase):
@@ -165,33 +332,42 @@ class GoVersionAndAdvancedTests(unittest.TestCase):
         content = SKILL_MD.read_text()
         self.assertIn("Go Version Gate", content)
 
-    def test_version_table_entries(self) -> None:
+    def test_version_gate_states_the_only_hard_stop(self) -> None:
+        """SKILL.md owns the gate (the 1.18 hard stop); per-release detail lives in the
+        reference. Duplicating the release table in both drifts."""
         content = SKILL_MD.read_text()
         self.assertIn("1.18", content)
-        self.assertIn("1.20", content)
-        self.assertIn("1.21", content)
-        self.assertIn("1.22", content)
+        self.assertIn("hard stop", content.lower())
+        self.assertIn("applicability-checklist.md", content)
+        tuning = TUNING_REF.read_text()
+        for release in ("1.20", "1.22", "1.23"):
+            self.assertIn(release, tuning, f"{release} missing from advanced-tuning.md")
 
-    def test_race_detection_fuzz(self) -> None:
-        content = SKILL_MD.read_text()
-        self.assertIn("Race Detection + Fuzz", content)
-        self.assertIn("-race", content)
+    def test_rangefunc_version_is_accurate(self) -> None:
+        """Range-over-func is a Go 1.23 language feature; in 1.22 it needed
+        GOEXPERIMENT=rangefunc. Stating it as a plain 1.22 capability misleads anyone
+        writing a harness that must run on 1.22."""
+        tuning = TUNING_REF.read_text()
+        self.assertIn("GOEXPERIMENT=rangefunc", tuning)
+        self.assertIn("1.23", tuning)
+        self.assertNotIn("| 1.22+ | Range function support", tuning)
 
-    def test_worker_parallelism(self) -> None:
-        content = SKILL_MD.read_text()
-        self.assertIn("Fuzz Worker Parallelism", content)
-        self.assertIn("GOMAXPROCS", content)
-        self.assertIn("-parallel", content)
-
-    def test_go_fuzz_headers(self) -> None:
-        content = SKILL_MD.read_text()
-        self.assertIn("go-fuzz-headers", content)
-        self.assertIn("GenerateStruct", content)
-
-    def test_performance_baseline(self) -> None:
-        content = SKILL_MD.read_text()
-        self.assertIn("Fuzz Performance Baseline", content)
-        self.assertIn("execs/sec", content)
+    def test_tuning_topics_live_in_the_reference_and_are_linked(self) -> None:
+        """These four were duplicated in SKILL.md and the reference. The reference owns
+        them; SKILL.md must still route the reader there."""
+        skill = SKILL_MD.read_text()
+        tuning = TUNING_REF.read_text()
+        for heading, token in (
+            ("Race Detection + Fuzz", "-race"),
+            ("Fuzz Worker Parallelism", "GOMAXPROCS"),
+            ("Structured Input with `go-fuzz-headers`", "GenerateStruct"),
+            ("Fuzz Performance Baseline", "execs/sec"),
+        ):
+            self.assertIn(heading, tuning, f"advanced-tuning.md lost: {heading}")
+            self.assertIn(token, tuning, f"advanced-tuning.md lost: {token}")
+        self.assertIn("advanced-tuning.md", skill)
+        self.assertIn("execs/sec", skill, "SKILL.md must still name the baseline metric")
+        self.assertIn("go-fuzz-headers", skill)
 
 
 class FuzzVsPropertyTests(unittest.TestCase):
@@ -302,8 +478,21 @@ class TemplateSeedQualityTests(unittest.TestCase):
 
     def test_placeholder_note_points_at_seed_mining(self) -> None:
         content = SKILL_MD.read_text()
-        self.assertIn("placeholders are not", content.lower())
+        self.assertIn("they are still\nplaceholders", content.lower())
         self.assertIn("Seed mining strategy", content)
+
+    def test_s1_criterion_matches_what_the_templates_ship(self) -> None:
+        """S1 used to demand ">=3 structurally distinct VALID inputs" while the templates
+        shipped a deliberately malformed seed and claimed to satisfy it. One of the two had
+        to move; the criterion did, because a malformed seed is exactly what a parser
+        harness needs."""
+        content = SKILL_MD.read_text()
+        s1 = [ln for ln in content.splitlines() if ln.startswith("| S1 ")]
+        self.assertEqual(1, len(s1), "expected exactly one S1 row")
+        row = s1[0]
+        self.assertIn("at least one valid", row.lower())
+        self.assertNotIn("distinct valid inputs", row)
+        self.assertIn("reaching the region", row.lower())
 
 
 class FuzzFlagSemanticsTests(unittest.TestCase):
@@ -398,6 +587,41 @@ class CoverageDocConsistencyTests(unittest.TestCase):
         self.assertIn("test_llm_fuzz_eval.py", text)
         self.assertIn("frame_parser", text)
         self.assertIn("kv_codec", text)
+
+    def test_declared_test_counts_match_the_collected_suite(self) -> None:
+        """A deleted or renamed test disappears silently: unittest simply collects fewer.
+
+        COVERAGE.md declares a count per file, so comparing it against what the loader
+        actually collects turns "someone disabled a check" into a red suite."""
+        import importlib.util
+        import sys as _sys
+
+        text = self.COVERAGE.read_text()
+        declared = {
+            "test_skill_contract.py": r"\*\*Contract test count: (\d+)\*\*",
+            "test_golden_scenarios.py": r"\*\*Golden test count: (\d+)\*\*",
+            "test_templates_compile.py": r"\*\*Template test count: (\d+)\*\*",
+            "test_llm_fuzz_eval.py": r"\*\*Behavioral eval count: (\d+)\*\*",
+        }
+        here = SKILL_DIR / "scripts" / "tests"
+        total = 0
+        for filename, pattern in declared.items():
+            m = re.search(pattern, text)
+            self.assertIsNotNone(m, f"COVERAGE.md must declare a count for {filename}")
+            spec = importlib.util.spec_from_file_location(f"count_probe_{filename[:-3]}",
+                                                          here / filename)
+            module = importlib.util.module_from_spec(spec)
+            _sys.modules[spec.name] = module
+            spec.loader.exec_module(module)
+            actual = unittest.defaultTestLoader.loadTestsFromModule(module).countTestCases()
+            total += actual
+            self.assertEqual(actual, int(m.group(1)),
+                             f"COVERAGE.md says {m.group(1)} tests in {filename}, loader "
+                             f"collects {actual}")
+        m = re.search(r"\*\*Total tests: (\d+)\*\*", text)
+        self.assertIsNotNone(m, "COVERAGE.md must declare a total")
+        self.assertEqual(total, int(m.group(1)),
+                         f"COVERAGE.md total is {m.group(1)}, loader collects {total}")
 
     def test_declared_anti_example_count_matches_reference(self) -> None:
         actual = len(re.findall(r"(?m)^### Mistake \d+:", ANTI_EXAMPLES_REF.read_text()))

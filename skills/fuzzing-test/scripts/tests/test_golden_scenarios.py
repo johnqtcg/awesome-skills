@@ -1,4 +1,5 @@
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -166,16 +167,19 @@ class GoldenCrashHandlingTests(unittest.TestCase):
         crash = (SKILL_DIR / "references" / "crash-handling.md").read_text()
         self.assertEqual(data["workflow_type"], "crash_handling")
         # Every declared crash step must be reachable from the skill's own workflow.
+        # Anchors are matched case-insensitively: the step must be documented, in whichever
+        # voice the doc uses. Pinning exact casing made a rewording look like a missing step.
         anchors = {
-            "retain_corpus": "retain corpus under",
-            "record_failure_type": "Record failure type",
-            "fix_minimal": "Fix with minimal code change",
-            "rerun_regression": "Re-run corpus regression",
-            "report_root_cause": "Report root cause",
+            "retain_corpus": "testdata/fuzz/fuzzxxx/",
+            "record_failure_type": "record the failure type",
+            "fix_minimal": "minimal change",
+            "rerun_regression": "corpus replay",
+            "report_root_cause": "report root cause",
         }
+        haystack = (skill + crash).lower()
         for step in data["expected_crash_steps"]:
             self.assertIn(step, anchors, f"fixture declares unknown crash step: {step}")
-            self.assertIn(anchors[step], skill + crash,
+            self.assertIn(anchors[step], haystack,
                           f"crash step {step} has no anchor in SKILL.md/crash-handling.md")
 
 
@@ -224,13 +228,18 @@ class GoldenHardStopConsistencyTests(unittest.TestCase):
     def test_hard_stop_items_agree_across_documents(self) -> None:
         skill = SKILL_MD.read_text()
         ref = APP_REF.read_text()
+        # Match the DECLARATION, not its formatting: the table became a sentence when the
+        # duplicated rationale moved to the checklist, and a layout change is not a rule
+        # change. What must hold is that both documents name 1, 2 and 3 as blocking.
+        m = re.search(r"Hard stop — items (.+?)(?:\n\n|On any of those)", skill, re.S)
+        self.assertIsNotNone(m, "SKILL.md must declare which items are hard stops")
+        declaration = m.group(1)
         for item in ("1", "2", "3"):
-            self.assertRegex(
-                skill, rf"\|\s*`?{item}`?\s",
-                f"SKILL.md hard-stop table must list blocking item {item}",
-            )
+            self.assertIn(f"`{item}`", declaration,
+                          f"SKILL.md hard-stop declaration must list blocking item {item}")
             self.assertIn(f"If `{item}` fails: **stop**", ref,
                           f"applicability-checklist.md must hard-stop on item {item}")
+        self.assertIn("independently blocking", declaration)
 
     def test_skill_md_no_longer_limits_hard_stop_to_2_or_3(self) -> None:
         skill = SKILL_MD.read_text()

@@ -38,15 +38,10 @@ Mark each item `Pass` / `Fail`:
 4. Target is mostly deterministic/local (not dominated by DB/network/clock/global mutable state).
 5. Target is fast enough for high-iteration fuzzing.
 
-Hard stop — items `1`, `2`, and `3` are each independently blocking:
-
-| Failed item | Why it stops the workflow |
-|---|---|
-| `1` meaningful input space | Fuzzing adds nothing a table-driven unit test would not find |
-| `2` fuzz-supported types | Go's fuzzer cannot drive the target at all |
-| `3` clear oracle | No way to recognise a bug even when the input triggers it |
-
-On any of those:
+Hard stop — items `1`, `2`, and `3` are each independently blocking: without a meaningful
+input space fuzzing finds nothing a table test would not; without fuzz-supported types the
+fuzzer cannot drive the target; without an oracle a bug cannot be recognised when the input
+triggers it. On any of those:
 - output `Applicability Verdict: Not suitable for fuzzing`
 - list concrete failed checks with specific code references
 - suggest alternative strategy (unit/integration/property tests)
@@ -55,18 +50,25 @@ On any of those:
 Items `4` and `5` are **soft warnings**, never hard stops: proceed, flag the risk, and adjust
 the cost class. Full decision tree in `references/applicability-checklist.md`.
 
+**Soft warning ≠ fuzz the live dependency.** Item `4` grades *determinism*; the Guardrails
+rule ("do not fuzz targets requiring live DB/network") grades *what the harness body does*.
+They resolve in one order, and this is the binding statement — a reference file that reads
+otherwise is stale:
+
+| Situation | Verdict |
+|---|---|
+| Harness body would touch a live DB/network/clock | **Not a gate failure — a scope decision.** Stub or extract the pure layer, then fuzz that. If neither is possible, stop and say so |
+| Dependency is stubbed/injected, results still vary | Soft warning: proceed, flag non-determinism, raise the cost class |
+| Target merely *reads* injected config/state deterministically | No warning |
+
 ## Additional Gates
 
 ### Target Priority Gate
 
-When multiple candidates exist, prioritize by bug-finding yield:
-
-1. Parsers/decoders/protocol handlers
-2. Serialization/deserialization round-trip paths
-3. State transitions with strict invariants
-4. Differential comparison candidates (new vs ref implementation)
-
-If only low-yield targets exist, state that explicitly before writing broad fuzz suites.
+With multiple candidates, fuzz in yield order: parsers/decoders/protocol handlers →
+serialization round-trip paths → state transitions with strict invariants → differential
+candidates. If only low-yield targets exist, say so before writing broad fuzz suites.
+Tiers, examples, and tie-breaks: `references/target-priority.md`.
 
 ### Risk and Cost Gate
 
@@ -112,32 +114,29 @@ Then:
 - round-trip
 - differential
 - multi-parameter
-3. Seed with `f.Add(...)` — mine real data, do NOT invent fake seeds:
+3. Seed with `f.Add(...)` — mine real data, do NOT invent fake seeds. Run all four before
+   writing any `f.Add`:
 
-   **Seed mining strategy (run these before writing f.Add calls):**
-   ```
-   a. Grep existing unit tests for real inputs:
-      Grep for function calls to the fuzz target in *_test.go files
-      → extract literal arguments as seeds
+   | Source | How |
+   |---|---|
+   | Existing unit tests | Grep `*_test.go` for calls to the target; lift the literal arguments |
+   | `testdata/` | Glob `testdata/**/*` and `testdata/fuzz/**/*`; file contents become `[]byte` seeds |
+   | Repo fixtures | `fixtures/`, `examples/`, `samples/`, `*.golden` — domain-representative inputs |
+   | Production-like data | `.json`/`.yaml`/`.proto`/`.csv` matching the target's input type |
 
-   b. Scan testdata/ directories:
-      Glob for testdata/**/* and testdata/fuzz/**/*
-      → use file contents as []byte seeds
-
-   c. Scan fixtures/examples in the repo:
-      Glob for fixtures/, examples/, samples/, *.golden
-      → use as domain-representative seeds
-
-   d. Extract from production-like config/data files:
-      Read any .json, .yaml, .proto, .csv files that match the target's input type
-      → use real payloads, not hallucinated ones
-   ```
-
-   **Seed categories (each f.Add should cover ≥3 of these):**
-   - valid inputs (mined from tests/testdata above)
+   **Seed categories (cover ≥3 of these across the `f.Add` set):**
+   - valid inputs (mined above)
    - boundary values (empty, max-length, single-element)
    - malformed/known-bad inputs (truncated, corrupted headers)
    - structurally distinct cases (different branches/variants)
+
+   **If there is nothing to mine** — a new package, no tests, no testdata — do not skip the
+   step and do not invent plausible-looking payloads. Construct seeds from the **declared
+   contract**: the struct definition, the format spec, the switch arms of the parser. Label
+   them `constructed (no corpus available)` in the report, keep them minimal, and verify
+   every one with `go test -run='^Fuzz' .` before shipping. "Do not invent seeds" bans
+   fabricating *data you claim is real*; deriving a seed from the type you are about to
+   parse is the legitimate fallback.
 4. Implement `FuzzXxx` in `*_test.go`.
 5. Add harness guards:
 - add a **Size guard**
@@ -153,19 +152,17 @@ Then:
 
 ## Crash Handling (Mandatory)
 
-When fuzz finds a failure:
+When fuzz finds a failure: capture the minimal reproducer → keep the crashing input in
+`<pkg>/testdata/fuzz/FuzzXxx/` → record the failure type (panic / invariant violation /
+timeout-resource blowup) → fix with a minimal change → re-run corpus replay **and** a short
+fuzz → report root cause and the guard that prevents recurrence.
 
-1. Capture minimal reproducible command.
-2. Keep crashing input in corpus path.
-3. Record failure type:
-- panic
-- invariant violation
-- timeout/resource blowup
-4. Fix with minimal code change.
-5. Re-run corpus regression and short fuzz run.
-6. Report root cause + prevention guard.
+A round-trip or differential failure can come from either side. Decide which **from the
+contract**, not from confidence in the code (§Template B): the harness is wrong only when
+the contract says the input is outside what the target must preserve. Keep the reproducer
+either way, and never relax an assertion to restore green.
 
-Use format in `references/crash-handling.md`.
+→ Report format in `references/crash-handling.md`.
 
 ## CI Strategy
 
@@ -180,10 +177,11 @@ Use two-lane strategy (see `references/ci-strategy.md`):
 
 ## Minimal Templates
 
-Every template ships **placeholder seeds**, marked as such. They are structurally distinct
-so each template already satisfies scorecard `S1` as written — but placeholders are not
-real seeds. Replace them with inputs mined per §Seed mining strategy before shipping; keep
-at least three structurally distinct cases when you do.
+Every template ships **placeholder seeds**, marked as such: three structurally distinct
+cases including a valid one, so the template satisfies `S1`'s shape. They are still
+placeholders — they say nothing about *your* target's breaking region, which is the half of
+`S1` that finds bugs. Replace them per §Seed mining strategy, keep ≥3 structurally distinct
+cases, and make sure one of them reaches the behaviour your oracle asserts.
 
 ### Template A: Parser (`[]byte`)
 
@@ -211,18 +209,27 @@ func FuzzParseXxx(f *testing.F) {
 
 ### Template B: Round-Trip
 
+A round-trip harness fails on **correct** code unless the *whole mutated input domain* —
+not just the seeds — stays inside what the codec is contractually required to preserve.
+Seeds are the easy half; the fuzzer generates the other half.
+
 ```go
 func FuzzRoundTripXxx(f *testing.F) {
 	// PLACEHOLDER SEEDS — replace with mined inputs (§Seed mining strategy).
-	// Seeds must round-trip under the CORRECT implementation, so they stay inside
-	// what the codec can represent. Invalid UTF-8 does NOT belong here: encoding/json
-	// rewrites it to U+FFFD, so the seed fails on correct code (see the note below).
 	f.Add("", int32(0))                            // boundary: zero values
 	f.Add("seed", int32(1))                        // valid: typical
-	f.Add("nul\x00 combining é \U0001F30D", int32(-1)) // valid but tricky: NUL, combining mark, astral rune
+	f.Add("nul\x00 combining é \U0001F30D", int32(-1)) // valid but tricky: NUL, combining mark, astral rune
 
 	f.Fuzz(func(t *testing.T, a string, b int32) {
 		if len(a) > 1<<16 {
+			t.Skip()
+		}
+		// DOMAIN GUARD — mandatory, and specific to the codec under test.
+		// Anything the codec may legitimately rewrite is NOT a counter-example, so it
+		// must leave the assertion's domain. For encoding/json that is invalid UTF-8:
+		// Marshal replaces it with U+FFFD, so without this guard the fuzzer reports a
+		// round-trip mismatch within a second against a perfectly correct codec.
+		if !utf8.ValidString(a) {
 			t.Skip()
 		}
 		orig := Obj{A: a, B: b}
@@ -241,13 +248,85 @@ func FuzzRoundTripXxx(f *testing.F) {
 }
 ```
 
-Two round-trip traps that fail on **correct** code — both cost a debugging cycle:
+**Write the domain guard from the codec's contract, before the assertion.** Common ones:
 
-- **Every seed must be representable by the codec.** Invalid UTF-8 under `encoding/json`
-  becomes U+FFFD, so the seed fails before testing anything. Same for dropped sub-second
-  precision or clamped integer width. Verify with `go test -run='^Fuzz' .`
-- **If the codec normalizes, `got != orig` is the wrong oracle** — compare canonical forms,
-  or assert idempotence on a second pass.
+| Codec behaviour | Guard that keeps the oracle honest |
+|---|---|
+| `encoding/json`: invalid UTF-8 → U+FFFD | `if !utf8.ValidString(s) { t.Skip() }` |
+| Timestamp truncated to ms/s | round the input to the stored precision first |
+| Integer clamped by the wire format | bound the input to the representable range |
+| Unicode normalised (NFC), key order canonicalised | no guard expresses it — use the variant below |
+
+**Variant — codec normalizes inside its representable domain.** When the rewrite cannot be
+guarded away, drop strict equality and assert **value-level idempotence**: one normalization
+pass is legitimate, drift after it is not.
+
+```go
+	got, err := Decode(enc) // pass 1
+	if err != nil {
+		t.Fatalf("decode(encode(x)) failed: %v", err)
+	}
+	enc2, err := Encode(got)
+	if err != nil {
+		t.Fatalf("re-encode failed: %v", err)
+	}
+	got2, err := Decode(enc2) // pass 2
+	if err != nil {
+		t.Fatalf("second decode failed: %v", err)
+	}
+	if got2 != got {
+		t.Fatalf("round-trip not idempotent: %+v vs %+v", got2, got)
+	}
+```
+
+Two caveats, both measured on Go 1.26.1 against an `encoding/json` codec:
+
+- **Compare decoded values, never encoded bytes.** `bytes.Equal(enc, enc2)` fails on correct
+  code — `Marshal` writes invalid input as the escape `\ufffd` but a genuine U+FFFD rune as
+  its literal bytes, so the encodings differ while the values agree.
+- **Idempotence is strictly weaker than guarded equality.** It forbids drift, not a one-shot
+  wrong transform. Against a codec mutated to flip the sign of large integers, with the same
+  seeds in both harnesses: guarded equality **caught** it, the idempotent variant **missed**
+  it (the corrupted value re-encodes to itself, so pass 2 agrees with pass 1). Prefer the
+  domain guard; fall back to idempotence only when no guard can express the contract.
+
+**Verify the oracle before trusting it.** A round-trip harness is wrong in two directions,
+and only the second command catches the first one:
+
+```bash
+go test -run='^FuzzRoundTripXxx$' -v .                        # seeds must pass, and RUN
+go test -run='^$' -fuzz='^FuzzRoundTripXxx$' -fuzztime=10s .  # must stay clean
+```
+
+Use `-v` on the first one: a seed the domain guard skips prints `--- SKIP: FuzzXxx/seed#2`
+and the package still reports `ok`. Such a seed is **dead weight** — it satisfies `S1`'s
+count while exercising nothing. Replace it with one the guard admits.
+
+When the second command fails, **triage against the contract — do not assume either side**.
+"I believe the implementation is correct" is not evidence; finding bugs in code its author
+believed correct is the entire point of fuzzing.
+
+1. **Keep the reproducer first.** The failing input is in `<pkg>/testdata/fuzz/FuzzXxx/`.
+   Do not delete it, and do not widen a guard or weaken an assertion to get back to green —
+   that silences the finding instead of resolving it.
+2. **Ask what the codec's documented contract says about this input.** Not what the code
+   does — what it promises. (`encoding/json` documents the U+FFFD rewrite; a JSON number
+   documents its precision limits.)
+3. **Then classify, and say which rule decided it:**
+   - contract says the input is outside what the codec must preserve → the **harness** is
+     wrong: add the domain guard (or the canonical comparison) and note the contract clause;
+   - contract says the value must survive → the **implementation** is wrong: report it, keep
+     the input as a regression corpus entry;
+   - contract is silent or ambiguous → **neither is settled**. Report it as an open
+     question with the reproducer attached, and do not change the assertion to hide it.
+
+Record the verdict and its basis in the crash report (`references/crash-handling.md`). A
+harness fix with no cited contract clause is indistinguishable from suppressing a bug.
+
+Converse: a harness that finds nothing against a target you know is broken may have a fine
+oracle and **seeds that never reach the breaking region** — the sign-flip mutant above is
+caught instantly by a seed of `int32(-1<<30)` and survives 25s from seeds of `0`, `1`, `-1`.
+That is `S1` doing real work, not a formality.
 
 → Load `references/anti-examples.md` (Mistakes 8-9) for both patterns with BAD/GOOD code.
 
@@ -314,14 +393,24 @@ Key points:
 
 **Deserialization strategy (choose by performance need):**
 
-| Method | Speed | When to use |
-|--------|-------|-------------|
-| `json.Unmarshal` | Slow (~10-50 μs/op) | Quick prototyping, human-readable seeds, low-iteration targets |
-| `encoding/gob` | Medium (~2-10 μs/op) | Better throughput when seed readability is not needed |
-| `encoding/binary.Read` | Fast (~0.1-1 μs/op) | Performance-sensitive targets needing max `execs/sec` |
-| `go-fuzz-headers` `GenerateStruct` | Fast + structured | Complex structs with nested fields; see [go-fuzz-headers bridge](#go-fuzz-headers-bridge) below |
+| Method | Measured cost | When to use |
+|--------|--------------|-------------|
+| `encoding/binary.Read` | **57 ns/op**, 64 B, 2 allocs | Fixed-layout structs; highest `execs/sec` |
+| `json.Unmarshal` | **441 ns/op**, 232 B, 5 allocs | Readable seeds, nested/optional fields |
+| `encoding/gob` (`NewDecoder` per input) | **5 293 ns/op**, 7 216 B, 163 allocs | Rarely worth it in a harness — see below |
+| `go-fuzz-headers` `GenerateStruct` | not measured here | Complex nested structs; see [go-fuzz-headers bridge](#go-fuzz-headers-bridge) |
 
-For high-iteration fuzzing (targets <1 μs/call), prefer `encoding/binary` or `go-fuzz-headers` over JSON — the deserialization overhead can dominate total execution time and reduce bug-finding yield.
+Conditions: Go 1.26.1, darwin/arm64 (Apple M4), one 4-field struct (`uint8,int32,uint32,uint16`),
+`-benchmem -count=3`. **These are one machine's numbers — the ordering is the transferable
+part, and even that depends on your struct.** Re-measure before optimising:
+
+```bash
+go test -run='^$' -bench=. -benchmem -count=5 . | tee bench.txt && benchstat bench.txt
+```
+
+Why `gob` loses here: a harness gets a fresh `[]byte` per iteration, so it builds a new
+`gob.Decoder` and re-reads the type descriptor every time — 163 allocations against JSON's 5.
+`gob` is fast on a long-lived stream, which a harness never has.
 
 ## Fuzz vs Property-Based Testing
 
@@ -341,13 +430,11 @@ fuzz-workflow error:
 
 So a clean 30-minute run reporting `new interesting: 2000` adds **nothing** to
 `testdata/fuzz` — those entries are in the build cache
-(`find "$(go env GOCACHE)/fuzz" -type f | wc -l`). Note `<pkg>` is the tested package's own
-directory, not the repo root.
+(`find "$(go env GOCACHE)/fuzz" -type f | wc -l`). `<pkg>` is the tested package's own
+directory, not the repo root. Clean with `go clean -fuzzcache`.
 
-- **Always commit** crashing inputs under `<pkg>/testdata/fuzz/FuzzXxx/` — these are regression tests.
-- **Do not commit** the Go fuzz cache (`$GOCACHE/fuzz/`) — large and machine-specific.
-- **Selectively commit** high-value seeds covering distinct code paths; not hundreds of auto-generated entries.
-- Clean cache: `go clean -fuzzcache`
+→ `references/ci-strategy.md` (§Corpus Sharing Between Lanes) owns the cache keys, the
+artifact glob, and who commits a crasher.
 
 ## Go Version Gate
 
@@ -355,60 +442,25 @@ directory, not the repo root.
 Run `go version` (and `go env GOTOOLCHAIN`); `testing.F` is a stdlib symbol, so the toolchain
 decides whether it exists. A `go 1.16` module fuzzes fine under a modern toolchain.
 
-| Effective toolchain (`go version`) | Guidance |
-|---------------------|----------|
-| `< 1.18` | **Hard stop.** No `testing.F`. Recommend property tests, or legacy `go-fuzz` with explicit justification. |
-| `1.18` | Native `testing.F` available. Baseline for this skill. |
-| `1.20` | Prefer current corpus layout and CI patterns. |
-| `1.21` | Re-check package performance and memory budgets before extending fuzz time. |
-| `1.22` | Per-iteration loop variables; be explicit about loop semantics when adapting older examples. |
+- **`go version` < 1.18 → hard stop.** No `testing.F`. Recommend property tests, or legacy
+  `go-fuzz` with explicit justification.
+- **≥ 1.18 → proceed.** Everything after 1.18 is a tuning detail, not a gate.
+- A low `go` directive is a **note, not a stop**: it caps *language* features inside the
+  harness, nothing more.
 
-A low `go` directive is a **note, not a stop**: it caps *language* features inside the
-harness, nothing more.
+→ `references/applicability-checklist.md` (§Go Version Gate) for the three-source check and
+the `GOTOOLCHAIN` cases; `references/advanced-tuning.md` (§Go Version Details) for
+per-release behaviour worth knowing when tuning.
 
-→ Load `references/applicability-checklist.md` (§Go Version Gate) for the three-source check
-and the `GOTOOLCHAIN` cases.
+### Tuning: race, parallelism, structured input, baseline
 
-### Race Detection + Fuzz
+Four knobs share one home — `references/advanced-tuning.md` — so the numbers stay in one
+place: `-race` with fuzz (cost multiplier, when it is worth it, when to say you skipped it),
+worker parallelism (`GOMAXPROCS`/`-parallel` for memory-heavy targets and CI runners),
+`go-fuzz-headers` `GenerateStruct` for structs that native fuzz types cannot express, and the
+`execs/sec` baseline table that decides whether a longer fuzz window is worth buying.
 
-When the target touches goroutines, shared caches, or normalization pipelines with internal concurrency:
-
-- run corpus replay with `go test -race -run=^FuzzXxx$ .`
-- if runtime is acceptable, run a short fuzz burst with `-race`
-- document when `-race` is skipped because the package is too slow for a bounded fuzz window
-
-### Fuzz Worker Parallelism
-
-Tune concurrency deliberately:
-
-- cap `GOMAXPROCS` when CPU saturation hides determinism issues
-- use `-parallel` carefully; higher worker counts can reduce `execs/sec` on allocation-heavy targets
-- if a target is memory-heavy, lower worker count before increasing fuzz time
-
-### go-fuzz-headers bridge
-
-For complex binary or protocol-heavy inputs, `go-fuzz-headers` can bootstrap structured data from bytes:
-
-```go
-consumer := fuzz.NewConsumer(data)
-var req Request
-if err := consumer.GenerateStruct(&req); err != nil {
-	t.Skip()
-}
-```
-
-Use `GenerateStruct` only when native fuzz parameter types are too limiting and the target still has a strong oracle.
-
-### Fuzz Performance Baseline
-
-Record a baseline before scaling up:
-
-- approximate `execs/sec`
-- average allocation profile if known
-- skip rate estimate
-- time budget used for the measurement
-
-If `execs/sec` is too low for meaningful exploration, simplify the harness before asking for longer fuzz windows.
+Record a baseline (`execs/sec`, skip rate, measurement window) before scaling up any budget.
 
 ## Quality Scorecard
 
@@ -434,7 +486,7 @@ invariant and then dropping the result.
 
 | # | Check | Criteria |
 |---|-------|----------|
-| S1 | Seed quality | `f.Add(...)` includes ≥3 structurally distinct valid inputs |
+| S1 | Seed quality | ≥3 structurally distinct `f.Add(...)` seeds, **at least one valid**, all passing on the correct implementation, and at least one reaching the region the oracle protects |
 | S2 | Fuzz mode matches target | Parser → robustness, codec → round-trip, migration → differential |
 | S3 | Skip rate bounded | `t.Skip()` usage justified; estimated skip rate <50% |
 | S4 | Harness isolation | No network/DB/clock/global-state dependency in harness body |

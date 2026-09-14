@@ -71,16 +71,46 @@ jobs:
       - name: Corpus replay
         run: go test -run='^Fuzz' ./...
 
-      # optional: short fuzz for low-cost targets only, one step per target
+      # optional: short fuzz for low-cost targets only, one step per target.
+      # `continue-on-error` keeps a time-boxed SEARCH from gating the merge queue — but on
+      # its own it also discards a real crash, which is why the next two steps exist.
       - name: Quick fuzz (low-cost target)
+        id: quickfuzz
         run: go test -run='^$' -fuzz='^FuzzParseConfig$' -fuzztime=10s ./pkg/parser/
-        continue-on-error: true  # don't block PR on a time-limited search
+        continue-on-error: true
+
+      # a crasher is written to the target package's testdata/fuzz and dies with the
+      # workspace unless it is uploaded. `**/` is required — see the scheduled lane.
+      - name: Upload crash corpus
+        if: steps.quickfuzz.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-fuzz-crash-${{ github.run_id }}
+          path: '**/testdata/fuzz/**'
+          if-no-files-found: error
+
+      # make the swallowed failure visible instead of a silent green check
+      - name: Report quick-fuzz finding
+        if: steps.quickfuzz.outcome == 'failure'
+        run: |
+          echo "::warning title=Quick fuzz found a crash::Commit the input from artifact pr-fuzz-crash-${{ github.run_id }} under testdata/fuzz/, then fix."
+          {
+            echo "### Quick fuzz found a crash"
+            echo "A 10s fuzz run failed. The failing input is in the uploaded artifact."
+            echo "It is **not** blocking this PR, and it must **not** be dropped:"
+            echo "commit it under \`<pkg>/testdata/fuzz/FuzzXxx/\` so corpus replay pins it."
+          } >> "$GITHUB_STEP_SUMMARY"
 ```
 
 Rules:
 - Corpus replay is **mandatory** — fail the PR on deterministic replay failures.
 - Short fuzz is **optional** — only `Low` cost targets, max 10-15s.
 - Never run long fuzz in the PR lane (blocks the merge queue).
+- `continue-on-error: true` on the quick-fuzz step is a **merge-queue** decision, not an
+  "ignore the result" decision. Pair it with the upload + warning steps above, or the
+  crasher dies with the runner and the check goes green on a real bug.
+- Drop `continue-on-error` when the team wants new findings to block. The tradeoff: an
+  unrelated PR can go red because the fuzzer happened to find a pre-existing bug.
 
 ## Scheduled Lane (deep)
 
