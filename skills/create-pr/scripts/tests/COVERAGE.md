@@ -8,9 +8,9 @@ number that drifts from reality fails the suite instead of quietly misreporting.
 | --- | ---: |
 | `scripts/tests/test_create_pr.py` | 82 |
 | `scripts/tests/test_integration_repo.py` | 36 |
-| `scripts/tests/test_skill_contract.py` | 53 |
+| `scripts/tests/test_skill_contract.py` | 57 |
 | `scripts/tests/test_golden_scenarios.py` | 17 |
-| **Total** | **188** |
+| **Total** | **192** |
 
 ## Script Unit Tests (`test_create_pr.py`)
 

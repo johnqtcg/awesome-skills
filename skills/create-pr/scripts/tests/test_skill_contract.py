@@ -1,3 +1,4 @@
+import fnmatch
 import os
 import re
 import sys
@@ -61,7 +62,9 @@ class CreatePRSkillContractTests(unittest.TestCase):
             for line in fm.splitlines()
             if line and not line.startswith((" ", "\t")) and ":" in line
         }
-        self.assertEqual({"name", "description"}, keys)
+        self.assertEqual(
+            {"name", "description", "disable-model-invocation", "allowed-tools"}, keys
+        )
 
     def test_skill_references_all_supporting_files(self) -> None:
         for path in (
@@ -402,17 +405,45 @@ class CreatePRSkillContractTests(unittest.TestCase):
             "COVERAGE.md total is stale",
         )
 
-    def test_run_regression_runs_validator_help_and_unittest_discovery(self) -> None:
+    def test_run_regression_runs_help_and_unittest_discovery(self) -> None:
         for phrase in (
-            "[1/3] Validate skill frontmatter",
-            "[2/3] Smoke-test bundled script help",
+            "[1/2] Smoke-test bundled script help",
             "python3 \"${SKILL_DIR}/scripts/create_pr.py\" --help >/dev/null",
-            "[3/3] Run regression tests",
+            "[2/2] Run regression tests",
             "python3 -m unittest discover -s \"${SKILL_DIR}/scripts/tests\" -p \"test_*.py\" -v",
         ):
             self.assertIn(phrase, self.run_regression_text)
         self.assertNotIn("continuing", self.run_regression_text.lower())
-        self.assertIn('python3 "${VALIDATOR}" "${SKILL_DIR}"', self.run_regression_text)
+
+    def test_run_regression_needs_nothing_outside_this_repository(self) -> None:
+        """The documented entrypoint must run on a fresh clone.
+
+        It used to hard-fail on a validator under `$HOME/.codex/`, a path this
+        repository does not ship, so the suite was red on every other machine
+        before a single test ran. Any absolute path into a user's home is the
+        same defect wearing a different filename.
+        """
+        # Scan the EXECUTABLE lines only. Matching the whole file would fire on
+        # the comment that documents the removed path — a guard wider than its
+        # subject, reporting the explanation as the defect.
+        code = "\n".join(
+            line
+            for line in self.run_regression_text.splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        for absolute in ("$HOME/", "${HOME}/", "~/"):
+            self.assertNotIn(
+                absolute,
+                code,
+                f"run_regression.sh reaches outside the repo via {absolute!r}",
+            )
+        # The opt-in hook may name the variable, but never default it to a path.
+        self.assertNotRegex(code, r"SKILL_CREATOR_VALIDATOR:-[^}]")
+
+    # No "the entrypoint exits 0 with the validator unset" test here on purpose:
+    # it would invoke the runner, which invokes this suite, which invokes the
+    # runner. `test_run_regression_stops_when_validator_fails` can shell out only
+    # because its stub validator aborts the run before the discovery step.
 
     def test_run_regression_stops_when_validator_fails(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -428,7 +459,7 @@ class CreatePRSkillContractTests(unittest.TestCase):
                 text=True,
             )
         self.assertEqual(7, result.returncode)
-        self.assertNotIn("[2/3]", result.stdout)
+        self.assertNotIn("[1/2]", result.stdout)
         self.assertNotIn("regression checks passed", result.stdout)
 
     def test_bundled_script_exposes_exit_codes_and_main_returns_all_three(self) -> None:
@@ -845,10 +876,103 @@ class ProseScriptConsistencyTests(unittest.TestCase):
             self.assertIn("found in commit", result.stdout)
             self.assertIn(".env", result.stdout)
 
-    def test_frontmatter_has_only_portable_skill_fields(self) -> None:
-        fm = frontmatter(self.skill_text)
-        self.assertNotIn("disable-model-invocation", fm)
-        self.assertNotIn("allowed-tools", fm)
+    # --- frontmatter -----------------------------------------------------
+    #
+    # These replace an earlier `test_frontmatter_has_only_portable_skill_fields`,
+    # which pinned the ABSENCE of `disable-model-invocation` and `allowed-tools`.
+    # That shape came from skill-creator's `quick_validate.py`, whose allowlist is
+    # five fields against the seventeen Claude Code documents. Two things were
+    # wrong with deferring to it. It rejects `disable-model-invocation`, a real
+    # field — so the one skill here whose terminal action is `git push` +
+    # `gh pr create` was also the only one a model could invoke on its own. And it
+    # explicitly ALLOWS `allowed-tools`, so pinning that field's absence was not
+    # even required by the tool being accommodated. The schema check the external
+    # validator used to provide now lives in
+    # `test_frontmatter_fields_are_documented_claude_code_fields` below.
+
+    #: Documented Claude Code frontmatter fields + Agent Skills packaging fields.
+    #: Mirrors `skills/update-doc/scripts/validate_frontmatter.py`.
+    CLAUDE_CODE_FIELDS = frozenset(
+        {
+            "name", "description", "when_to_use", "argument-hint", "arguments",
+            "disable-model-invocation", "user-invocable", "allowed-tools",
+            "disallowed-tools", "model", "effort", "context", "agent",
+            "background", "hooks", "paths", "shell", "license", "metadata",
+        }
+    )
+
+    #: Commands that must always reach the user as a permission prompt. The
+    #: bundled script is on this list because `--create-pr` makes it run
+    #: `git push` and `gh pr edit` itself: excluding the two commands while
+    #: auto-approving the program that issues them would be a guard narrower
+    #: than its subject.
+    NEVER_AUTO_APPROVED = (
+        "git push",
+        "git push -u origin HEAD",
+        "gh pr create",
+        "gh pr edit",
+        "gh api",
+        "gh api -X DELETE repos/o/r",
+        "python3 scripts/create_pr.py --create-pr",
+        "python3 /abs/path/skills/create-pr/scripts/create_pr.py --create-pr",
+    )
+
+    def _frontmatter_fields(self) -> dict:
+        """Parse the top-level `key: value` pairs. No PyYAML dependency."""
+        fields = {}
+        for line in frontmatter(self.skill_text).splitlines():
+            if not line or line.startswith((" ", "\t", "#")):
+                continue
+            key, sep, value = line.partition(":")
+            if sep:
+                fields[key.strip()] = value.strip()
+        return fields
+
+    def _allowed_bash_patterns(self) -> list:
+        """The inner patterns of every `Bash(...)` entry in allowed-tools."""
+        return re.findall(r"Bash\(([^)]*)\)", self._frontmatter_fields().get("allowed-tools", ""))
+
+    def test_frontmatter_fields_are_documented_claude_code_fields(self) -> None:
+        unexpected = set(self._frontmatter_fields()) - self.CLAUDE_CODE_FIELDS
+        self.assertFalse(
+            unexpected, f"frontmatter carries undocumented field(s): {sorted(unexpected)}"
+        )
+
+    def test_model_invocation_is_disabled(self) -> None:
+        """A skill whose terminal action is `git push` is user-invoked only."""
+        self.assertEqual(
+            "true",
+            self._frontmatter_fields().get("disable-model-invocation", "").lower(),
+            "create-pr publishes to a remote; it must not be model-invocable "
+            "from its description alone",
+        )
+
+    def test_allowed_tools_declared_and_covers_evidence_gathering(self) -> None:
+        patterns = self._allowed_bash_patterns()
+        self.assertTrue(patterns, "allowed-tools declares no Bash commands")
+        # A sample of the read-only evidence the gates actually run.
+        for cmd in ("git diff --stat origin/main...HEAD", "gh repo view", "go test ./..."):
+            self.assertTrue(
+                any(fnmatch.fnmatch(cmd, pat) for pat in patterns),
+                f"allowed-tools does not cover evidence command {cmd!r}",
+            )
+
+    def test_publishing_commands_are_never_auto_approved(self) -> None:
+        """Matched as globs, not substrings.
+
+        A substring check passes a frontmatter that wrote `Bash(git*)` or
+        `Bash(gh*)` — patterns that carry no literal "git push" yet approve it.
+        Match each forbidden command against every pattern the way the
+        permission layer does.
+        """
+        patterns = self._allowed_bash_patterns()
+        for cmd in self.NEVER_AUTO_APPROVED:
+            covering = [pat for pat in patterns if fnmatch.fnmatch(cmd, pat)]
+            self.assertFalse(
+                covering,
+                f"allowed-tools auto-approves {cmd!r} via {covering!r}; the "
+                f"publishing step must stay behind a permission prompt",
+            )
 
 
 if __name__ == "__main__":

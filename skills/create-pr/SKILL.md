@@ -1,6 +1,8 @@
 ---
 name: create-pr
 description: Create evidence-backed pull requests to the GitHub main branch with strict preflight, quality, and security gates. Use when users ask to create/submit/open/update a PR to main (including private repos), decide draft vs ready state, and provide reviewer-ready context for team review.
+disable-model-invocation: true
+allowed-tools: Read, Grep, Glob, Write, Bash(git rev-parse*), Bash(git status*), Bash(git remote -v), Bash(git remote get-url*), Bash(git fetch*), Bash(git merge-base*), Bash(git diff*), Bash(git log*), Bash(git show*), Bash(git rev-list*), Bash(git ls-remote*), Bash(git config --get*), Bash(gh auth status*), Bash(gh repo view*), Bash(gh pr view*), Bash(gh pr list*), Bash(make*), Bash(go test*), Bash(go build*), Bash(go vet*), Bash(golangci-lint*), Bash(gosec*), Bash(govulncheck*), Bash(pytest*), Bash(npm*), Bash(cargo*)
 ---
 
 # Create PR
@@ -44,6 +46,7 @@ The script distinguishes `blocks_publish` from `blocks_ready`. Repository identi
 - **Verify every write target, not just the read target.** `git push origin` uses `remote.origin.pushurl` when set, git keeps it independent of the fetch URL, and a remote may have more than one — a single push then writes to all of them. Every one must resolve to the repository `gh` reports.
 - **Secret evidence covers every commit being pushed**, not only the net diff. A credential added in one commit and deleted in a later commit still reaches the remote.
 - **A missing check is an uncovered risk, never a pass.** Test, lint, and build are graded separately; "every discovered command succeeded" is not evidence that all three ran.
+- **The publishing step is never auto-approved.** `allowed-tools` covers evidence gathering only — read-only `git`/`gh` queries and the Gate D/E tools. `git push`, `gh pr create`, `gh pr edit`, and `gh api` are deliberately absent, so the outward-facing write always reaches the user as a permission prompt. **`scripts/create_pr.py` is absent for the same reason**: with `--create-pr` it runs `git push` and `gh pr edit` itself, and an `allowed-tools` pattern is a prefix match that cannot require `--dry-run`, so auto-approving the script would auto-approve the publish it performs. Run the script explicitly; approve the prompt once you have read the gate report.
 
 ## PR Granularity Guidelines
 
