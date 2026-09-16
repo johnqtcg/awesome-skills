@@ -575,7 +575,12 @@ class TestHostAttestedTestEvidence(RepositoryFixture):
                     "commit": "working-tree-unpinned",
                     "snapshot": "worktree",
                 },
-                self.host_test_receipt(),
+                # The edit above dirties tracked content, so a receipt claiming
+                # a clean snapshot would now be rejected outright by
+                # `test_dirty_state_contradicted` and this test would stop
+                # discriminating on its own subject. Declare the dirty state
+                # honestly and let unpinned `code-2` be the only fault.
+                self.host_test_receipt(dirty=True),
             ],
         }
         summary = deep_research.validate_research_bundle(
@@ -813,6 +818,88 @@ class TestHostAttestedTestEvidence(RepositoryFixture):
         self.assertIn(
             "relevance review is not approved",
             " ".join(summary["findings"][0]["downgrade_reasons"]),
+        )
+
+    def test_receipt_claiming_clean_over_dirty_tracked_content_is_rejected(self) -> None:
+        """A receipt's own `dirty` field is a claim, and this process can check it.
+
+        Before this guard the field was accepted on the caller's word while
+        `repository_snapshot` — able to compute the real answer — sat unused in
+        the same module. A receipt asserting `dirty: false` over an edited tree
+        yielded `snapshot_clean: True` and `primary: True`, which is the last
+        gate between a caller-authored JSON file and a runtime High.
+        """
+        receipt = self.host_test_receipt()
+        self.source.write_text(
+            self.source.read_text(encoding="utf-8") + "\nEDITED_AFTER_RECEIPT = True\n",
+            encoding="utf-8",
+        )
+        artifact = {"root": str(self.root), "evidence": [receipt]}
+        summary = deep_research.validate_research_bundle(
+            research_kind="codebase",
+            results=[],
+            contents=[],
+            code_evidence=artifact,
+            findings=self.runtime_finding(),
+        )
+        self.assertIn(
+            "test_dirty_state_contradicted",
+            [issue["code"] for issue in summary["issues"]],
+        )
+        self.assertNotIn(
+            "test",
+            [row["kind"] for row in summary["findings"][0]["verified_evidence"]],
+        )
+
+    def test_honest_dirty_receipt_is_not_rejected_by_the_clean_check(self) -> None:
+        """The contradiction check must only fire on the clean direction.
+
+        A receipt that admits `dirty: true` is already capped below High. If
+        the new check also rejected those, it would be scoped wider than its
+        subject and would delete evidence the tool is supposed to keep.
+        """
+        receipt = self.host_test_receipt(dirty=True)
+        self.source.write_text(
+            self.source.read_text(encoding="utf-8") + "\nEDITED = True\n",
+            encoding="utf-8",
+        )
+        artifact = {"root": str(self.root), "evidence": [receipt]}
+        summary = deep_research.validate_research_bundle(
+            research_kind="codebase",
+            results=[],
+            contents=[],
+            code_evidence=artifact,
+            findings=self.runtime_finding(),
+        )
+        self.assertNotIn(
+            "test_dirty_state_contradicted",
+            [issue["code"] for issue in summary["issues"]],
+        )
+        self.assertIn(
+            "test",
+            [row["kind"] for row in summary["findings"][0]["verified_evidence"]],
+        )
+
+    def test_untracked_artifacts_do_not_contradict_a_clean_receipt(self) -> None:
+        """Writing an evidence file next to the repo is not editing the code.
+
+        Scoping the check to `--untracked-files=all` made it fire on ordinary
+        use of the tool — `__pycache__`, a code-evidence JSON, any build
+        output — which is how a correct guard gets removed as a nuisance.
+        """
+        receipt = self.host_test_receipt()
+        (self.root / "scratch-artifact.json").write_text("{}", encoding="utf-8")
+        artifact = {"root": str(self.root), "evidence": [receipt]}
+        summary = deep_research.validate_research_bundle(
+            research_kind="codebase",
+            results=[],
+            contents=[],
+            code_evidence=artifact,
+            findings=self.runtime_finding(),
+        )
+        self.assertNotIn(
+            "test_dirty_state_contradicted",
+            [issue["code"] for issue in summary["issues"]],
         )
 
     def test_dirty_test_snapshot_cannot_support_runtime_high(self) -> None:

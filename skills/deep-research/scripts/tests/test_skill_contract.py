@@ -55,7 +55,24 @@ class TestFrontmatter(unittest.TestCase):
         m = re.search(r"allowed-tools:\s*(.+)", self.text)
         self.assertIsNotNone(m)
         tools = m.group(1)
-        self.assertNotIn("Bash(*deep_research.py*)", tools)
+        # Allow-list the safe shape rather than denying one spelling of the
+        # unsafe one. The previous check asserted a single literal was absent,
+        # which `Bash(*deep_research.py *)` — equally blanket — walked straight
+        # past. A leading `*` matches across `;` and `&&`, so such a rule
+        # constrains neither the command that runs nor the file it runs, and
+        # `python3 /tmp/anything/deep_research.py plan` was auto-approved.
+        for rule in re.findall(r"Bash\(([^)]*)\)", tools):
+            self.assertFalse(
+                rule.startswith("*"),
+                f"allowed-tools rule is unanchored and matches any command "
+                f"containing the fragment: Bash({rule})",
+            )
+        for rule in re.findall(r"Bash\((python3[^)]*deep_research\.py[^)]*)\)", tools):
+            self.assertIn(
+                "${CLAUDE_SKILL_DIR}/scripts/deep_research.py",
+                rule,
+                f"helper invocation must name the bundled script path: Bash({rule})",
+            )
         for command in [
             "plan",
             "retrieve",
@@ -592,6 +609,52 @@ class TestCoverageMatrixIsNotStale(unittest.TestCase):
             len(corpus["cases"]),
             self._stated("Claim-support corpus cases"),
         )
+
+
+class TestBundledAssetInventory(unittest.TestCase):
+    """The shipped-file list must match the directory in both directions.
+
+    The previous inventory sat in SKILL.md, was maintained by hand, and had
+    drifted by five files — `scripts/run_regression.sh`, `COVERAGE.md`, the
+    golden fixture directory, and the two largest test files. A one-directional
+    `.exists()` check would not have caught any of them, because every path it
+    listed did exist; what was missing was everything it failed to list.
+    """
+
+    INVENTORY = SKILL_ROOT / "references" / "bundled-assets.md"
+
+    def _listed(self) -> set:
+        text = self.INVENTORY.read_text(encoding="utf-8")
+        return set(re.findall(r"^\|\s*`([^`]+)`\s*\|", text, flags=re.MULTILINE))
+
+    def _on_disk(self) -> set:
+        return {
+            path.relative_to(SKILL_ROOT).as_posix()
+            for path in SKILL_ROOT.rglob("*")
+            if path.is_file()
+            and "__pycache__" not in path.parts
+            and path.suffix != ".pyc"
+            and path.relative_to(SKILL_ROOT).as_posix() != "SKILL.md"
+        }
+
+    def test_every_shipped_file_is_listed(self) -> None:
+        missing = sorted(self._on_disk() - self._listed())
+        self.assertEqual(
+            [],
+            missing,
+            "files ship but are absent from references/bundled-assets.md",
+        )
+
+    def test_every_listed_file_exists(self) -> None:
+        phantom = sorted(self._listed() - self._on_disk())
+        self.assertEqual(
+            [],
+            phantom,
+            "references/bundled-assets.md names files that do not exist",
+        )
+
+    def test_skill_md_routes_to_the_inventory(self) -> None:
+        self.assertIn("references/bundled-assets.md", _read(SKILL_MD))
 
 
 class TestLineCount(unittest.TestCase):

@@ -378,5 +378,100 @@ class LedgerSchemaEvolution(unittest.TestCase):
             deep_research.load_session(self.path)
 
 
+class ArtifactsAreBoundToTheirLedger(unittest.TestCase):
+    """The report must not print one ledger's budget for another run's work.
+
+    `retrieve` and `fetch-content` already stamp `session_id` into their
+    output; nothing read it back. A report rendered from artifacts collected
+    under a spent ledger, with `--session` pointing at a fresh one, printed
+    "Budget consumed: retrieval 0/10" as an audit fact about a run that had
+    consumed something else entirely.
+    """
+
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.session = self.root / "session.json"
+        deep_research.initialize_session(
+            self.session,
+            deep_research.plan_research("Quick check.", explicit_mode="quick"),
+        )
+        self.state = deep_research.load_session(self.session)
+
+    def _artifact(self, name: str, session_id: str) -> Path:
+        path = self.root / name
+        path.write_text(json.dumps({"session_id": session_id, "results": []}))
+        return path
+
+    def test_foreign_session_id_is_rejected(self) -> None:
+        foreign = self._artifact("results.json", "SOME-OTHER-SESSION")
+        with self.assertRaises(ValueError) as ctx:
+            deep_research.assert_artifacts_share_session(
+                self.state, [("--results artifact", foreign)]
+            )
+        self.assertIn("SOME-OTHER-SESSION", str(ctx.exception))
+
+    def test_matching_session_id_is_accepted(self) -> None:
+        """Positive control: the check must not reject the normal workflow."""
+        same = self._artifact("results.json", self.state["session_id"])
+        deep_research.assert_artifacts_share_session(
+            self.state, [("--results artifact", same)]
+        )
+
+    def test_unstamped_artifact_is_an_unknown_not_a_mismatch(self) -> None:
+        """A fallback tool's artifact carries no stamp; that is not a conflict.
+
+        Rejecting it would break the documented search/extraction fallback
+        path, which the skill already treats as untrusted by other means.
+        """
+        path = self.root / "imported.json"
+        path.write_text(json.dumps({"results": []}))
+        deep_research.assert_artifacts_share_session(
+            self.state, [("--results artifact", path)]
+        )
+
+
+class LiveReachabilityIsBudgeted(unittest.TestCase):
+    """Both flags that open sockets are gated, not just one.
+
+    `--check-live` issued one HEAD per cited URL, with GET fallback, three
+    retries and five redirect hops, against no ledger at all — while the
+    parser's own error text for `--live-web` explained that network fetches
+    require `--session` "so they are counted against the mode budget".
+    """
+
+    def test_check_live_requires_a_session(self) -> None:
+        parser = deep_research.build_parser()
+        with self.assertRaises(SystemExit):
+            parser.parse_args([
+                "validate",
+                "--research-kind", "web",
+                "--results", "r.json",
+                "--content", "c.json",
+                "--findings", "f.json",
+                "--check-live",
+                "--output", "v.json",
+            ])
+
+    def test_validate_without_live_flags_does_not_require_a_session(self) -> None:
+        """Control: offline validation must stay usable with no ledger.
+
+        Without this, gating every `validate` invocation would satisfy the test
+        above while breaking the documented offline shape-check step.
+        """
+        parser = deep_research.build_parser()
+        args = parser.parse_args([
+            "validate",
+            "--research-kind", "web",
+            "--results", "r.json",
+            "--content", "c.json",
+            "--findings", "f.json",
+            "--output", "v.json",
+        ])
+        self.assertEqual("validate", args.cmd)
+
+
+
 if __name__ == "__main__":
     unittest.main()

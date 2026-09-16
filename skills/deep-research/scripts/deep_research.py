@@ -49,6 +49,7 @@ from deep_research_lib.planning import (  # noqa: E402
 )
 from deep_research_lib.authority import classify as classify_authority  # noqa: E402
 from deep_research_lib.claim_support import (  # noqa: E402
+    claim_text,
     review_claim_support,
     summarize_claim_support,
     support_reasons,
@@ -162,7 +163,12 @@ CLOUDFLARE_MARKERS = [
     "Just a moment...",
     "Attention Required! | Cloudflare",
     "cf-challenge-running",
-    "ray ID",
+    # Must stay qualified. The bare substring "ray id" is contained in ordinary
+    # prose — "array identifier", "X-ray identification", "gray idempotency" —
+    # and a false positive here is not harmless: the page is retried three
+    # times, then marked blocked, and every excerpt taken from it is rejected
+    # with `web_content_not_extracted`. That destroys valid evidence silently.
+    "Cloudflare Ray ID",
 ]
 
 # ---------------------------------------------------------------------------
@@ -1270,6 +1276,31 @@ def assess_finding(
         ]
 
     issues: List[Dict[str, Any]] = []
+    if not claim_text(finding).strip():
+        # Every other gate here grades the relationship between a claim and its
+        # evidence. None of them checked that a claim exists. A finding with an
+        # empty title and empty analysis validated as usable and attested, and
+        # rendered into Key Findings as "**Untitled finding** (High confidence)"
+        # — a report whose headline section carried no assertion at all.
+        issues.append(
+            _issue(
+                "finding_has_no_claim",
+                f"finding #{finding_index} states no claim: title and analysis "
+                "are both empty, so there is nothing for evidence to support",
+                finding=finding_index,
+            )
+        )
+        assessed = {
+            "title": str(finding.get("title", "")) or f"Finding {finding_index}",
+            "analysis": str(finding.get("analysis", "")),
+            "requested_confidence": str(finding.get("confidence", "low")).lower(),
+            "effective_confidence": "low",
+            "usable": False,
+            "verified_evidence": [],
+            "claim_support": review_claim_support({}, []),
+            "downgrade_reasons": ["finding states no claim"],
+        }
+        return assessed, issues
     refs = finding.get("evidence", [])
     if not refs and finding.get("citations"):
         issues.append(
@@ -1676,10 +1707,41 @@ def _source_maps(
     return url_map, repository_map
 
 
+def verified_web_excerpts(validation: Dict[str, Any]) -> Dict[str, List[str]]:
+    """Collect the excerpts the validator matched, keyed by normalized URL.
+
+    Only usable findings contribute: an excerpt attached to a finding the
+    validator rejected is not evidence for anything the report states.
+    """
+    out: Dict[str, List[str]] = {}
+    buckets = [validation.get("findings", [])]
+    for key in ("analysis_sections", "consensus", "debate"):
+        buckets.append(validation.get(key, []))
+    for rows in buckets:
+        if not isinstance(rows, list):
+            continue
+        for row in rows:
+            if not isinstance(row, dict) or not row.get("usable"):
+                continue
+            for item in row.get("verified_evidence", []) or []:
+                if not isinstance(item, dict) or item.get("kind") != "web":
+                    continue
+                url = str(item.get("url", "")).strip()
+                excerpt = " ".join(str(item.get("excerpt", "")).split())
+                if not url or not excerpt:
+                    continue
+                seen = out.setdefault(url, [])
+                if excerpt not in seen:
+                    seen.append(excerpt)
+    return out
+
+
 def build_sources_index(
     results: Sequence[SearchResult],
     code_evidence: Optional[Dict[str, Any]] = None,
+    verified_excerpts: Optional[Dict[str, List[str]]] = None,
 ) -> str:
+    excerpts_by_url = verified_excerpts or {}
     lines = []
     for i, r in enumerate(results, start=1):
         date = r.date if r.date else "unknown"
@@ -1689,13 +1751,23 @@ def build_sources_index(
             f"basis: {r.classification_basis}; sponsorship: {r.sponsorship}; "
             f"methodology: {r.methodology}"
         )
+        # The excerpt is the only part of the pipeline a reader can check
+        # without rerunning it: it was matched against the fetched page by this
+        # process. Rendering the citation index alone discarded the artifact the
+        # whole chain exists to produce, leaving the proof in a temporary
+        # findings file that nobody keeps.
+        for excerpt in excerpts_by_url.get(r.normalized_url, []):
+            lines.append(f'    verified excerpt: "{excerpt}"')
 
     rows = (
         code_evidence.get("evidence", [])
         if isinstance(code_evidence, dict)
         else []
     )
-    next_index = len(lines) + 1
+    # Counted from the sources, not from `lines`: excerpt lines are continuation
+    # text under a source, not separate citations, and `_source_maps` derives
+    # the same numbering independently.
+    next_index = len(results) + 1
     for row in rows:
         if not isinstance(row, dict) or not str(row.get("id", "")).strip():
             continue
@@ -2155,7 +2227,7 @@ def generate_report(
 {_source_quality_notes(cited_results, validation, cited_code_evidence)}
 
 ## 8) Sources
-{build_sources_index(cited_results, cited_code_evidence)}
+{build_sources_index(cited_results, cited_code_evidence, verified_web_excerpts(validation))}
 
 ## 9) Gaps & Limitations
 {gaps_md}
@@ -2234,6 +2306,49 @@ def _load_budget_session(args: argparse.Namespace) -> Dict[str, Any]:
     state = load_session(session_path, expected_mode=expected_mode)
     args.mode = state["mode"]
     return state
+
+
+def artifact_session_id(path: Optional[Path]) -> str:
+    """Read the `session_id` a collection artifact was stamped with, if any."""
+    if not path:
+        return ""
+    try:
+        payload = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return ""
+    if not isinstance(payload, dict):
+        return ""
+    return str(payload.get("session_id", "")).strip()
+
+
+def assert_artifacts_share_session(
+    session: Dict[str, Any],
+    artifacts: Sequence[Tuple[str, Optional[Path]]],
+) -> None:
+    """Raise when a collection artifact was produced under a different ledger.
+
+    `retrieve` and `fetch-content` already stamp `session_id` into their output
+    — the check was simply never performed on the way back in. Without it a
+    report could be rendered from artifacts collected under a spent ledger
+    while `--session` pointed at a fresh one, and the Method section would
+    print that fresh ledger's "Budget consumed: retrieval 0/10" as an audit
+    fact about a run that consumed something else entirely.
+    """
+    current = str(session.get("session_id", "")).strip()
+    if not current:
+        return
+    for label, path in artifacts:
+        stamped = artifact_session_id(path)
+        # An artifact with no stamp predates the field or came from a fallback
+        # tool; that is an unknown, not a mismatch, and the skill already
+        # treats imported records as untrusted.
+        if stamped and stamped != current:
+            raise ValueError(
+                f"{label} was produced under session {stamped}, but --session "
+                f"names {current}; the budget line in the report would describe "
+                "a different run. Pass the ledger the artifacts were collected "
+                "under, or recollect them under this one."
+            )
 
 
 def cmd_plan(args: argparse.Namespace) -> int:
@@ -2406,6 +2521,18 @@ def _live_verify_web_contents(
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
+    if args.session:
+        try:
+            assert_artifacts_share_session(
+                _load_budget_session(args),
+                [
+                    ("--results artifact", Path(args.results) if args.results else None),
+                    ("--content artifact", Path(args.content) if args.content else None),
+                ],
+            )
+        except (ValueError, OSError, json.JSONDecodeError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
     results = load_results(Path(args.results)) if args.results else []
     contents, content_metadata = (
         load_content_artifact(Path(args.content))
@@ -2448,6 +2575,12 @@ def cmd_validate(args: argparse.Namespace) -> int:
         status = None
         error = ""
         if args.check_live:
+            reserve_session_budget(
+                Path(args.session),
+                "live_verifications",
+                1,
+                allow_partial=False,
+            )
             reachable, status, error = check_reachability(row.normalized_url, timeout=args.timeout)
             if not reachable:
                 url_issues.append(
@@ -2499,6 +2632,13 @@ def cmd_validate(args: argparse.Namespace) -> int:
 def cmd_report(args: argparse.Namespace) -> int:
     try:
         session = _load_budget_session(args)
+        assert_artifacts_share_session(
+            session,
+            [
+                ("--results artifact", Path(args.results) if args.results else None),
+                ("--content artifact", Path(args.content) if args.content else None),
+            ],
+        )
     except (ValueError, OSError, json.JSONDecodeError) as exc:
         print(str(exc), file=sys.stderr)
         return 2
@@ -2981,15 +3121,17 @@ class ResearchArgumentParser(argparse.ArgumentParser):
     ) -> argparse.Namespace:
         parsed = super().parse_args(args=args, namespace=namespace)
         cmd = getattr(parsed, "cmd", "")
-        if (
-            cmd == "validate"
-            and getattr(parsed, "live_web", False)
-            and not parsed.session
-        ):
-            self.error(
-                "validate --live-web performs real network fetches and requires "
-                "--session so they are counted against the mode budget"
-            )
+        # Both flags open real sockets, so both are gated. `--check-live` was
+        # tied to nothing: one HEAD per cited URL, GET fallback on 405, three
+        # retries, five redirect hops — all outside every ceiling the ledger
+        # exists to enforce.
+        for flag in ("live_web", "check_live"):
+            if cmd == "validate" and getattr(parsed, flag, False) and not parsed.session:
+                self.error(
+                    f"validate --{flag.replace('_', '-')} performs real network "
+                    "fetches and requires --session so they are counted against "
+                    "the mode budget"
+                )
         if cmd in {"reserve-budget", "retrieve", "fetch-content", "report"} and not parsed.session:
             self.error(f"{cmd} requires --session")
         if cmd == "reserve-budget" and parsed.count <= 0:

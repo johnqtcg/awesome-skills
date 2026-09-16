@@ -3,7 +3,7 @@ name: deep-research
 description: |
   Perform auditable research with executable mode budgets, mandatory source-content verification, typed web and repository evidence, confidence assessment, honest degradation, and one fixed nine-section report.
   Use for web research, claim verification, technical comparisons, trend analysis, pure codebase research, and hybrid codebase-plus-web investigations that need traceable conclusions rather than search-result summaries.
-allowed-tools: Read, Write, Grep, Glob, WebSearch, WebFetch, Bash(*deep_research.py plan*), Bash(*deep_research.py reserve-budget*), Bash(*deep_research.py retrieve*), Bash(*deep_research.py fetch-content*), Bash(*deep_research.py quick-check*), Bash(*deep_research.py search-codebase*), Bash(*deep_research.py snapshot-codebase*), Bash(*deep_research.py import-test-receipt*), Bash(*deep_research.py validate*), Bash(*deep_research.py report*), Bash(git log*), Bash(go test*), Bash(python3 -m unittest*), Bash(python3 -m pytest*)
+allowed-tools: Read, Write, Grep, Glob, WebSearch, WebFetch, Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py plan*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py reserve-budget*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py retrieve*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py fetch-content*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py quick-check*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py search-codebase*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py snapshot-codebase*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py import-test-receipt*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py validate*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py report*), Bash(git log*), Bash(go test*), Bash(python3 -m unittest*), Bash(python3 -m pytest*)
 ---
 
 # Deep Research
@@ -14,7 +14,7 @@ Produce research whose claims can be traced to content actually read or reposito
 
 | Need | Action |
 |---|---|
-| Classify `web | codebase | hybrid` and `quick | standard | deep` | Run `plan` before retrieval |
+| Classify `web \| codebase \| hybrid` and `quick \| standard \| deep` | Run `plan` before retrieval |
 | Enforce cumulative query, extraction, and report-source ceilings | Reuse the session artifact created by `plan --output` |
 | Author findings JSON | Load `references/output-contract-template.md` |
 | Assess hallucination, confidence, or source quality | Load `references/hallucination-and-verification.md` |
@@ -43,10 +43,16 @@ Select one research kind and one goal.
 Run the executable classifier:
 
 ```bash
-python3 scripts/deep_research.py plan \
+python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py plan \
   --request "<user request>" \
   --output /tmp/research_plan.json
 ```
+
+**Every command below is written `python3 scripts/deep_research.py ...` for
+brevity; run it as `python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py ...`.**
+For `codebase` and `hybrid` work the working directory is the user's
+repository, not this skill, so a bare relative path will not resolve. Write
+every `--output` outside the repository under study.
 
 The output is a versioned session ledger, not a disposable plan. Reuse that
 exact file for every budget-consuming command in the research run.
@@ -108,11 +114,15 @@ Auto-select mode with `plan`; pass an explicit user mode as `--mode`.
 | Thorough/deep request, multi-vendor decision, architecture/trend report | Deep |
 | Security-sensitive or production-impacting decision | Deep |
 
-| Mode | Retrieval Calls | Content Extractions | Report Sources |
-|---|---:|---:|---:|
-| Quick | 5–10 | max 5 | 3–8 |
-| Standard | 15–25 | max 10 | 8–20 |
-| Deep | 30–50 | max 15 | 15–40 |
+| Mode | Retrieval ceiling | Extraction ceiling | Report-source ceiling | Typical range (advisory) |
+|---|---:|---:|---:|---|
+| Quick | 10 | 5 | 8 | 5–10 retrievals, 3–8 sources |
+| Standard | 25 | 10 | 20 | 15–25 retrievals, 8–20 sources |
+| Deep | 50 | 15 | 40 | 30–50 retrievals, 15–40 sources |
+
+Only the three ceilings are executable. The advisory column is guidance for
+planning a run; no command enforces a floor, so a Quick report citing two
+sources is not rejected.
 
 If the user explicitly requests a mode, use it. Classification is deterministic and behavior-tested.
 
@@ -302,7 +312,11 @@ below.
 7. Deliver the report without renaming, splitting, or omitting top-level sections.
 
 Run `validate` with the same evidence flags when validation itself is the
-deliverable; `--live-web` there also requires `--session`. When a report is
+deliverable; `--live-web` and `--check-live` both open real sockets, so both
+require `--session` and both draw on `live_verifications`. `validate` and
+`report` also refuse artifacts stamped with a different `session_id` than the
+ledger you pass, so the budget line in the report always describes the run that
+produced the evidence. When a report is
 required, prefer a single `report --live-web` so the same pages are not
 fetched twice.
 
@@ -476,24 +490,7 @@ If DDG Lite fails, use an available search tool with the same query plan and pre
 
 ## Bundled Assets
 
-- `scripts/deep_research.py`: compatibility CLI plus shared Web validation/report engine
-- `scripts/deep_research_lib/planning.py`: multilingual classification, routing confidence, and mode budgets
-- `scripts/deep_research_lib/claim_support.py`: claim-support attestation plus polarity and numeric screens
-- `scripts/deep_research_lib/authority.py`: curated source-authority registry lookup
-- `scripts/deep_research_lib/session.py`: cross-process locked, cumulative session-budget ledger
-- `scripts/deep_research_lib/repository.py`: Git provenance, read-only snapshot metadata, and static host-receipt verification
-- `scripts/deep_research_lib/reporting.py`: cited-source selection and ceiling enforcement
-- `scripts/deep_research_lib/web.py`: public-network-only HTTP(S), DNS/IP pinning, TLS hostname verification, and redirect revalidation
-- `scripts/tests/test_evidence_integrity.py`: evidence-chain and negative behavioral tests
-- `scripts/tests/test_repository_integrity.py`: dirty-tree, forged Git, receipt binding, and command-proxy negative tests
-- `scripts/tests/test_session_budget.py`: cumulative/multiprocess budget and report-source ceiling tests
-- `scripts/tests/test_golden_scenarios.py`: fixture request → executable decision tests
-- `scripts/tests/test_subcommand_smoke.py`: offline CLI end-to-end tests
-- `scripts/tests/test_web_security.py`: local-scheme, private-address, mixed-DNS, redirect, and DNS-pinning negative tests
-- `scripts/tests/test_claim_support.py` + `scripts/tests/claim_support_corpus.json`: adversarial claim-vs-excerpt corpus and screen mutation tests
-- `references/output-contract-template.md`: canonical schema and report template
-- `references/source-authority-registry.json`: curated domain-to-authority registry
-- `references/hallucination-and-verification.md`: verification/confidence/source-quality protocol
-- `references/web-evidence-and-egress.md`: Web provenance state machine and safe-egress contract
-- `references/research-patterns.md`: programmer-focused research patterns
-- `references/test-receipt-schema.md`: host receipt schema, snapshot binding, and relevance rules
+The shipped file inventory lives in `references/bundled-assets.md`, where a
+regression test compares it against the directory in both directions. A
+hand-maintained list in this file had drifted by five files, including the
+regression entry point and the suite that guards this document's own claims.

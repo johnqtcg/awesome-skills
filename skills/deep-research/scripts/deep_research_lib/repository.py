@@ -98,6 +98,31 @@ def repository_snapshot(search_root: Path) -> Dict[str, Any]:
     }
 
 
+def git_tracked_content_is_dirty(root: Path) -> Tuple[bool, str]:
+    """Return whether *tracked* content differs from HEAD, or an error string.
+
+    Deliberately narrower than `repository_snapshot`'s `dirty`, which counts
+    untracked files too. The question here is whether the code the test ran
+    against has been edited since — and an untracked artifact (a `__pycache__`
+    directory, an evidence JSON written next to the repo, a build output) is
+    not an edit to that code. Counting those would make this guard fire on
+    ordinary use of the tool, which is how a correct guard gets deleted.
+
+    Fails closed: an unreadable state is reported as an error rather than as
+    clean, because the caller uses this to contradict a receipt's own claim.
+    """
+    try:
+        status = _run_git(
+            root,
+            ["status", "--porcelain=v1", "--untracked-files=no"],
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return True, str(exc)
+    if status.returncode != 0:
+        return True, status.stderr.strip() or "git status failed"
+    return bool(status.stdout.strip()), ""
+
+
 def _safe_relative_path(value: Any) -> Tuple[Optional[str], str]:
     raw = str(value or "").replace("\\", "/").strip()
     path = PurePosixPath(raw)
@@ -385,7 +410,13 @@ class RepositoryEvidenceVerifier:
             "commit": commit or WORKTREE_COMMIT,
             "snapshot": "commit" if pinned else "worktree",
             "pinned": pinned,
-            "primary": True,
+            # Primary status tracks the pin, not the read. Working-tree content
+            # validates against a file that can change after this process exits,
+            # so it can corroborate a claim but can never be the unit a High
+            # rests on. Returning True here let two files in a directory that is
+            # not even a Git repository satisfy "two independent verified units,
+            # including a primary unit".
+            "primary": pinned,
         }
         return verified, None
 
@@ -532,6 +563,28 @@ class RepositoryEvidenceVerifier:
                 "test_dirty_state_invalid",
                 f"test evidence {evidence_id} repository.dirty must be boolean",
             )
+        # The receipt declares the state it observed; this process can read the
+        # state that holds now, and a runtime High depends on the difference.
+        # Nothing prevents a receipt from asserting `dirty: false` over a tree
+        # that has since been edited — or was edited all along. Whether the
+        # declaration was *historically* true is not decidable here, but a
+        # declaration that contradicts the tree in front of us is, and only the
+        # clean direction is load-bearing: a receipt claiming clean must still
+        # be clean, while one that admits dirty is already capped.
+        if not dirty:
+            observed_dirty, dirty_error = git_tracked_content_is_dirty(self.root)
+            if dirty_error:
+                return None, _issue(
+                    "test_dirty_state_unreadable",
+                    f"test evidence {evidence_id} declares a clean snapshot but "
+                    f"the working tree state could not be read: {dirty_error}",
+                )
+            if observed_dirty:
+                return None, _issue(
+                    "test_dirty_state_contradicted",
+                    f"test evidence {evidence_id} declares repository.dirty=false "
+                    "but tracked content differs from HEAD now",
+                )
         tested_paths_raw = record.get("tested_paths", [])
         if not isinstance(tested_paths_raw, list) or not tested_paths_raw:
             return None, _issue(

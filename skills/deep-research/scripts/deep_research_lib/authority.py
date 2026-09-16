@@ -74,15 +74,45 @@ def load_registry(path: Optional[str] = None) -> List[Dict[str, Any]]:
     return cleaned
 
 
+# Subdomains that host user-generated content even on a domain the registry
+# lists. Ownership of `python.org` says who runs `discuss.python.org`; it says
+# nothing about who wrote the post. Without this, a Discourse thread, a
+# community wiki, a JIRA ticket and a mailing-list archive all classified as
+# T1 `official` — exactly the source classes the tier table puts at T4, and T1
+# is the only requirement for the narrow single-fact High exception.
+USER_CONTENT_LABELS = frozenset({
+    "answers", "blog", "blogs", "bugs", "bugzilla", "community", "discuss",
+    "discussion", "discussions", "forum", "forums", "gist", "groups", "issues",
+    "jira", "list", "lists", "lore", "mail", "mail-archive", "mail-archives",
+    "mailman", "news", "pipermail", "qa", "review", "reviews", "social",
+    "support", "tickets", "wiki", "cwiki",
+})
+
+
+def has_user_content_label(hostname: str) -> bool:
+    """Whether any label of `hostname` marks it as a user-content surface."""
+    return any(
+        label in USER_CONTENT_LABELS
+        for label in str(hostname or "").strip().lower().strip(".").split(".")
+    )
+
+
 def lookup(hostname: str, registry: Optional[List[Dict[str, Any]]] = None) -> Optional[Dict[str, Any]]:
     """Return the registry entry that owns `hostname`, if any.
 
     Matching is exact host or a true subdomain of a listed domain. It is never
     reduced to the registrable domain: `docs.aws.amazon.com` is listed, so
     `amazon.com` must not inherit its authority.
+
+    A host carrying a user-content label is excluded even when its parent
+    domain is listed, and falls through to the heuristics. Withholding registry
+    authority can only lower a tier, never raise one, so the failure direction
+    is the safe one.
     """
     host = str(hostname or "").strip().lower().strip(".")
     if not host:
+        return None
+    if has_user_content_label(host):
         return None
     entries = load_registry() if registry is None else registry
     best: Optional[Dict[str, Any]] = None

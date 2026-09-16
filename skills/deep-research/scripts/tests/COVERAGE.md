@@ -70,7 +70,7 @@ than trusting fixture labels.
 |---|---|
 | Retrieval is cumulative | Two reservations share one locked session ledger |
 | Extraction is cumulative | Repeated commands can use only the remaining allowance |
-| Session mode cannot drift | Load with a conflicting mode and reject |
+| Session mode cannot drift | **Not currently exercised.** `session.py` rejects a conflicting `expected_mode`, but no test passes one; the branch is live in `cmd_*` and untested |
 | Concurrent writes are serialized | Race 20 processes for 10 slots and assert exactly 10 reservations |
 | External tools share the ledger | Exercise `reserve-budget` through the CLI |
 | Ledger reset is refused | Attempt to initialize an existing session path |
@@ -128,11 +128,18 @@ The remaining eight keyword fixtures check reference discoverability for debuggi
 It also rejects file/loopback URLs before budget reservation and introspects
 the parser so documented flags cannot drift from accepted flags.
 
+**Known gap, stated rather than implied:** `retrieve`, `snapshot-codebase` and
+`import-test-receipt` appear here only as parse-only argv, and no successful
+`fetch-content` is executed. A guaranteed `AttributeError` in `cmd_retrieve`'s
+persist step was confirmed to ship with the whole suite green. The list above
+describes which subcommands are *covered by a smoke test*, not which are
+executed end to end.
+
 ## Current Summary
 
 | Metric | Count |
 |---|---:|
-| Total tests | 363 |
+| Total tests | 397 |
 | Golden fixtures | 16 |
 | Claim-support corpus cases | 30 |
 | Behavioral fixtures executed through code | 8 |
@@ -164,6 +171,42 @@ the excerpt exists on the page.
 | The authority registry fails closed | Point the loader at a missing file and assert no entries |
 | Vendor-self docs are not an independent primary | Assert a two-unit vendor-only High request downgrades |
 
+## Guards Added After the 2026-09-16 Audit
+
+Each row names the defect that was reproduced by execution first, then the test
+that now fires the guard. Every one was mutation-checked: deleting the guard
+turns the named test red.
+
+| Guard | Defect it closes | Test |
+|---|---|---|
+| `primary` tracks `pinned` | Two `.txt` files in a non-Git directory reached `Full`+`high` for a subjective comparison | `test_unpinned_code_is_never_an_independent_primary_unit` (+ pinned positive control) |
+| Receipt `dirty` recomputed | A receipt declaring `dirty: false` over an edited tree yielded `snapshot_clean`+`primary`, while `repository_snapshot()` sat unused in the same module | `test_receipt_claiming_clean_over_dirty_tracked_content_is_rejected`, plus honest-dirty and untracked-artifact controls |
+| Relevance floor on Web excerpts | The excerpt `"the"` satisfied containment; an unrelated excerpt scored as "no objection" | `RelevanceFloorOnWebExcerpts` (4 cases + corpus threshold) |
+| Claim must exist | Empty `title`+`analysis` was `usable` and `attested`, rendering as "**Untitled finding**" | `FindingsMustStateAClaim` |
+| Registry user-content exclusion | `discuss.python.org`, `issues.apache.org`, `lore.kernel.org` classified T1 `official` | `TestRegistryUserContentExclusion` (+ docs-host positive control) |
+| Artifacts bound to their ledger | A report printed one ledger's "Budget consumed" for evidence collected under another | `ArtifactsAreBoundToTheirLedger` |
+| `--check-live` is budgeted | It opened one HEAD per URL, with retries and redirects, against no ledger | `LiveReachabilityIsBudgeted` |
+| WAF marker qualified | `"ray id"` matched "array identifier" and silently destroyed every excerpt from the page | `TestAntiBotMarkerPrecision` |
+| Untested `web.py` guards | 14 of 18 raises never executed | `TestPreviouslyUncoveredGuards` |
+| Report carries its excerpt | The verified quote was validated then discarded before rendering | `ReportCarriesItsOwnEvidence` |
+| Bundled-asset inventory | The hand-maintained list had drifted by five files | `TestBundledAssetInventory` (both directions) |
+| `allowed-tools` anchoring | Ten leading-`*` rules constrained neither the command nor the file | `test_allowed_tools_scope_helper_script_by_safe_subcommand` (allow-list shape) |
+| Skips fail the gate | `run_regression.sh` exited 0 with `OK (skipped=7)` when `rg` was absent | `run_regression.sh` declares its dependencies and fails on any skip |
+
+### Unmasking, not just adding
+
+Four tests in `TestCodebaseEvidence` built findings with no `support_review`,
+so `unreviewed` forced `medium` before any repository gate was consulted. Their
+assertions could not discriminate: mutating `passed = status == "passed" and
+exit_code == 0` to `passed = True` — a failed test receipt accepted as runtime
+proof — left the entire suite green. Adding the attestation those fixtures were
+missing makes that mutation fail `test_failed_test_does_not_verify_runtime_behavior`.
+
+The lesson generalises past this file: a suite can prove every guard rejects
+malformed input and still never ask what the cheapest *well-formed* input
+reaching the top grade is.
+
+
 ## Adding Coverage
 
 1. Add a fixture only when it contains a reusable user request or source artifact.
@@ -171,3 +214,8 @@ the excerpt exists on the page.
 3. Assert the observed result, not the fixture's own expected field.
 4. Add a negative case for every new integrity rule.
 5. Update this matrix after the regression passes.
+6. Mutation-check the guard: delete it, confirm the new test fails, restore.
+   A test that passes either way documents an intention, not a constraint.
+7. Add a positive control. A guard satisfied by rejecting everything is not a
+   guard, and every negative test in this suite should have something that
+   proves the accepting path still works.

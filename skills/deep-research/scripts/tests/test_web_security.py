@@ -3,6 +3,9 @@
 import importlib.util
 import sys
 import unittest
+# Guards added after an audit found 14 of 18 raises in web.py never executing.
+# Each test below fires exactly one of them; without a test that reaches the
+# raise, deleting the guard is a silent no-op on a green suite.
 from pathlib import Path
 from unittest.mock import patch
 
@@ -99,6 +102,85 @@ class TestSafeRedirectAndPinning(unittest.TestCase):
         )
 
 
+
+
+
+class TestPreviouslyUncoveredGuards(unittest.TestCase):
+    """One test per guard that a coverage trace showed never executing.
+
+    A guard with no test that reaches it can be deleted without turning the
+    suite red, which is the same as not having it. Each case below was
+    confirmed to fail when its guard is removed.
+    """
+
+    def test_localhost_and_dotted_localhost_are_rejected(self) -> None:
+        for url in ("http://localhost/", "http://app.localhost/", "https://LOCALHOST/x"):
+            with self.subTest(url=url):
+                with self.assertRaises(web.UnsafeWebTargetError) as ctx:
+                    web.resolve_public_target(url)
+                self.assertIn("non-public", str(ctx.exception))
+
+    def test_ipv4_mapped_ipv6_literals_are_rejected(self) -> None:
+        """`::ffff:127.0.0.1` is loopback wearing an IPv6 costume.
+
+        Honest scope note: on current CPython this passes with or without the
+        `_canonical_ip` unwrap, because `IPv6Address.is_global` already
+        delegates for mapped addresses. It is a version-independence check on
+        the outcome, not proof that the unwrap is load-bearing. The assertion
+        that does pin the unwrap is `test_mapped_literal_pins_the_ipv4_form`.
+        """
+        for url in (
+            "http://[::ffff:127.0.0.1]/",
+            "http://[::ffff:169.254.169.254]/latest/meta-data/",
+            "http://[::ffff:10.0.0.1]/",
+        ):
+            with self.subTest(url=url):
+                with self.assertRaises(web.UnsafeWebTargetError):
+                    web.resolve_public_target(url)
+
+    def test_mapped_literal_pins_the_ipv4_form(self) -> None:
+        """The unwrap decides which address string the socket is pinned to.
+
+        Deleting `_canonical_ip`'s ipv4_mapped branch makes this fail: the
+        target would carry `::ffff:8.8.8.8`, so the connection would be opened
+        over a different address family than the one that was validated.
+        """
+        target = web.resolve_public_target("http://[::ffff:8.8.8.8]/x")
+        self.assertEqual(("8.8.8.8",), target.addresses)
+
+    def test_malformed_target_is_rejected_before_any_lookup(self) -> None:
+        with self.assertRaises(web.UnsafeWebTargetError):
+            web.resolve_public_target("http://example.com:not-a-port/")
+
+    def test_hostname_is_required(self) -> None:
+        with self.assertRaises(web.UnsafeWebTargetError) as ctx:
+            web.resolve_public_target("http:///just-a-path")
+        self.assertIn("hostname", str(ctx.exception))
+
+    def test_unresolvable_hostname_fails_closed(self) -> None:
+        with patch.object(web.socket, "getaddrinfo", side_effect=web.socket.gaierror("nope")):
+            with self.assertRaises(web.UnsafeWebTargetError) as ctx:
+                web.resolve_public_target("https://example.com/")
+        self.assertIn("unable to resolve", str(ctx.exception))
+
+    def test_empty_resolution_fails_closed(self) -> None:
+        """An empty answer must not read as "nothing disallowed, proceed"."""
+        with patch.object(web.socket, "getaddrinfo", return_value=[]):
+            with self.assertRaises(web.UnsafeWebTargetError) as ctx:
+                web.resolve_public_target("https://example.com/")
+        self.assertIn("did not resolve", str(ctx.exception))
+
+    def test_public_hostname_still_resolves(self) -> None:
+        """Positive control: the guards above must not reject everything.
+
+        Without this, returning `raise` unconditionally would satisfy every
+        negative test in this class and read as a hardened boundary.
+        """
+        answer = [(web.socket.AF_INET, web.socket.SOCK_STREAM, 6, "", ("93.184.216.34", 443))]
+        with patch.object(web.socket, "getaddrinfo", return_value=answer):
+            target = web.resolve_public_target("https://example.com/path")
+        self.assertIn("93.184.216.34", str(target))
+
+
 if __name__ == "__main__":
     unittest.main()
-

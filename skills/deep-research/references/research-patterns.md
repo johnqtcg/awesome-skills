@@ -2,6 +2,29 @@
 
 Reference patterns for technical research scenarios commonly encountered by software engineers.
 
+## Which engine are these operators for?
+
+`retrieve` calls DuckDuckGo Lite and nothing else. DuckDuckGo supports `""`,
+`site:`, `filetype:`, `intitle:`, `inurl:`, `-term` and `OR`. It does **not**
+implement `after:` / `before:` / `related:` (Google-only; Google itself dropped
+`related:`), nor `language:` / `filename:` / `path:` / `repo:` (GitHub code
+search only).
+
+This matters because the failure is silent: an unsupported operator is matched
+as literal text, so the engine returns degraded results instead of an error and
+the skill's honest-degradation machinery never fires. Each block below is
+tagged with the engine its syntax targets.
+
+- **Any engine** — use directly with `retrieve`.
+- **Google-only** — run it through the host `WebSearch` tool, then record the
+  spend with `reserve-budget --budget retrieval_calls`.
+- **GitHub-only** — run it in GitHub code search; `retrieve` cannot express it.
+
+Date filtering on DuckDuckGo is a request parameter, not a query operator. To
+bound a time window through `retrieve`, put the year in the query as a plain
+term (`"Kafka performance" 2025 benchmark`) and confirm the date from the
+extracted page, which is what the Source Quality rules require anyway.
+
 ## 1. Error Debugging Research
 
 When researching error messages or unexpected behavior:
@@ -15,7 +38,7 @@ When researching error messages or unexpected behavior:
 "<key function name>" "<error type>" site:github.com OR site:stackoverflow.com
 
 # Known-issue search
-"<product>" "<error keyword>" issue OR bug after:2024
+"<product>" "<error keyword>" issue OR bug 2025        # Google-only if you use after:2024
 ```
 
 **Evidence Chain**: Error message → Root cause → Fix (verified in official docs or issue tracker)
@@ -54,13 +77,13 @@ When researching how others implement a pattern:
 **Query Strategy**:
 ```
 # GitHub code search (use site:github.com)
-"<function signature>" language:go site:github.com
+"<function signature>" site:github.com                 # GitHub-only: language:go
 
 # Find real-world usage examples
-"<import path>" "<function name>" filetype:go
+"<import path>" "<function name>" site:github.com      # filetype:go indexes nothing
 
 # Find configuration examples
-filename:<config-file> "<setting name>" site:github.com
+"<config-file>" "<setting name>" site:github.com       # GitHub-only: filename:
 ```
 
 **Evidence Chain**: Multiple repos using the pattern → Official documentation confirming it → Understanding of edge cases
@@ -79,7 +102,7 @@ When comparing frameworks, libraries, or architectural approaches:
 **Query Strategy**:
 ```
 # Independent benchmarks
-"<tech-A>" vs "<tech-B>" benchmark "methodology" after:2024
+"<tech-A>" vs "<tech-B>" benchmark "methodology" 2025  # Google-only if you use after:2024
 
 # Migration experiences
 "migrated from <tech-A> to <tech-B>" OR "switched from <tech-A>"
@@ -99,7 +122,7 @@ When researching performance claims or conducting performance analysis:
 **Query Strategy**:
 ```
 # Find benchmarks with methodology
-"<product>" benchmark results "test environment" OR "hardware" after:2024
+"<product>" benchmark results "test environment" OR "hardware" 2025
 
 # TechEmpower, Database benchmarks, etc.
 "<product>" "techempower" OR "sysbench" OR "pgbench" OR "wrk" OR "k6"
@@ -137,10 +160,10 @@ When researching security practices, vulnerabilities, or compliance:
 **Query Strategy**:
 ```
 # CVE search
-"CVE-<year>-<number>" site:nvd.nist.gov OR site:cve.mitre.org
+"CVE-<year>-<number>" site:nvd.nist.gov OR site:cve.org
 
 # Security advisory
-"<product>" "security advisory" OR "vulnerability" after:2024
+"<product>" "security advisory" OR "vulnerability" 2025
 
 # Best practices
 "<technology>" "security" "best practices" site:owasp.org OR site:<vendor>.com
@@ -238,7 +261,7 @@ live execution proof or use it to produce High.
 | `-keyword` | Exclude results | `Go context -tutorial -beginner` |
 | `OR` | Either term matches | `gRPC OR "connect-go"` |
 | `*` | Wildcard placeholder | `"Go * pattern" concurrency` |
-| `after:YYYY` | Published after date | `Kafka performance after:2024` |
-| `before:YYYY` | Published before date | `before:2020` for historical context |
-| `related:` | Find similar sites | `related:kubernetes.io` |
+| `after:YYYY` | Published after date — **Google-only**, ignored by DDG | `Kafka performance after:2024` |
+| `before:YYYY` | Published before date — **Google-only**, ignored by DDG | `before:2020` for historical context |
+| `related:` | Find similar sites — **removed by Google; supported nowhere** | `related:kubernetes.io` |
 | `inurl:` | URL must contain | `inurl:benchmark "Go HTTP"` |

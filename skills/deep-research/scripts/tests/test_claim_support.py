@@ -511,5 +511,91 @@ class AuthorityRegistryContract(unittest.TestCase):
         self.assertTrue(any("own" in r for r in reasons))
 
 
+class RelevanceFloorOnWebExcerpts(unittest.TestCase):
+    """"No signal" from the screens must not be scored as "no objection".
+
+    `polarity_conflict` returns None both when the texts agree and when it
+    cannot align them. Treating those identically meant containment alone
+    carried the verdict: the excerpt "the" is present on nearly every page, so
+    it proved the fetch succeeded and nothing more.
+    """
+
+    @staticmethod
+    def _finding(claim: str) -> dict:
+        return {
+            "title": claim,
+            "analysis": "",
+            "support_review": {
+                "stance": "supports",
+                "rationale": "the cited excerpt supports this claim as written",
+            },
+        }
+
+    def test_thin_excerpt_cannot_reach_attested(self) -> None:
+        review = claim_support.review_claim_support(
+            self._finding("Go generics are production ready for all workloads."),
+            [{"kind": "web", "excerpt": "the"}],
+        )
+        self.assertEqual("qualified", review["state"])
+        self.assertFalse(review["high_eligible"])
+        self.assertEqual(1, review["screens"]["thin_web_excerpts"])
+
+    def test_excerpt_unrelated_to_the_claim_cannot_reach_attested(self) -> None:
+        review = claim_support.review_claim_support(
+            self._finding("Go generics are production ready for all workloads."),
+            [{"kind": "web", "excerpt": "Shutdown waits for in-flight requests to drain."}],
+        )
+        self.assertEqual("qualified", review["state"])
+        self.assertEqual("none", review["screens"]["corroboration"])
+
+    def test_a_faithful_excerpt_is_still_attested(self) -> None:
+        """Positive control: the floor must not reject correct citations."""
+        review = claim_support.review_claim_support(
+            self._finding("GOMAXPROCS defaults to the number of visible CPUs."),
+            [{
+                "kind": "web",
+                "excerpt": "The default value of GOMAXPROCS is the number of CPUs visible to the program.",
+            }],
+        )
+        self.assertEqual("attested", review["state"])
+        self.assertEqual("lexical", review["screens"]["corroboration"])
+
+    def test_repository_evidence_is_corroborated_structurally_not_lexically(self) -> None:
+        """Code shares no prose phrase with the sentence built on it.
+
+        Applying the Web floor to repository evidence would reject every
+        legitimate code finding, so the state stays attested — but the
+        corroboration label must say `structural`, so the report cannot imply
+        a lexical screen examined it.
+        """
+        review = claim_support.review_claim_support(
+            self._finding("The lookup entry point is a module-level function."),
+            [{"kind": "code", "excerpt": "def lookup(hostname: str) -> Optional[Dict[str, Any]]:"}],
+        )
+        self.assertEqual("attested", review["state"])
+        self.assertEqual("structural", review["screens"]["corroboration"])
+
+    def test_anchor_threshold_does_not_false_downgrade_the_corpus(self) -> None:
+        """The one-token threshold is a measured choice; keep it measured.
+
+        A shared 2-gram false-downgraded 5 of the 18 `supported` cases (28%).
+        This asserts the shipped threshold stays at zero on that same corpus,
+        so a future tightening cannot be made quietly.
+        """
+        supported = [c for c in CORPUS["cases"] if c["label"] == "supported"]
+        self.assertGreaterEqual(len(supported), 3)
+        false_downgrades = [
+            case
+            for case in supported
+            if not claim_support.content_anchor(case["claim"], case["excerpt"])
+        ]
+        self.assertEqual(
+            [],
+            [c["claim"] for c in false_downgrades],
+            "relevance floor rejects correct findings; re-measure before tightening",
+        )
+
+
+
 if __name__ == "__main__":
     unittest.main()

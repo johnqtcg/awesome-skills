@@ -1013,5 +1013,83 @@ class TestFetchPageContentQuality(unittest.TestCase):
         self.assertTrue(result.error == "" or "content yield" in result.error or "WAF" in result.error)
 
 
+class TestAntiBotMarkerPrecision(unittest.TestCase):
+    """A blocked-page marker must not match ordinary prose.
+
+    `"ray ID"` as a bare substring matched "array identifier", "X-ray
+    identification" and "gray idempotency". The failure is not harmless: the
+    page is retried three times, marked "likely blocked by WAF/anti-bot", and
+    then every excerpt taken from it is rejected with
+    `web_content_not_extracted`. It destroys valid evidence silently.
+    """
+
+    def test_ordinary_prose_is_not_read_as_a_challenge_page(self) -> None:
+        for text in (
+            "The array identifier is out of bounds.",
+            "Use an X-ray identification tag on each sample.",
+            "A gray idempotency key is still a key.",
+            "Stray identifiers were removed from the payload.",
+        ):
+            with self.subTest(text=text):
+                self.assertFalse(deep_research._is_blocked_response(text))
+
+    def test_real_challenge_pages_are_still_detected(self) -> None:
+        for text in (
+            "Cloudflare Ray ID: 7d3f1a2b4c5e6f70",
+            "Just a moment...",
+            "Checking if the site connection is secure",
+            "Attention Required! | Cloudflare",
+        ):
+            with self.subTest(text=text):
+                self.assertTrue(deep_research._is_blocked_response(text))
+
+
+class TestRegistryUserContentExclusion(unittest.TestCase):
+    """Domain ownership does not make every subdomain authoritative.
+
+    Registry membership says who operates `python.org`; it says nothing about
+    who wrote a post on `discuss.python.org`. Because T1 is the only
+    requirement for the narrow single-fact High exception, inheriting registry
+    authority down to a forum made a Discourse thread a High-eligible primary
+    source.
+    """
+
+    def test_user_content_subdomains_do_not_inherit_registry_authority(self) -> None:
+        for host in (
+            "discuss.python.org",
+            "wiki.python.org",
+            "issues.apache.org",
+            "lists.apache.org",
+            "cwiki.apache.org",
+            "lore.kernel.org",
+            "wiki.postgresql.org",
+            "forums.mongodb.com",
+            "blog.mongodb.com",
+        ):
+            with self.subTest(host=host):
+                _, tier, basis = deep_research.infer_source_quality(host)
+                self.assertNotEqual("T1", tier)
+                self.assertTrue(basis.startswith("heuristic:"))
+
+    def test_documentation_hosts_keep_registry_authority(self) -> None:
+        """Positive control: the exclusion must not empty the registry."""
+        for host in (
+            "docs.python.org",
+            "peps.python.org",
+            "go.dev",
+            "pkg.go.dev",
+            "kubernetes.io",
+            "docs.aws.amazon.com",
+            "rfc-editor.org",
+            "dev.mysql.com",
+            "learn.microsoft.com",
+        ):
+            with self.subTest(host=host):
+                _, tier, basis = deep_research.infer_source_quality(host)
+                self.assertEqual("T1", tier)
+                self.assertTrue(basis.startswith("registry:"))
+
+
+
 if __name__ == "__main__":
     unittest.main()

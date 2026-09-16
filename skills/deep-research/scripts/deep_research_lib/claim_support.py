@@ -51,6 +51,23 @@ ANCHOR_STOPWORDS = frozenset({
 MIN_ANCHOR_TOKENS = 2
 MIN_ANCHOR_CONTENT_WORDS = 2
 
+# A shared six-token phrase is already decisive; longer ones only repeat the
+# verdict a shorter anchor inside them already delivered. Without this cap the
+# screen rebuilt both n-gram indexes once per anchor length, which is cubic in
+# the input: a measured 760-word claim/excerpt pair took 26 seconds, and a Deep
+# run pays that per finding per excerpt.
+MAX_ANCHOR_TOKENS = 6
+
+# Beyond this the screen is comparing an essay to an essay. Truncating bounds
+# the work without changing any verdict a real citation would get, because a
+# supporting excerpt has to overlap the claim near its start to be quotable.
+MAX_SCREEN_TOKENS = 400
+
+# An excerpt below this many content words cannot demonstrate support for
+# anything: "the" is contained in almost every page, so containment alone
+# proves only that the fetch succeeded.
+MIN_EXCERPT_CONTENT_WORDS = 4
+
 # Hyphenated compounds stay whole; a period splits a clause only at a real
 # sentence boundary so identifiers like `t.Setenv` and `go.mod` survive intact.
 _TOKEN_RE = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*|[一-鿿]")
@@ -127,6 +144,57 @@ def _content_ngrams(tokens: Sequence[str], size: int) -> Dict[Tuple[str, ...], L
     return index
 
 
+def _truncate_for_screen(text: str) -> str:
+    """Bound screen input by word count, preserving clause punctuation."""
+    words = str(text or "").split()
+    if len(words) <= MAX_SCREEN_TOKENS:
+        return str(text or "")
+    return " ".join(words[:MAX_SCREEN_TOKENS])
+
+
+def _content_stems(text: str) -> set:
+    return {
+        _stem(word)
+        for word in _tokens(_truncate_for_screen(text))
+        if word not in ANCHOR_STOPWORDS and word not in NEGATORS
+    }
+
+
+def content_anchor(claim: str, excerpt: str) -> Optional[str]:
+    """Return a content word shared by claim and excerpt, if any.
+
+    This answers the question `polarity_conflict` deliberately does not: is this
+    excerpt lexically about the same subject as the claim at all? The polarity
+    screen returns ``None`` both when the two texts agree and when it cannot
+    align them, and scoring those two outcomes identically let an excerpt with
+    no relationship to its claim pass as clean.
+
+    The threshold is **one shared stemmed content word**, not a phrase. That is
+    a measured choice, not a cautious guess: requiring a shared 2-gram
+    false-downgraded 5 of the 18 `supported` cases in
+    `tests/claim_support_corpus.json` (28%), because correct paraphrases
+    routinely keep the subject and rewrite everything around it —
+    "SetMaxOpenConns caps open database connections" against "SetMaxOpenConns
+    sets the maximum number of open connections". At one token the same corpus
+    yields zero false downgrades while still rejecting an excerpt that shares
+    no vocabulary with its claim. The corpus enforces this; see
+    `ScreenMutations` and `max_false_anchor_downgrades`.
+    """
+    shared = _content_stems(claim) & _content_stems(excerpt)
+    if not shared:
+        return None
+    return sorted(shared)[0]
+
+
+def excerpt_is_substantive(excerpt: str) -> bool:
+    """Whether an excerpt carries enough content words to support anything."""
+    tokens = _tokens(_truncate_for_screen(excerpt))
+    content = sum(
+        1 for word in tokens if word not in ANCHOR_STOPWORDS and word not in NEGATORS
+    )
+    return content >= MIN_EXCERPT_CONTENT_WORDS
+
+
 def polarity_conflict(claim: str, excerpt: str) -> Optional[str]:
     """Return the shared anchor phrase when claim and excerpt disagree in polarity.
 
@@ -140,13 +208,13 @@ def polarity_conflict(claim: str, excerpt: str) -> Optional[str]:
     is the safe one: it demands an author attestation instead of passing
     silently. See `tests/claim_support_corpus.json`, class `lexically-opposed`.
     """
-    claim_clauses = _clauses(claim)
-    excerpt_clauses = _clauses(excerpt)
+    claim_clauses = _clauses(_truncate_for_screen(claim))
+    excerpt_clauses = _clauses(_truncate_for_screen(excerpt))
     claim_tokens = _flatten(claim_clauses)
     excerpt_tokens = _flatten(excerpt_clauses)
     if not claim_tokens or not excerpt_tokens:
         return None
-    largest = min(len(claim_tokens), len(excerpt_tokens))
+    largest = min(len(claim_tokens), len(excerpt_tokens), MAX_ANCHOR_TOKENS)
     # Every anchor length is examined, not just the longest. In a multi-sentence
     # excerpt the longest shared phrase often sits in an unrelated sentence
     # while the sentence that actually contradicts the claim shares a shorter
@@ -184,7 +252,8 @@ def numeric_drift(claim: str, excerpts: Sequence[str]) -> List[str]:
     return [n for n in dict.fromkeys(numbers_in(claim)) if n not in quoted]
 
 
-def _claim_text(finding: Dict[str, Any]) -> str:
+def claim_text(finding: Dict[str, Any]) -> str:
+    """Return the claim sentence a finding asserts, across its schema variants."""
     parts = [
         str(finding.get("title", "")),
         str(finding.get("analysis", "")),
@@ -240,7 +309,17 @@ def review_claim_support(
         for item in verified_evidence
         if str(item.get("excerpt", "")).strip()
     ]
-    claim = _claim_text(finding if isinstance(finding, dict) else {})
+    # The lexical screens only have purchase on prose. A code excerpt shares no
+    # content phrase with the sentence built on it, so applying the same floor
+    # to repository evidence would reject every legitimate code finding. Those
+    # are corroborated structurally instead — the validator rereads the pinned
+    # blob, and a runtime claim needs a receipt covering every cited code ID.
+    web_excerpts = [
+        str(item.get("excerpt", ""))
+        for item in verified_evidence
+        if item.get("kind") == "web" and str(item.get("excerpt", "")).strip()
+    ]
+    claim = claim_text(finding if isinstance(finding, dict) else {})
 
     conflicts: List[str] = []
     for excerpt in excerpts:
@@ -249,10 +328,45 @@ def review_claim_support(
             conflicts.append(anchor)
     drift = numeric_drift(claim, excerpts) if excerpts and not attestation["derived_numbers"] else []
 
+    # A Web excerpt only counts toward support when it is substantive *and*
+    # lexically about the claim. Without this, containment alone carried the
+    # verdict: the excerpt "the" is contained in almost every page, so it
+    # proved the fetch succeeded and nothing else.
+    substantive = [e for e in web_excerpts if excerpt_is_substantive(e)]
+    # `derived_numbers` is the author declaring the claim is computed from the
+    # excerpt rather than quoted from it. That already exempts the numeric
+    # screen, and a derived claim ("3 times faster" from "90ms to 30ms")
+    # legitimately shares no vocabulary with its source, so it exempts this one
+    # for the same reason.
+    anchored = (
+        list(substantive)
+        if attestation["derived_numbers"]
+        else [e for e in substantive if content_anchor(claim, e)]
+    )
+    # Distinguish "the screens examined this and did not object" from "no
+    # screen could apply". Reporting both as zero conflicts let an
+    # uncorroborated attestation read like a checked one. `structural` means a
+    # repository artifact the validator rereads — never a Web excerpt the
+    # screens simply could not align.
+    repository_backed = any(
+        item.get("kind") in {"code", "commit", "test"} for item in verified_evidence
+    )
+    if anchored:
+        corroboration = "lexical"
+    elif repository_backed:
+        corroboration = "structural"
+    else:
+        corroboration = "none"
+
     screens = {
         "polarity_conflicts": list(dict.fromkeys(conflicts)),
         "unquoted_numbers": drift,
         "excerpts_reviewed": len(excerpts),
+        "web_excerpts_reviewed": len(web_excerpts),
+        "thin_web_excerpts": len(web_excerpts) - len(substantive),
+        "unanchored_web_excerpts": len(substantive) - len(anchored),
+        "anchored_web_excerpts": len(anchored),
+        "corroboration": corroboration,
     }
 
     if attestation["stance"] == "contradicts":
@@ -270,6 +384,12 @@ def review_claim_support(
     elif attestation["stance"] in {"partial", "context-only"}:
         state = "qualified"
     elif drift:
+        state = "qualified"
+    elif web_excerpts and not anchored:
+        # Every cited Web excerpt is either too thin to support anything or
+        # shares no content phrase with the claim. The author may still be
+        # right, so this stays publishable — but an attestation no screen could
+        # corroborate must not be worth the same as one they examined.
         state = "qualified"
     else:
         state = "attested"
@@ -318,10 +438,23 @@ def support_reasons(review: Dict[str, Any]) -> List[str]:
             reasons.append(
                 "claim asserts numbers no cited excerpt contains: " + ", ".join(drift)
             )
-        else:
+        elif review.get("stance") in {"partial", "context-only"}:
             reasons.append(
                 f"author review recorded stance={review.get('stance')}, which is "
                 "weaker than full support"
+            )
+        else:
+            thin = screens.get("thin_web_excerpts", 0)
+            detail = (
+                f"{thin} Web excerpt(s) carry fewer than "
+                f"{MIN_EXCERPT_CONTENT_WORDS} content words"
+                if thin
+                else "no cited Web excerpt shares a content phrase with the claim"
+            )
+            reasons.append(
+                "claim support could not be corroborated by any screen: "
+                + detail
+                + "; the attestation stands alone and cannot reach High"
             )
     return reasons
 

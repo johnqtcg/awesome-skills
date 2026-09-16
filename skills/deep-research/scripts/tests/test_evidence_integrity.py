@@ -726,6 +726,11 @@ class TestCodebaseEvidence(unittest.TestCase):
             "analysis": "The middleware calls verifyToken.",
             "support_review": {
                 "stance": "supports",
+                "rationale": "the cited repository evidence states this directly",
+                "reviewed_by": "author",
+            },
+            "support_review": {
+                "stance": "supports",
                 "rationale": "the pinned excerpt is the call site the claim names",
             },
             "evidence": [{"kind": "code", "id": "code-1"}],
@@ -749,6 +754,11 @@ class TestCodebaseEvidence(unittest.TestCase):
             "claim_type": "runtime_behavior",
             "confidence": "high",
             "analysis": "The path is tested.",
+            "support_review": {
+                "stance": "supports",
+                "rationale": "the cited repository evidence states this directly",
+                "reviewed_by": "author",
+            },
             "evidence": [
                 {"kind": "code", "id": "code-1"},
                 {"kind": "test", "id": "test-1"},
@@ -763,6 +773,87 @@ class TestCodebaseEvidence(unittest.TestCase):
         )
         self.assertNotEqual("high", summary["findings"][0]["effective_confidence"])
 
+    def test_unpinned_code_is_never_an_independent_primary_unit(self) -> None:
+        """Two working-tree files must not satisfy the two-unit High rule.
+
+        `_verify_code` used to stamp `primary: True` on every code record, and
+        the `pinned` flag next to it was only consulted for `code_fact` and
+        `runtime_behavior` claims. On the default branch — analysis, comparison,
+        recommendation — two unpinned records keyed on distinct ids counted as
+        "two independent verified units, including a primary unit". Verified
+        against a directory that was not a Git repository at all: `Full` +
+        `high` + no downgrade reason, for a purely subjective comparative claim.
+        """
+        for record in self.evidence["evidence"]:
+            if record.get("kind") == "code":
+                record["commit"] = "working-tree-unpinned"
+                record["snapshot"] = "worktree"
+        second = dict(self.evidence["evidence"][0])
+        second["id"] = "code-2"
+        self.evidence["evidence"].append(second)
+        finding = {
+            "title": "Framework X is a better fit than framework Y",
+            "claim_type": "analysis",
+            "confidence": "high",
+            "analysis": "Both call sites point the same way.",
+            "support_review": {
+                "stance": "supports",
+                "rationale": "both cited working-tree call sites were read in full",
+                "reviewed_by": "author",
+            },
+            "evidence": [
+                {"kind": "code", "id": "code-1"},
+                {"kind": "code", "id": "code-2"},
+            ],
+        }
+        summary = deep_research.validate_research_bundle(
+            research_kind="codebase",
+            results=[],
+            contents=[],
+            code_evidence=self.evidence,
+            findings={"findings": [finding]},
+        )
+        self.assertNotEqual("Full", summary["degradation"])
+        self.assertEqual("medium", summary["findings"][0]["effective_confidence"])
+        self.assertTrue(
+            summary["findings"][0]["downgrade_reasons"],
+            "an unpinned-only High must name the rule it failed",
+        )
+
+    def test_pinned_code_remains_an_independent_primary_unit(self) -> None:
+        """Positive control: the fix must not demote pinned evidence.
+
+        Without this, gating `primary` on `pinned` could be satisfied by
+        returning False everywhere, which would silently cap every codebase
+        finding at Medium and read as "the guard works".
+        """
+        second = dict(self.evidence["evidence"][0])
+        second["id"] = "code-2"
+        self.evidence["evidence"].append(second)
+        finding = {
+            "title": "Both call sites verify the token",
+            "claim_type": "analysis",
+            "confidence": "high",
+            "analysis": "Both call sites point the same way.",
+            "support_review": {
+                "stance": "supports",
+                "rationale": "both cited pinned call sites were read in full",
+                "reviewed_by": "author",
+            },
+            "evidence": [
+                {"kind": "code", "id": "code-1"},
+                {"kind": "code", "id": "code-2"},
+            ],
+        }
+        summary = deep_research.validate_research_bundle(
+            research_kind="codebase",
+            results=[],
+            contents=[],
+            code_evidence=self.evidence,
+            findings={"findings": [finding]},
+        )
+        self.assertEqual("high", summary["findings"][0]["effective_confidence"])
+
     def test_unpinned_code_fact_cannot_be_high(self) -> None:
         self.evidence["evidence"][0]["commit"] = "unknown"
         finding = {
@@ -770,6 +861,11 @@ class TestCodebaseEvidence(unittest.TestCase):
             "claim_type": "code_fact",
             "confidence": "high",
             "analysis": "The middleware calls verifyToken.",
+            "support_review": {
+                "stance": "supports",
+                "rationale": "the cited repository evidence states this directly",
+                "reviewed_by": "author",
+            },
             "evidence": [{"kind": "code", "id": "code-1"}],
         }
         summary = deep_research.validate_research_bundle(
@@ -789,6 +885,11 @@ class TestCodebaseEvidence(unittest.TestCase):
             "claim_type": "code_fact",
             "confidence": "high",
             "analysis": "The middleware calls verifyToken.",
+            "support_review": {
+                "stance": "supports",
+                "rationale": "the cited repository evidence states this directly",
+                "reviewed_by": "author",
+            },
             "evidence": [{"kind": "code", "id": "code-1"}],
         }
         summary = deep_research.validate_research_bundle(
@@ -806,6 +907,11 @@ class TestCodebaseEvidence(unittest.TestCase):
             "claim_type": "single_fact",
             "confidence": "high",
             "analysis": "The middleware calls verifyToken.",
+            "support_review": {
+                "stance": "supports",
+                "rationale": "the cited repository evidence states this directly",
+                "reviewed_by": "author",
+            },
             "evidence": [{"kind": "code", "id": "code-1"}],
         }
         summary = deep_research.validate_research_bundle(
@@ -823,6 +929,11 @@ class TestCodebaseEvidence(unittest.TestCase):
             "claim_type": "code_fact",
             "confidence": "high",
             "analysis": "The middleware calls verifyToken.",
+            "support_review": {
+                "stance": "supports",
+                "rationale": "the cited repository evidence states this directly",
+                "reviewed_by": "author",
+            },
             "evidence": [{"kind": "code", "id": "code-1"}],
         }
         summary = deep_research.validate_research_bundle(
@@ -1076,6 +1187,113 @@ class TestCliEvidenceRequirements(unittest.TestCase):
             report = report_path.read_text()
             self.assertIn("Degradation level: `Partial`", report)
             self.assertIn("research budget was exhausted", report)
+
+
+class FindingsMustStateAClaim(unittest.TestCase):
+    """Every other gate grades a claim against evidence; none checked one exists.
+
+    A finding with an empty title and empty analysis validated as usable and
+    `attested`, and rendered into Key Findings as
+    "**Untitled finding** (High confidence)" — a report whose headline section
+    carried no assertion at all, with zero issues raised.
+    """
+
+    def test_empty_claim_is_not_usable(self) -> None:
+        summary = deep_research.validate_research_bundle(
+            research_kind="web",
+            results=[web_source()],
+            contents=[web_content()],
+            code_evidence={},
+            findings={"findings": [{
+                "title": "",
+                "analysis": "",
+                "confidence": "high",
+                "evidence": [{
+                    "kind": "web",
+                    "url": "https://go.dev/pkg/context",
+                    "excerpt": "WithTimeout returns a copy of the parent context",
+                }],
+                "support_review": {
+                    "stance": "supports",
+                    "rationale": "the excerpt states the return value directly",
+                },
+            }]},
+        )
+        finding = summary["findings"][0]
+        self.assertFalse(finding["usable"])
+        self.assertIn(
+            "finding_has_no_claim",
+            [issue["code"] for issue in summary["issues"]],
+        )
+
+    def test_a_stated_claim_is_still_accepted(self) -> None:
+        """Positive control: the check must key on emptiness, not on presence."""
+        summary = deep_research.validate_research_bundle(
+            research_kind="web",
+            results=[web_source()],
+            contents=[web_content()],
+            code_evidence={},
+            findings={"findings": [web_finding(confidence="medium")]},
+        )
+        self.assertNotIn(
+            "finding_has_no_claim",
+            [issue["code"] for issue in summary["issues"]],
+        )
+        self.assertTrue(summary["findings"][0]["usable"])
+
+
+class ReportCarriesItsOwnEvidence(unittest.TestCase):
+    """The verified excerpt is the only part a reader can check without a rerun.
+
+    The renderer emitted a bare citation index and left the matched excerpt in
+    `findings.json` — a temporary file nobody keeps. A report whose thesis is
+    traceability has to carry the quotation it traced.
+    """
+
+    def test_sources_section_prints_the_verified_excerpt(self) -> None:
+        excerpt = "WithTimeout returns a copy of the parent context"
+        validation = deep_research.validate_research_bundle(
+            research_kind="web",
+            results=[web_source()],
+            contents=[web_content()],
+            code_evidence={},
+            findings={"findings": [web_finding(confidence="medium", excerpt=excerpt)]},
+        )
+        report = deep_research.generate_report(
+            question="What does WithTimeout return?",
+            findings={"findings": [web_finding(confidence="medium", excerpt=excerpt)]},
+            results=[web_source()],
+            depth="quick",
+            contents=[web_content()],
+            research_kind="web",
+            validation=validation,
+        )
+        self.assertIn(excerpt, report)
+        self.assertIn("verified excerpt:", report)
+
+    def test_excerpts_do_not_shift_the_citation_numbering(self) -> None:
+        """Excerpt lines are continuation text, not new citations.
+
+        `next_index` used to be derived from the rendered line count, so
+        adding a line under a source would have renumbered every repository
+        citation after it and silently misaligned every `[n]` in the body.
+        """
+        excerpt = "WithTimeout returns a copy of the parent context"
+        validation = deep_research.validate_research_bundle(
+            research_kind="web",
+            results=[web_source()],
+            contents=[web_content()],
+            code_evidence={},
+            findings={"findings": [web_finding(confidence="medium", excerpt=excerpt)]},
+        )
+        sources = deep_research.build_sources_index(
+            [web_source()],
+            None,
+            deep_research.verified_web_excerpts(validation),
+        )
+        self.assertIn("[1] ", sources)
+        self.assertNotIn("[2] ", sources)
+
 
 
 if __name__ == "__main__":
