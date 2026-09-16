@@ -1,7 +1,7 @@
 ---
 name: go-ci-workflow
 description: Use when creating or refactoring GitHub Actions CI workflows for Go repositories. Covers repository-shape detection, Make-driven delegation with formal fallbacks, Go setup, caching, tool pinning, permissions, reusable workflows, and quality gate design.
-allowed-tools: Read, Write, Grep, Glob, Bash(go version*), Bash(go install*), Bash(go test*), Bash(go build*), Bash(make*), Bash(gosec*), Bash(govulncheck*), Bash(docker build*)
+allowed-tools: Read, Write, Edit, Grep, Glob, Bash(bash ${CLAUDE_SKILL_DIR}/scripts/discover_ci_needs.sh*), Bash(actionlint*), Bash(yq eval*), Bash(gh api repos/*), Bash(go version*), Bash(go install*), Bash(go test*), Bash(go build*), Bash(make*), Bash(gosec*), Bash(govulncheck*), Bash(docker build*)
 ---
 
 # Go CI Workflow Writer
@@ -79,7 +79,11 @@ Inspect:
 - Dockerfiles and major app directories
 - test layout for unit, integration, and e2e
 
-Use `scripts/discover_ci_needs.sh` first, then confirm with manual inspection where needed.
+Run `bash ${CLAUDE_SKILL_DIR}/scripts/discover_ci_needs.sh <repo-root>` first, then
+confirm by manual inspection. The script is a probe, not a classifier — read the
+LIMITS block at its top. It prunes `vendor/`, `node_modules/`, `testdata/`, and
+`third_party/`, and finds Dockerfiles only 4 levels below the root; anything
+outside that it will miss or over-report.
 
 ### 2) Local Parity Gate
 
@@ -150,7 +154,9 @@ Use `references/fallback-and-scaffolding.md`.
   - extra static analysis
 - Set `timeout-minutes` on every job (10-15 for core gate, 20 for e2e/integration).
 - Use `needs:` only when ordering matters.
-- Use `concurrency` to cancel redundant runs on the same branch or PR.
+- Use `concurrency` to cancel redundant runs, but gate the cancellation on the
+  event (`cancel-in-progress: ${{ github.event_name == 'pull_request' }}`) so a
+  merged commit on a protected branch is never left without a completed run.
 
 ## Trigger Rules
 
@@ -166,9 +172,12 @@ Do not force all expensive jobs onto every PR unless the repository risk profile
 ## Go Setup and Tooling Rules
 
 - Use `go-version-file: go.mod` — never hardcode Go version.
-- Pin `go install` tool versions exactly, never `@latest`.
+- Pin `go install` tool versions exactly, never `@latest`. The pinned versions
+  live in `references/workflow-quality-guide.md` §11 — that table is the single
+  source of truth, and like §16 for actions it must be re-verified at generation
+  time rather than trusted.
 - Keep tool versions aligned with Makefile or repo-native install scripts when those exist.
-- Pin third-party actions and **re-verify the latest major at generation time** — do not trust an embedded version number. Standard repos pin the major tag (`@v7`); high-security repos pin a full commit SHA with a `# vX.Y.Z` comment and let Dependabot/Renovate bump it. See `references/workflow-quality-guide.md` §16.
+- Pin third-party actions and **re-verify the latest major at generation time** — do not trust an embedded version number. Standard repos pin the major tag (`actions/checkout@v7`); high-security repos pin a full commit SHA with a `# vX.Y.Z` comment and let Dependabot/Renovate bump it. See `references/workflow-quality-guide.md` §16.
 - When `go.mod`/`go.sum` is not at the repo root (sub-directory module, matrix over modules, `go.work` workspace), set `cache-dependency-path` on `setup-go` — otherwise the cache key is wrong or missing. Treat a `go.work` repo as one workspace, not as independent modules.
 
 ## Advanced GitHub Actions Rules
@@ -202,7 +211,7 @@ If available, run:
 ```bash
 actionlint
 yq eval . .github/workflows/ci.yml
-bash scripts/discover_ci_needs.sh
+bash ${CLAUDE_SKILL_DIR}/scripts/discover_ci_needs.sh .
 ```
 
 ## Output Contract

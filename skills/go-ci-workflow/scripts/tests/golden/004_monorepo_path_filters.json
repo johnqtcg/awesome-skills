@@ -4,17 +4,38 @@
   "scenario_type": "monorepo",
   "context": {
     "go_mod_count": 1,
-    "app_dirs": ["services/api", "services/worker", "services/gateway"],
+    "app_dirs": [
+      "services/api",
+      "services/worker",
+      "services/gateway"
+    ],
     "has_makefile": true,
-    "makefile_targets": ["ci", "ci-api-integration", "docker-build"],
+    "makefile_targets": [
+      "ci",
+      "ci-api-integration",
+      "docker-build"
+    ],
     "has_dockerfile": true,
     "dockerfile_count": 3,
     "has_golangci_lint_config": true,
-    "test_types": ["unit", "integration"],
+    "test_types": [
+      "unit",
+      "integration"
+    ],
     "existing_workflows": []
   },
-  "expected_gates": ["Repository Shape Gate", "Local Parity Gate", "Security and Permissions Gate"],
-  "expected_output_fields": ["repository shape classification", "job list", "execution path for each job", "trigger configuration", "permissions"],
+  "expected_gates": [
+    "Repository Shape Gate",
+    "Local Parity Gate",
+    "Security and Permissions Gate"
+  ],
+  "expected_output_fields": [
+    "repository shape classification",
+    "job list",
+    "execution path for each job",
+    "trigger configuration",
+    "permissions"
+  ],
   "expected_shape": "monorepo with multiple apps/packages",
   "skill_rules_that_must_fire": [
     "Repository Shape Gate",
@@ -24,6 +45,16 @@
     "multiple apps",
     "needs:",
     "concurrency",
-    "permissions"
+    "permissions",
+    "dorny/paths-filter@v4",
+    "pull-requests: read",
+    "Path Filters vs. Required Status Checks",
+    "ci-required",
+    "if: always()",
+    "cache-dependency-path"
+  ],
+  "load_references": [
+    "repository-shapes.md",
+    "golden-example-monorepo.md"
   ]
 }

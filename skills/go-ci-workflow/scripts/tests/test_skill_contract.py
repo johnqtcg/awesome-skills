@@ -44,6 +44,18 @@ def _count_heading(text: str, title: str) -> int:
     return len(re.findall(pattern, text, re.MULTILINE))
 
 
+def gate_sections(text: str) -> dict:
+    """SKILL.md gate name -> the text of that gate's own section."""
+    heads = list(re.finditer(r"^#{2,4}\s*(?:\d+\)\s*)?(?P<name>[A-Z][^\n]*?Gate)\s*$",
+                             text, re.MULTILINE))
+    out = {}
+    for i, m in enumerate(heads):
+        end = heads[i + 1].start() if i + 1 < len(heads) else len(text)
+        nxt = re.search(r"^## ", text[m.end():end], re.MULTILINE)
+        stop = m.end() + nxt.start() if nxt else end
+        out[m.group("name")] = text[m.end():stop]
+    return out
+
 # ------------------------------------------------------------------
 # TestFrontmatter
 # ------------------------------------------------------------------
@@ -87,14 +99,54 @@ class TestSkillMdStructure(unittest.TestCase):
         self.assertIn("Degraded Output Gate", self.skill_text)
 
     def test_skill_has_5_mandatory_gates(self) -> None:
+        """Gate NAMES are a real contract — the golden fixtures key
+        `expected_gates` on them. Match the name, not the `### N)` prefix, so
+        renumbering or restyling headings is not a test failure."""
         for gate in (
-            "### 1) Repository Shape Gate",
-            "### 2) Local Parity Gate",
-            "### 3) Security and Permissions Gate",
-            "### 4) Execution Integrity Gate",
-            "### 5) Degraded Output Gate",
+            "Repository Shape Gate",
+            "Local Parity Gate",
+            "Security and Permissions Gate",
+            "Execution Integrity Gate",
+            "Degraded Output Gate",
         ):
-            self.assertIn(gate, self.skill_text)
+            self.assertRegex(
+                self.skill_text,
+                re.compile(r"^#{2,4}[^\n]*" + re.escape(gate) + r"\s*$", re.MULTILINE),
+                f"mandatory gate heading missing: {gate}",
+            )
+
+    def test_every_gate_has_a_substantive_body(self) -> None:
+        """Slice SKILL.md between gate headings and assert INSIDE the slice.
+
+        A mutation audit deleted the entire body of the Local Parity Gate and of
+        the Degraded Output Gate and the suite stayed green: their assertions
+        were whole-file substring checks that other sections happened to
+        satisfy. A gate reduced to a heading is a gate that does not run.
+        """
+        gates = gate_sections(self.skill_text)
+        self.assertEqual(5, len(gates), f"expected 5 gate sections, got {sorted(gates)}")
+        # Each gate must carry its own operative content, found in its own slice.
+        required = {
+            "Repository Shape Gate": ["go.mod", "Makefile", "classify"],
+            "Local Parity Gate": ["make target", "repo task", "inline fallback",
+                                  "missing"],
+            "Security and Permissions Gate": ["fork PRs can reach secrets",
+                                              "minimum required `permissions`",
+                                              "workflow_call"],
+            "Execution Integrity Gate": ["Not run in this environment",
+                                         "exact commands to run next"],
+            "Degraded Output Gate": ["do not fabricate complete parity",
+                                     "scaffold", "missing targets"],
+        }
+        for gate, needles in required.items():
+            body = gates[gate]
+            self.assertGreaterEqual(
+                len(body.split()), 25,
+                f"{gate}: body is {len(body.split())} words — heading without content",
+            )
+            for needle in needles:
+                self.assertIn(needle, body,
+                              f"{gate}: operative content missing from its own section: {needle!r}")
 
     def test_repository_shape_gate_lists_all_shapes(self) -> None:
         self.assertIn("Repository Shape Gate", self.skill_text)
@@ -224,10 +276,12 @@ class TestWorkflowQualityGuide(unittest.TestCase):
             self.assertIn(rule, self.wqg_text)
 
     def test_wqg_tool_version_currency_note(self) -> None:
-        self.assertIn(
-            "Versions in this guide are examples current at time of writing",
-            self.wqg_text,
-        )
+        # §11 must carry a machine-checked pin table AND an explicit
+        # re-verify instruction — a prose "these may be stale" note alone is
+        # what let five tool pins rot unnoticed.
+        self.assertIn("Re-verify before generating", self.wqg_text)
+        self.assertIn("single source of truth", self.wqg_text)
+        self.assertRegex(self.wqg_text, r"gh api repos/[\w./-]+/releases/latest")
 
     def test_wqg_mentions_monorepo(self) -> None:
         self.assertIn("monorepo", self.wqg_text.lower())
@@ -567,3 +621,125 @@ class TestRunRegression(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+# ------------------------------------------------------------------
+# TestToolVersionCurrency — §11 pin table is the single source of truth
+# ------------------------------------------------------------------
+
+# §11 rows: | golangci-lint | `path/to/cmd` | `v2.13.2` | 2026-09-16 |
+TOOL_ROW_RE = re.compile(
+    r"^\|\s*(?P<tool>[a-z0-9-]+)\s*\|\s*`(?P<path>[^`]+)`\s*\|\s*`(?P<version>v[0-9][^`]*)`\s*\|",
+    re.MULTILINE,
+)
+GO_INSTALL_RE = re.compile(r"go install (?P<path>[^\s@]+)@(?P<version>[^\s`\"']+)")
+# A bare major tag in a code span. Tool pins always carry dots (`v2.13.2`), so
+# anything matching this is an ACTION major — and must come from §16, not from
+# a hand-written example. `pr-checklist.md` recommended `@v4`/`@v5` long after
+# §16 moved to v7, and the old guard never saw it because it only read `uses:`
+# lines.
+BARE_MAJOR_RE = re.compile(r"`@v(?P<major>\d+)`")
+
+
+class TestToolVersionCurrency(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.table = {
+            m.group("path"): m.group("version")
+            for m in TOOL_ROW_RE.finditer(WORKFLOW_GUIDE.read_text())
+        }
+        cls.ref_files = sorted(REF_DIR.glob("*.md"))
+
+    def test_pin_table_lists_the_tools_the_examples_install(self) -> None:
+        self.assertGreaterEqual(len(self.table), 5,
+                                f"§11 pin table did not parse: {self.table}")
+        installed = {
+            m.group("path")
+            for path in self.ref_files
+            for m in GO_INSTALL_RE.finditer(path.read_text())
+        }
+        missing = installed - set(self.table)
+        self.assertFalse(missing, f"tools installed in examples but absent from §11: {missing}")
+
+    def test_every_go_install_matches_the_pin_table(self) -> None:
+        """Eleven copies of five tool pins were scattered over five files with
+        no cross-check; all five had rotted by several minor versions."""
+        drift = []
+        for path in self.ref_files:
+            for m in GO_INSTALL_RE.finditer(path.read_text()):
+                want = self.table.get(m.group("path"))
+                if want and m.group("version") != want:
+                    drift.append(f"{path.name}: {m.group('path')}@{m.group('version')} != §11 {want}")
+        self.assertFalse(drift, "tool pins drifted from §11:\n" + "\n".join(drift))
+
+    def test_no_go_install_at_latest(self) -> None:
+        for path in self.ref_files:
+            for m in GO_INSTALL_RE.finditer(path.read_text()):
+                self.assertNotEqual("latest", m.group("version").lstrip("@"),
+                                    f"{path.name}: {m.group('path')} installed @latest")
+
+    def test_prose_tool_versions_match_the_pin_table(self) -> None:
+        """Output-summary tables quoted `golangci-lint v2.6.2` in prose. Prose
+        is a second copy and rots the same way — bind it to §11 too."""
+        by_tool = {
+            m.group("tool"): m.group("version")
+            for m in TOOL_ROW_RE.finditer(WORKFLOW_GUIDE.read_text())
+        }
+        drift = []
+        for path in self.ref_files:
+            text = path.read_text()
+            for tool, want in by_tool.items():
+                for m in re.finditer(re.escape(tool) + r"\s+(v\d+\.\d+\.\d+)", text):
+                    if m.group(1) != want:
+                        drift.append(f"{path.name}: {tool} {m.group(1)} != §11 {want}")
+        self.assertFalse(drift, "prose tool versions drifted from §11:\n" + "\n".join(drift))
+
+    def test_no_bare_stale_action_major_anywhere(self) -> None:
+        """Catches version guidance written as prose rather than as a `uses:`
+        line — the hole that let pr-checklist.md keep recommending `@v4`."""
+        policy_majors = {
+            m.group("major")
+            for m in re.finditer(r"\|\s*`[A-Za-z0-9_./-]+`\s*\|\s*`v(?P<major>\d+)`\s*\|",
+                                 WORKFLOW_GUIDE.read_text())
+        }
+        self.assertTrue(policy_majors, "§16 policy table did not parse")
+        # A bare `@vN` names no action, so it cannot be checked against §16 and
+        # cannot be acted on by a reader — `@v4` is current for
+        # dorny/paths-filter and four majors stale for actions/checkout at the
+        # same time. Version examples must carry their action.
+        offenders = []
+        for path in self.ref_files + [SKILL_MD]:
+            for m in BARE_MAJOR_RE.finditer(path.read_text()):
+                offenders.append(f"{path.name}: `@v{m.group('major')}` names no action")
+        self.assertFalse(offenders,
+                         "unattributed action version example:\n" + "\n".join(offenders))
+
+
+# ------------------------------------------------------------------
+# TestCrossReferences — every `*.md` pointer must resolve
+# ------------------------------------------------------------------
+
+MD_REF_RE = re.compile(r"`(?P<name>[A-Za-z0-9._/-]+\.md)`")
+
+
+class TestCrossReferences(unittest.TestCase):
+    def test_every_referenced_md_file_exists(self) -> None:
+        """`golden-examples.md` pointed readers at `advanced-patterns.md` — a
+        file that does not exist (the real name is
+        `github-actions-advanced-patterns.md`). It sat in an always-loaded file,
+        on the fork-PR safety pointer, and no test looked at links at all."""
+        broken = []
+        for path in sorted(REF_DIR.glob("*.md")) + [SKILL_MD]:
+            for m in MD_REF_RE.finditer(path.read_text()):
+                target = m.group("name")
+                if any((base / target).exists() for base in (REF_DIR, SKILL_DIR)):
+                    continue
+                broken.append(f"{path.name} -> {target}")
+        self.assertFalse(broken, "dangling cross-references:\n" + "\n".join(broken))
+
+    def test_skill_md_names_every_reference_file(self) -> None:
+        """A reference nothing points to is dead weight in the skill bundle."""
+        # SKILL.md writes them as `references/<name>.md`; compare basenames.
+        named = {Path(n).name for n in MD_REF_RE.findall(SKILL_MD.read_text())}
+        shipped = {p.name for p in REF_DIR.glob("*.md")}
+        self.assertFalse(shipped - named,
+                         f"reference files never named by SKILL.md: {shipped - named}")

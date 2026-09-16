@@ -18,11 +18,15 @@ Use this checklist for quick and reliable review of GitHub Actions CI workflow P
 - `cache: true` enabled in `actions/setup-go`.
 - Each job sets up Go independently (no shared state assumption).
 
-## 4) Make Parity
-- Every CI job delegates to a `make` target.
+## 4) Local Parity
+- Every CI job delegates to a repo-native entrypoint — a `make` target, or a
+  committed task runner (`Taskfile.yml`, `mage`, `scripts/*.sh`) when the repo
+  uses one instead of Make. See SKILL.md § Execution Priority.
 - If inline fallback exists, it is explicitly labeled as fallback.
-- Corresponding `make ci-*` targets exist in Makefile for local parity.
-- Configuration overrides (e.g., `COVER_MIN`) passed as Make variables.
+- The corresponding target/task exists locally, so a developer can reproduce the
+  job with one command.
+- Configuration overrides (e.g., `COVER_MIN`) passed as Make variables or task
+  arguments — not duplicated as literals in the workflow.
 
 ## 5) Tool Management
 - All `go install` commands use exact pinned versions (no `@latest`).
@@ -39,7 +43,9 @@ Use this checklist for quick and reliable review of GitHub Actions CI workflow P
 - Secrets use `${{ secrets.* }}` (never hardcoded).
 - Secret-dependent jobs gated against fork PRs.
 - No sensitive data in job logs.
-- `actions/*` pinned to major version tags (e.g., `@v4`, `@v5`).
+- `actions/*` pinned to the majors in `workflow-quality-guide.md` §16 (that
+  table is the single source of truth — do not copy a version from here), or to
+  a full commit SHA for high-security repos.
 - `permissions` minimized for the workflow or job.
 
 ## 8) Caching and Performance

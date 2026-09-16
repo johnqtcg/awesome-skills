@@ -5,17 +5,39 @@
   "context": {
     "go_mod_count": 1,
     "has_makefile": true,
-    "makefile_targets": ["ci", "docker-build"],
+    "makefile_targets": [
+      "ci",
+      "docker-build"
+    ],
     "has_dockerfile": true,
     "dockerfile_count": 3,
-    "dockerfile_paths": ["Dockerfile", "Dockerfile.worker", "Dockerfile.migrate"],
-    "build_args": ["APP", "VERSION"],
+    "dockerfile_paths": [
+      "Dockerfile",
+      "Dockerfile.worker",
+      "Dockerfile.migrate"
+    ],
+    "build_args": [
+      "APP",
+      "VERSION"
+    ],
     "has_golangci_lint_config": true,
-    "test_types": ["unit"],
+    "test_types": [
+      "unit"
+    ],
     "existing_workflows": []
   },
-  "expected_gates": ["Repository Shape Gate", "Local Parity Gate", "Security and Permissions Gate"],
-  "expected_output_fields": ["repository shape classification", "job list", "execution path for each job", "trigger configuration", "permissions"],
+  "expected_gates": [
+    "Repository Shape Gate",
+    "Local Parity Gate",
+    "Security and Permissions Gate"
+  ],
+  "expected_output_fields": [
+    "repository shape classification",
+    "job list",
+    "execution path for each job",
+    "trigger configuration",
+    "permissions"
+  ],
   "expected_shape": "Docker-heavy repository",
   "skill_rules_that_must_fire": [
     "Repository Shape Gate",
@@ -25,5 +47,8 @@
     "docker-build",
     "permissions",
     "concurrency"
+  ],
+  "load_references": [
+    "repository-shapes.md"
   ]
 }

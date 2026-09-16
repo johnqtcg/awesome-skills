@@ -5,17 +5,38 @@
   "context": {
     "go_mod_count": 1,
     "has_makefile": true,
-    "makefile_targets": ["ci", "docker-build"],
+    "makefile_targets": [
+      "ci",
+      "docker-build"
+    ],
     "has_dockerfile": true,
     "has_golangci_lint_config": true,
-    "test_types": ["unit"],
+    "test_types": [
+      "unit"
+    ],
     "existing_workflows": []
   },
-  "expected_gates": ["Repository Shape Gate", "Local Parity Gate", "Security and Permissions Gate", "Execution Integrity Gate"],
-  "expected_output_fields": ["repository shape classification", "job list", "execution path for each job", "trigger configuration", "permissions", "tool versions", "validation performed"],
+  "expected_gates": [
+    "Repository Shape Gate",
+    "Local Parity Gate",
+    "Security and Permissions Gate",
+    "Execution Integrity Gate"
+  ],
+  "expected_output_fields": [
+    "repository shape classification",
+    "job list",
+    "execution path for each job",
+    "trigger configuration",
+    "permissions",
+    "tool versions",
+    "validation performed"
+  ],
   "expected_shape": "single-module application",
   "expected_parity_level": "full",
-  "expected_jobs": ["ci", "docker-build"],
+  "expected_jobs": [
+    "ci",
+    "docker-build"
+  ],
   "expected_execution_paths": {
     "ci": "make target",
     "docker-build": "make target"
@@ -30,5 +51,6 @@
     "permissions",
     "concurrency",
     "cancel-in-progress"
-  ]
+  ],
+  "load_references": []
 }

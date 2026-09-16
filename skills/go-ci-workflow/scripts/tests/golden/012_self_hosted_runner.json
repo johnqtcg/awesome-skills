@@ -5,10 +5,16 @@
   "context": {
     "go_mod_count": 1,
     "has_makefile": true,
-    "makefile_targets": ["ci"],
+    "makefile_targets": [
+      "ci"
+    ],
     "has_dockerfile": false,
     "runner_type": "self-hosted",
-    "runner_labels": ["self-hosted", "linux", "x64"],
+    "runner_labels": [
+      "self-hosted",
+      "linux",
+      "x64"
+    ],
     "air_gapped": false,
     "existing_workflows": []
   },
@@ -19,11 +25,16 @@
     "Execution Integrity Gate"
   ],
   "expected_shape": "single-module application",
-  "expected_jobs": ["ci"],
+  "expected_jobs": [
+    "ci"
+  ],
   "skill_rules_that_must_fire": [
     "Self-Hosted Runners",
     "self-hosted",
     "permissions",
     "Do not silently reuse GitHub-hosted assumptions"
+  ],
+  "load_references": [
+    "github-actions-advanced-patterns.md"
   ]
 }

@@ -16,14 +16,31 @@
 #   - app-vs-library is a heuristic (presence of `package main`), not a verdict;
 #   - it does NOT parse Taskfile/mage task bodies, only detects their presence;
 #   - CGO, codegen, cross-platform, and private-module needs are not inferred;
-#   - TSV assumes paths contain no literal tab or newline (true for ~all Go repos).
+#   - TSV assumes paths contain no literal tab or newline (true for ~all Go repos);
+#   - Dockerfiles are searched to DOCKERFILE_MAX_DEPTH (4) below the root, which
+#     covers `./Dockerfile`, `build/`, `cmd/<app>/`, and `deployments/docker/<app>/`
+#     but NOT deeper burials — a repo that hides them lower will under-report;
+#   - only the PRUNE list below is excluded. A first-party tree with an unusual
+#     name (e.g. `examples/`, `hack/`, generated site output) is still scanned
+#     and can contribute targets the repo does not actually own.
 set -u
 
-# Directories that never indicate first-party module structure. Vendored and
-# generated trees carry their own go.mod files; counting them as "nested
-# modules" would misclassify an ordinary single-module repo as multi-module.
-# Kept as quoted -not -path filters at each find call site (an unquoted glob
-# list would be pathname-expanded by the shell before find ever sees it).
+# Directories that never indicate first-party repository structure. Vendored,
+# generated, and dependency trees carry their own Makefiles, go.mod files,
+# Dockerfiles, and test directories; counting any of them as first-party would
+# make the skill promise CI parity with a target the repo does not own.
+#
+# This list is applied to EVERY probe, not just the module probe. An earlier
+# version pruned only the go.mod probe, so a repo with `vendor/` reported its
+# dependencies' `ci:` targets and `test/integration` directories as its own.
+PRUNE=(
+  -not -path '*/vendor/*'
+  -not -path '*/node_modules/*'
+  -not -path '*/testdata/*'
+  -not -path '*/third_party/*'
+  -not -path '*/.git/*'
+)
+DOCKERFILE_MAX_DEPTH=4
 
 root="${1:-.}"
 cd "$root" || { printf 'error\tcannot-cd\t%s\n' "$root" >&2; exit 2; }
@@ -36,7 +53,7 @@ while IFS= read -r makefile; do
   grep -E '^(ci|ci-[a-zA-Z0-9_-]+|docker-build):' "$makefile" 2>/dev/null | while IFS=: read -r target _; do
     printf "makefile-target\t%s\t%s\n" "$target" "$rel"
   done
-done < <(find . -name Makefile -type f 2>/dev/null | sort)
+done < <(find . -name Makefile -type f "${PRUNE[@]}" 2>/dev/null | sort)
 
 # 2. Alternative repo task entrypoints
 for taskfile in Taskfile.yml Taskfile.yaml; do
@@ -44,22 +61,28 @@ for taskfile in Taskfile.yml Taskfile.yaml; do
 done
 [ -f magefile.go ] && printf "repo-task\tmage\tmagefile.go\n"
 if [ -d scripts ]; then
-  find scripts -maxdepth 2 -type f \( -name '*.sh' -o -name '*.bash' \) 2>/dev/null | sort | while read -r script; do
+  find scripts -maxdepth 2 -type f \( -name '*.sh' -o -name '*.bash' \) "${PRUNE[@]}" 2>/dev/null | sort | while read -r script; do
     printf "repo-task\tscript\t%s\n" "$script"
   done
 fi
 
-# 3. Dockerfile presence
-find . -maxdepth 2 -type f \( -name 'Dockerfile' -o -name 'Dockerfile.*' \) 2>/dev/null | sort | while read -r df; do
+# 3. Dockerfile presence. Depth-limited (see DOCKERFILE_MAX_DEPTH in LIMITS):
+# monorepos keep them at `services/<app>/Dockerfile` or `cmd/<app>/Dockerfile`,
+# which an earlier -maxdepth 2 missed entirely — reporting zero containers for
+# exactly the repository shape this skill emphasises.
+find . -maxdepth "$DOCKERFILE_MAX_DEPTH" -type f \( -name 'Dockerfile' -o -name 'Dockerfile.*' \) \
+  "${PRUNE[@]}" 2>/dev/null | sort | while read -r df; do
   rel="${df#./}"
   printf "container\t%s\t%s\n" "$rel" "$rel"
 done
 
 # 4. Test categories
-find . -type d \( -path '*/tests/integration' -o -path '*/test/integration' \) 2>/dev/null | sort | while read -r dir; do
+find . -type d \( -path '*/tests/integration' -o -path '*/test/integration' \) \
+  "${PRUNE[@]}" 2>/dev/null | sort | while read -r dir; do
   printf "test-type\tintegration\t%s\n" "${dir#./}"
 done
-find . -type d \( -path '*/tests/e2e' -o -path '*/test/e2e' \) 2>/dev/null | sort | while read -r dir; do
+find . -type d \( -path '*/tests/e2e' -o -path '*/test/e2e' \) \
+  "${PRUNE[@]}" 2>/dev/null | sort | while read -r dir; do
   printf "test-type\te2e\t%s\n" "${dir#./}"
 done
 
@@ -81,10 +104,7 @@ while IFS= read -r gomod; do
   toolchain=$(awk '/^toolchain / {print $2}' "$gomod" 2>/dev/null)
   [ -n "$toolchain" ] && printf "config\ttoolchain\t%s (%s)\n" "$rel" "$toolchain"
   [ "$rel" != "go.mod" ] && has_nested_go_mod=1
-done < <(find . -type f -name go.mod \
-  -not -path '*/vendor/*' -not -path '*/testdata/*' \
-  -not -path '*/third_party/*' -not -path '*/node_modules/*' \
-  -not -path '*/.git/*' 2>/dev/null | sort)
+done < <(find . -type f -name go.mod "${PRUNE[@]}" 2>/dev/null | sort)
 
 if [ -f go.mod ]; then
   printf "shape\tsingle-root-module\tgo.mod\n"
@@ -118,7 +138,8 @@ if [ -d .github/workflows ]; then
 fi
 
 # 8. Detect tools referenced in Makefiles and scripts
-tool_sources=$(find . \( -name Makefile -o -path './scripts/*.sh' -o -path './scripts/*.bash' \) -type f 2>/dev/null)
+tool_sources=$(find . \( -name Makefile -o -path './scripts/*.sh' -o -path './scripts/*.bash' \) \
+  -type f "${PRUNE[@]}" 2>/dev/null)
 if [ -n "$tool_sources" ]; then
   printf '%s\n' "$tool_sources" \
     | xargs grep -h -oE '(golangci-lint|swag|goimports-reviser|govulncheck|fieldalignment|protoc|mockgen|wire|gosec|nilaway)' 2>/dev/null \

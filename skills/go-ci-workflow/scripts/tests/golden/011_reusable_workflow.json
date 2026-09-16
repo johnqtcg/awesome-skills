@@ -5,11 +5,19 @@
   "context": {
     "go_mod_count": 1,
     "has_makefile": true,
-    "makefile_targets": ["ci"],
+    "makefile_targets": [
+      "ci"
+    ],
     "has_dockerfile": false,
     "consumer_repo_count": 4,
-    "shared_workflow_steps": ["go-setup", "lint", "test"],
-    "existing_workflows": ["ci.yml"]
+    "shared_workflow_steps": [
+      "go-setup",
+      "lint",
+      "test"
+    ],
+    "existing_workflows": [
+      "ci.yml"
+    ]
   },
   "expected_gates": [
     "Repository Shape Gate",
@@ -18,12 +26,17 @@
     "Execution Integrity Gate"
   ],
   "expected_shape": "reusable-workflow candidate",
-  "expected_jobs": ["ci"],
+  "expected_jobs": [
+    "ci"
+  ],
   "skill_rules_that_must_fire": [
     "reusable-workflow candidate",
     "workflow_call",
     "Reusable Workflows",
     "Composite Action",
     "Step-level sharing"
+  ],
+  "load_references": [
+    "github-actions-advanced-patterns.md"
   ]
 }

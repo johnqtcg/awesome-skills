@@ -55,8 +55,9 @@ Add concurrency control to cancel redundant PR runs:
 
 ```yaml
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # per-PR group; per-commit on push so main runs never cancel each other
+  group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 ```
 
 For secret-dependent jobs, also consider event trust boundaries and `permissions`. See `github-actions-advanced-patterns.md`.
@@ -104,6 +105,7 @@ The primary quality gate. Must be fast and comprehensive:
 ci:
   name: Format · Test · Lint · Build
   runs-on: ubuntu-latest
+  timeout-minutes: 15
   steps:
     - uses: actions/checkout@v7
 
@@ -114,7 +116,7 @@ ci:
         cache: true
 
     - name: Install golangci-lint
-      run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2
+      run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
 
     - name: Run CI gate
       run: make ci COVER_MIN=80
@@ -126,6 +128,42 @@ Key principles:
 - Pass configuration overrides (like `COVER_MIN`) as Make variables.
 - If the repository does not have `make ci`, either use another committed task entrypoint or mark the job as fallback.
 
+### Non-Make task runners (the `repo task` execution path)
+
+Make is the default, not a requirement. When the repository already standardises
+on another committed runner, delegate to **that** — mirroring the repo beats
+importing a Makefile it does not have. This is the `repo task` path in the
+Output Contract; classify the job as `repo task`, not `make target`.
+
+The runner binary is a pinned tool like any other, so install it with the same
+exact-version rule as §11:
+
+```yaml
+    # Taskfile.yml — go-task/task
+    - name: Install task
+      run: go install github.com/go-task/task/v3/cmd/task@v3.53.1
+    - name: Run CI gate
+      run: task ci
+
+    # magefile.go — magefile/mage
+    - name: Install mage
+      run: go install github.com/magefile/mage@v1.17.2
+    - name: Run CI gate
+      run: mage ci
+
+    # committed shell entrypoint
+    - name: Run CI gate
+      run: ./scripts/ci.sh
+```
+
+Re-verify these tool versions at generation time exactly as §16 requires for
+actions — they rot the same way. A committed `scripts/ci.sh` needs no install
+step, which makes it the cheapest parity entrypoint for a repo that has neither
+Make nor a task runner.
+
+Only after none of these exist does the job become an `inline fallback` — see
+`fallback-and-scaffolding.md`.
+
 ## 5. Docker Build Job
 
 Verifies the container image builds successfully without pushing:
@@ -134,6 +172,7 @@ Verifies the container image builds successfully without pushing:
 docker-build:
   name: Docker Image Build
   runs-on: ubuntu-latest
+  timeout-minutes: 10
   steps:
     - uses: actions/checkout@v7
 
@@ -159,6 +198,7 @@ For API and service-to-service integration tests:
 api-integration:
   name: API Integration
   runs-on: ubuntu-latest
+  timeout-minutes: 20
   steps:
     - uses: actions/checkout@v7
 
@@ -185,6 +225,7 @@ End-to-end tests are expensive. Run conditionally:
 e2e:
   name: E2E Journey
   runs-on: ubuntu-latest
+  timeout-minutes: 30
   if: github.event_name == 'push' || github.event_name == 'schedule'
   steps:
     - uses: actions/checkout@v7
@@ -211,6 +252,7 @@ Key principles:
 govulncheck:
   name: Dependency Vulnerability Check
   runs-on: ubuntu-latest
+  timeout-minutes: 10
   steps:
     - uses: actions/checkout@v7
 
@@ -221,7 +263,7 @@ govulncheck:
         cache: true
 
     - name: Install govulncheck
-      run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+      run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
 
     - name: Run govulncheck
       run: govulncheck ./...
@@ -237,6 +279,7 @@ Optional jobs for additional quality checks:
 fieldalignment:
   name: Struct Field Alignment Check
   runs-on: ubuntu-latest
+  timeout-minutes: 10
   steps:
     - uses: actions/checkout@v7
 
@@ -247,7 +290,7 @@ fieldalignment:
         cache: true
 
     - name: Install fieldalignment
-      run: go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@v0.42.0
+      run: go install golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment@v0.50.0
 
     - name: Run fieldalignment
       run: $(go env GOPATH)/bin/fieldalignment ./...
@@ -286,20 +329,41 @@ Pin exact versions. Match between CI workflow and Makefile:
 ```yaml
 # CI workflow
 - name: Install golangci-lint v2
-  run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2
+  run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
 ```
 
 ```make
 # Makefile (must match)
-GOLANGCI_LINT_VERSION ?= v2.6.2
+GOLANGCI_LINT_VERSION ?= v2.13.2
 ```
 
+### Pinned tool versions used throughout this skill (single source of truth)
+
+Same contract as §16 for actions: every `go install` in every example must use
+the version in this table, and `TestToolVersionCurrency` fails if they drift.
+
+| Tool | Install path | Pinned | Latest verified |
+|------|--------------|--------|-----------------|
+| golangci-lint | `github.com/golangci/golangci-lint/v2/cmd/golangci-lint` | `v2.13.2` | 2026-09-16 |
+| govulncheck | `golang.org/x/vuln/cmd/govulncheck` | `v1.8.0` | 2026-09-16 |
+| fieldalignment | `golang.org/x/tools/go/analysis/passes/fieldalignment/cmd/fieldalignment` | `v0.50.0` | 2026-09-16 |
+| task | `github.com/go-task/task/v3/cmd/task` | `v3.53.1` | 2026-09-16 |
+| mage | `github.com/magefile/mage` | `v1.17.2` | 2026-09-16 |
+
 Rules:
-- Every `go install` in CI must use an exact version tag.
+- Every `go install` in CI must use an exact version tag — never `@latest`.
 - Tool versions in CI must match the Makefile `install-tools` target.
 - When upgrading a tool, update both CI and Makefile simultaneously.
 - Prefer `go install` over `curl | sh` for Go tools.
-- Versions in this guide are examples current at time of writing. Before generating a workflow, verify the latest stable release of each tool and use that version. When in doubt, check the tool's GitHub releases page.
+- **Re-verify before generating**, exactly as §16 requires for actions — these
+  rot on the same clock. The table records when it was last checked, not a
+  guarantee that it is still current:
+  ```bash
+  gh api repos/golangci/golangci-lint/releases/latest --jq .tag_name
+  gh api repos/golang/vuln/tags --jq '.[0].name'
+  ```
+  If the real latest is higher, prefer it and update the table and every example
+  together.
 
 ## 12. Secret Management
 
@@ -328,6 +392,7 @@ ci:
     matrix:
       go-version: ['1.22', '1.23']
   runs-on: ubuntu-latest
+  timeout-minutes: 15
   steps:
     - uses: actions/setup-go@v7
       with:

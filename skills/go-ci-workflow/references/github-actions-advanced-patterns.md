@@ -13,6 +13,27 @@ permissions:
 
 Add extra scopes only when required. Do not default to broad write permissions.
 
+**Declaring a `permissions:` block sets every scope you did not list to `none`.**
+It replaces the default token grant, it does not add to it. This is the single
+most common permissions mistake:
+
+```yaml
+# WRONG — contents is now `none`, so actions/checkout fails with a 403
+publish:
+  permissions:
+    packages: write
+
+# CORRECT — re-list every scope the job needs
+publish:
+  permissions:
+    contents: read
+    packages: write
+```
+
+The same replacement rule applies between levels: a job-level `permissions:`
+block **overrides** the workflow-level block for that job rather than merging
+with it. A job that escalates one scope must restate the ones it still needs.
+
 Common permission escalations and when they apply:
 
 | Permission | When Needed |
@@ -32,11 +53,13 @@ permissions:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     # inherits workflow-level contents: read
     steps: ...
 
   publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: read
       packages: write
@@ -63,6 +86,7 @@ api-integration:
     (github.event_name == 'pull_request' &&
      github.event.pull_request.head.repo.full_name == github.repository)
   runs-on: ubuntu-latest
+  timeout-minutes: 20
   steps:
     - name: Run integration tests
       run: make ci-api-integration
@@ -115,6 +139,7 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-go@v7
@@ -159,7 +184,7 @@ runs:
         cache: true
     - name: Install golangci-lint
       shell: bash
-      run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2
+      run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
 ```
 
 Usage:
@@ -167,6 +192,8 @@ Usage:
 ```yaml
 jobs:
   ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: ./.github/actions/setup-go-env
       - run: make ci
@@ -235,6 +262,22 @@ Publish artifacts when they help diagnosis:
 - set reasonable `timeout-minutes` per job
 - do not rely on GitHub defaults for expensive jobs
 
+**Cancel PR runs, not `main` runs.** A blanket `cancel-in-progress: true` also
+cancels in-flight runs on `main` when commits land back-to-back, so a merged
+commit can end up with no completed CI run at all — and if anything downstream
+(release, deploy, coverage upload) keys off that run, it never happens. Gate the
+cancellation on the event instead:
+
+```yaml
+concurrency:
+  # one group per PR; per-commit on push so main runs never collide
+  group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+```
+
+Use the unconditional `cancel-in-progress: true` only for workflows that never
+run on a protected branch.
+
 Recommended timeouts:
 
 | Job Type | Timeout |
@@ -252,6 +295,7 @@ Use GitHub Actions `services:` for integration tests that need databases, caches
 ```yaml
 api-integration:
   runs-on: ubuntu-latest
+  timeout-minutes: 20
   services:
     postgres:
       image: postgres:16-alpine

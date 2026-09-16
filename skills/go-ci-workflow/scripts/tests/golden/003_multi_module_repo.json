@@ -4,16 +4,34 @@
   "scenario_type": "multi_module",
   "context": {
     "go_mod_count": 3,
-    "go_mod_paths": ["go.mod", "pkg/client/go.mod", "tools/go.mod"],
+    "go_mod_paths": [
+      "go.mod",
+      "pkg/client/go.mod",
+      "tools/go.mod"
+    ],
     "has_makefile": true,
-    "makefile_targets": ["ci"],
+    "makefile_targets": [
+      "ci"
+    ],
     "has_dockerfile": false,
     "has_golangci_lint_config": true,
-    "test_types": ["unit"],
+    "test_types": [
+      "unit"
+    ],
     "existing_workflows": []
   },
-  "expected_gates": ["Repository Shape Gate", "Local Parity Gate", "Security and Permissions Gate"],
-  "expected_output_fields": ["repository shape classification", "job list", "execution path for each job", "trigger configuration", "missing targets"],
+  "expected_gates": [
+    "Repository Shape Gate",
+    "Local Parity Gate",
+    "Security and Permissions Gate"
+  ],
+  "expected_output_fields": [
+    "repository shape classification",
+    "job list",
+    "execution path for each job",
+    "trigger configuration",
+    "missing targets"
+  ],
   "expected_shape": "multi-module repository",
   "expected_parity_level": "full",
   "skill_rules_that_must_fire": [
@@ -23,5 +41,8 @@
     "Local Parity Gate",
     "go-version-file",
     "permissions"
+  ],
+  "load_references": [
+    "repository-shapes.md"
   ]
 }

@@ -5,17 +5,42 @@
   "context": {
     "go_mod_count": 1,
     "has_makefile": true,
-    "makefile_targets": ["ci", "ci-api-integration"],
+    "makefile_targets": [
+      "ci",
+      "ci-api-integration"
+    ],
     "has_dockerfile": true,
     "has_golangci_lint_config": true,
-    "test_types": ["unit", "integration"],
-    "integration_dependencies": ["mysql", "redis"],
-    "test_dirs": ["tests/integration"],
+    "test_types": [
+      "unit",
+      "integration"
+    ],
+    "integration_dependencies": [
+      "mysql",
+      "redis"
+    ],
+    "test_dirs": [
+      "tests/integration"
+    ],
     "existing_workflows": []
   },
-  "expected_gates": ["Repository Shape Gate", "Local Parity Gate", "Security and Permissions Gate"],
-  "expected_output_fields": ["repository shape classification", "job list", "execution path for each job", "trigger configuration", "permissions"],
-  "expected_jobs": ["ci", "api-integration", "docker-build"],
+  "expected_gates": [
+    "Repository Shape Gate",
+    "Local Parity Gate",
+    "Security and Permissions Gate"
+  ],
+  "expected_output_fields": [
+    "repository shape classification",
+    "job list",
+    "execution path for each job",
+    "trigger configuration",
+    "permissions"
+  ],
+  "expected_jobs": [
+    "ci",
+    "api-integration",
+    "docker-build"
+  ],
   "skill_rules_that_must_fire": [
     "Repository Shape Gate",
     "Local Parity Gate",
@@ -23,6 +48,15 @@
     "integration",
     "ci-api-integration",
     "permissions",
-    "concurrency"
+    "concurrency",
+    "--health-cmd",
+    "127.0.0.1",
+    "only available on Linux runners",
+    "mysql:8.0",
+    "redis:7-alpine"
+  ],
+  "load_references": [
+    "github-actions-advanced-patterns.md",
+    "golden-example-service-containers.md"
   ]
 }

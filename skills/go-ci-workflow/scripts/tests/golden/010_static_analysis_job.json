@@ -5,12 +5,22 @@
   "context": {
     "go_mod_count": 1,
     "has_makefile": true,
-    "makefile_targets": ["ci", "vuln", "fieldalignment"],
+    "makefile_targets": [
+      "ci",
+      "vuln",
+      "fieldalignment"
+    ],
     "has_dockerfile": false,
     "has_golangci_lint_config": true,
-    "test_types": ["unit"],
-    "security_tools": ["govulncheck"],
-    "static_analysis_tools": ["fieldalignment"],
+    "test_types": [
+      "unit"
+    ],
+    "security_tools": [
+      "govulncheck"
+    ],
+    "static_analysis_tools": [
+      "fieldalignment"
+    ],
     "existing_workflows": []
   },
   "expected_gates": [
@@ -19,7 +29,10 @@
     "Security and Permissions Gate",
     "Execution Integrity Gate"
   ],
-  "expected_jobs": ["ci", "govulncheck"],
+  "expected_jobs": [
+    "ci",
+    "govulncheck"
+  ],
   "expected_shape": "single-module application",
   "skill_rules_that_must_fire": [
     "Vulnerability Scanning",
@@ -27,5 +40,6 @@
     "Static Analysis Extras",
     "schedule",
     "permissions"
-  ]
+  ],
+  "load_references": []
 }

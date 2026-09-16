@@ -5,10 +5,16 @@
   "context": {
     "go_mod_count": 1,
     "has_makefile": true,
-    "makefile_targets": ["ci", "ci-e2e"],
+    "makefile_targets": [
+      "ci",
+      "ci-e2e"
+    ],
     "has_dockerfile": true,
     "has_golangci_lint_config": true,
-    "test_types": ["unit", "e2e"],
+    "test_types": [
+      "unit",
+      "e2e"
+    ],
     "e2e_target": "ci-e2e",
     "existing_workflows": []
   },
@@ -18,14 +24,18 @@
     "Security and Permissions Gate",
     "Execution Integrity Gate"
   ],
-  "expected_jobs": ["ci", "e2e"],
+  "expected_jobs": [
+    "ci",
+    "e2e"
+  ],
   "expected_shape": "single-module application",
   "skill_rules_that_must_fire": [
     "E2E Test Job",
     "schedule",
     "push",
-    "30 min",
+    "timeout-minutes: 30",
     "permissions",
     "concurrency"
-  ]
+  ],
+  "load_references": []
 }

@@ -7,6 +7,10 @@ Use this file when repository structure is incomplete.
 ### Level A: Full parity
 
 - every job maps to a Makefile target or repo-native task
+- a repo that uses `Taskfile.yml`, `mage`, or a committed `scripts/ci.sh`
+  instead of Make is at Level A, not a fallback — delegate to what the repo
+  actually has. See `workflow-quality-guide.md` §4 "Non-Make task runners" for
+  the worked delegation steps. Classify those jobs as `repo task`.
 
 ### Level B: Partial parity
 

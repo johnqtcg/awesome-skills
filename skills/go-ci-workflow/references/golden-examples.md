@@ -39,8 +39,9 @@ on:
     - cron: '0 3 * * 1'  # Weekly Monday 03:00 UTC
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # per-PR group; per-commit on push so main runs never cancel each other
+  group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -60,7 +61,7 @@ jobs:
           cache: true
 
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
 
       - name: Run CI gate
         run: make ci COVER_MIN=80
@@ -90,7 +91,7 @@ jobs:
           cache: true
 
       - name: Install govulncheck
-        run: go install golang.org/x/vuln/cmd/govulncheck@v1.1.4
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
 
       - name: Run govulncheck
         run: govulncheck ./...
@@ -107,7 +108,7 @@ jobs:
 | govulncheck execution path | `inline` (tool not managed by Makefile) |
 | Trigger | PR: ci + docker-build; push: all; schedule: govulncheck |
 | Permissions | `contents: read` |
-| Tool versions | golangci-lint v2.6.2, govulncheck v1.1.4 |
+| Tool versions | golangci-lint v2.13.2, govulncheck v1.8.0 |
 | Missing targets | none |
 | Validation | YAML reviewed, make targets verified |
 
@@ -133,8 +134,9 @@ on:
   pull_request:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # per-PR group; per-commit on push so main runs never cancel each other
+  group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -154,7 +156,7 @@ jobs:
           cache: true
 
       - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2
+        run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.13.2
 
       # INLINE FALLBACK — no make target available
       - name: Check formatting
@@ -208,8 +210,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # per-PR group; per-commit on push so main runs never cancel each other
+  group: ${{ github.workflow }}-${{ github.head_ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   ci:
@@ -248,4 +251,4 @@ jobs:
 | Fork PR guard | `if: github.event.pull_request.head.repo.full_name == github.repository` |
 | Local parity | full (core gate); partial (secret steps skipped for fork contributors) |
 | Missing targets | none |
-| Recommended follow-up | never use `pull_request_target` for CI; see `advanced-patterns.md` § 2) Fork PR Safety |
+| Recommended follow-up | never use `pull_request_target` for CI; see `github-actions-advanced-patterns.md` § 2) Fork PR Safety |

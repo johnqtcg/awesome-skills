@@ -91,6 +91,62 @@ class DiscoverScriptTests(unittest.TestCase):
             "vendored go.mod leaked into go-version discovery",
         )
 
+    def test_dependency_trees_leak_into_no_probe(self) -> None:
+        """Pruning must apply to EVERY probe, not just the go.mod one.
+
+        Regression: pruning was added to the module probe only, so a repo with
+        `vendor/` reported its dependencies' `ci:` targets and their
+        `test/integration` directories as first-party CI needs — feeding the
+        Local Parity Gate targets the repo cannot actually run.
+        """
+        (self.repo / "go.mod").write_text("module app\n\ngo 1.23\n")
+        (self.repo / "Makefile").write_text("ci:\n\techo real\n")
+
+        dep = self.repo / "vendor" / "github.com" / "dep"
+        (dep / "test" / "integration").mkdir(parents=True)
+        (dep / "Makefile").write_text("ci:\n\techo VENDORED\nci-deploy:\n\techo x\n")
+        nm = self.repo / "node_modules" / "pkg"
+        nm.mkdir(parents=True)
+        (nm / "Makefile").write_text("docker-build:\n\techo NODEMODULES\n")
+        (nm / "Dockerfile").write_text("FROM scratch\n")
+
+        proc = run_discovery(self.repo)
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        rows = tsv_rows(proc)
+
+        self.assertIn(("makefile-target", "ci", "Makefile"), rows)
+        for row in rows:
+            for field in row:
+                self.assertNotIn("vendor/", field, f"vendored tree leaked: {row}")
+                self.assertNotIn("node_modules/", field, f"dependency tree leaked: {row}")
+        self.assertFalse(
+            any(r[0] == "makefile-target" and r[1] == "ci-deploy" for r in rows),
+            "a vendored Makefile target was reported as a first-party CI target",
+        )
+
+    def test_monorepo_dockerfiles_below_depth_two_are_found(self) -> None:
+        """`services/<app>/Dockerfile` and `cmd/<app>/Dockerfile` are the
+        canonical monorepo layout this skill documents. A -maxdepth 2 probe
+        reported ZERO containers for them, so the docker-build job was silently
+        dropped for exactly the shape the skill emphasises.
+        """
+        (self.repo / "go.mod").write_text("module app\n\ngo 1.23\n")
+        for sub in ("services/api", "cmd/gateway", "deployments/docker/worker"):
+            (self.repo / sub).mkdir(parents=True)
+            (self.repo / sub / "Dockerfile").write_text("FROM scratch\n")
+
+        proc = run_discovery(self.repo)
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        found = {r[1] for r in tsv_rows(proc) if r[0] == "container"}
+        self.assertEqual(
+            {
+                "services/api/Dockerfile",
+                "cmd/gateway/Dockerfile",
+                "deployments/docker/worker/Dockerfile",
+            },
+            found,
+        )
+
     def test_go_workspace_detected(self) -> None:
         (self.repo / "go.work").write_text("go 1.23\n\nuse (\n  .\n  ./svc/api\n)\n")
         (self.repo / "go.mod").write_text("module root\n\ngo 1.23\n")
