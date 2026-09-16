@@ -50,31 +50,75 @@ class TestFrontmatter:
 
 
 # ──────────────────────────────────────────────────────────────────────
+def gate_body(n: int) -> str:
+    """The body of Gate N, from its own heading to the next heading.
+
+    Every assertion about a gate must read THIS, not the whole document. The
+    previous version searched SKILL_MD globally, so deleting the entire Gate 3
+    body went undetected (its four mode names also appear in §9.2) and Gate 4's
+    body was covered only incidentally by a global `SKILL_MD.count("STOP")`.
+    """
+    m = re.search(rf"^#{{2,4}}[^\n]*Gate {n}:[^\n]*$", SKILL_MD, re.MULTILINE)
+    assert m, f"Gate {n} heading not found"
+    rest = SKILL_MD[m.end():]
+    nxt = re.search(r"^#{2,4}\s", rest, re.MULTILINE)
+    return rest[:nxt.start()] if nxt else rest
+
+
 class TestMandatoryGates:
-    """Validate §2 Mandatory Gates."""
+    """Validate §2 Mandatory Gates.
+
+    Headings are matched by NAME, not by the exact `## 2 Mandatory Gates`
+    string: a meaning-preserving rename used to be the one thing this suite
+    reliably caught, while it missed body deletion and body inversion.
+    """
 
     def test_gates_section_exists(self):
-        assert "## 2 Mandatory Gates" in SKILL_MD
+        assert re.search(r"^##\s*\d*\s*(Mandatory|Required)\s+Gates\s*$",
+                         SKILL_MD, re.MULTILINE), "gates section heading not found"
+        assert "Gates are serial hard blockers" in SKILL_MD
 
     def test_gate_1_context_collection(self):
-        assert "Gate 1: Context Collection" in SKILL_MD
-        assert "Service endpoint" in SKILL_MD
-        assert "Protocol" in SKILL_MD
+        body = gate_body(1)
+        for needle in ("Service endpoint", "Protocol", "Required for"):
+            assert needle in body, f"{needle!r} missing from Gate 1's own body"
+        assert "STOP" in body, "Gate 1 lost its STOP condition"
 
     def test_gate_2_slo_first(self):
-        assert "Gate 2: SLO-First" in SKILL_MD
-        assert "A PASS/FAIL verdict requires an SLO" in SKILL_MD
+        body = gate_body(2)
+        assert "A PASS/FAIL verdict requires an SLO" in body
         # exploratory work must remain legitimate without a pre-set SLO —
         # this is the exact rigidity the skill was reviewed for
-        assert "Exploratory work does NOT need a pre-set SLO" in SKILL_MD
+        assert "Exploratory work does NOT need a pre-set SLO" in body
+        assert "STOP" in body, "Gate 2 lost its STOP condition"
+
+    def test_gate_2_slo_examples_are_realistic(self):
+        """Inverting the example SLOs (`p99 < 20s`, `< 90% 5xx`) preserved every
+        asserted literal and passed. A load-testing skill that models a 20-second
+        p99 target as normal teaches the opposite of its own §5.1."""
+        body = gate_body(2)
+        for m in re.finditer(r"p(?:50|99)\s*<\s*(\d+(?:\.\d+)?)\s*(ms|s)\b", body):
+            ms = float(m.group(1)) * (1000 if m.group(2) == "s" else 1)
+            assert ms <= 2000, f"example latency SLO {m.group(0)!r} is not a target, it is an outage"
+        for m in re.finditer(r"<\s*(\d+(?:\.\d+)?)\s*%\s*5xx", body):
+            assert float(m.group(1)) <= 5, f"example error budget {m.group(0)!r} is not an SLO"
+        for m in re.finditer(r"(?:minimum sustained RPS|e\.g\.,\s*)(\d+)\s*RPS", body):
+            assert int(m.group(1)) >= 100, f"example throughput {m.group(0)!r} is implausibly low"
 
     def test_gate_3_scope_classification(self):
-        assert "Gate 3: Scope Classification" in SKILL_MD
+        body = gate_body(3)
         for mode in ("Write", "Review", "Analyze", "Advise"):
-            assert mode in SKILL_MD, f"mode {mode} missing from Gate 3"
+            assert mode in body, f"mode {mode} missing from Gate 3's own body"
+        assert "Deliverable" in body, "Gate 3 lost its mode/deliverable table"
 
     def test_gate_4_output_completeness(self):
-        assert "Gate 4: Output Completeness" in SKILL_MD
+        body = gate_body(4)
+        assert "STOP" in body, "Gate 4 lost its STOP-and-fill-gaps instruction"
+        assert "§9" in body, "Gate 4 no longer points at the output contract"
+        # inversion guard: the gate must not license shipping an incomplete §9
+        assert not re.search(r"(missing[^.\n]*sections? (are|is) fine|"
+                             r"never STOP|deliver as soon as)", body, re.IGNORECASE), \
+            "Gate 4's body contradicts its own purpose"
 
     def test_stop_semantics(self):
         count = SKILL_MD.count("STOP")
@@ -210,6 +254,38 @@ class TestAntiExamples:
         right_count = SKILL_MD.count("# RIGHT")
         assert wrong_count >= 6, f"found {wrong_count} # WRONG markers, expected >= 6"
         assert right_count >= 6, f"found {right_count} # RIGHT markers, expected >= 6"
+
+    def test_wrong_and_right_blocks_are_not_swapped(self):
+        """Counting markers globally cannot tell WRONG from RIGHT. Swapping
+        AE-1's two blocks — so the no-warmup anti-pattern becomes the
+        recommendation — passed the entire suite. Anchor the signature of each
+        side to the side it belongs on.
+
+        signature = (anti-example title, token that must be in WRONG only,
+                     token that must be in RIGHT only)
+        """
+        signatures = [
+            ("AE-1", "measurement starts immediately", "warmup"),
+            ("AE-2", "let's see how fast it is", "thresholds"),
+            ("AE-3", "same 4-core laptop", "separate machines"),
+            ("AE-4", "same ID every request", "SharedArray"),
+            ("AE-5", "load test passed", "duration matches"),
+            ("AE-6", "average latency is 45ms", "percentile-based"),
+        ]
+        for ae, wrong_token, right_token in signatures:
+            start = SKILL_MD.index(f"### {ae}:")
+            end = SKILL_MD.index("### AE-", start + 5) if f"### AE-" in SKILL_MD[start + 5:] \
+                else len(SKILL_MD)
+            block = SKILL_MD[start:end]
+            w = block.find("# WRONG")
+            r = block.find("# RIGHT")
+            assert w != -1 and r != -1, f"{ae}: missing a WRONG/RIGHT pair"
+            assert w < r, f"{ae}: the RIGHT block precedes the WRONG block"
+            wrong_side, right_side = block[w:r], block[r:]
+            assert wrong_token in wrong_side, \
+                f"{ae}: {wrong_token!r} is not on the WRONG side — the blocks look swapped"
+            assert right_token in right_side, \
+                f"{ae}: {right_token!r} is not on the RIGHT side — the blocks look swapped"
 
 
 # ──────────────────────────────────────────────────────────────────────

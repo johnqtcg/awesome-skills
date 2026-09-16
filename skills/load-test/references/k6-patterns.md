@@ -427,21 +427,29 @@ export function handleSummary(data) {
 }
 ```
 
-A fuller human-readable report via `textSummary()`/`htmlReport()` needs
-jslib — a remote dependency the version above avoids:
+A fuller human-readable stdout report via `textSummary()` needs jslib — a
+remote dependency the version above avoids:
 
 ```javascript
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.4/index.js';
-import { htmlReport } from 'https://jslib.k6.io/k6-html-report/2.0.0/bundle.js';
 
 export function handleSummary(data) {
   return {
     stdout: textSummary(data, { indent: ' ', enableColors: true }),
     'results/summary.json': JSON.stringify(data),
-    'results/summary.html': htmlReport(data),
   };
 }
 ```
+
+`jslib.k6.io` hosts `k6-summary`; it does **not** host an HTML reporter.
+(An earlier revision of this file imported
+`https://jslib.k6.io/k6-html-report/2.0.0/bundle.js`, which 404s — k6 then
+fails at module resolution before the test starts.) For HTML output, pin a
+third-party reporter yourself and **verify the URL resolves before
+committing it** — k6 resolves remote imports at startup, so a dead URL is a
+hard failure, not a degraded report. `RemoteImportReachabilityTests` in
+`scripts/tests/test_k6_scripts_valid.py` checks every remote import in this
+file for exactly that.
 
 ---
 

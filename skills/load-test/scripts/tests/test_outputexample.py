@@ -12,6 +12,7 @@ numbers cannot drift silently again.
 
 import http.server
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -20,10 +21,41 @@ import threading
 import unittest
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[4]
-EXAMPLE_DIR = REPO_ROOT / "outputexample" / "load-test"
-SCRIPT = EXAMPLE_DIR / "checkout-load-test.js"
-ANALYSIS = EXAMPLE_DIR / "checkout-load-test-analysis.md"
+SKILL_DIR = Path(__file__).resolve().parents[2]
+
+
+def _find_example_dir():
+    """Locate outputexample/load-test/ by walking up from the SKILL, not by
+    counting path segments.
+
+    `parents[4]` was positional, which failed two ways at once. Vendoring the
+    skill on its own made 13 of this file's 14 tests hard-FAIL with
+    FileNotFoundError instead of skipping; and dropping the skill into any
+    tree that happens to have an `outputexample/load-test/` four levels up
+    would have validated *someone else's* files while reporting green. Both
+    are fixed by searching for the directory and requiring it to sit
+    alongside this very skill (`<root>/skills/load-test` must exist), then
+    skipping with an explicit reason when it does not.
+    """
+    for root in SKILL_DIR.parents:
+        candidate = root / "outputexample" / "load-test"
+        if candidate.is_dir() and (root / "skills" / "load-test") == SKILL_DIR:
+            return candidate
+    return None
+
+
+EXAMPLE_DIR = _find_example_dir()
+SCRIPT = (EXAMPLE_DIR / "checkout-load-test.js") if EXAMPLE_DIR else None
+ANALYSIS = (EXAMPLE_DIR / "checkout-load-test-analysis.md") if EXAMPLE_DIR else None
+
+# Every test in this file targets the published example, which ships with the
+# repository, not with the skill bundle. When the skill is installed on its
+# own the example is genuinely absent — skip with a reason instead of
+# failing, and never fall back to a same-named directory from another tree.
+requires_example = unittest.skipIf(
+    EXAMPLE_DIR is None,
+    "outputexample/load-test/ not found beside this skill — the published "
+    "example ships with the repository, not with the installed skill bundle")
 
 
 def _script_text() -> str:
@@ -34,6 +66,7 @@ def _analysis_text() -> str:
     return ANALYSIS.read_text(encoding="utf-8")
 
 
+@requires_example
 class FilesExistTests(unittest.TestCase):
     def test_example_files_present(self) -> None:
         self.assertTrue(SCRIPT.exists(), f"missing {SCRIPT}")
@@ -41,6 +74,7 @@ class FilesExistTests(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("node"), "node not installed")
+@requires_example
 class ScriptSyntaxTests(unittest.TestCase):
     def test_node_check_passes(self) -> None:
         proc = subprocess.run(["node", "--check", str(SCRIPT)],
@@ -49,6 +83,7 @@ class ScriptSyntaxTests(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("k6"), "k6 not installed")
+@requires_example
 class K6InspectTests(unittest.TestCase):
     def test_k6_inspect_passes(self) -> None:
         proc = subprocess.run(["k6", "inspect", str(SCRIPT)],
@@ -65,6 +100,7 @@ def _k6_duration_to_seconds(s: str) -> float:
 
 
 @unittest.skipUnless(shutil.which("k6"), "k6 not installed")
+@requires_example
 class K6ExecutionRequirementsTests(unittest.TestCase):
     """Every mistake in an earlier revision of this file (summed VU pools
     across non-overlapping scenarios, an 8x-undercounted Trend list, a
@@ -130,6 +166,7 @@ class _StubHandler(http.server.BaseHTTPRequestHandler):
 
 
 @unittest.skipUnless(shutil.which("k6"), "k6 not installed")
+@requires_example
 class RealRunTests(unittest.TestCase):
     """Executes the published script's default()/handleSummary() for real.
     The script's own scenarios run ~4.5 minutes, too slow for a test suite,
@@ -146,8 +183,12 @@ class RealRunTests(unittest.TestCase):
             # bottleneck and risk a spurious dropped_iterations threshold
             # failure that has nothing to do with the script under test.
             self.server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _StubHandler)
-        except PermissionError:
-            self.skipTest("sandbox denies binding a local listen socket")
+        except OSError as exc:      # PermissionError is a subclass
+            msg = (f"sandbox denies binding a local listen socket ({exc}) — "
+                   "the real k6-run layer did NOT execute")
+            if os.environ.get("LOADTEST_REQUIRE_RUNTIME") == "1":
+                self.fail(msg + " (LOADTEST_REQUIRE_RUNTIME=1)")
+            self.skipTest(msg)
         self.port = self.server.server_port
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -210,6 +251,7 @@ class RealRunTests(unittest.TestCase):
             self.assertIn("http_reqs", data.get("metrics", {}))
 
 
+@requires_example
 class CrossFileConsistencyTests(unittest.TestCase):
     """The script and its paired analysis.md each state the same SLO/config
     numbers independently. A human has to re-read both to notice drift; this

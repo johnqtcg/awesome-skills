@@ -19,6 +19,7 @@ runtime with a ReferenceError. Three layers here:
 """
 
 import http.server
+import os
 import json
 import re
 import shutil
@@ -66,6 +67,62 @@ class ImportCompletenessTests(unittest.TestCase):
                          "copy-paste of these scripts raises ReferenceError:\n  "
                          + "\n  ".join(violations))
 
+
+
+
+# The runtime layer disappears silently when a sandbox refuses a loopback
+# bind(): setUp skipped, suite still green, and the whole `k6 run` layer that
+# the docstrings above advertise never executes. Two mitigations, because a
+# bare skip is indistinguishable from a pass in a summary line:
+#   * LOADTEST_REQUIRE_RUNTIME=1 turns the skip into a failure (use in CI that
+#     must actually exercise the runtime layer);
+#   * scripts/run_regression.sh greps for these skips and downgrades its final
+#     success line, so a human reading the output cannot miss it.
+def bind_stub_server(test, handler):
+    """Bind a loopback stub server, or skip/fail loudly — never silently."""
+    try:
+        return http.server.HTTPServer(("127.0.0.1", 0), handler)
+    except OSError as exc:          # PermissionError is a subclass
+        msg = (f"sandbox denies binding a local listen socket ({exc}) — the "
+               "real k6-run layer did NOT execute")
+        if os.environ.get("LOADTEST_REQUIRE_RUNTIME") == "1":
+            test.fail(msg + " (LOADTEST_REQUIRE_RUNTIME=1)")
+        test.skipTest(msg)
+
+# k6 EXITS 0 on iteration-level JavaScript errors when no threshold is
+# breached. Verified on k6 v1.3.0: a script whose default() raises a
+# ReferenceError three times still returns exit status 0, with the error
+# visible only on stderr. So `assertEqual(0, returncode)` is fail-open for
+# precisely the bug class the real-run layer exists to catch. Every real run
+# must additionally assert the output is error-free AND that the expected
+# number of iterations actually completed.
+K6_RUNTIME_ERROR_RE = re.compile(
+    r"(ReferenceError|TypeError|SyntaxError|RangeError|GoError|level=error)")
+
+
+def assert_k6_run_clean(test, proc, expected_iterations, summary_metrics, ctx):
+    """Exit code, error-free output, and a real iteration count — all three.
+
+    Dropping any one of them reopens the hole: exit code alone misses runtime
+    errors, error-text alone misses a script that silently ran zero
+    iterations, and the count alone misses an error in a later statement.
+    """
+    combined = (proc.stdout or "") + (proc.stderr or "")
+    test.assertEqual(
+        0, proc.returncode,
+        f"{ctx}: k6 run exited non-zero\nstdout:\n{proc.stdout[-2000:]}\n"
+        f"stderr:\n{proc.stderr[-2000:]}")
+    hit = K6_RUNTIME_ERROR_RE.search(combined)
+    test.assertIsNone(
+        hit,
+        f"{ctx}: k6 reported a runtime error while still exiting 0 "
+        f"({hit.group(0) if hit else ''}) — this is the bug class static "
+        f"analysis and k6 inspect cannot see:\n{combined[-2000:]}")
+    actual = (summary_metrics.get("iterations") or {}).get("count")
+    test.assertEqual(
+        expected_iterations, actual,
+        f"{ctx}: expected {expected_iterations} completed iterations, got "
+        f"{actual} — default() did not run to completion for every iteration")
 
 @unittest.skipUnless(shutil.which("k6"), "k6 not installed")
 class K6InspectTests(unittest.TestCase):
@@ -215,13 +272,7 @@ class RealK6RunTests(unittest.TestCase):
 
     def setUp(self) -> None:
         _StubHandler.request_log = []
-        try:
-            self.server = http.server.HTTPServer(("127.0.0.1", 0), _StubHandler)
-        except PermissionError:
-            # Some sandboxes deny binding even a loopback listen socket.
-            # That's an environment restriction, not a test failure — skip
-            # rather than reporting a false red.
-            self.skipTest("sandbox denies binding a local listen socket")
+        self.server = bind_stub_server(self, _StubHandler)
         self.port = self.server.server_port
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
@@ -249,17 +300,13 @@ class RealK6RunTests(unittest.TestCase):
                  f"--summary-export={summary}", script.name],
                 cwd=tmpdir, capture_output=True, text=True, timeout=30,
             )
-            self.assertEqual(
-                0, proc.returncode,
-                "k6 run failed executing default() for real — this is exactly "
-                "the class of bug static analysis and k6 inspect cannot see:\n"
-                f"stdout:\n{proc.stdout[-2000:]}\nstderr:\n{proc.stderr[-2000:]}")
+            summary_data = json.loads(summary.read_text(encoding="utf-8"))
+            metrics = summary_data.get("metrics", {})
+            assert_k6_run_clean(self, proc, 4, metrics, "§7 Custom Metrics")
             self.assertGreater(
                 len(_StubHandler.request_log), 0,
                 "no requests reached the stub server — default() did not run "
                 "as expected")
-            summary_data = json.loads(summary.read_text(encoding="utf-8"))
-            metrics = summary_data.get("metrics", {})
             for name in ("order_latency", "orders_created",
                          "order_queue_depth", "order_errors"):
                 self.assertIn(
@@ -288,19 +335,123 @@ class RealK6RunTests(unittest.TestCase):
                 ["k6", "run", "--vus", "1", "--iterations", "2", script.name],
                 cwd=tmpdir, capture_output=True, text=True, timeout=30,
             )
-            self.assertEqual(
-                0, proc.returncode,
-                "k6 run failed executing the handleSummary() script for "
-                f"real:\nstdout:\n{proc.stdout[-2000:]}\nstderr:\n{proc.stderr[-2000:]}")
             results = tmpdir / "results.json"
             self.assertTrue(
                 results.exists(),
                 "handleSummary() ran but results.json was never written to "
                 "disk — the file-writing side of its return value")
             data = json.loads(results.read_text(encoding="utf-8"))
+            assert_k6_run_clean(self, proc, 2, data.get("metrics", {}),
+                                "§6 handleSummary()")
             self.assertIn("metrics", data)
             self.assertIn("http_reqs", data["metrics"])
 
 
 if __name__ == "__main__":
     unittest.main()
+
+# ------------------------------------------------------------------
+# Options-only blocks: the 17-of-23 blind spot
+# ------------------------------------------------------------------
+
+OPTIONS_FRAGMENT_RE = re.compile(r"^\s*(scenarios|thresholds)\s*:\s*\{", re.MULTILINE)
+
+
+def options_fragments() -> list[tuple[int, str]]:
+    """(index, source) for fenced blocks that configure k6 but are not whole
+    scripts — `scenarios: {...}` / `thresholds: {...}` shown on their own.
+
+    `complete_scripts()` requires both `import` and `export default`, so these
+    were parsed by nothing at all: 17 of the 23 JS blocks in this file got no
+    machine check of any kind. A mutation renaming `ramping-arrival-rate` to
+    the non-existent `ramping-arrival-rates` in two separate options blocks
+    went undetected for exactly this reason. Wrapping the fragment in a
+    minimal valid script hands it to k6's own options validator.
+    """
+    text = K6_PATTERNS.read_text(encoding="utf-8")
+    blocks = re.findall(r"```(?:javascript|js)\n(.*?)```", text, re.DOTALL)
+    out = []
+    for i, b in enumerate(blocks):
+        if "export default" in b:
+            continue        # script-shaped: complete_scripts(), or an elided
+                            # illustration that is deliberately not valid JS
+        if "..." in b:
+            continue        # literal `{...}` elision — cannot be parsed, by design
+        if OPTIONS_FRAGMENT_RE.search(b) or b.lstrip().startswith("export const options"):
+            out.append((i, b))
+    return out
+
+
+class OptionsFragmentTests(unittest.TestCase):
+    def test_options_fragments_found(self) -> None:
+        self.assertGreaterEqual(
+            len(options_fragments()), 5,
+            "options-only fragments no longer detected — this guard is inert")
+
+    @unittest.skipUnless(shutil.which("k6"), "k6 not installed")
+    def test_options_fragments_are_valid_k6_config(self) -> None:
+        """k6 validates executor names, stage shapes and threshold expressions
+        when it builds the options object, so a synthetic wrapper is enough to
+        reject a bogus executor without needing the surrounding script."""
+        failures = []
+        for idx, frag in options_fragments():
+            body = frag.strip()
+            if not body.startswith("export const options"):
+                body = "export const options = {\n" + body.rstrip().rstrip(",") + "\n};"
+            src = ("import http from 'k6/http';\n"
+                   + body + "\n"
+                   + "export default function () { http.get('http://127.0.0.1:1/'); }\n")
+            with tempfile.TemporaryDirectory() as tmp:
+                script = Path(tmp) / "frag.js"
+                script.write_text(src, encoding="utf-8")
+                proc = subprocess.run(
+                    ["k6", "inspect", script.name],
+                    cwd=tmp, capture_output=True, text=True, timeout=30,
+                    env=dict(os.environ, K6_NO_USAGE_REPORT="true"),
+                )
+                if proc.returncode != 0:
+                    failures.append(
+                        f"block #{idx}: k6 rejected this options fragment:\n"
+                        f"{proc.stderr.strip()[-400:]}")
+        self.assertEqual([], failures, "\n\n".join(failures))
+
+
+# ------------------------------------------------------------------
+# Remote imports: k6 resolves them at startup, so a dead URL is fatal
+# ------------------------------------------------------------------
+
+REMOTE_IMPORT_RE = re.compile(r"from\s+'(https://[^']+)'")
+
+
+class RemoteImportReachabilityTests(unittest.TestCase):
+    """`https://jslib.k6.io/k6-html-report/2.0.0/bundle.js` shipped in this
+    file and 404s — jslib does not host an HTML reporter at all. It sat in a
+    double blind spot: the block has no `export default`, so the import
+    checker skipped it, and it has remote imports, so `k6 inspect` skipped it
+    as network-dependent. Two individually reasonable exclusions stacked to
+    zero coverage.
+    """
+
+    def test_every_remote_import_resolves(self) -> None:
+        import urllib.error
+        import urllib.request
+
+        urls = sorted(set(REMOTE_IMPORT_RE.findall(
+            K6_PATTERNS.read_text(encoding="utf-8"))))
+        if not urls:
+            self.skipTest("no remote imports in the references")
+        dead = []
+        for url in urls:
+            try:
+                req = urllib.request.Request(url, method="HEAD")
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    if resp.status >= 400:
+                        dead.append(f"{url} -> HTTP {resp.status}")
+            except urllib.error.HTTPError as exc:
+                dead.append(f"{url} -> HTTP {exc.code}")
+            except Exception as exc:        # offline / proxied / DNS-blocked
+                self.skipTest(f"network unavailable for {url}: {exc}")
+        self.assertEqual(
+            [], dead,
+            "k6 resolves remote imports at startup, so these are hard "
+            "failures before the test begins:\n  " + "\n  ".join(dead))
