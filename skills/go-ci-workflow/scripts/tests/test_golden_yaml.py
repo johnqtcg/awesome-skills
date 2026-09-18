@@ -105,19 +105,42 @@ def is_reusable(doc: dict) -> bool:
     return "workflow_call" in triggers_of(doc)
 
 
+def is_composite_action(doc: dict) -> bool:
+    """A composite `action.yml` carries a top-level `runs:` mapping with
+    `using:`. Its `runs.steps` are action steps, not a job, so they cannot
+    carry `runs-on` or `timeout-minutes`. Derived from the Actions schema —
+    not an opt-out marker a future edit could abuse."""
+    runs = doc.get("runs")
+    return isinstance(runs, dict) and "using" in runs
+
+
+def jobs_in_doc(doc: object) -> dict:
+    """Job map for one parsed block.
+
+    The jobmap fallback keys off `steps:`/`uses:` and deliberately NOT off
+    `runs-on:`. Keying it off `runs-on` made the rule its own precondition: a
+    job missing `runs-on` was dropped from the very check that requires it, so
+    `repository-shapes.md` §5 shipped a `docker-build` job with neither
+    `runs-on` nor `timeout-minutes` — a workflow GitHub rejects — while the
+    suite stayed green. Pinned by
+    `test_jobmap_fallback_is_not_keyed_on_the_field_it_validates`.
+    """
+    if not isinstance(doc, dict) or is_composite_action(doc):
+        return {}
+    jobs = doc.get("jobs")
+    if isinstance(jobs, dict):
+        return jobs
+    return {k: v for k, v in doc.items()
+            if isinstance(v, dict) and ("steps" in v or "uses" in v)}
+
+
 def job_definitions() -> list[tuple[str, str, dict]]:
     """(block, job_id, job) for every job in a complete workflow or a jobmap
     fragment. Reusable-workflow caller jobs (`uses:`) are excluded — they
     cannot set `runs-on` or `timeout-minutes`."""
     out = []
     for name, _text, doc in parsed_blocks():
-        if not isinstance(doc, dict):
-            continue
-        jobs = doc.get("jobs")
-        if not isinstance(jobs, dict):
-            jobs = {k: v for k, v in doc.items()
-                    if isinstance(v, dict) and "runs-on" in v}
-        for job_id, job in jobs.items():
+        for job_id, job in jobs_in_doc(doc).items():
             if isinstance(job, dict) and "uses" not in job:
                 out.append((name, job_id, job))
     return out
@@ -179,6 +202,31 @@ class GoldenYamlTests(unittest.TestCase):
                                   f"{name}:{job_id} timeout-minutes must be a number")
             checked += 1
         self.assertGreaterEqual(checked, 15, "job discovery collapsed — rule no longer bites")
+
+    def test_jobmap_fallback_is_not_keyed_on_the_field_it_validates(self) -> None:
+        """A discovery filter must not require the field its callers assert on.
+
+        Keying the jobmap fallback on `runs-on` exempted exactly the jobs that
+        break the `runs-on` rule — a job was skipped *because* it was more
+        broken. Live regression: `repository-shapes.md` §5 shipped a
+        `docker-build` job with neither `runs-on` nor `timeout-minutes` (a
+        workflow GitHub rejects) and the suite stayed green. Synthetic inputs,
+        so a corpus that happens to comply cannot mask a revert."""
+        no_runs_on = {"docker-build": {"steps": [{"run": "docker build ."}]}}
+        self.assertIn("docker-build", jobs_in_doc(no_runs_on),
+                      "a job missing runs-on must still be discovered, or the "
+                      "runs-on rule can never fire")
+
+        # The explicit `jobs:` mapping form is unchanged.
+        self.assertEqual({"a"}, set(jobs_in_doc({"jobs": {"a": {"steps": []}}})))
+
+        # A composite action's `runs:` block is not a job.
+        self.assertEqual({}, jobs_in_doc({"name": "x", "runs": {
+            "using": "composite", "steps": [{"run": "true"}]}}),
+            "composite action steps are not a job")
+
+        # Non-job mappings must not be mistaken for jobs.
+        self.assertEqual({}, jobs_in_doc({"strategy": {"matrix": {"go": ["1.26"]}}}))
 
     def test_runner_labels_are_real(self) -> None:
         """A typo'd runner label queues forever instead of failing fast."""
@@ -262,10 +310,17 @@ class GoldenYamlTests(unittest.TestCase):
             value = conc["cancel-in-progress"]
             self.assertNotEqual(False, value,
                                 f"{name}: cancel-in-progress: false is pointless — remove it")
-            self.assertIn(
-                "pull_request", str(value),
-                f"{name}: cancel-in-progress must be gated on the PR event, or a "
-                "merged commit can end up with no completed run (advanced-patterns §8)",
+            # Anchored to the OPERATOR, not to the word. A substring check on
+            # "pull_request" passes for the inverted `!= 'pull_request'`, which
+            # cancels protected-branch runs and never cancels PR runs — the
+            # precise failure the rule exists to prevent, and a mutation that
+            # survived the audit.
+            self.assertRegex(
+                str(value), r"github\.event_name\s*==\s*'pull_request'",
+                f"{name}: cancel-in-progress must be gated on "
+                f"`github.event_name == 'pull_request'`; got {value!r}. An "
+                "inverted comparison cancels merged-commit runs instead "
+                "(advanced-patterns §8)",
             )
         self.assertGreaterEqual(seen, 5, "concurrency examples disappeared from the references")
 
@@ -280,7 +335,12 @@ class GoldenYamlTests(unittest.TestCase):
 
     def test_declared_go_versions_are_plausible(self) -> None:
         """A matrix is the one place a literal Go version is allowed (§13), so
-        it is also the one place a nonsense version can hide."""
+        it is also the one place a nonsense version can hide.
+
+        This is a coarse shape filter only. Version *currency* is owned by
+        `test_skill_contract.py::TestGoVersionCurrency`, which pins every
+        matrix literal to the §13 policy row. Do not re-encode the support
+        floor here — one source of truth, and it is §13."""
         for name, text in yaml_blocks():
             for literal in re.findall(r"['\"](\d+)\.(\d+)['\"]", text):
                 major, minor = int(literal[0]), int(literal[1])
@@ -307,6 +367,7 @@ class GoldenYamlTests(unittest.TestCase):
         """A `pull_request`-triggered workflow that hands a secret to a job or
         step must guard it. Fork PRs receive empty secrets, so an unguarded job
         also fails confusingly rather than skipping."""
+        seen = 0
         for name, _text, doc in complete_workflows():
             if "pull_request" not in triggers_of(doc):
                 continue
@@ -315,12 +376,18 @@ class GoldenYamlTests(unittest.TestCase):
                     continue
                 job_guard = str(job.get("if", ""))
                 for holder, label in _secret_holders(job, job_id):
+                    seen += 1
                     guard = job_guard + " " + str(holder.get("if", ""))
                     self.assertTrue(
                         FORK_GUARD_RE.search(guard) or TRUSTED_EVENT_RE.search(guard),
                         f"{name}:{label} references a secret on a pull_request "
                         f"workflow without a fork guard",
                     )
+        # Floor: without it, removing every `${{ secrets.* }}` from the examples
+        # leaves this test asserting nothing while still reporting green. Its
+        # sibling fork-guard test has always carried one; this one was missed.
+        self.assertGreaterEqual(
+            seen, 1, "no secret-bearing example remains — the rule no longer bites")
 
     # --- tool and action pinning ---
 
@@ -348,30 +415,61 @@ class GoldenYamlTests(unittest.TestCase):
         """A setup-go step reading a matrix/subdirectory go.mod must also set
         cache-dependency-path, or every module shares one wrong cache key
         (see workflow-quality-guide.md §3)."""
+        seen = 0
         for name, text in yaml_blocks():
             if re.search(r"go-version-file:\s*\$\{\{\s*matrix\.", text):
+                seen += 1
                 self.assertIn(
                     "cache-dependency-path", text,
                     f"{name}: matrix go-version-file without cache-dependency-path",
                 )
+        # Floor: deleting the matrix examples would otherwise make this vacuous.
+        self.assertGreaterEqual(
+            seen, 2, "matrix go-version-file examples disappeared — rule no longer bites")
 
     def test_actionlint_when_available(self) -> None:
+        """This test had NEVER passed, because it had never been run.
+
+        Two defects, both invisible while actionlint was absent and the test
+        skipped (2026-09-17, first execution):
+
+        1. **Wrong selector.** It linted any block with a `jobs:` key, which
+           includes illustrative fragments carrying `steps: ...` elisions and
+           no trigger. actionlint correctly rejects those as malformed
+           workflows. The file already has the right discriminator —
+           `complete_workflows()` — and this was the one place not using it.
+        2. **Wrong invocation.** Bare `actionlint` with `cwd=tmp` makes it
+           search parent directories for a git project and exit **3**
+           ("no project was found") before linting anything. Every block
+           failed for an environmental reason, so the test could not pass even
+           on perfect YAML. Passing the file path explicitly skips project
+           discovery.
+
+        With both fixed, all 6 complete workflows lint clean.
+        """
         if not shutil.which("actionlint"):
             self.skipTest("actionlint not installed")
-        for name, doc_text, doc in parsed_blocks():
-            if not (isinstance(doc, dict) and "jobs" in doc):
-                continue
+        seen = 0
+        for name, doc_text, _doc in complete_workflows():
+            seen += 1
             with tempfile.TemporaryDirectory() as tmp:
                 wf_dir = Path(tmp) / ".github" / "workflows"
                 wf_dir.mkdir(parents=True)
-                (wf_dir / "golden.yml").write_text(doc_text)
+                target = wf_dir / "golden.yml"
+                target.write_text(doc_text)
                 proc = subprocess.run(
-                    ["actionlint", "-no-color"],
-                    cwd=tmp,
-                    capture_output=True,
-                    text=True,
+                    ["actionlint", "-no-color", str(target)],
+                    cwd=tmp, capture_output=True, text=True,
                 )
-                self.assertEqual(0, proc.returncode, f"{name}: actionlint:\n{proc.stdout}")
+                # stderr carries actionlint's own errors (bad flags, no project);
+                # the old message printed stdout only, so a rc=3 environment
+                # failure arrived with an empty diagnostic.
+                self.assertEqual(
+                    0, proc.returncode,
+                    f"{name}: actionlint rc={proc.returncode}\n"
+                    f"stdout:\n{proc.stdout}\nstderr:\n{proc.stderr}")
+        self.assertGreaterEqual(
+            seen, 5, "complete workflows vanished — actionlint had nothing to lint")
 
 
 def _all_if_conditions(node) -> list[str]:

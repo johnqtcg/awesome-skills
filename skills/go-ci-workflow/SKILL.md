@@ -152,7 +152,7 @@ Use `references/fallback-and-scaffolding.md`.
   - e2e
   - vulnerability scanning
   - extra static analysis
-- Set `timeout-minutes` on every job (10-15 for core gate, 20 for e2e/integration).
+- Set `timeout-minutes` on every job: 15 core gate, 10 docker build, 20 integration, 30 e2e. The table in `references/github-actions-advanced-patterns.md` §8 is the source of truth for these numbers.
 - Use `needs:` only when ordering matters.
 - Use `concurrency` to cancel redundant runs, but gate the cancellation on the
   event (`cancel-in-progress: ${{ github.event_name == 'pull_request' }}`) so a
@@ -178,7 +178,7 @@ Do not force all expensive jobs onto every PR unless the repository risk profile
   time rather than trusted.
 - Keep tool versions aligned with Makefile or repo-native install scripts when those exist.
 - Pin third-party actions and **re-verify the latest major at generation time** — do not trust an embedded version number. Standard repos pin the major tag (`actions/checkout@v7`); high-security repos pin a full commit SHA with a `# vX.Y.Z` comment and let Dependabot/Renovate bump it. See `references/workflow-quality-guide.md` §16.
-- When `go.mod`/`go.sum` is not at the repo root (sub-directory module, matrix over modules, `go.work` workspace), set `cache-dependency-path` on `setup-go` — otherwise the cache key is wrong or missing. Treat a `go.work` repo as one workspace, not as independent modules.
+- When `go.mod` is not at the repo root (sub-directory module, matrix over modules, `go.work` workspace), set `cache-dependency-path` on `setup-go` — with `cache: true` and no such path the step **fails**, because it looks for `go.mod` in the repository root only and does not honour `working-directory`. See `references/workflow-quality-guide.md` §3. Treat a `go.work` repo as one workspace, not as independent modules.
 
 ## Advanced GitHub Actions Rules
 

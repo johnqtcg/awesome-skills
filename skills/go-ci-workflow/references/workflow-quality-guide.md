@@ -77,7 +77,14 @@ Always use `go-version-file` to read Go version from `go.mod`:
 Never hardcode Go version in the workflow. The `go.mod` file is the single source of truth.
 For multi-module repositories, be explicit about which `go.mod` governs each job.
 
-**Cache key correctness — `cache-dependency-path`.** `setup-go`'s built-in cache derives its key by hashing `go.sum`. It only finds `go.sum` in the working directory by default. Whenever the module lives in a subdirectory, a workspace has several `go.sum` files, or `go-version-file` points anywhere other than the root, set `cache-dependency-path` explicitly — otherwise the key is computed from the wrong (or a missing) `go.sum`, producing cross-module cache poisoning or a permanent cache miss:
+**Cache key correctness — `cache-dependency-path`.** *Behaviour verified against `actions/setup-go@v7.0.0` source on 2026-09-17. Like the version tables in §11 and §16, re-verify before relying on it — this default changed in v6.3.0.*
+
+With `cache: true` and no `cache-dependency-path`, `setup-go` hashes **`go.mod`** — not `go.sum` — and finds it with a **non-recursive listing of `GITHUB_WORKSPACE`**, i.e. the repository root only. A step-level or job-level `working-directory` does not move where it looks. Two consequences:
+
+- **No `go.mod` at the repo root and the step fails outright**, it does not silently miss: `Dependencies file is not found in <workspace>. Supported file pattern: go.mod`. Sub-directory modules, matrices over modules, and `go.work` repos with no root module all hit this.
+- **The default key tracks `go.mod` only.** A dependency change that touches just `go.sum` produces the same key, so the newly required modules are downloaded on every run and never make it into the saved cache — a silent, permanent partial cache miss.
+
+Set `cache-dependency-path` whenever the module is not at the root, or whenever you want the key to track `go.sum`. Its value goes straight to `hashFiles()`, so globs and multi-line lists work; if it resolves to no file the step fails with `Some specified paths were not resolved, unable to cache dependencies.`
 
 ```yaml
 # Module in a subdirectory (e.g. matrix over modules)
@@ -376,21 +383,49 @@ For jobs that need secrets (deploy, push, API keys):
     API_TOKEN: ${{ secrets.API_TOKEN }}
 ```
 
+**The rule GitHub already enforces, stated plainly:** a `pull_request` run from a **fork** receives **no secrets at all** and a **read-only `GITHUB_TOKEN`**, and cannot write to the base branch's cache scope. A `pull_request` run from a **branch in the same repository** receives secrets normally. You do not need an `if:` to stop a fork from reading a secret — the platform does that.
+
+What an `if:` is actually for: a fork PR that reaches a secret-dependent step gets an **empty** secret and fails somewhere confusing (a 401 from an API, a blank registry password). Guard to skip the job cleanly, not to plug a leak.
+
 Rules:
 - Never echo or log secrets.
 - Use `${{ secrets.* }}` for all sensitive values.
-- Gate secret-dependent jobs with `if: github.event_name != 'pull_request'` to prevent exposure on fork PRs.
+- Guard secret-dependent jobs with the **fork check**, not the event check:
+  `if: github.event.pull_request.head.repo.full_name == github.repository`.
+  `if: github.event_name != 'pull_request'` is blunter than it looks — it also
+  disables the job for same-repo PRs, where the secret is present and the job
+  would have worked.
+- **`pull_request_target` is the real exposure.** It runs in the *base* branch's
+  context with full secrets and a writable token. Never combine it with a
+  checkout of the PR head SHA: that executes fork-authored code with your
+  secrets. See `github-actions-advanced-patterns.md` §2.
 - Document required secrets in the workflow file as comments.
 
 ## 13. Matrix Strategy
 
 For testing across multiple Go versions (libraries only):
 
+### Supported Go majors (single source of truth)
+
+Go's support policy covers the **two most recent majors** — an older major receives no security fixes, so a matrix pinned to one is testing an unsupported toolchain. Go ships a new major roughly every six months, which is faster than either the actions in §16 or the tools in §11, so this table rots first.
+
+| Toolchain | Supported majors | Latest verified |
+|-----------|------------------|-----------------|
+| `go` | `1.26`, `1.27` | 2026-09-17 |
+
+Every Go-version matrix in this skill uses these majors. When you bump this row, bump every example too — `scripts/tests/test_skill_contract.py::TestGoVersionCurrency` fails if they drift apart, and that failure is the reminder to re-verify.
+
+**Re-verify before generating**, exactly as for §16 — do not trust the numbers above:
+
+```bash
+curl -s 'https://go.dev/dl/?mode=json' | grep -o '"version": *"go[0-9.]*"' | head -2
+```
+
 ```yaml
 ci:
   strategy:
     matrix:
-      go-version: ['1.22', '1.23']
+      go-version: ['1.26', '1.27']
   runs-on: ubuntu-latest
   timeout-minutes: 15
   steps:
@@ -409,7 +444,7 @@ Robustness:
 - All jobs must be independent unless explicitly linked with `needs:`.
 - Each job checks out code and sets up Go independently.
 - No shared state between jobs (use artifacts for passing data if needed).
-- Set `timeout-minutes` on every job: 10-15 for core gate, 20 for e2e/integration.
+- Set `timeout-minutes` on every job: 15 core gate, 10 docker build, 20 integration, 30 e2e (source of truth: `github-actions-advanced-patterns.md` §8).
 - Use `continue-on-error: true` only for informational jobs (not gates).
 
 Anti-patterns to avoid:

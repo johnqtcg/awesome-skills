@@ -229,12 +229,28 @@ strategy:
 
 ## 6) Self-Hosted Runners
 
-When self-hosted runners are involved, state assumptions about:
+*Trust-boundary claims below track GitHub's "Security hardening for GitHub Actions" guide; verified 2026-09-17.*
 
-- toolchain availability
-- caching persistence
-- trust boundary
-- cleanup and isolation
+**Rule zero: a self-hosted runner must almost never serve a public repository.** A self-hosted runner has no guarantee of running in an ephemeral clean VM and can be *persistently* compromised by untrusted code in a workflow — and on a public repo **any** user can open a pull request to run that code on your machine. If a public repo needs self-hosted capacity, put the work behind an approval-gated build service, not behind a runner label.
+
+**Private and internal repos are not automatically safe.** Anyone who can fork and open a PR — generally anyone with read access — can compromise the runner, and that includes reading secrets and the `GITHUB_TOKEN`, which may carry write access to the repository. Environments with required reviewers do **not** isolate the job: the review gates the secret, it does not sandbox the machine.
+
+**"Destroy the runner after each job" is weaker than it looks.** There is no way to guarantee a self-hosted runner executes only one job, so a job sharing the machine can read another's secrets — any secret passed as a command-line argument is visible to `ps x -w`. Treat ephemerality as defence in depth, never as the boundary itself.
+
+**Labels are not a security boundary.** `runs-on: self-hosted` is a routing hint that any workflow in scope may request. A runner registered at organization or enterprise level can receive workflows from every repository in scope, so one compromise has org-wide blast radius. Constrain reachability with **runner groups**, and limit which repositories may register repo-level runners.
+
+**Audit what the host can reach.** The runner inherits the machine's ambient credentials: SSH keys, cloud CLI profiles, kubeconfigs, and — most commonly missed — the cloud metadata endpoint (`169.254.169.254`). Anything the host can reach, a PR author can reach.
+
+### Go-specific assumptions that break
+
+| GitHub-hosted assumption | On self-hosted |
+|---|---|
+| Clean `GOMODCACHE` / `GOCACHE` per job | Persist across jobs; a poisoned module cache survives into the next run |
+| Preinstalled toolchain matches `ubuntu-latest` | Whatever is on the box; `setup-go` still installs, but the tool cache and `PATH` differ |
+| Workspace is empty at checkout | `actions/checkout` cleans the workspace — not `$HOME`, `/tmp`, or Docker layers |
+| `docker build` starts from a cold daemon | Shares a daemon and layer cache with every other job on that host |
+
+State these assumptions explicitly in the workflow whenever you target a self-hosted label, and prefer `runs-on: ubuntu-latest` for anything that does not genuinely need the host.
 
 Do not silently reuse GitHub-hosted assumptions on self-hosted runners.
 

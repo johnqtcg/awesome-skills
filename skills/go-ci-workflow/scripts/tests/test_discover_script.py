@@ -67,12 +67,109 @@ class DiscoverScriptTests(unittest.TestCase):
         self.assertIn(("shape", "single-root-module", "go.mod"), rows)
         self.assertIn(("config", "go-version", "go.mod (1.22)"), rows)
 
-    def test_empty_repo_exits_zero_with_no_output(self) -> None:
+    def test_empty_repo_emits_only_the_completion_marker(self) -> None:
+        """An empty repo must be distinguishable from a crash on line 1.
+
+        The old contract was `stdout == ""`, which is exactly the fail-silent
+        shape: "nothing found" and "died before producing anything" were
+        byte-identical, and a caller had no positive signal that the probe ran
+        at all. The script now always terminates with
+        `meta<TAB>probe-complete<TAB>ok`, so absence of that line means a
+        partial run."""
         proc = run_discovery(self.repo)
         self.assertEqual(0, proc.returncode, proc.stderr)
-        self.assertEqual("", proc.stdout)
+        rows = tsv_rows(proc)
+        self.assertEqual([("meta", "probe-complete", "ok")], rows)
+
+    def test_every_successful_run_ends_with_the_completion_marker(self) -> None:
+        (self.repo / "go.mod").write_text("module x\n\ngo 1.23\n")
+        (self.repo / "Makefile").write_text("ci:\n\techo ok\n")
+        proc = run_discovery(self.repo)
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        lines = [line for line in proc.stdout.splitlines() if line]
+        self.assertEqual("meta\tprobe-complete\tok", lines[-1],
+                         "completion marker must be the LAST line, or a truncated "
+                         "run cannot be told from a complete one")
 
     # --- shape-detection accuracy (probe must not over-classify) ---
+
+    def test_git_internals_are_never_cited_as_the_entrypoint(self) -> None:
+        """`.git/` is in the prune list; the package-main probe once had its own
+        hand-written copy that omitted it, so a blob checked out under `.git/`
+        was reported as the application entrypoint."""
+        (self.repo / "go.mod").write_text("module lib\n\ngo 1.23\n")
+        stray = self.repo / ".git" / "x"
+        stray.mkdir(parents=True)
+        (stray / "leftover.go").write_text("package main\n\nfunc main() {}\n")
+        proc = run_discovery(self.repo)
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        rows = tsv_rows(proc)
+        self.assertIn(("shape", "likely-library-or-unknown", "no package main found"), rows)
+        for row in rows:
+            self.assertNotIn(".git", row[2], f"pruned tree cited as evidence: {row}")
+
+    def test_apostrophe_in_a_path_does_not_zero_the_tool_probe(self) -> None:
+        """BSD xargs treats `'` as a quote character. One such directory
+        ANYWHERE aborted the whole tool probe with "unterminated quote" — the
+        clean root Makefile's tools were lost too, with exit 0 and (stderr
+        being discarded) no diagnostic at all."""
+        (self.repo / "go.mod").write_text("module x\n\ngo 1.23\n")
+        (self.repo / "Makefile").write_text("ci:\n\tfieldalignment ./...\n")
+        odd = self.repo / "john's dir"
+        odd.mkdir()
+        (odd / "Makefile").write_text("ci:\n\tnilaway ./...\n")
+        proc = run_discovery(self.repo)
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        rows = tsv_rows(proc)
+        self.assertIn(("tool", "fieldalignment", "repo-scan"), rows)
+        self.assertIn(("tool", "nilaway", "repo-scan"), rows)
+
+    def test_unreadable_directory_does_not_produce_a_confident_verdict(self) -> None:
+        """A permission-denied path is not evidence of absence.
+
+        Every probe discarded stderr, so unreadable and absent were
+        indistinguishable: an unreadable `cmd/` flipped the shape from
+        `likely-application` to `likely-library-or-unknown` — a confidently
+        WRONG answer feeding Gate 1, not an under-report."""
+        (self.repo / "go.mod").write_text("module app\n\ngo 1.23\n")
+        cmd = self.repo / "cmd" / "app"
+        cmd.mkdir(parents=True)
+        (cmd / "main.go").write_text("package main\n\nfunc main() {}\n")
+
+        rows = tsv_rows(run_discovery(self.repo))
+        self.assertIn(("shape", "likely-application", "cmd/app/main.go"), rows)
+
+        (self.repo / "cmd").chmod(0o000)
+        self.addCleanup(lambda: (self.repo / "cmd").chmod(0o755))
+        proc = run_discovery(self.repo)
+        self.assertEqual(0, proc.returncode, proc.stderr)
+        rows = tsv_rows(proc)
+        shapes = {r[1] for r in rows if r[0] == "shape"}
+        self.assertNotIn("likely-library-or-unknown", shapes,
+                         "an unreadable tree must not yield a confident library verdict")
+        self.assertIn("undetermined", shapes)
+        self.assertTrue(any(r[:2] == ("meta", "partial-scan") for r in rows),
+                        "a degraded scan must say so")
+
+    def test_empty_and_dash_arguments_are_rejected(self) -> None:
+        """`${1:-.}` treated "" as unset and scanned the CWD, producing a full,
+        plausible report of the wrong repository. `-` reached bash's `cd -`
+        (which `--` does not prevent) and scanned $OLDPWD."""
+        for bad in ("", "-"):
+            proc = subprocess.run(["bash", str(SCRIPT), bad],
+                                  capture_output=True, text=True, timeout=30)
+            self.assertEqual(2, proc.returncode, f"{bad!r} was accepted as a root")
+            self.assertEqual("", proc.stdout, f"{bad!r} produced a report")
+
+    def test_gnumakefile_targets_are_found(self) -> None:
+        """GNU make prefers GNUmakefile over Makefile; `-name Makefile` is an
+        exact match and does not case-fold even on a case-insensitive volume,
+        so such a repo reported zero targets."""
+        (self.repo / "go.mod").write_text("module x\n\ngo 1.23\n")
+        (self.repo / "GNUmakefile").write_text("ci:\n\tgosec ./...\n")
+        rows = tsv_rows(run_discovery(self.repo))
+        self.assertIn(("makefile-target", "ci", "GNUmakefile"), rows)
+        self.assertIn(("tool", "gosec", "repo-scan"), rows)
 
     def test_vendored_go_mod_does_not_trigger_multi_module(self) -> None:
         """A vendored dependency's go.mod must not read as a nested module."""
@@ -203,7 +300,8 @@ class DiscoverScriptTests(unittest.TestCase):
         rows = tsv_rows(proc)
         categories = {r[0] for r in rows}
         self.assertEqual(
-            {"makefile-target", "repo-task", "container", "test-type", "config", "shape", "workflow", "tool"},
+            {"makefile-target", "repo-task", "container", "test-type", "config",
+             "shape", "workflow", "tool", "meta"},
             categories,
         )
         self.assertIn(("makefile-target", "ci-e2e", "Makefile"), rows)

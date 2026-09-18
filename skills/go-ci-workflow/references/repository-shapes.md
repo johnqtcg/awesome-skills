@@ -2,7 +2,7 @@
 
 Use this file to choose workflow architecture based on repository structure.
 
-## 1) Single-Module Service
+## 1) Single-Module Application
 
 Default pattern:
 
@@ -25,10 +25,10 @@ Consider matrix strategy when the library intentionally supports multiple Go ver
 ```yaml
 strategy:
   matrix:
-    go-version: ['1.22', '1.23']
+    go-version: ['1.26', '1.27']
 ```
 
-Use matrix only for library projects. Application projects should use `go-version-file: go.mod`.
+Use matrix only for library projects. Application projects should use `go-version-file: go.mod`. The majors above are governed by the table in `workflow-quality-guide.md` §13 — re-verify them at generation time rather than copying.
 
 ## 3) Multi-Module Repository
 
@@ -50,8 +50,9 @@ steps:
     with:
       go-version-file: ${{ matrix.module }}/go.mod
       cache: true
-      # REQUIRED for sub-directory modules: without this, setup-go hashes the
-      # root go.sum (or none), so every module shares one wrong cache key.
+      # REQUIRED for sub-directory modules. Without it setup-go looks for
+      # go.mod in GITHUB_WORKSPACE only (non-recursive) and FAILS the step when
+      # the root has none. See workflow-quality-guide.md §3.
       cache-dependency-path: ${{ matrix.module }}/go.sum
   - name: Test
     working-directory: ${{ matrix.module }}
@@ -79,7 +80,7 @@ If the repository has a root `go.work`, the modules build together as one worksp
   ```
 - `discover_ci_needs.sh` emits a `shape  go-workspace  go.work` row when it detects this — do not treat a `go.work` repo as if each module had a fully independent CI.
 
-## 4) Monorepo
+## 4) Monorepo with Multiple Apps/Packages
 
 Detect:
 
@@ -178,12 +179,18 @@ Path filtering and branch-protection *required checks* interact badly, and this 
 - **Whole-workflow `paths:`/`paths-ignore` (Approach A):** when a PR touches nothing in the filter, the workflow never starts, so a required check named after one of its jobs is reported as *Expected — waiting for status* and **never resolves**. The PR is blocked forever with no way to make it pass.
 - **Per-job `if:` (Approach B):** a skipped job reports `skipped`. Whether that counts as "passing" for a required check is subtle and has changed over time — do not rely on it.
 
-The safe pattern is to make **one always-running aggregation job the single required check**, and never mark the conditional jobs required:
+**This fixes Approach B only.** Approach A cannot be repaired from inside the workflow: if the whole workflow is filtered out it never starts, so an aggregation job inside it never runs either. For Approach A the required check must be satisfied by a *second* workflow with the same job name and the inverse `paths-ignore`, or you must drop whole-workflow `paths:` and move the filter down to per-job `if:`.
+
+For Approach B, make **one always-running aggregation job the single required check**, and never mark the conditional jobs required:
 
 ```yaml
   ci-required:
     name: CI Required
-    needs: [ci-api, ci-worker]   # every conditional job
+    # Every job whose result gates the merge — INCLUDING the detector itself.
+    # Omitting `changes` is the classic fail-open: if the detector errors, the
+    # conditional jobs report `skipped`, nothing in the list says `failure`,
+    # and a broken run hands branch protection a green required check.
+    needs: [changes, ci-api, ci-worker]
     if: always()                 # runs even when upstreams are skipped
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -192,14 +199,19 @@ The safe pattern is to make **one always-running aggregation job the single requ
         run: |
           results='${{ join(needs.*.result, ' ') }}'
           echo "upstream results: $results"
+          # Allow-list, not deny-list: `success` and `skipped` are the only two
+          # outcomes that may pass. A deny-list on failure/cancelled lets any
+          # result string GitHub adds later through silently.
+          [ -n "$results" ] || { echo "no upstream results: needs: is empty or misspelled"; exit 1; }
           for r in $results; do
-            if [ "$r" = "failure" ] || [ "$r" = "cancelled" ]; then
-              echo "a required upstream job did not pass"; exit 1
-            fi
+            case "$r" in
+              success|skipped) ;;
+              *) echo "upstream job result: $r"; exit 1 ;;
+            esac
           done
 ```
 
-Configure branch protection to require only `CI Required`. It always runs, so it always resolves; it fails only when a job that actually executed failed. Skipped-because-unchanged jobs leave it green.
+Configure branch protection to require only `CI Required`. It always runs, so it always resolves; it fails when any job that actually executed failed, and when the detector itself failed. Skipped-because-unchanged jobs leave it green.
 
 ### Monorepo Job Separation
 
@@ -219,6 +231,9 @@ For multi-app Docker builds:
 
 ```yaml
 docker-build:
+  name: Docker (${{ matrix.app }})
+  runs-on: ubuntu-latest
+  timeout-minutes: 10
   strategy:
     matrix:
       include:
@@ -236,7 +251,32 @@ docker-build:
 
 When a `make docker-build` target accepts `APP` or `DOCKERFILE` as a variable, delegate to it instead of inline `docker build`.
 
-## 6) No Makefile or Partial Tasking
+## 6) Reusable-Workflow Candidate
+
+The sixth shape in SKILL.md's Repository Shape Gate. Classify a repository here only when duplication is already real — two or more repositories, or two or more jobs in this repository, run genuinely the same steps with only inputs differing.
+
+Signals that the shape applies:
+
+- the same core gate is copy-pasted across repositories in one organisation
+- a job body differs only by module path, app name, or a version input
+- a platform team already owns a `.github` repository
+
+Signals that it does **not** apply, despite appearances:
+
+- the duplication is step-level and inside one repository — use a **composite action** instead, which is cheaper and keeps the job in the caller's context
+- the shared steps need secrets the caller cannot cleanly pass
+- there is exactly one consumer today
+
+Two constraints decide most of these calls, and both are easy to discover late:
+
+- a called workflow's `GITHUB_TOKEN` permissions can only be **equal to or more restrictive than** the caller's — a reusable workflow cannot grant itself a scope the caller withheld
+- called jobs appear in branch protection as `caller / callee`, so extracting a reusable workflow **renames every required status check** it moves
+
+See `github-actions-advanced-patterns.md` §3 for the `workflow_call` contract and §4 for the composite-action comparison.
+
+## 7) No Makefile or Partial Tasking
+
+This is a **parity condition, not one of the six repository shapes** — it can coexist with any shape above, and it drives Gate 2 (Local Parity) rather than Gate 1. Handle it in addition to the shape classification, never instead of it.
 
 Preferred order:
 
