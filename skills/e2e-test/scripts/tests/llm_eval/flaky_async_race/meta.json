@@ -1,0 +1,40 @@
+{
+  "title": "Flaky checkout test — a response waiter armed after its trigger",
+  "prompt": "This Playwright test passes locally and fails in CI about one run in four. Diagnose and fix it.\n\n```ts\ntest('checkout shows the order id', async ({ page }) => {\n  await page.goto('/cart');\n  await page.getByRole('button', { name: 'Place order' }).click();\n  const res = await page.waitForResponse('**/api/orders');\n  const body = await res.json();\n  await expect(page.getByTestId('order-id')).toHaveText(body.id);\n});\n```",
+  "why_this_fixture": "The failure is an ordering bug: Playwright only delivers events that arrive after the waiter is installed, so a fast response is missed and the wait burns its timeout. Both tempting fixes — a fixed sleep, or `networkidle` — make the flake rarer without removing it, and CI then fails at a lower rate that nobody can reproduce. The fix has to arm the promise before the click.",
+  "requires": [
+    {
+      "id": "promise-armed-before-action",
+      "pattern": "const\\s+\\w+\\s*=\\s*page\\.waitFor(?:Response|Event|Request)|Promise\\.all\\s*\\(\\s*\\[",
+      "why": "the waiter must be created before the action that triggers it"
+    },
+    {
+      "id": "names-the-race",
+      "pattern": "(?i)race|before the (?:click|action)|after (?:the )?(?:click|trigger)|already (?:landed|arrived|resolved)|arm(?:ed|ing)? (?:the )?(?:promise|waiter)",
+      "why": "root cause must be stated, not just patched"
+    },
+    {
+      "id": "root-cause-reported",
+      "pattern": "(?i)root cause|failure under triage|diagnos",
+      "why": "output contract field 5 for a triage task"
+    }
+  ],
+  "forbids": [
+    {
+      "id": "fixed-sleep",
+      "pattern": "waitForTimeout\\s*\\(",
+      "why": "a sleep hides the race at a lower failure rate"
+    },
+    {
+      "id": "networkidle",
+      "pattern": "networkidle",
+      "why": "DISCOURAGED by Playwright and still racy here"
+    },
+    {
+      "id": "retries-as-the-fix",
+      "pattern": "(?i)(?:add|bump|set|increase)[^\\n]{0,40}retries|test\\.describe\\.configure\\(\\s*\\{\\s*retries",
+      "why": "retrying a known race buys a green board, not a fixed test"
+    }
+  ],
+  "exemplars": {"good.md": "PASS", "bad.md": "FAIL"}
+}

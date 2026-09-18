@@ -639,41 +639,139 @@ class TestNoDiscouragedApis(unittest.TestCase):
 
     Playwright marks it DISCOURAGED in its own API reference. Two instances were
     shipping inside GOOD examples; this test is what keeps them from returning.
+
+    The exemption is POSITIONAL, not proximity-based. The previous version searched a
+    +-6-line window, so rewriting
+
+        "Never wait on `waitForLoadState('networkidle')` at any version - Playwright
+         marks it DISCOURAGED."
+
+    into "Prefer ... for stability - Playwright marks it DISCOURAGED." left the suite
+    green: the surviving DISCOURAGED clause satisfied the window for the sentence that
+    now RECOMMENDED the call. Measured; deleting that clause too was caught, which is how
+    the window was identified as the hole. The rule now asks what the sentence says ABOUT
+    this occurrence, which is the thing the ban is about.
     """
+
+    PROHIBITION = (
+        "wrong", "bad", "discouraged", "do not", "don't", "never", "avoid",
+        "anti-pattern", "prohibited", "banned", "mechanically checked", "not on",
+    )
+    RECOMMENDATION = ("prefer", "recommended", "should use", "settles the")
+
+    @staticmethod
+    def _sentence_around(lines, i, col):
+        """The sentence containing lines[i][col], joined across wrapped physical lines.
+
+        Prose wraps mid-sentence, so a line is the wrong unit: `networkidle` is\n
+        DISCOURAGED... puts the marker on the next physical line while being one claim.
+        Returns (sentence_text, index_of_the_occurrence_within_it)."""
+        # Join backwards while the previous line does not end a sentence.
+        start_i = i
+        while start_i > 0:
+            prev = lines[start_i - 1].rstrip()
+            if not prev or prev.endswith((".", ":", ";", "!", "?", "|", "`")) or prev.lstrip().startswith(("#", "```", "-", "*", "|")):
+                break
+            start_i -= 1
+        end_i = i
+        while end_i < len(lines) - 1:
+            cur = lines[end_i].rstrip()
+            if not cur or cur.endswith((".", ":", ";", "!", "?", "|")) or lines[end_i + 1].lstrip().startswith(("#", "```", "-", "*", "|")):
+                break
+            end_i += 1
+        joined = " ".join(l.strip() for l in lines[start_i:end_i + 1])
+        prefix = " ".join(l.strip() for l in lines[start_i:i])
+        pos = len(prefix) + (1 if prefix else 0) + col
+        # Narrow to the sentence containing pos.
+        left = max((joined.rfind(s, 0, pos) for s in (". ", "? ", "! ")), default=-1)
+        right_candidates = [j for j in (joined.find(s, pos) for s in (". ", "? ", "! ")) if j != -1]
+        right = min(right_candidates) + 1 if right_candidates else len(joined)
+        return joined[left + 1:right].strip(), pos - (left + 1)
+
+    @classmethod
+    def _fence_label_is_prohibition(cls, lines, i) -> bool:
+        """True when line i is in a fenced block marked as the BAD example — by a caption
+        directly above the opening fence, or by a comment inside the block above line i.
+        A structural relationship, not a distance."""
+        j = i
+        while j >= 0 and not lines[j].lstrip().startswith("```"):
+            if any(m in lines[j].lower() for m in cls.PROHIBITION):
+                return True          # an in-block comment above the occurrence
+            j -= 1
+        if j < 0:
+            return False
+        return any(k >= 0 and any(m in lines[k].lower() for m in cls.PROHIBITION)
+                   for k in (j - 1, j - 2))
+
+    @classmethod
+    def offenders_in(cls, lines):
+        """The single decision, shared by the real scan and the synthetic self-test, so
+        the test cannot drift from what the guard does. Returns 1-based line numbers."""
+        out = []
+        for i, line in enumerate(lines):
+            col = line.lower().find("networkidle")
+            if col == -1:
+                continue
+            stripped = line.strip()
+            if stripped.startswith("#") or stripped.startswith("- ["):
+                continue           # a heading or TOC entry naming the anti-pattern
+            sentence, at = cls._sentence_around(lines, i, col)
+            low = sentence.lower()
+            before = low[:at]
+            # A recommendation verb governing this occurrence is never exempt, whatever
+            # the rest of the sentence says afterwards.
+            if any(r in before for r in cls.RECOMMENDATION):
+                out.append(i + 1)
+                continue
+            if any(m in low for m in cls.PROHIBITION):
+                continue
+            if cls._fence_label_is_prohibition(lines, i):
+                continue
+            out.append(i + 1)
+        return out
 
     def test_networkidle_only_in_prohibition_context(self) -> None:
         offenders = []
         for path in [SKILL_MD] + sorted(REFS_DIR.glob("*.md")):
             lines = path.read_text().split("\n")
-            for i, line in enumerate(lines):
-                if "networkidle" not in line:
-                    continue
-                stripped = line.strip()
-                # Navigation, not usage: a heading or a TOC entry naming the
-                # anti-pattern is how the reader finds the prohibition.
-                if stripped.startswith("#") or stripped.startswith("- ["):
-                    continue
-                # Allowed only when the surrounding lines mark it as wrong.
-                window = "\n".join(lines[max(0, i - 6) : i + 4]).lower()
-                if any(
-                    marker in window
-                    for marker in [
-                        "wrong",
-                        "bad",
-                        "discouraged",
-                        "do not",
-                        "never",
-                        "avoid",
-                        "mechanically checked",
-                    ]
-                ):
-                    continue
-                offenders.append(f"{path.name}:{i + 1}: {line.strip()}")
+            for n in self.offenders_in(lines):
+                offenders.append(f"{path.name}:{n}: {lines[n - 1].strip()}")
         self.assertEqual(
-            [],
-            offenders,
-            "networkidle used without a prohibition marker:\n" + "\n".join(offenders),
+            [], offenders,
+            "networkidle used without a prohibition governing THIS occurrence:\n"
+            + "\n".join(offenders),
         )
+
+    def test_the_networkidle_detector_still_detects(self) -> None:
+        """Synthetic input. The guard above is pinned to text that is correct today, so a
+        detector edited into one that matches nothing would pass vacuously — and the
+        previous window-based version did exactly that while the rule was inverted."""
+        # The shape that defeated the window version.
+        self.assertEqual([1], self.offenders_in([
+            "Prefer `waitForLoadState('networkidle')` for stability - Playwright marks",
+            "it DISCOURAGED. Assert the user-visible state instead.",
+        ]), "a recommendation must be flagged even with DISCOURAGED in the same sentence")
+        # The real rule's shape stays clean.
+        self.assertEqual([], self.offenders_in([
+            "Never wait on `waitForLoadState('networkidle')` at any version - Playwright marks",
+            "it DISCOURAGED. Assert the user-visible state instead.",
+        ]))
+        # A prohibition phrased with a recommendation verb stays clean.
+        self.assertEqual([], self.offenders_in([
+            'Playwright marks `networkidle` **DISCOURAGED**: "Don\'t use this method".',
+        ]))
+        # A wrapped sentence whose marker lands on the next physical line stays clean.
+        self.assertEqual([], self.offenders_in([
+            "// Wait on a real readiness signal, not on network quiet. `networkidle` is",
+            "// DISCOURAGED by Playwright and never fires on pages with polling.",
+        ]))
+        # Fenced examples: captioned and in-block-commented are exempt, bare is not.
+        self.assertEqual([], self.offenders_in(
+            ["BAD:", "```ts", "await page.waitForLoadState('networkidle');", "```"]))
+        self.assertEqual([], self.offenders_in(
+            ["```ts", "// WRONG - proxy signal", "await page.waitForLoadState('networkidle');", "```"]))
+        self.assertEqual([2], self.offenders_in(
+            ["```ts", "await page.waitForLoadState('networkidle');", "```"]))
 
 
 class TestTauriRoutedAwayFromPlaywright(unittest.TestCase):
@@ -686,6 +784,7 @@ class TestTauriRoutedAwayFromPlaywright(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.deep = (REFS_DIR / "playwright-deep-patterns.md").read_text()
+        cls.skill = SKILL_MD.read_text()
 
     def test_official_route_documented(self) -> None:
         for token in ["WebdriverIO", "@wdio/tauri-service", "tauri-driver"]:
@@ -694,6 +793,50 @@ class TestTauriRoutedAwayFromPlaywright(unittest.TestCase):
     def test_wrong_route_absent(self) -> None:
         for banned in ["Playwright WebView debugging", "Connect to WebView port"]:
             self.assertNotIn(banned, self.deep, f"wrong Tauri guidance present: {banned}")
+
+    # The reference is the deep dive. SKILL.md's own §Platform Scope Boundary table is
+    # what actually routes the decision, and it is read FIRST — before anyone opens the
+    # reference. This guard used to read the reference only, so inverting SKILL.md's row
+    # to `| **Tauri** | Playwright |` passed all 282 tests while leaving the two files
+    # contradicting each other. Measured.
+    PLATFORM_ROUTES = {
+        "Native iOS / Android": "Detox, Maestro, or Appium",
+        "**Tauri**": "WebdriverIO + `@wdio/tauri-service`",
+        "Electron": "Playwright `_electron`",
+        "React Native **Web**": "Playwright",
+    }
+
+    def _platform_rows(self) -> dict:
+        section = self.skill.split("### Platform Scope Boundary", 1)[1].split("\n## ", 1)[0]
+        rows = {}
+        for line in section.split("\n"):
+            s = line.strip()
+            if not s.startswith("|"):
+                continue
+            cells = [c.strip() for c in s.strip("|").split("|")]
+            if len(cells) < 2 or set("".join(cells)) <= set("-: ") or cells[0] == "Platform":
+                continue
+            rows[cells[0]] = cells[1]
+        return rows
+
+    def test_skill_md_platform_table_routes_every_platform_correctly(self) -> None:
+        rows = self._platform_rows()
+        self.assertEqual(set(self.PLATFORM_ROUTES), set(rows),
+                         "a Platform Scope Boundary row was added or removed unpinned")
+        for platform, route in self.PLATFORM_ROUTES.items():
+            with self.subTest(platform=platform):
+                self.assertEqual(route, rows[platform])
+
+    def test_skill_md_and_reference_agree_on_tauri(self) -> None:
+        """Two copies of one routing decision. They must not be able to disagree."""
+        rows = self._platform_rows()
+        self.assertIn("WebdriverIO", rows["**Tauri**"])
+        self.assertNotIn("Playwright cannot attach", self.skill.split("| **Tauri** |")[0][-400:],
+                         "sanity: the claim belongs after the row, not before it")
+        self.assertIn("WebdriverIO", self.deep,
+                      "SKILL.md routes Tauri to WebdriverIO; the reference must say the same")
+        # And SKILL.md must point at the reference section that carries the detail.
+        self.assertIn("§Tauri", self.skill)
 
 
 class TestSelectorPriorityConsistent(unittest.TestCase):
@@ -1745,6 +1888,225 @@ class TestDiscoverScriptRobustness(unittest.TestCase):
 
     def test_never_prints_secret_values(self) -> None:
         self.assertIn("never print a value", self.text.lower())
+
+
+# ══════════════════════════════════════════════════════════════════════════════════════
+# Structural guards — added after a mutation sweep found the normative prose unpinned
+# ══════════════════════════════════════════════════════════════════════════════════════
+
+
+def md_section(text: str, heading: str) -> str:
+    """Body under `heading`, to the next heading of the same or higher level.
+
+    An `assertIn` over the whole document stays green while the occurrence that decides
+    something is edited. Measured: 12 of 22 mutations survived the full 282-test suite,
+    every one of them a threshold or a rule sentence."""
+    lines = text.split("\n")
+    for start, ln in enumerate(lines):
+        if ln.startswith("#") and ln.lstrip("#").strip() == heading:
+            level = len(ln) - len(ln.lstrip("#"))
+            break
+    else:
+        raise AssertionError(f"heading not found: {heading!r}")
+    for end in range(start + 1, len(lines)):
+        nxt = lines[end]
+        if nxt.startswith("#") and (len(nxt) - len(nxt.lstrip("#"))) <= level:
+            return "\n".join(lines[start + 1:end])
+    return "\n".join(lines[start + 1:])
+
+
+def md_rows(section: str) -> list:
+    """Markdown table rows as cell lists (header/separator dropped, `**` kept — the
+    scorecard's own item text uses backticks, not bold, so stripping is unnecessary)."""
+    rows, seen_header = [], False
+    for ln in section.split("\n"):
+        s = ln.strip()
+        if not s.startswith("|"):
+            seen_header = False
+            continue
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        if set("".join(cells)) <= set("-: "):
+            continue
+        if not seen_header:
+            seen_header = True
+            continue
+        rows.append(cells)
+    return rows
+
+
+class TestScorecardThresholdsPinned(unittest.TestCase):
+    """The three tier bars and the item-level thresholds decide every verdict this skill
+    emits, and none of them was pinned: `≥ 4/6` → `≥ 1/6`, `≥ 3/4` → `≥ 0/4` and
+    `≥ 90%` → `≥ 10%` all passed the full suite."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.skill = SKILL_MD.read_text()
+        cls.scorecard = md_section(cls.skill, "Quality Scorecard")
+
+    def test_tier_headings_state_their_bars(self) -> None:
+        for heading in ("### Critical (any FAIL → overall FAIL)",
+                        "### Standard (≥ 4/6 PASS)",
+                        "### Hygiene (≥ 3/4 PASS)"):
+            self.assertIn(heading, self.scorecard, f"tier bar changed or removed: {heading}")
+
+    def test_tier_bars_match_their_own_table_sizes(self) -> None:
+        """A `/6` that describes a 5-row table is a bar nobody can compute. Derive the
+        denominator from the rows rather than trusting the heading."""
+        for tier, prefix, want in (("Critical", "C", 4), ("Standard", "S", 6), ("Hygiene", "H", 4)):
+            body = md_section(self.scorecard, [h for h in
+                                               re.findall(r"(?m)^### (.+)$", self.scorecard)
+                                               if h.startswith(tier)][0])
+            ids = [r[0] for r in md_rows(body) if re.fullmatch(prefix + r"\d+", r[0])]
+            with self.subTest(tier=tier):
+                self.assertEqual(want, len(set(ids)), f"{tier} rows: {sorted(set(ids))}")
+        self.assertIn("≥ 4/6 PASS", self.scorecard)
+        self.assertIn("≥ 3/4 PASS", self.scorecard)
+
+    def test_item_level_thresholds_are_pinned(self) -> None:
+        rows = {r[0]: " | ".join(r[1:]) for r in md_rows(self.scorecard)}
+        self.assertIn("≥ 90% of interactions use accessible selectors", rows["S1"])
+        self.assertIn("Zero instances outside diagnostic comments", rows["C1"])
+        self.assertIn("Serial only with documented reason", rows["S5"])
+
+    def test_na_rows_must_still_be_listed(self) -> None:
+        """Dropping an N/A row and dividing by a smaller denominator inflates the score —
+        the rule that makes the bars meaningful for non-Playwright runners."""
+        self.assertIn("List every item including the N/A ones", self.scorecard)
+        self.assertIn("Dropping a row and dividing by a smaller\ndenominator inflates the score",
+                      self.scorecard)
+
+
+class TestConfigGateRulesPinned(unittest.TestCase):
+    """Rules established by rounds 2–4, each of which a mutation reverted with the suite
+    green: the `declared` vs `available` distinction, the never-print rule, guard scope,
+    and guard-every-variable."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.gate = md_section(SKILL_MD.read_text(), "1) Configuration Gate")
+
+    ENV_STATES = {
+        "`available`": "a non-empty value exists now (process env or a real `.env`)",
+        "`declared`": "the name is known but no value is supplied here — a `.env.example` entry, or `E2E_PASS=` with nothing after it",
+        "`missing`": "no evidence the project uses this variable at all",
+        "`unknown`": "not yet inspected",
+    }
+
+    # The Consequence cell is where the distinction actually bites: two states can be
+    # described similarly and still differ on whether the suite may be called runnable.
+    ENV_CONSEQUENCES = {
+        "`available`": "usable",
+        "`declared`": "**not** usable; confirm the runtime source before claiming runnable",
+        "`missing`": "scaffold or stop",
+        "`unknown`": "inspect before deciding",
+    }
+
+    def test_four_env_states_keep_their_meanings(self) -> None:
+        rows = {r[0]: r for r in md_rows(self.gate)}
+        self.assertEqual(set(self.ENV_STATES), set(rows),
+                         "an env-state row was added or removed unpinned")
+        for state, means in self.ENV_STATES.items():
+            with self.subTest(state=state, cell="means"):
+                self.assertEqual(means, rows[state][1])
+        for state, consequence in self.ENV_CONSEQUENCES.items():
+            with self.subTest(state=state, cell="consequence"):
+                self.assertEqual(consequence, rows[state][2])
+        self.assertIn("A template file\nproves a variable is *expected*, never that a value exists.",
+                      self.gate)
+
+    def test_never_print_a_value(self) -> None:
+        self.assertIn("Never print a variable's value to check whether it is set", self.gate)
+        self.assertIn("report the state", self.gate)
+
+    def test_guard_every_variable_and_guard_scope(self) -> None:
+        self.assertIn("Guard **every** variable the suite needs, not just the first one.", self.gate)
+        self.assertIn("A guard in one test says nothing about\nanother test.", self.gate)
+        self.assertIn("file scope, inside the test,\nor in a `beforeEach` / `beforeAll` hook", self.gate)
+
+    def test_after_hook_guard_is_named_worse_than_useless(self) -> None:
+        """Measured on Playwright 1.62.0 (scripts/verify_hook_semantics.sh): the body runs,
+        reads the unset value, and the run is relabelled skipped."""
+        self.assertIn("A `test.skip` in `afterEach` / `afterAll` is worse than useless.", self.gate)
+        self.assertIn("the test body **runs**", self.gate)
+        self.assertIn("reported as **skipped**", self.gate)
+        self.assertIn("Never put a guard in an\n`after` hook.", self.gate)
+
+
+class TestGoldenFiguresLabelledSynthetic(unittest.TestCase):
+    """`golden-examples.md` carries invented pass counts. SKILL.md's router row is where a
+    reader learns that before opening it; the label was unpinned there."""
+
+    def test_router_row_labels_the_figures(self) -> None:
+        skill = SKILL_MD.read_text()
+        row = [l for l in skill.split("\n") if "golden-examples.md" in l and l.strip().startswith("|")]
+        self.assertTrue(row, "golden-examples.md has no router row")
+        self.assertTrue(any("**All figures in it are synthetic**" in l for l in row),
+                        f"the synthetic label is missing from the router row: {row}")
+
+
+class TestCoverageTotalsDerived(unittest.TestCase):
+    """COVERAGE.md states per-suite counts and a total. They were prose: changing 282 to
+    999 passed all 282 tests. Derive them from the loader instead."""
+
+    def test_declared_totals_match_the_collected_suite(self) -> None:
+        import importlib.util
+        import sys
+
+        here = Path(__file__).resolve().parent
+        cov = (here / "COVERAGE.md").read_text()
+        modules = sorted(f.name for f in here.glob("test_*.py"))
+        self.assertEqual(
+            ["test_discover_script.py", "test_golden_scenarios.py",
+             "test_llm_skill_eval.py", "test_skill_contract.py"],
+            modules,
+            "a test module was added or removed; COVERAGE.md's table must account for it")
+        total = 0
+        for name in modules:
+            spec = importlib.util.spec_from_file_location("_count_" + name[:-3], here / name)
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = mod
+            spec.loader.exec_module(mod)
+            n = unittest.defaultTestLoader.loadTestsFromModule(mod).countTestCases()
+            total += n
+            self.assertIn(f"| `{name}` | {n} |", cov,
+                          f"COVERAGE.md does not state {n} tests for {name}")
+        self.assertIn(f"| **Total** | **{total}** |", cov,
+                      f"COVERAGE.md total is stale; the loader collects {total}")
+
+
+class TestToolSurfaceIsNotOverbroad(unittest.TestCase):
+    """`allowed-tools` is a least-privilege AUTO-APPROVAL surface: a listed pattern runs
+    with no prompt. `Bash(curl*)` can POST anywhere; `Bash(npm run*)` executes any script
+    in the target repo's package.json; `Bash(bash scripts/*)` is a relative wildcard that,
+    from a target repository, means "run any script that repo ships"."""
+
+    BANNED = {
+        "curl*": "can POST to any host; use WebFetch or ask",
+        "npm run*": "runs any script in the target repo's package.json",
+        "bash scripts/*": "relative wildcard — any script in the CWD's scripts/",
+        "python3 scripts/*": "relative wildcard — any script in the CWD's scripts/",
+        "sh*": "arbitrary shell",
+        "*": "everything",
+    }
+
+    def test_no_overbroad_bash_pattern(self) -> None:
+        fm = frontmatter(SKILL_MD.read_text())
+        line = [l for l in fm.split("\n") if l.startswith("allowed-tools:")]
+        self.assertEqual(1, len(line))
+        for pattern in re.findall(r"Bash\(([^)]*)\)", line[0]):
+            with self.subTest(pattern=pattern):
+                self.assertNotIn(pattern, self.BANNED,
+                                 f"`{pattern}` is pre-approved but {self.BANNED.get(pattern)}")
+
+    def test_the_skill_own_scripts_are_still_runnable(self) -> None:
+        """Anti-vacuity and the usability half: narrowing must not strip the entries the
+        skill's own documented commands need."""
+        fm = frontmatter(SKILL_MD.read_text())
+        patterns = re.findall(r"Bash\(([^)]*)\)", fm)
+        for needed in ("python3 scripts/lint_e2e_spec.py*", "bash scripts/discover_e2e_needs.sh*"):
+            self.assertIn(needed, patterns,
+                          f"the skill documents a command that nothing pre-approves: {needed}")
 
 
 if __name__ == "__main__":

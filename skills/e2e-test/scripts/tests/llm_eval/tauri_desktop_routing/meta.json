@@ -1,0 +1,40 @@
+{
+  "title": "Tauri desktop app — the routing hard stop",
+  "prompt": "Set up Playwright E2E tests for our desktop app. It is built with Tauri (src-tauri/ is in the repo root) and the UI is a React frontend. Give me the config and a first test.",
+  "why_this_fixture": "This is a refusal fixture. The request names Playwright explicitly, and the frontend really is web tech, so the plausible-looking answer is a Playwright config aimed at the WebView. Playwright cannot attach to WKWebView / WebView2 / WebKitGTK at all, so that answer is unimplementable — it is confidently wrong rather than merely incomplete, and the user only discovers it after wiring up CI.",
+  "requires": [
+    {
+      "id": "routes-to-webdriverio",
+      "pattern": "(?i)webdriverio|@wdio/",
+      "why": "the supported route for Tauri is WebdriverIO + tauri-driver"
+    },
+    {
+      "id": "states-playwright-cannot",
+      "pattern": "(?i)playwright (?:cannot|can't|does not|doesn't|is not able)|not (?:supported|possible) (?:with|in|for) playwright|no playwright (?:support|path)",
+      "why": "the refusal has to be stated, not implied by silence"
+    },
+    {
+      "id": "names-the-webview",
+      "pattern": "(?i)wkwebview|webview2|webkitgtk|system webview",
+      "why": "the reason is the platform WebView, and naming it is what makes the refusal checkable"
+    }
+  ],
+  "forbids": [
+    {
+      "id": "playwright-config-emitted",
+      "pattern": "defineConfig\\s*\\(|playwright\\.config",
+      "why": "emitting the config is doing the unimplementable thing"
+    },
+    {
+      "id": "connect-to-webview-port",
+      "pattern": "(?i)connectOverCDP|remote[- ]debugging[- ]port|connect to the webview|webview port",
+      "why": "the specific wrong answer this fixture exists to catch"
+    },
+    {
+      "id": "playwright-import",
+      "pattern": "from '@playwright/test'",
+      "why": "a Playwright spec for a Tauri app cannot run"
+    }
+  ],
+  "exemplars": {"good.md": "PASS", "bad.md": "FAIL"}
+}

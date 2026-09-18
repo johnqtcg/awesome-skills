@@ -30,6 +30,11 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:3000
 # expect 200 or 302
 ```
 
+`npm run dev` and `curl` are **deliberately not** in this skill's `allowed-tools`:
+`Bash(curl*)` pre-approves a POST to any host, and `Bash(npm run*)` pre-approves every
+script in the target repository's `package.json`. Run this probe by asking the operator
+to run it, or accept the approval prompt — do not widen the frontmatter to silence it.
+
 **Never echo a secret's value to check whether it is set.** CI logs, screen
 recordings, and agent transcripts all capture stdout. Probe presence only:
 

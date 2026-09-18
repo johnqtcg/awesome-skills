@@ -12,12 +12,14 @@ Regenerate with `bash scripts/run_regression.sh`.
 
 | Suite | Tests |
 |-------|------:|
-| `test_skill_contract.py` | 184 |
+| `test_skill_contract.py` | 199 |
 | `test_golden_scenarios.py` | 54 |
 | `test_discover_script.py` | 44 |
-| **Total** | **282** |
+| `test_llm_skill_eval.py` | 15 |
+| **Total** | **312** |
 
-Plus one **opt-in** verifier not counted above:
+One of the 15 in `test_llm_skill_eval.py` is the live-model evaluation, which skips
+unless `E2E_LLM_EVAL=1`. Plus one **opt-in** verifier not counted above:
 `scripts/verify_hook_semantics.sh` (8 real-Playwright checks; needs npm).
 
 Both invocation forms must be green: `python3 <file>` and
@@ -214,14 +216,63 @@ mid-report — output that reads as "found nothing else" rather than "scan died"
 Tests scrub inherited `E2E_*` variables so a developer's shell cannot flip a
 verdict.
 
+## Skill-Output Evaluation (`test_llm_skill_eval.py`)
+
+The layer the other three do not reach. They assert the skill *contains* its rules;
+this one grades **a response to a task**, which is the artifact the skill produces.
+
+`grade(response, meta, linter)` applies three independent checks and returns a defect
+list; empty means PASS:
+
+1. every `ts`/`js` fenced block goes through `lint_e2e_spec.py`; any CRITICAL is a
+   defect. Prose that *quotes* a forbidden call while explaining why it is wrong is
+   not scored as writing it — only fenced code is linted.
+2. the fixture's `requires` patterns: the decisions the answer has to make.
+3. the fixture's `forbids` patterns: the specific plausible wrong answers.
+
+| Fixture | The decision it grades | What the bad exemplar does |
+|---------|------------------------|----------------------------|
+| `login_journey_declared_env` | `.env.example` means **declared**, not available — scaffold with a guard in a `before` hook naming *every* variable, and do not claim the suite is runnable | reads `process.env.E2E_PASS!` unguarded, hardcodes a staging URL, claims "2 tests passed" with nothing executed, and echoes the password |
+| `tauri_desktop_routing` | a **refusal**: Playwright cannot attach to WKWebView / WebView2 / WebKitGTK, so the answer routes to WebdriverIO + `tauri-driver` and says why | emits a `playwright.config.ts` and a spec that `connectOverCDP`s to a WebView "remote debugging port" — the unimplementable answer the prompt invites |
+| `flaky_async_race` | a waiter armed *after* its trigger is an ordering bug; arm the promise first | adds `waitForTimeout`, `networkidle` and two retries — three fixes that lower the failure rate without removing the race |
+
+Measured discrimination on the shipped exemplars — every `good.md` clean, every
+`bad.md` caught on several independent axes, so one edit cannot silence a fixture:
+
+| Fixture | `good.md` | `bad.md` | Of which from the skill's own linter |
+|---------|----------:|---------:|-------------------------------------:|
+| `login_journey_declared_env` | 0 | 13 | 8 (C1, C3, C4) |
+| `flaky_async_race` | 0 | 8 | 2 (C1) |
+| `tauri_desktop_routing` | 0 | 6 | 0 |
+
+`test_every_fixture_discriminates_on_more_than_one_axis` enforces the ≥ 2 rule;
+`test_all_three_check_families_earn_their_place` asserts across the corpus that no
+check family is decoration (a refusal fixture may legitimately have no code to lint,
+so this is a corpus-level claim, not a per-fixture one); and `FixtureShapeTests`
+rejects a fixture with an empty `requires`/`forbids` — the shape that grades nothing
+while reporting green.
+
+`GraderSelfTests` probes the grader with synthetic input rather than trusting the
+exemplars to exercise it, including the case that a regex-based extractor gets wrong:
+a ```` ```ts ```` line *inside* an open fence is content under CommonMark, not a new
+opener. The extractor is line-oriented and closes only on a bare fence.
+
+The live arm is off by default — it needs a model, costs money, and is not
+deterministic:
+
+```bash
+E2E_LLM_EVAL=1 python3 -m pytest scripts/tests/test_llm_skill_eval.py -k Live
+```
+
 ## Remaining Gaps
 
 Stated plainly rather than rounded up to "100%".
 
-1. **No LLM-in-the-loop evaluation.** `lint_e2e_spec.py` grades *given* spec
-   source deterministically, and the golden fixtures assert the skill contains
-   the rules that should fire — but nothing invokes a model on a prompt and
-   grades its output. Closing this needs an eval harness outside this suite.
+1. **The live arm of the skill-output eval is opt-in.** `test_llm_skill_eval.py`
+   grades real responses, but by default it grades the two shipped exemplars per
+   fixture, not a model's output. What CI proves is that the grader still
+   discriminates — not that today's model passes. Run with `E2E_LLM_EVAL=1` when
+   that question matters.
 2. **The grader is heuristic, not a parser.** It cannot follow helper
    indirection, resolve imported constants, or see through a page object. It is
    built to prefer a miss over a false alarm, so a clean report is weaker

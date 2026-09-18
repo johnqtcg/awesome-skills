@@ -13,6 +13,15 @@
 > The §5 file-size and token-cost figures below describe the pre-revision files
 > and are no longer accurate. The assertion pass rates in §3 were not re-run.
 > Read this report as a record of the 2026-03-11 state, not the current one.
+>
+> **Second staleness note (2026-09-18).** A further hardening round narrowed
+> `allowed-tools` to a least-privilege set, rewrote the `networkidle` detector to be
+> sentence-scoped, pinned the scorecard thresholds and the four env states as data,
+> derived the COVERAGE.md totals from the loader, and added a skill-output evaluation
+> layer (`scripts/tests/test_llm_skill_eval.py`, three fixtures with paired
+> good/bad exemplars). The suite is now 312 tests. §6 of this report lists
+> "no LLM-in-the-loop evaluation" as a gap; that gap is now partially closed — the
+> live arm is opt-in via `E2E_LLM_EVAL=1`.
 
 ---
 
