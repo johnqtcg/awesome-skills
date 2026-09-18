@@ -30,7 +30,8 @@ import tempfile
 import unittest
 
 GO = shutil.which("go")
-FIXTURE_DIR = os.path.join(os.path.dirname(__file__), "llm_eval", "slice_transform")
+EVAL_DIR = os.path.join(os.path.dirname(__file__), "llm_eval")
+FIXTURE_DIR = os.path.join(EVAL_DIR, "slice_transform")
 SKILL_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), os.pardir, os.pardir))
 SCORECARD_REF = os.path.join(SKILL_DIR, "references", "boundary-scorecard.md")
 LIVE_CMD = os.environ.get("UNIT_TEST_SKILL_EVAL_CMD")
@@ -57,12 +58,25 @@ _UNRESOLVED_DEP = re.compile(
 )
 
 
-def _load_fixture() -> dict:
-    with open(os.path.join(FIXTURE_DIR, "meta.json"), encoding="utf-8") as fh:
+def _load_fixture(fixture_dir: str = FIXTURE_DIR) -> dict:
+    with open(os.path.join(fixture_dir, "meta.json"), encoding="utf-8") as fh:
         meta = json.load(fh)
-    with open(os.path.join(FIXTURE_DIR, "sut.go"), encoding="utf-8") as fh:
+    with open(os.path.join(fixture_dir, "sut.go"), encoding="utf-8") as fh:
         meta["source"] = fh.read()
+    meta["dir"] = fixture_dir
     return meta
+
+
+def fixture_dirs() -> list:
+    """Every directory under `llm_eval/` that carries a `meta.json`.
+
+    Discovery rather than a hand-maintained list: a fixture added without being
+    registered somewhere is a fixture nothing runs, and a list that must agree with the
+    filesystem is a second copy of what the filesystem already knows."""
+    return sorted(
+        os.path.join(EVAL_DIR, name) for name in os.listdir(EVAL_DIR)
+        if os.path.isfile(os.path.join(EVAL_DIR, name, "meta.json"))
+    )
 
 
 def scorecard_rule() -> dict:
@@ -826,6 +840,89 @@ class GraderSelfTest(unittest.TestCase):
         self.assertIn("does NOT kill the H1 mutation", joined)
 
 
+@unittest.skipIf(GO is None, "go toolchain not installed")
+class EveryFixtureDiscriminatesTest(unittest.TestCase):
+    """Round 7. Run the good/bad discrimination over **every** fixture under `llm_eval/`,
+    discovered from the filesystem.
+
+    Until round 7 the grader — the only layer that scores a real skill-driven response —
+    had exactly one fixture: a pure function with no dependencies, in Standard mode. Four
+    of the skill's own techniques (dependency error propagation, no-partial-payload,
+    wrong-key mapping, terminal-branch completeness) and four of its five target types
+    were therefore graded by keyword presence alone. Adding a fixture must not require
+    editing this file, so the fixtures are discovered rather than listed.
+    """
+
+    def setUp(self):
+        self.runner = _GoRunner(self)
+        self.runner.preflight()
+
+    @staticmethod
+    def _read(fixture_dir: str, name: str) -> str:
+        with open(os.path.join(fixture_dir, name), encoding="utf-8") as fh:
+            return fh.read()
+
+    def test_at_least_two_fixtures_exist(self):
+        """Anti-vacuity. A loop over an empty (or one-element) discovery reads as green
+        while proving nothing — the single-fixture ceiling this class exists to lift."""
+        found = fixture_dirs()
+        self.assertGreaterEqual(
+            len(found), 2,
+            f"fixture discovery found {[os.path.basename(d) for d in found]}; the "
+            f"round-7 floor is 2, so a fixture was deleted or the layout changed")
+
+    def test_every_fixture_is_sound_before_it_grades_anything(self):
+        """`validate_fixture` checks the fixture, not the response: each hypothesis must
+        own a mutation that exists in the source and contract evidence the source
+        actually states."""
+        for fixture_dir in fixture_dirs():
+            with self.subTest(fixture=os.path.basename(fixture_dir)):
+                self.assertEqual([], validate_fixture(_load_fixture(fixture_dir)))
+
+    def test_every_good_exemplar_passes_its_grader(self):
+        """An exemplar that cannot pass its own grader is not a standard, and an exemplar
+        that over-claims becomes the passing standard for over-claiming."""
+        for fixture_dir in fixture_dirs():
+            name = os.path.basename(fixture_dir)
+            with self.subTest(fixture=name):
+                fixture = _load_fixture(fixture_dir)
+                passed, reasons = grade(self._read(fixture_dir, "good.md"),
+                                        fixture, self.runner)
+                self.assertTrue(passed, f"{name}/good.md should pass; reasons: {reasons}")
+
+    def test_every_bad_exemplar_fails_its_grader(self):
+        for fixture_dir in fixture_dirs():
+            name = os.path.basename(fixture_dir)
+            with self.subTest(fixture=name):
+                fixture = _load_fixture(fixture_dir)
+                passed, _ = grade(self._read(fixture_dir, "bad.md"), fixture, self.runner)
+                self.assertFalse(passed, f"{name}/bad.md must not pass the grader")
+
+    def test_the_plausible_bad_response_fails_on_substance(self):
+        """`service_mapping/bad.md` is the hard negative: correct mode, all four
+        hypotheses named, a scorecard, both `Kill: Verified` labels, and a JSON summary
+        that parses and agrees with itself. Every format check passes. It must still fail,
+        and on the three substantive grounds — otherwise the grader is scoring prose."""
+        fixture_dir = os.path.join(EVAL_DIR, "service_mapping")
+        fixture = _load_fixture(fixture_dir)
+        passed, reasons = grade(self._read(fixture_dir, "bad.md"), fixture, self.runner)
+        self.assertFalse(passed)
+        joined = " | ".join(reasons)
+        # "6 cases" over a file that runs 3.
+        self.assertIn("report claims 6 case(s) but go test -v ran 3", joined)
+        # Precisely which hypotheses went unverified, not merely "something failed".
+        # H1 IS killed — the length and ID assertions catch a dropped level — so a
+        # grader that rejected all four would be failing the response for the wrong
+        # reason and would tell us nothing about its discrimination.
+        survived = {h["id"] for h in fixture["hypotheses"]
+                    if f"does NOT kill the {h['id']} mutation" in joined}
+        self.assertEqual({"H2", "H3", "H4"}, survived)
+        # And it must NOT be rejected for anything the response actually got right:
+        # mode, scorecard, report markers, and a JSON summary that agrees with itself.
+        for right in ("mode:", "no scorecard", "report is missing", "JSON:"):
+            self.assertNotIn(right, joined)
+
+
 class JsonSummaryContractTests(unittest.TestCase):
     """Mutation tests for `grade_json_summary`: break exactly one thing in the good
     exemplar's JSON and require the matching rejection.
@@ -1019,21 +1116,36 @@ class LiveSkillEval(unittest.TestCase):
     """Opt-in: drive a real model through the skill and grade its output."""
 
     def test_live_model_output_passes_grader(self):
-        fixture = _load_fixture()
+        """Every discovered fixture, not just the first. The live arm is the only layer
+        that proves a model driving the skill produces a conforming response, so running
+        it against one target type would leave exactly the gap round 7 closed in CI.
+        Set `UNIT_TEST_SKILL_EVAL_FIXTURE` to a fixture id to narrow it."""
+        only = os.environ.get("UNIT_TEST_SKILL_EVAL_FIXTURE")
         runner = _GoRunner(self)
         runner.preflight()
-        skill_md = os.path.join(SKILL_DIR, "SKILL.md")
-        with open(skill_md, encoding="utf-8") as fh:
+        with open(os.path.join(SKILL_DIR, "SKILL.md"), encoding="utf-8") as fh:
             skill = fh.read()
-        prompt = (
-            "Follow this unit-test skill exactly and produce its full output "
-            "(mode, failure hypotheses, killer case with a Go test, scorecard, JSON):\n\n"
-            f"{skill}\n\n---\nTarget source (package sut):\n```go\n{fixture['source']}```\n"
-        )
-        proc = subprocess.run(LIVE_CMD, shell=True, input=prompt,
-                              capture_output=True, text=True, timeout=900)
-        passed, reasons = grade(proc.stdout, fixture, runner)
-        self.assertTrue(passed, f"live model output failed grading: {reasons}\n\n{proc.stdout[:2000]}")
+
+        selected = [d for d in fixture_dirs()
+                    if only is None or os.path.basename(d) == only]
+        self.assertTrue(selected, f"no fixture named {only!r}")
+
+        for fixture_dir in selected:
+            with self.subTest(fixture=os.path.basename(fixture_dir)):
+                fixture = _load_fixture(fixture_dir)
+                prompt = (
+                    "Follow this unit-test skill exactly and produce its full output "
+                    "(mode, failure hypotheses, killer case with a Go test, scorecard, "
+                    "JSON):\n\n"
+                    f"{skill}\n\n---\nTarget source (package "
+                    f"{fixture['package']}):\n```go\n{fixture['source']}```\n"
+                )
+                proc = subprocess.run(LIVE_CMD, shell=True, input=prompt,
+                                      capture_output=True, text=True, timeout=900)
+                passed, reasons = grade(proc.stdout, fixture, runner)
+                self.assertTrue(
+                    passed,
+                    f"live model output failed grading: {reasons}\n\n{proc.stdout[:2000]}")
 
 
 if __name__ == "__main__":

@@ -190,7 +190,7 @@ When in doubt, choose Standard.
 | Case budget per target | **3-6** | **5-12** | **8-15+** |
 | Failure Hypothesis List | Skip | Required | Required |
 | Killer Case per target | Skip | Required (1) | Required (1+) |
-| Removal Risk Statement | Skip | Required | Required |
+| Kill verification (`Kill: Verified`/`Unverified`) | Skip | Required | Required |
 | Boundary Checklist | **Light (5 items)** | Full (12 items) | Full (12 items) |
 | Scorecard | **Light (7 checks)** | Full (13 checks) | Full (13 checks) |
 | Property-based test guidance | N/A | Recommend if applicable | Required when pattern matches |
@@ -372,9 +372,7 @@ When the task is fixing failing tests or adding tests to existing code, use thes
 2. **(Standard + Strict only)** Build targeted Failure Hypothesis List (only for uncovered paths)
 3. Design cases for gaps only (do not rewrite existing tests)
 4. Run coverage diff: compare before/after
-5. Simplified Scorecard (mode-aware):
-   - **Standard/Strict targets**: only verify items 5, 7, 8, 11 for new cases.
-   - **Light targets**: only verify items L3, L5, L7 for new cases.
+5. Simplified Scorecard, scored over the new cases only — see §Auto Scorecard *Applicability*, which is the single place the incremental item lists live.
 
 ### Coverage recovery:
 1. Run `go test -coverprofile=before.out`

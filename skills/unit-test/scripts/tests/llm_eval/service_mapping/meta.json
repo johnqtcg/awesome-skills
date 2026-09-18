@@ -1,0 +1,93 @@
+{
+  "id": "service_mapping",
+  "target": "LevelService.ListLevels",
+  "expected_mode": "Standard",
+  "expected_mode_rationale": "Service interface over a slice transform with one failing dependency — Light excludes slice/map transforms; no Strict risk trigger (ctx is pass-through, no concurrency, no security surface)",
+  "package": "sut",
+
+  "_why_this_fixture": "The slice_transform fixture grades a pure function with no dependency, so four of the skill's own techniques were graded only by keyword presence: dependency error propagation, no-partial-payload, wrong-key mapping, and terminal-branch completeness. This fixture is a Service-interface target that exercises all four, and it deliberately does NOT promise a non-nil empty result — so an exemplar that asserts one is inventing a requirement, which `validate_fixture` is designed to catch from the other direction.",
+
+  "hypotheses": [
+    {
+      "id": "H1",
+      "description": "off-by-one in the range bound drops the last level",
+      "keywords": ["off-by-one", "last", "drop"],
+      "min_keywords": 2,
+      "case_pattern": "(?i)three|last|tail|chain|preserv",
+      "contract_evidence": "preserving order and count",
+      "mutation": {
+        "find": "for i := 0; i < len(levels); i++ {",
+        "replace": "for i := 0; i < len(levels)-1; i++ {"
+      }
+    },
+    {
+      "id": "H2",
+      "description": "a level links to its immediate successor, not to itself — a self-link makes every level look terminal-adjacent and is invisible to a length or ID-only assertion",
+      "keywords": ["successor", "NextLevelID"],
+      "min_keywords": 2,
+      "case_pattern": "(?i)three|chain|successor|next",
+      "contract_evidence": "Every level links to its successor",
+      "mutation": {
+        "find": "v.NextLevelID = levels[i+1].ID",
+        "replace": "v.NextLevelID = levels[i].ID"
+      }
+    },
+    {
+      "id": "H3",
+      "description": "the repository error is wrapped with %w, so errors.Is still matches it at the caller; %v would keep the message and lose the identity",
+      "keywords": ["repository error", "wrap"],
+      "min_keywords": 2,
+      "case_pattern": "(?i)error|fail|unavailable",
+      "contract_evidence": "wraps the repository's error with %w",
+      "mutation": {
+        "find": "return nil, fmt.Errorf(\"list levels: %w\", err)",
+        "replace": "return nil, fmt.Errorf(\"list levels: %v\", err)"
+      }
+    },
+    {
+      "id": "H4",
+      "description": "on a repository error the result is nil, not an empty non-nil slice a caller could range over as if it were the answer",
+      "keywords": ["partial", "nil"],
+      "min_keywords": 2,
+      "case_pattern": "(?i)error|fail|unavailable",
+      "contract_evidence": "never a partial list alongside an error",
+      "mutation": {
+        "find": "return nil, fmt.Errorf(\"list levels: %w\", err)",
+        "replace": "return []LevelView{}, fmt.Errorf(\"list levels: %w\", err)"
+      }
+    }
+  ],
+
+  "_allow_skipped_cases": "Every dependency is a hand-written fake; nothing here needs an environment. A skipped case is discovered, not verified.",
+  "allow_skipped_cases": false,
+
+  "json_field_types": {
+    "summary.pass": "bool",
+    "summary.score": "string",
+    "summary.go_version": "string",
+    "targets[].name": "string",
+    "targets[].type": "string",
+    "targets[].cases": "int",
+    "targets[].killer_cases": "int",
+    "targets[].hypothesis_covered": "array",
+    "coverage.package": "string",
+    "coverage.line_pct": "number",
+    "coverage.gate": "number",
+    "coverage.met": "bool",
+    "race.executed": "bool",
+    "race.clean": "bool",
+    "scorecard.critical_pass": "int",
+    "scorecard.critical_total": "int",
+    "scorecard.standard_pass": "int",
+    "scorecard.standard_total": "int",
+    "scorecard.hygiene_pass": "int",
+    "scorecard.hygiene_total": "int"
+  },
+
+  "report_patterns": [
+    {
+      "name": "a killer-case kill verification (`Kill: Verified|Unverified`)",
+      "regex": "Kill:\\s*(Verified|Unverified)"
+    }
+  ]
+}

@@ -1,8 +1,10 @@
 # Killer Case Patterns — Go Code Templates
 
-> Referenced from [SKILL.md](../SKILL.md). Each pattern includes a defect hypothesis, test code, critical assertion, and removal risk statement.
+> Referenced from [SKILL.md](../SKILL.md). Each pattern carries a defect hypothesis, test code, a critical assertion, and a `Kill check:` comment.
 >
-> The removal-risk sentence inside each template is a **code comment** binding the case to its hypothesis. The `Verification: Verified` / `Verification: Unverified` label belongs in the **report**, not in the comment — see § Verifying the Kill at the end of this file for how to obtain it.
+> The `Kill check:` sentence inside each template is a **code comment** binding the case to its hypothesis — it states what the injected defect must do, not that it was done. The `Kill: Verified` / `Kill: Unverified` label is the *result*, and it belongs in the **report**, never in the comment: a comment cannot know whether anyone ran anything. See § Verifying the Kill at the end of this file for how to obtain it.
+>
+> There is no "removal risk statement" in these templates and no `Verification:` label. Both were retired: the first asserted that an assertion was indispensable without running the experiment that decides it, and the second was renamed to `Kill:` so the label names the claim it carries. § Verifying the Kill keeps the two experiments apart.
 
 ## 1) Dropped-Tail in List Transform
 
@@ -208,6 +210,13 @@ go test ./path/to/pkg -run TestXxx -v          # MUST fail; keep the failure lin
 cp /tmp/target.go.orig path/to/target.go
 go test ./path/to/pkg -run TestXxx -v          # MUST pass again
 ```
+
+`cp` is **not** on this skill's `allowed-tools` auto-approval surface, so the snapshot and
+the restore will each ask for permission. That is a prompt, not a block — but in a
+non-interactive run it stalls the one step the report's `Kill: Verified` depends on. The
+equivalent with tools the skill already carries: read the file, keep the original text,
+write the mutated text, run the test, write the original text back. Whichever you use,
+**the restore is not optional** — see the last line of this section.
 
 Report `Kill: Verified` and quote the observed failure, e.g.
 `--- FAIL: TestExtractIDs/three_elements (0.00s) sut_test.go:31: len = 2, want 3`.

@@ -1,3 +1,4 @@
+import json
 import re
 import unittest
 from pathlib import Path
@@ -494,18 +495,32 @@ class UnitTestSkillContractTests(unittest.TestCase):
         self.assertIn("Incremental + Light mode: minimal scorecard", skill)
 
     def test_incremental_add_tests_flow_is_mode_aware(self) -> None:
-        """The 'Add tests for existing code' incremental flow must gate
-        Failure Hypothesis List and use mode-aware scorecard items."""
+        """The 'Add tests for existing code' incremental flow must gate the Failure
+        Hypothesis List, and route its scorecard to the one place the item lists live.
+
+        Round 7: this flow used to restate the incremental item lists (`5, 7, 8, 11` /
+        `L3, L5, L7`) that § Auto Scorecard *Applicability* already states. Two copies of
+        one rule drift, and a guard asserting the copy is present is what keeps them
+        both. The guard now follows the pointer instead: the flow must route, and the
+        destination must carry both mode-aware rules."""
         skill = SKILL_MD.read_text()
         inc_start = skill.index("### Add tests for existing code:")
         inc_section = skill[inc_start : inc_start + 600]
         # Failure Hypothesis List gated to Standard + Strict
         self.assertIn("(Standard + Strict only)", inc_section)
         self.assertIn("Failure Hypothesis List", inc_section)
-        # Scorecard is mode-aware
-        self.assertIn("Standard/Strict targets", inc_section)
-        self.assertIn("Light targets", inc_section)
-        self.assertIn("L3, L5, L7", inc_section)
+        # The flow routes to the single source rather than restating it.
+        self.assertIn("Auto Scorecard", inc_section)
+        self.assertNotIn(
+            "L3, L5, L7", inc_section,
+            "the incremental item list is restated here; it belongs only in "
+            "§ Auto Scorecard Applicability")
+        # And the destination is mode-aware for both target kinds.
+        applicability = skill[skill.index("## Auto Scorecard"):]
+        self.assertIn("Incremental mode (Standard/Strict targets)", applicability)
+        self.assertIn("items 5, 7, 8, 11", applicability)
+        self.assertIn("Incremental mode (Light targets)", applicability)
+        self.assertIn("items L3, L5, L7 only", applicability)
 
     # --- Fix: No unreachable force-Light path in PBT ---
 
@@ -531,19 +546,33 @@ class UnitTestSkillContractTests(unittest.TestCase):
 
     # --- New: SKILL.md line budget ---
 
-    # Budget raised 500 -> 520 in round 5. The round-4/5 correctness fixes (coverage
-    # measurement scope, and separating "the case kills the mutation" from "this
-    # assertion is indispensable") needed more precise wording, which left 2 lines of
-    # headroom under the old number — a budget that tight fires on the next edit
-    # regardless of merit. The guard's job is to bound growth, not to freeze a round
-    # number: the next addition should still trim or move content into `references/`.
-    SKILL_MD_LINE_BUDGET = 520
+    # Round 5 raised this 500 -> 520 to fit a file that had grown to 505 — which makes
+    # the number a record of the file's size rather than a constraint on it. Round 7 put
+    # it back below the file (510 against 503) after deleting a stale requirement row and
+    # merging a duplicated scorecard list.
+    #
+    # Rule for the next editor: this constant is not the thing to edit. SKILL.md is
+    # loaded in full on every trigger, so a section that only Standard/Strict needs, or
+    # that is consulted once, belongs in `references/` behind a pointer. Raise the number
+    # only with a reason recorded here, as round 5 did.
+    SKILL_MD_LINE_BUDGET = 510
 
     def test_skill_md_stays_within_line_budget(self) -> None:
         lines = len(SKILL_MD.read_text().splitlines())
         self.assertLessEqual(
             lines, self.SKILL_MD_LINE_BUDGET,
-            f"SKILL.md too long: {lines} lines (budget: {self.SKILL_MD_LINE_BUDGET})")
+            f"SKILL.md too long: {lines} lines (budget: {self.SKILL_MD_LINE_BUDGET}). "
+            f"Move a section into references/ rather than raising the budget.")
+
+    def test_the_line_budget_still_constrains_the_file(self) -> None:
+        """A budget set above the file by more than a rounding margin is a record, not a
+        limit — it cannot fire until someone adds a chapter. Keep the headroom small
+        enough that growth is a decision."""
+        lines = len(SKILL_MD.read_text().splitlines())
+        self.assertLessEqual(
+            self.SKILL_MD_LINE_BUDGET - lines, 25,
+            f"SKILL.md is {lines} lines against a budget of {self.SKILL_MD_LINE_BUDGET}: "
+            f"the budget has drifted into slack and no longer constrains anything")
 
     # --- New: boundary-scorecard.md reference integrity ---
 
@@ -949,6 +978,359 @@ class HypothesisMustBeCheckableGuardTests(unittest.TestCase):
         # The decision must route through the contract, not the current implementation.
         self.assertIn("reading the contract, not the implementation", self.techniques)
         self.assertIn("is not a contract", self.techniques)
+
+
+# --------------------------------------------------------------------------------------
+# Round 7 — structural guards
+# --------------------------------------------------------------------------------------
+
+def md_section(text: str, heading: str) -> str:
+    """Return the slice of `text` under `heading`, up to the next heading of the same or
+    a higher level.
+
+    Section scoping is the point. A guard written as `assertIn(">= 80%", skill)` is
+    satisfied by *any* occurrence in a 500-line document, so editing the one that decides
+    the gate leaves it green — measured, that is exactly what happened. Slicing first
+    makes the assertion refer to the place the rule lives.
+    """
+    lines = text.splitlines()
+    # Indices, not `text.index(line)`: searching for the heading's text would match a
+    # substring of an unrelated line, and the resulting slice would silently be the wrong
+    # section — a scoping bug that makes a scoped assertion behave like an unscoped one.
+    for start, line in enumerate(lines):
+        if line.startswith("#") and line.lstrip("#").strip() == heading:
+            level = len(line) - len(line.lstrip("#"))
+            break
+    else:
+        raise AssertionError(f"heading not found: {heading!r}")
+    for end in range(start + 1, len(lines)):
+        nxt = lines[end]
+        if nxt.startswith("#") and (len(nxt) - len(nxt.lstrip("#"))) <= level:
+            return "\n".join(lines[start + 1:end])
+    return "\n".join(lines[start + 1:])
+
+
+def md_table(section: str) -> list:
+    """Parse the first markdown table in `section` into a list of cell-lists.
+
+    The header row and the `|---|` separator are dropped; `**bold**` markers are
+    stripped so a cell's emphasis cannot change its value.
+    """
+    rows, seen_header = [], False
+    for line in section.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("|"):
+            if rows:
+                break          # table ended
+            continue
+        cells = [c.strip().replace("**", "") for c in stripped.strip("|").split("|")]
+        if set("".join(cells)) <= set("-: "):
+            continue           # separator row
+        if not seen_header:
+            seen_header = True
+            continue
+        rows.append(cells)
+    if not rows:
+        raise AssertionError("no markdown table found in section")
+    return rows
+
+
+class NormativeValueGuardTests(unittest.TestCase):
+    """Round 7. Eight mutations were run against SKILL.md and **six survived** — every one
+    of them a number or a table cell that decides an outcome:
+
+    * the coverage gate inside § Coverage Gate Policy (`>= 80%` -> `>= 75%`),
+    * the Mode-Requirements cell that makes a killer case mandatory in Standard,
+    * the Light-Scorecard PASS bar (`total >= 6/7` -> `3/7`) and its tier minimums,
+    * five `references/...md` pointers rewritten to a file that does not exist.
+
+    They survived because the guards asserted that a *string appeared somewhere in the
+    document*, and the same string appeared elsewhere — or because only the row label was
+    checked and never the cell. This is the failure mode the skill itself teaches
+    (Critical item 5, mutation-resistant assertions): an assertion satisfied by an
+    unrelated match. These tests parse the structure and assert the value in place.
+
+    Every test here was confirmed to FAIL against the mutation it names before being
+    committed. A guard with no demonstrated failure is not a check.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.skill = SKILL_MD.read_text()
+        cls.scorecard = BOUNDARY_SCORECARD_REF.read_text()
+
+    # --- the coverage gate, in the section that defines it ---
+
+    def test_coverage_gate_number_is_pinned_inside_its_policy_section(self):
+        section = md_section(self.skill, "Coverage Gate Policy (Default + Scope)")
+        self.assertLess(len(section), len(self.skill),
+                        "section scoping degenerated to the whole document")
+        self.assertIn("Coverage gate: **>= 80%**", section)
+        self.assertIn("typical **60–80%**", section)
+        # No other gate number may be stated here: two numbers in one policy is the
+        # ambiguity the single-source rule exists to prevent.
+        stated = set(re.findall(r">= (\d+)%", section))
+        self.assertEqual({"80"}, stated,
+                         f"§ Coverage Gate Policy states gate(s) {sorted(stated)}, want only 80%")
+
+    # --- the Mode Requirements table, cell by cell ---
+
+    MODE_REQUIREMENTS = {
+        "Table-driven tests": ("Required (2+ cases)", "Required (2+ cases)", "Required (2+ cases)"),
+        "Mutation-resistant assertions": ("Required", "Required", "Required"),
+        "Race detection (`-race`)": ("Required", "Required", "Required"),
+        "Coverage gate (80%)": ("Required", "Required", "Required"),
+        "Reporting Integrity": ("Required", "Required", "Required"),
+        "Case budget per target": ("3-6", "5-12", "8-15+"),
+        "Failure Hypothesis List": ("Skip", "Required", "Required"),
+        "Killer Case per target": ("Skip", "Required (1)", "Required (1+)"),
+        "Kill verification (`Kill: Verified`/`Unverified`)": ("Skip", "Required", "Required"),
+        "Boundary Checklist": ("Light (5 items)", "Full (12 items)", "Full (12 items)"),
+        "Scorecard": ("Light (7 checks)", "Full (13 checks)", "Full (13 checks)"),
+        "Property-based test guidance": ("N/A", "Recommend if applicable",
+                                         "Required when pattern matches"),
+        "JSON Summary": ("Skip", "Required", "Required"),
+    }
+
+    def _mode_requirements(self) -> dict:
+        rows = md_table(md_section(self.skill, "Mode Requirements"))
+        return {r[0]: tuple(r[1:4]) for r in rows}
+
+    def test_mode_requirements_cells_are_pinned(self):
+        """The mutation that survived: `Killer Case per target` Standard -> `Skip`, which
+        contradicts the Hard Rule three screens above it and was caught by nothing."""
+        table = self._mode_requirements()
+        for feature, want in self.MODE_REQUIREMENTS.items():
+            with self.subTest(feature=feature):
+                self.assertIn(feature, table, "Mode Requirements row disappeared")
+                self.assertEqual(want, table[feature])
+
+    def test_mode_requirements_has_no_unpinned_row(self):
+        """Adding a row must force pinning its cells, or the table grows an
+        unguarded requirement — which is how the retired `Removal Risk Statement`
+        row survived four rounds of review."""
+        self.assertEqual(set(self.MODE_REQUIREMENTS), set(self._mode_requirements()))
+
+    # --- the Light scorecard's pass bar, checked against its own table ---
+
+    def test_light_scorecard_pass_bar_is_pinned_and_consistent(self):
+        section = md_section(self.skill, "Light Scorecard (7 checks)")
+        tiers = [row[1] for row in md_table(section)]
+        sizes = {t: tiers.count(t) for t in set(tiers)}
+        self.assertEqual({"Critical": 2, "Standard": 2, "Hygiene": 3}, sizes)
+        total = len(tiers)
+
+        # Denominators are derived from the table, so a changed tier size must be
+        # reflected in the bar rather than silently contradicting it.
+        self.assertIn(f"Standard >= 1/{sizes['Standard']}", section)
+        self.assertIn(f"Hygiene >= 2/{sizes['Hygiene']}", section)
+        self.assertIn(f"total >= 6/{total}", section)
+
+        # And the bar must be arithmetically possible: the per-tier minimums plus both
+        # Critical items cannot exceed the total minimum, or the rule is unsatisfiable.
+        self.assertLessEqual(sizes["Critical"] + 1 + 2, 6)
+        self.assertLessEqual(6, total)
+
+    def test_case_budget_is_the_same_number_in_all_three_places(self):
+        """The per-mode case budget is written three times: the Mode-Requirements row,
+        the High-Signal Test Budget table, and Workflow step 6. Three copies of one
+        number drift, and each copy has its own presence-check guard, so a drift would
+        leave all three green. Deleting two copies would cost the at-a-glance matrix and
+        the in-flow reminder their value, so the copies are kept and required to agree."""
+        mode_row = self._mode_requirements()["Case budget per target"]
+        budget_rows = md_table(md_section(self.skill, "High-Signal Test Budget (Anti-Bloat)"))
+        budget = {r[0]: r[1] for r in budget_rows}
+        self.assertEqual(
+            {"Light": mode_row[0], "Standard": mode_row[1], "Strict": mode_row[2]},
+            budget,
+            "the Mode Requirements row and the High-Signal Test Budget table disagree")
+        workflow = md_section(self.skill, "Workflow")
+        step6 = next(l for l in workflow.splitlines() if l.startswith("6."))
+        for mode, value in budget.items():
+            self.assertIn(f"{mode}: {value}", step6,
+                          f"Workflow step 6 disagrees with the budget table for {mode}")
+
+    def test_json_summary_fields_match_every_eval_fixture(self):
+        """SKILL.md's JSON example defines the machine-readable contract; each grader
+        fixture's `json_field_types` is the list CI enforces. They are two copies of one
+        schema in different files, and nothing compared them — so a field added to the
+        skill would be optional in CI, and a field required by CI could vanish from the
+        skill with every test still green."""
+        block = re.search(r"```json\s*\n(.*?)```", self.skill, re.S)
+        self.assertIsNotNone(block, "SKILL.md no longer ships a JSON summary example")
+        try:
+            doc = json.loads(block.group(1))
+        except ValueError as exc:
+            # The example is the contract a model copies. If it does not parse, the
+            # schema comparison below cannot run — report that as the defect rather than
+            # letting a JSONDecodeError surface as an unexplained test error.
+            self.fail(f"SKILL.md's JSON summary example does not parse: {exc}")
+
+        documented = set()
+        for section, body in doc.items():
+            if isinstance(body, list):
+                for entry in body:
+                    documented.update(f"{section}[].{k}" for k in entry)
+            else:
+                documented.update(f"{section}.{k}" for k in body)
+
+        eval_dir = SKILL_DIR / "scripts" / "tests" / "llm_eval"
+        metas = sorted(eval_dir.glob("*/meta.json"))
+        self.assertGreaterEqual(len(metas), 2, "eval fixture discovery found almost none")
+        for meta_path in metas:
+            with self.subTest(fixture=meta_path.parent.name):
+                declared = set(json.loads(meta_path.read_text())["json_field_types"])
+                self.assertEqual(
+                    documented, declared,
+                    "SKILL.md's JSON summary example and this fixture's "
+                    "json_field_types describe different schemas")
+
+    def test_scorecard_tiers_agree_between_skill_and_reference(self):
+        """SKILL.md lists the tiers by item number; `boundary-scorecard.md` tags each of
+        the 13 items with its tier, and the grader parses the reference. If the two ever
+        disagree, the skill instructs one verdict and CI scores another."""
+        skill_tiers = {}
+        for row in md_table(md_section(self.skill, "Auto Scorecard (13 Checks)")):
+            tier = row[0].split(" (")[0]
+            skill_tiers[tier] = {int(n) for n in re.findall(r"\d+", row[1])}
+
+        ref_tiers = {}
+        for row in md_table(md_section(self.scorecard, "Auto Scorecard — 13 Items")):
+            ref_tiers.setdefault(row[1].strip("[]"), set()).add(int(row[0]))
+
+        self.assertEqual({"Critical": {5, 11, 13},
+                          "Standard": {7, 8, 9, 10, 12},
+                          "Hygiene": {1, 2, 3, 4, 6}}, skill_tiers)
+        self.assertEqual(skill_tiers, ref_tiers)
+
+
+# A line may name the retired `Removal Risk Statement` only to say it is retired.
+# Anything else — a table cell, a bullet, a workflow step — is the obligation coming back.
+# The allow-list is the *safe* shape, because the unsafe shapes are unbounded, so an
+# unrecognised line fails. Both predicates live at module scope so a test can drive them
+# with synthetic input: see `test_the_retirement_allow_list_still_discriminates`.
+RETIREMENT_MARKERS = ("retired", "there is no", "no longer", "must not")
+RETIRED_LABEL = re.compile(r"Verification:\s*(?:Verified|Unverified)")
+
+
+def names_removal_risk(line: str) -> bool:
+    return bool(re.search(r"removal[ -]risk statement", line, re.I))
+
+
+def is_retirement_note(line: str) -> bool:
+    return any(m in line.lower() for m in RETIREMENT_MARKERS)
+
+
+class ShippedSurfaceIntegrityTests(unittest.TestCase):
+    """Round 7. Guards over the whole shipped surface (SKILL.md + `references/`), as
+    opposed to the test-side documentation, which is allowed to quote retired wording as
+    history."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.assets = [SKILL_MD, *sorted(REFERENCE_DIR.glob("*.md"))]
+        cls.texts = {p.name: p.read_text() for p in cls.assets}
+
+    def test_every_reference_pointer_resolves(self):
+        """Renaming a reference file left five dead `references/...md` pointers in
+        SKILL.md with the full suite green. Only two of the five files had an existence
+        test, and both were named literally."""
+        pointers = set()
+        for name, text in self.texts.items():
+            for target in re.findall(r"references/([A-Za-z0-9._-]+\.md)", text):
+                pointers.add((name, target))
+        self.assertGreaterEqual(
+            len(pointers), 5,
+            "found almost no reference pointers — the regex stopped matching, so this "
+            "guard would pass vacuously")
+        for source, target in sorted(pointers):
+            with self.subTest(source=source, target=target):
+                self.assertTrue((REFERENCE_DIR / target).is_file(),
+                                f"{source} points at references/{target}, which does not exist")
+
+    def test_every_reference_file_is_reachable(self):
+        """The other direction: a reference nobody points at is never loaded, so its
+        rules do not apply to anything."""
+        pointed_at = set()
+        for text in self.texts.values():
+            pointed_at.update(re.findall(r"references/([A-Za-z0-9._-]+\.md)", text))
+        for ref in sorted(REFERENCE_DIR.glob("*.md")):
+            with self.subTest(reference=ref.name):
+                self.assertIn(ref.name, pointed_at,
+                              f"references/{ref.name} is never referenced — dead weight")
+
+    def test_retired_verification_label_cannot_return(self):
+        """Round 5 renamed `Verification: Verified` to `Kill: Verified` so the label names
+        the claim it carries. The old spelling survived in `killer-case-patterns.md`'s
+        header until round 7 — a model reading the reference first would emit a label the
+        scorecard's item 11 treats as unlabelled, i.e. a FAIL."""
+        for name, text in self.texts.items():
+            with self.subTest(asset=name):
+                self.assertIsNone(
+                    RETIRED_LABEL.search(text),
+                    f"{name} uses the retired `Verification:` label; the label is `Kill:`")
+
+    def test_retired_removal_risk_requirement_cannot_return(self):
+        """`Removal Risk Statement` was a mandated sentence asserting that an assertion was
+        indispensable — a claim nobody had run the experiment for. Round 5 retired it;
+        round 6 left it standing as a `Required` cell in the Mode Requirements table,
+        where it contradicted the Hard Rules. It must not come back as an obligation."""
+        for name, text in self.texts.items():
+            for line in text.splitlines():
+                if not names_removal_risk(line):
+                    continue
+                with self.subTest(asset=name, line=line.strip()[:70]):
+                    self.assertTrue(
+                        is_retirement_note(line),
+                        f"{name} names `Removal Risk Statement` outside a retirement "
+                        f"note, i.e. as a live obligation. The mandatory item is "
+                        f"`Kill: Verified`; an assertion-necessity claim is optional and "
+                        f"needs its own experiment.")
+
+    def test_the_retirement_allow_list_still_discriminates(self):
+        """The exemption needs its own negative test, or it is the hole.
+
+        Measured: widening `RETIREMENT_MARKERS` with `""` — which matches every line —
+        makes the guard above accept a reinstated `| Removal Risk Statement | Required |`
+        row, and **nothing failed**. The guard was pinned to the shipped text, which is
+        correct today, so an exemption that no longer excludes anything is invisible.
+        Synthetic input is what binds the predicate to its behaviour. Same for the
+        `Verification:` regex: a pattern edited into one that cannot match would leave
+        every assertion above vacuously true."""
+        reinstated = [
+            "| Removal Risk Statement | Skip | Required | Required |",
+            "- Removal Risk Statement: one sentence per killer case.",
+            "3. Add a removal-risk statement to each case.",
+        ]
+        for line in reinstated:
+            with self.subTest(line=line):
+                self.assertTrue(names_removal_risk(line))
+                self.assertFalse(is_retirement_note(line),
+                                 "the allow-list accepts a reinstated obligation")
+
+        retirement_notes = [
+            'There is no "removal risk statement" in these templates.',
+            "The Removal Risk Statement was retired in round 5.",
+            "A removal-risk statement must not come back as an obligation.",
+        ]
+        for line in retirement_notes:
+            with self.subTest(line=line):
+                self.assertTrue(is_retirement_note(line),
+                                "the guard forbids its own correction")
+
+        # And the retired-label regex must still match the thing it bans.
+        self.assertIsNotNone(RETIRED_LABEL.search("report `Verification: Verified` here"))
+        self.assertIsNone(RETIRED_LABEL.search("the retired `Verification:` label"))
+        self.assertIsNone(RETIRED_LABEL.search("report `Kill: Verified` here"))
+
+    def test_the_kill_label_is_spelled_one_way_everywhere(self):
+        """Anti-vacuity for the two guards above: they only mean something if the
+        replacement label is actually present on the shipped surface."""
+        hits = sum(len(re.findall(r"`?Kill:\s*(?:Verified|Unverified)", t))
+                   for t in self.texts.values())
+        self.assertGreaterEqual(hits, 5,
+                                "the `Kill:` label has nearly vanished from the shipped "
+                                "surface — the retired-label guards now pass vacuously")
 
 
 if __name__ == "__main__":

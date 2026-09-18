@@ -171,8 +171,16 @@ to § Multi-Package Coverage, so a mention elsewhere in SKILL.md cannot satisfy 
 
 "If this assertion is removed, the known bug can escape detection" is a claim about a
 defect that is *not in the code*. Nothing required running anything, so a hypothesis was
-reported in the grammar of a result. It now carries `Verification: Verified` (defect
-injected, failure observed and quoted) or `Verification: Unverified` (+ reason).
+reported in the grammar of a result. Round 4 gave it a `Verification: Verified` /
+`Verification: Unverified` label (defect injected, failure observed and quoted, or the
+reason it was not run).
+
+> **Superseded by round 5.** The whole sentence was retired — "kills the mutation" and
+> "this assertion is indispensable" are different claims (see the next section) — and the
+> surviving label was renamed to **`Kill: Verified` / `Kill: Unverified`**, so it names the
+> claim it actually carries. The round-7 guard
+> `test_retired_verification_label_cannot_return` keeps the old spelling off the shipped
+> surface; it is kept here only as history.
 
 | Guard | Pins |
 |-------|------|
@@ -235,6 +243,16 @@ report contract (scorecard + required report markers + a JSON summary), and the
 behavioral check — a Go test that compiles, PASSES on the correct source, and FAILS
 on the mutation. `LiveSkillEval` runs a real model through the same `grade()`, gated
 on `UNIT_TEST_SKILL_EVAL_CMD` (skipped otherwise). See `llm_eval/README.md`.
+
+Round 7 made this layer a **corpus** rather than a single case. `EveryFixtureDiscriminates
+Test` discovers every `llm_eval/*/meta.json` and requires each fixture's `good.md` to pass
+and its `bad.md` to fail, with a floor of 2 fixtures so an empty glob cannot read as
+green; the live arm runs the same corpus. The second fixture, `service_mapping`, is a
+Service-interface target, which puts four techniques under execution that were previously
+only asserted as doc text: dependency-error **wrapping** (`%w` vs `%v` — the mutated error
+carries an identical message and only `errors.Is` can see the difference), no-partial-
+payload on error, wrong-key mapping (a self-link preserves length, order and every ID),
+and terminal-branch completeness.
 
 ### Round-4: two ways the grader used to pass a broken response
 
@@ -340,6 +358,52 @@ declares no evidence at all) fails before any response is graded.
 **Honesty:** the CI self-test proves the *grader* works; it does not prove a live
 model passes. Only the opt-in live run does — that is the standing ceiling.
 
+### Round 7 — the guards that could not fail
+
+An external evaluation ran **eight mutations against SKILL.md; six survived.** Not
+obscure ones: the coverage-gate number in the section that defines it, the
+Mode-Requirements cell that makes a killer case mandatory in Standard, the Light
+scorecard's PASS bar and both its tier minimums, and five reference pointers rewritten to
+a file that does not exist. The full 166-test suite stayed green through all six.
+
+The cause is one pattern, and it is the pattern this skill's own Critical item 5 is
+about: **an assertion satisfied by an unrelated match.** `assertIn(">= 80%", skill)` over
+a 500-line document is green as long as *any* occurrence survives, so editing the one
+that decides the gate changes nothing. Where the assertion was scoped, it checked the row
+*label* and never the cell. The Go-executing layers were never affected — they run code,
+and code cannot be satisfied by a coincidence.
+
+| Guard (`NormativeValueGuardTests`) | Pins | Mutation it was shown to kill |
+|---|---|---|
+| `test_coverage_gate_number_is_pinned_inside_its_policy_section` | the gate, sliced to § Coverage Gate Policy, and that the section states exactly one gate | `>= 80%` → `>= 75%` there only |
+| `test_mode_requirements_cells_are_pinned` | every normative cell of the Mode-Requirements table, parsed | `Killer Case per target` Standard → `Skip` |
+| `test_mode_requirements_has_no_unpinned_row` | the exact row set, so a new row must be pinned | re-adding `Removal Risk Statement` |
+| `test_light_scorecard_pass_bar_is_pinned_and_consistent` | the PASS bar with denominators **derived** from the table's own Tier column, plus satisfiability | `total >= 6/7` → `3/7`; tier minimums → 0 |
+| `test_case_budget_is_the_same_number_in_all_three_places` | the three copies of the per-mode budget must agree | `3-6` → `1-99` in the mode table |
+| `test_json_summary_fields_match_every_eval_fixture` | SKILL.md's JSON example and every fixture's `json_field_types` are one schema | a field documented in one and not the other |
+| `test_scorecard_tiers_agree_between_skill_and_reference` | SKILL.md's tier lists vs. the reference the grader parses | Critical `5, 11, 13` → `5, 11, 12` |
+
+| Guard (`ShippedSurfaceIntegrityTests`) | Pins |
+|---|---|
+| `test_every_reference_pointer_resolves` | every `references/*.md` pointer in SKILL.md **and** in each reference resolves on disk; anti-vacuity floor of 5 pointers |
+| `test_every_reference_file_is_reachable` | the other direction — a reference nobody points at is never loaded |
+| `test_retired_verification_label_cannot_return` | the round-5 rename: `Kill:`, never `Verification:` |
+| `test_retired_removal_risk_requirement_cannot_return` | the retired sentence may be *named as retired* and nowhere else — the allow-list is the safe shape, so an unrecognised mention fails |
+| `test_the_kill_label_is_spelled_one_way_everywhere` | anti-vacuity for the two above: the replacement label must actually be present |
+
+**Two live contradictions were removed from the shipped text**, both survivors of round 5:
+
+- SKILL.md carried `| Removal Risk Statement | Skip | Required | Required |` — a
+  `Required` cell for an obligation retired two rounds earlier, defined nowhere else, and
+  contradicted by the Hard Rules three screens above it. Replaced by the requirement that
+  is real (`Kill: Verified`/`Unverified`).
+- `killer-case-patterns.md`'s header described a component the templates do not carry and
+  named the label `Verification: Verified`. A model reading the reference before SKILL.md
+  would emit a label scorecard item 11 scores as *unlabelled*, i.e. a FAIL.
+
+Round-7 mutation run: **10 mutations, 10 killed**, against a verified-effective harness
+(a control mutation was killed and an unchanged baseline was green first).
+
 ## Coverage Summary
 
 | Metric | Count |
@@ -347,8 +411,10 @@ model passes. Only the opt-in live run does — that is the standing ceiling.
 | Total golden fixtures | 15 |
 | Test generation (positive) | 13 |
 | Exclusions (negative) | 2 |
-| Target types covered | 5/5 (Service, Function, Handler, CLI, Middleware) |
+| Target types covered (rule text) | 5/5 (Service, Function, Handler, CLI, Middleware) |
+| Target types covered (**executed** skill-output grading) | 2/5 (Function, Service) — round 7 lifted this from 1/5 |
 | Modes covered | 3/3 (Light 1, Standard 5, Strict 4+2 excl) |
+| Skill-output eval fixtures | 2 (`slice_transform`, `service_mapping`) |
 | Reference files | 5 |
 
 Per-file test counts are deliberately **not** listed here. A hand-maintained total is
@@ -358,6 +424,13 @@ commit while still reading as authoritative. Get the current figures from the su
 ```bash
 python3 -m unittest discover -s scripts/tests -p 'test_*.py' -v   # names + total
 ```
+
+**Runtime.** The suite is minutes, not seconds: every skill-output grading compiles and
+runs a Go module per hypothesis mutation, and round 7 added a second fixture with four of
+them. Expect roughly 4 minutes with a warm Go build cache and more without one. That is
+past the default timeout of a single agent shell call, so run it in the background or
+raise the timeout — and read the final `OK` / `FAILED` line, because a truncated
+transcript that stops mid-test looks exactly like a pass.
 
 ## Gap Analysis
 
@@ -371,8 +444,10 @@ When adding a new rule to SKILL.md or references:
 
 | Scenario | Category | Priority |
 |----------|----------|----------|
-| Live LLM skill-output eval wired to a backend (grader + opt-in hook exist; needs a CI-available model) | behavioral | Medium |
-| More skill-output fixtures (mapping-key swap, nil-deref, context leak, concurrency mode) | behavioral | Medium |
+| **Defect-seeded A/B**: whether the methodology raises real defect detection is still unmeasured. The 2026-03 A/B found all 13 without-skill failures were methodology-level with identical core-path coverage — i.e. no measured detection delta. This is the standing ceiling, and it is what "prioritize bug discovery over test volume" currently rests on | effect | **High** |
+| Live LLM skill-output eval wired to a backend (grader + opt-in hook exist, and the live arm now runs every fixture; needs a CI-available model) | behavioral | Medium |
+| Skill-output fixtures for the remaining 3 target types (HTTP handler, CLI, middleware) and for Light and Strict modes — round 7 took this from 1 fixture to 2 | behavioral | Medium |
+| Skill-output fixtures for the untested defect shapes (nil-deref, context leak, concurrency) | behavioral | Medium |
 | gRPC handler target type | target_type | Low |
 | Golden file / snapshot test anti-example | anti_example | Low |
 | Fuzzing + unit test collaboration example | technique | Low |

@@ -73,12 +73,43 @@ python3 -m unittest discover -s scripts/tests -p 'test_*.py'
 ```
 
 `LiveSkillEval` builds the prompt (skill body + fixture source), runs the model,
-and grades the output with the same `grade()` used by the self-test.
+and grades the output with the same `grade()` used by the self-test. It runs **every**
+discovered fixture; narrow it with `UNIT_TEST_SKILL_EVAL_FIXTURE=<id>`.
+
+## The fixture corpus
+
+| Fixture | Target type | Mode | Techniques it puts under execution |
+|---------|-------------|------|------------------------------------|
+| `slice_transform` | Package-level function | Standard | off-by-one / dropped tail; nil-vs-empty contract |
+| `service_mapping` | Service interface | Standard | dropped tail; wrong-key mapping (self-link); dependency error **wrapping** (`%w` vs `%v`); no partial payload on error |
+
+Until round 7 there was one fixture — a pure function with no dependencies — so four of
+the skill's seven techniques and four of its five target types were graded by keyword
+presence alone. `EveryFixtureDiscriminatesTest` now runs the good/bad discrimination over
+every fixture it discovers on disk, with a floor of 2 so an empty glob cannot read green.
+
+`service_mapping/bad.md` is deliberately the **hard** negative: correct mode, all four
+hypotheses named in the right vocabulary, a scorecard, both `Kill: Verified` labels, and
+a JSON summary that parses and agrees with itself. Every format check passes it. It fails
+on substance only — three hypotheses whose mutations its test does not kill, and a
+claimed case count the run contradicts — and the test asserts *which* three, because a
+grader that rejected all four (H1 is genuinely killed there) would be right by accident.
 
 ## Adding fixtures
 
 Create `llm_eval/<id>/` with `meta.json`, `sut.go`, `good.md`, `bad.md` in the
-same shape as `slice_transform/`. The grader is fixture-driven.
+same shape as the existing ones. Discovery is by filesystem — a new directory with a
+`meta.json` is picked up with no test-file edit, and conversely a fixture that is
+incomplete fails rather than being skipped.
+
+Discovery is deliberately unfiltered: **any** directory here holding a `meta.json` is
+graded, including a `service_mapping.bak` you left behind. That is the safe default (a
+half-edited copy fails loudly rather than lurking), but it also means a parked copy costs
+real suite time — park it outside `llm_eval/`. This bit us while verifying the
+anti-vacuity floor: renaming the fixture to `service_mapping.bak` to "delete" it left the
+count at 2, so the floor test passed and the mutation was killed by an unrelated
+`FileNotFoundError` — a kill credited to the wrong guard. The mutation had to be redone
+by moving the directory out of `llm_eval/` entirely.
 
 **`hypotheses` is the centre of the fixture.** One entry per hypothesis, each carrying
 everything needed to decide whether it is really covered:
@@ -110,7 +141,14 @@ makes that structurally impossible.
 Rules for each `mutation`:
 
 - it must be a **behavioral** change that still compiles — a mutation that breaks the
-  build proves nothing and is reported as a fixture defect;
+  build proves nothing and is reported as a fixture defect. This is not theoretical:
+  `service_mapping`'s H3 was first written as `return nil, fmt.Errorf(...)` →
+  `return nil, nil`, which removes the package's only use of `fmt`, and the harness
+  rejected it as an invalid mutation before it could be credited as a kill. Some real
+  defect shapes simply cannot be expressed as a compiling one-line mutation of a given
+  source; say so in `good.md` as a gap instead of reporting the hypothesis as verified;
+- `contract_evidence` must match a **contiguous** span of `sut.go`. A phrase split across
+  two `//` comment lines will not match — the same H3 failed this way first;
 - it must violate *its own* hypothesis, so that killing it is evidence for that
   hypothesis specifically;
 - `good.md` must pass the grader and `bad.md` must fail it, for the reasons you intend.
