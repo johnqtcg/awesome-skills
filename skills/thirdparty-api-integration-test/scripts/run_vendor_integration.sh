@@ -73,6 +73,49 @@ while [[ $i -le $# ]]; do
   i=$((i + 1))
 done
 
+# The integrity marker is read from the AMBIENT environment, BEFORE the env file is parsed,
+# and the file is forbidden from setting it (see refuse-list below). The anti-false-green
+# check at the bottom is the runner's own integrity parameter; taking it from a file the
+# runner deliberately treats as untrusted would let that file switch the check off.
+# Measured: with `VENDOR_TEST_NAME_MATCH=Test` in the env file, a run in which only a plain
+# unit test passed went from exit 4 ("none matching 'Integration'") to exit 0.
+name_match="${VENDOR_TEST_NAME_MATCH:-Integration}"
+if [[ -z "$name_match" ]]; then
+  echo "VENDOR_TEST_NAME_MATCH must be non-empty (the integration test-name marker)" >&2
+  exit 2
+fi
+# Report it immediately: any log, including one that ends in an early refusal, then
+# shows which integrity parameter the final PASS check was going to use.
+echo "runner: integration test-name marker = '${name_match}'" >&2
+
+# Keys the env file may NOT set. Parsing instead of `source`ing stops shell execution inside
+# the file, but exporting an arbitrary key walks straight back into it: measured, a single
+# line `GOFLAGS=-exec=/path/to/script` makes `go test` run that script with the test binary
+# as its argument — arbitrary code execution — while the suite still reports `--- PASS` and
+# this runner still exits 0. The strict extra-arg allowlist above is bypassed entirely,
+# because the flags arrive through the environment rather than the command line.
+#
+# So: anything that can change WHICH program runs, HOW it is built, or WHERE its inputs come
+# from is refused. `ENV` is deliberately NOT on this list — for this skill it is the
+# environment label (dev/staging/prod) and is required; it is only a shell-startup variable
+# for an interactive POSIX sh, which this script never spawns.
+env_key_is_refused() {
+  case "$1" in
+    # Program resolution and the dynamic linker.
+    PATH | SHELL | BASH_ENV | IFS | LD_* | DYLD_*) return 0 ;;
+    # Go toolchain, module source, and build behaviour. GOFLAGS is the proven hole; the
+    # rest can swap the toolchain, the module proxy, or the checksum database.
+    GOFLAGS | GOTOOLCHAIN | GOROOT | GOBIN | GOPROXY | GOPRIVATE | GONOSUMDB | GOSUMDB \
+      | GONOSUMCHECK | GOINSECURE | GOEXPERIMENT | GOOS | GOARCH | GOARM | GOAMD64) return 0 ;;
+    # cgo: an arbitrary compiler or linker flags.
+    CC | CXX | CGO_*) return 0 ;;
+    # This runner's own integrity parameter — see name_match above. Timeout and parallelism
+    # ARE settable here because both are clamped to a safe band; this one has no clamp.
+    VENDOR_TEST_NAME_MATCH) return 0 ;;
+  esac
+  return 1
+}
+
 # Parse KEY=VALUE lines WITHOUT executing the file. `source` would run any shell code in the
 # env file (e.g. `X=$(rm -rf …)`); the file may also hold tokens, so on a malformed line we
 # report only the LINE NUMBER — never echo the content (it could contain a secret).
@@ -89,6 +132,13 @@ while IFS= read -r line || [[ -n "$line" ]]; do
   val="${line#*=}"
   if [[ ! "$key" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
     echo "invalid env key on line $lineno in $envfile" >&2
+    exit 2
+  fi
+  # A key name is safe to echo (it matched the identifier pattern above and is not a value).
+  if env_key_is_refused "$key"; then
+    echo "refuse env key '$key' on line $lineno in $envfile: it can change which program" >&2
+    echo "runs, how it is built, or this runner's own integrity check. Set build/toolchain" >&2
+    echo "variables in your shell or CI, not in the parsed env file." >&2
     exit 2
   fi
   # strip one layer of matching surrounding quotes, if present
@@ -146,15 +196,10 @@ if [[ ! "$par" =~ ^[1-9][0-9]*$ ]] || [[ "$par" -gt 4 ]]; then
   exit 2
 fi
 
-# The integration tests must be identifiable so a plain unit test cannot satisfy the
-# executed-a-test check below. A PASSED test's name must contain this marker (the skill's
-# Required Pattern mandates `…Integration` in test names); override only to another non-empty
-# substring for a repo with a different convention.
-name_match="${VENDOR_TEST_NAME_MATCH:-Integration}"
-if [[ -z "$name_match" ]]; then
-  echo "VENDOR_TEST_NAME_MATCH must be non-empty (the integration test-name marker)" >&2
-  exit 2
-fi
+# `name_match` was resolved and reported near the top, from the AMBIENT environment, before
+# the env file was parsed — and the file is forbidden from setting it (see the refuse-list).
+# A repo with a different test-name convention exports VENDOR_TEST_NAME_MATCH in its shell or
+# CI job, which is a deliberate act outside the untrusted config file.
 
 # Run with -v so we can confirm from the output that a real integration test actually PASSED.
 # Capture while still streaming. -tags/-count/-timeout/-p/-parallel/-v are fixed; extra args were

@@ -956,6 +956,86 @@ class RunnerScriptTests(unittest.TestCase):
         self.assertNotEqual(res.returncode, 0, "runner must reject a timeout above the 1h cap")
         self.assertIn("VENDOR_TEST_TIMEOUT", res.stdout + res.stderr)
 
+    # ── env-file key refuse-list ───────────────────────────────────────────────────────
+    # Parsing instead of sourcing stops shell execution *inside* the file, but exporting an
+    # arbitrary key walks straight back into it. Measured before this guard existed: a single
+    # `GOFLAGS=-exec=<script>` line made `go test` run that script with the test binary as its
+    # argument (arbitrary code execution) while the suite still printed `--- PASS` and the
+    # runner still exited 0 — the strict extra-arg allowlist bypassed entirely, because the
+    # flags arrived through the environment rather than the command line.
+
+    REFUSED_KEYS = [
+        ("GOFLAGS", "GOFLAGS=-exec=/bin/echo"),          # the proven arbitrary-execution hole
+        ("GOTOOLCHAIN", "GOTOOLCHAIN=go1.21.0"),         # fetches and runs a different toolchain
+        ("GOROOT", "GOROOT=/tmp/fake"),
+        ("GOPROXY", "GOPROXY=http://evil.invalid"),      # substitutes the module source
+        ("GOSUMDB", "GOSUMDB=off"),
+        ("PATH", "PATH=/tmp/fake:/usr/bin"),             # substitutes the `go` binary itself
+        ("LD_PRELOAD", "LD_PRELOAD=/tmp/x.so"),
+        ("DYLD_INSERT_LIBRARIES", "DYLD_INSERT_LIBRARIES=/tmp/x.dylib"),
+        ("CC", "CC=/tmp/fake-cc"),
+        ("CGO_CFLAGS", "CGO_CFLAGS=-fplugin=/tmp/x.so"),
+        ("VENDOR_TEST_NAME_MATCH", "VENDOR_TEST_NAME_MATCH=Test"),  # disables the PASS check
+    ]
+
+    def test_env_file_cannot_set_a_build_or_exec_influencing_key(self):
+        for key, line in self.REFUSED_KEYS:
+            with self.subTest(key=key):
+                res, _ = self._run_runner(self._GOOD_ENV + line + "\n")
+                out = res.stdout + res.stderr
+                self.assertNotEqual(res.returncode, 0,
+                                    f"env file was allowed to set {key}: {out[-300:]}")
+                self.assertIn(f"refuse env key '{key}'", out)
+
+    def test_env_file_still_accepts_ordinary_vendor_config(self):
+        """Anti-vacuity, and the usability half: the refuse-list must not block the vendor
+        configuration the env file exists to carry. `ENV` in particular stays allowed — here
+        it is the environment label (dev/staging/prod), not the POSIX sh startup file, and
+        this runner never spawns an interactive sh."""
+        ok = (self._GOOD_ENV + "STRIPE_BASE_URL=https://api.sandbox.example\n"
+              "STRIPE_TEST_ACCOUNT=acct_test_1\nCONFIG_DIR=/tmp/cfg\n"
+              "VENDOR_MAX_CALLS=5\nVENDOR_TEST_TIMEOUT=60s\nVENDOR_TEST_PARALLELISM=2\n")
+        res, _ = self._run_runner(ok, pkg="-count=0")     # stop before `go test`, after parsing
+        out = res.stdout + res.stderr
+        self.assertNotIn("refuse env key", out, "the refuse-list rejected ordinary config")
+        self.assertIn("invalid go-package", out, "expected to reach the package check")
+
+    def test_the_name_match_marker_comes_from_the_ambient_env_not_the_file(self):
+        """The marker is this runner's own integrity parameter. A repo with a different
+        test-name convention exports it in its shell or CI job — a deliberate act outside the
+        config file the runner deliberately treats as untrusted."""
+        # Use a run that fails AFTER the marker is resolved (a refused key), so the marker
+        # line is reachable without needing a go toolchain.
+        res, _ = self._run_runner(self._GOOD_ENV + "GOFLAGS=-x\n")
+        out = res.stdout + res.stderr
+        self.assertIn("marker = 'Integration'", out,
+                      "the runner must report which marker its PASS check will use")
+        self.assertIn("refuse env key 'GOFLAGS'", out)
+
+    def test_ambient_name_match_override_is_still_honoured(self):
+        """Closing the file-based hole must not remove the legitimate escape hatch."""
+        root = tempfile.mkdtemp(prefix="tp-runner-")
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        envfile = os.path.join(root, "env")
+        with open(envfile, "w", encoding="utf-8") as fh:
+            fh.write(self._GOOD_ENV + "GOFLAGS=-x\n")   # fail after the marker is reported
+        env = {**os.environ, "TMPDIR": root, "VENDOR_TEST_NAME_MATCH": "E2E"}
+        try:
+            res = subprocess.run(["bash", RUNNER, envfile, "./...", "-run", "X"],
+                                 cwd=root, env=env, capture_output=True, text=True, timeout=30)
+        except OSError as exc:
+            self.skipTest(f"cannot exec bash: {exc}")
+        self.assertIn("marker = 'E2E'", res.stdout + res.stderr,
+                      "an ambient VENDOR_TEST_NAME_MATCH must still take effect")
+
+    def test_refused_key_message_never_echoes_the_value(self):
+        """The env file holds tokens. A key NAME matched the identifier pattern and is safe to
+        print; the value is not, and a refusal must not leak it into a CI log."""
+        secret = "sk_live_THIS_MUST_NOT_APPEAR"
+        res, _ = self._run_runner(self._GOOD_ENV + f"GOFLAGS=-exec={secret}\n")
+        self.assertNotEqual(res.returncode, 0)
+        self.assertNotIn(secret, res.stdout + res.stderr)
+
     def _fake_go_run(self, go_body, pkg="./internal/pkg/x", args=("-run", "Integration")):
         """Run the runner against a fake `go` (on PATH) that records its argv and then runs
         `go_body`. Returns (CompletedProcess, argv_file). Needs bash, not the real toolchain."""

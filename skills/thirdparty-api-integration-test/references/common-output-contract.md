@@ -16,6 +16,15 @@ When executing integration-test skills, always report:
 8. Missing prerequisites:
    - exact missing variables
    - actionable setup instructions
+9. **Quality scorecard verdict** (whenever test code was authored or reviewed):
+   - the tier counts from `checklists.md` §Test Quality Checklist —
+     `Critical: n/4, Standard: n/5, Hygiene: n/4`
+   - the overall verdict under that file's rule: **any single Critical FAIL → overall
+     FAIL**, whatever the other tiers say
+   - each FAIL named by item ID (`C3`, `S4`, …) with what would fix it
+
+   Scoring without reporting is the same as not scoring. Omit this field only when no test
+   code was produced or reviewed — a Blocked degradation level, or a scope redirect.
 
 ## CI-Integrity Rules
 

@@ -1,0 +1,38 @@
+{
+  "id": "internal_handler_redirect",
+  "description": "This service's OWN http.HandlerFunc — first-party, no vendor, nothing billable. The correct response is the Scope Validation Gate's HARD STOP: verdict + redirect to $api-integration-test + reason, and NO test code. Grades the path every other fixture skips — without it, 'always write a vendor test' scores as well as running gate 1.",
+  "expected_scope": "out_of_scope",
+  "package": "sut",
+  "required_report_patterns": [
+    {
+      "name": "out-of-scope verdict",
+      "regex": "(?i)(out of scope|not in scope|out-of-scope|redirect)"
+    },
+    {
+      "name": "redirect to the internal-API skill",
+      "regex": "\\$api-integration-test"
+    },
+    {
+      "name": "a stated reason",
+      "regex": "(?i)(own (http )?handler|first[- ]party|internal service|no vendor|not a third[- ]party)"
+    }
+  ],
+  "forbidden_report_patterns": [
+    {
+      "name": "a vendor run command",
+      "regex": "run_vendor_integration\\.sh|THIRDPARTY_INTEGRATION=1"
+    },
+    {
+      "name": "a sandbox allowlist being SET (gate 5 must not have run)",
+      "regex": "VENDOR_SANDBOX_HOSTS\\s*="
+    },
+    {
+      "name": "a degradation level (the config gate must not have run)",
+      "regex": "(?i)degradation level"
+    }
+  ],
+  "bad_expected_reasons": [
+    "emitted test code for an out-of-scope target"
+  ],
+  "_forbidden_patterns": "These match the gate being RUN, not the variable being NAMED. A correct refusal explains why the vendor machinery has nothing to bind to, and naming VENDOR_SANDBOX_HOSTS is how it does that — so the pattern requires an assignment (`VENDOR_SANDBOX_HOSTS=`), which is configuration, not explanation. The first version matched the bare name and failed the good exemplar for making its own argument."
+}

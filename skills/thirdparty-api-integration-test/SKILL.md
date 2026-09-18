@@ -189,5 +189,8 @@ Use the shared output contract in:
 1. **Always read**: `references/common-integration-gate.md` — gate design, resolved-host + account validation, degradation levels, skip-vs-fail. _Parallel to `$api-integration-test`'s gate (same safety bar, plus vendor rules) — it is a **separate file**, not shared; edits do not propagate between skills._
 2. **Always read**: `references/common-output-contract.md` — structured report format. _Parallel to `$api-integration-test`'s — a separate file, not shared._
 3. **Always read when writing test code**: `references/go-baseline.md` — the canonical Go safety helpers; copy them into the test package verbatim (kept token-identical to the regression fixture).
-4. **Read if authoring new tests or triaging failures**: `references/checklists.md`
+4. **Read if authoring new tests or triaging failures**: `references/checklists.md` —
+   when you author or review test code you MUST then score it against that file's
+   §Test Quality Checklist and report the verdict (output-contract field 9): any single
+   **Critical** FAIL is an overall FAIL, Standard needs ≥4/5, Hygiene ≥3/4.
 5. **Read if no vendor pattern exists in the repo**: `references/vendor-examples.md` — generic template and run commands

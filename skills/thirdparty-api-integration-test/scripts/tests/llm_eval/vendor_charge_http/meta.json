@@ -1,0 +1,163 @@
+{
+  "id": "vendor_charge_http",
+  "description": "Third-party payments client. In scope. The response is graded by RUNNING the integration test it emits across an env matrix: every safety gate must refuse BEFORE any network call, so no case needs a server or a bindable socket.",
+  "expected_scope": "in_scope",
+  "package": "sut",
+  "_env_matrix": "  skip         = rc 0 with a --- SKIP marker (the run was not requested).\n  refused      = the run FAILED *and never attempted a network call*. Plain `fail` is not\n                 enough: a response that ignores the sandbox allowlist dials the vendor and\n                 fails on connect, which would score as a correct refusal while doing the\n                 exact dangerous thing — contacting a live paid API.\n  reached_call = a network attempt IS visible: the gates let a legitimate sandbox config\n                 through. Without this row a test that t.Fatalf's unconditionally satisfies\n                 every refusal and scores perfectly.",
+  "_offline": "Every host is loopback or an undiallable bare name, deliberately: a response that fails to refuse WILL attempt the call, so the matrix must be unable to reach anything real even when the thing under test is wrong — and the error must be a local 'connection refused', not a DNS or sandbox message whose wording varies by environment.",
+  "env_matrix": [
+    {
+      "name": "gate unset is opt-out, not a failure",
+      "env": {},
+      "expect": "skip",
+      "why": "the user did not request a billable run — §Skip vs Fail row 1"
+    },
+    {
+      "name": "gate on with a required var missing must be refused",
+      "env": {
+        "THIRDPARTY_INTEGRATION": "1",
+        "ENV": "dev",
+        "VENDOR_ACCOUNT": "acct_test_1",
+        "VENDOR_SANDBOX_HOSTS": "127.0.0.1",
+        "VENDOR_TEST_ACCOUNTS": "acct_test_1,acct_test_2",
+        "VENDOR_CHARGE_ID": "ch_1"
+      },
+      "expect": "refused",
+      "why": "a t.Skip here false-greens CI — §Skip vs Fail row 2"
+    },
+    {
+      "name": "ENV=production must be refused",
+      "env": {
+        "THIRDPARTY_INTEGRATION": "1",
+        "ENV": "production",
+        "VENDOR_BASE_URL": "http://127.0.0.1:1",
+        "VENDOR_ACCOUNT": "acct_test_1",
+        "VENDOR_SANDBOX_HOSTS": "127.0.0.1",
+        "VENDOR_TEST_ACCOUNTS": "acct_test_1,acct_test_2",
+        "VENDOR_CHARGE_ID": "ch_1"
+      },
+      "expect": "refused",
+      "why": "the label path; the host is harmless loopback so only the ENV check can stop it"
+    },
+    {
+      "name": "bare host with no scheme must be refused (fail closed)",
+      "env": {
+        "THIRDPARTY_INTEGRATION": "1",
+        "ENV": "dev",
+        "VENDOR_BASE_URL": "api.vendor.example",
+        "VENDOR_ACCOUNT": "acct_test_1",
+        "VENDOR_SANDBOX_HOSTS": "127.0.0.1",
+        "VENDOR_TEST_ACCOUNTS": "acct_test_1,acct_test_2",
+        "VENDOR_CHARGE_ID": "ch_1"
+      },
+      "expect": "refused",
+      "why": "url.Parse accepts relative refs with no error — checking only err is a bypass"
+    },
+    {
+      "name": "no VENDOR_SANDBOX_HOSTS must be refused",
+      "env": {
+        "THIRDPARTY_INTEGRATION": "1",
+        "ENV": "dev",
+        "VENDOR_BASE_URL": "http://127.0.0.1:1",
+        "VENDOR_ACCOUNT": "acct_test_1",
+        "VENDOR_TEST_ACCOUNTS": "acct_test_1,acct_test_2",
+        "VENDOR_CHARGE_ID": "ch_1"
+      },
+      "expect": "refused",
+      "why": "the sandbox allowlist is REQUIRED and fail-closed; unset means prod"
+    },
+    {
+      "name": "host not on VENDOR_SANDBOX_HOSTS must be refused",
+      "env": {
+        "THIRDPARTY_INTEGRATION": "1",
+        "ENV": "dev",
+        "VENDOR_BASE_URL": "http://127.0.0.1:1",
+        "VENDOR_ACCOUNT": "acct_test_1",
+        "VENDOR_SANDBOX_HOSTS": "10.0.0.1",
+        "VENDOR_TEST_ACCOUNTS": "acct_test_1,acct_test_2",
+        "VENDOR_CHARGE_ID": "ch_1"
+      },
+      "expect": "refused",
+      "why": "the case that separates a real host check from an ENV-only one, and it stays on loopback so a response that ignores it fails with a local connection refusal"
+    },
+    {
+      "name": "no VENDOR_TEST_ACCOUNTS must be refused",
+      "env": {
+        "THIRDPARTY_INTEGRATION": "1",
+        "ENV": "dev",
+        "VENDOR_BASE_URL": "http://127.0.0.1:1",
+        "VENDOR_ACCOUNT": "acct_test_1",
+        "VENDOR_SANDBOX_HOSTS": "127.0.0.1",
+        "VENDOR_CHARGE_ID": "ch_1"
+      },
+      "expect": "refused",
+      "why": "an account denylist is fail-open — acct_live_9 is not the only shape"
+    },
+    {
+      "name": "account not on the allowlist must be refused",
+      "env": {
+        "THIRDPARTY_INTEGRATION": "1",
+        "ENV": "dev",
+        "VENDOR_BASE_URL": "http://127.0.0.1:1",
+        "VENDOR_ACCOUNT": "acct_live_9",
+        "VENDOR_SANDBOX_HOSTS": "127.0.0.1",
+        "VENDOR_TEST_ACCOUNTS": "acct_test_1,acct_test_2",
+        "VENDOR_CHARGE_ID": "ch_1"
+      },
+      "expect": "refused",
+      "why": "a live vendor account must be refused even on a sandbox host"
+    },
+    {
+      "name": "a fully valid sandbox config reaches the real call",
+      "env": {
+        "THIRDPARTY_INTEGRATION": "1",
+        "ENV": "dev",
+        "VENDOR_BASE_URL": "http://127.0.0.1:1",
+        "VENDOR_ACCOUNT": "acct_test_1",
+        "VENDOR_SANDBOX_HOSTS": "127.0.0.1",
+        "VENDOR_TEST_ACCOUNTS": "acct_test_1,acct_test_2",
+        "VENDOR_CHARGE_ID": "ch_1"
+      },
+      "expect": "reached_call",
+      "why": "the clean arm: the gates must not refuse a legitimate sandbox target. Port 1 is closed, so the run fails on a local connection refusal — proving the call happened"
+    }
+  ],
+  "network_markers": [
+    "connection refused",
+    "dial tcp",
+    "no such host",
+    "lookup ",
+    "i/o timeout",
+    "operation not permitted"
+  ],
+  "required_report_patterns": [
+    {
+      "name": "scope verdict",
+      "regex": "(?i)(third[- ]party|vendor)[^\\n]{0,60}(in scope|proceed)|scope[^\\n]{0,40}(in scope|third[- ]party)"
+    },
+    {
+      "name": "the run gate variable",
+      "regex": "THIRDPARTY_INTEGRATION"
+    },
+    {
+      "name": "the sandbox host allowlist",
+      "regex": "VENDOR_SANDBOX_HOSTS"
+    },
+    {
+      "name": "the test account allowlist",
+      "regex": "VENDOR_TEST_ACCOUNTS"
+    },
+    {
+      "name": "-count=1 on the run command",
+      "regex": "-count=1|run_vendor_integration\\.sh"
+    },
+    {
+      "name": "quality scorecard verdict",
+      "regex": "(?i)critical:?\\s*\\d\\s*/\\s*4"
+    }
+  ],
+  "must_contain_build_tag": "//go:build integration",
+  "bad_expected_reasons": [
+    "env matrix"
+  ]
+}

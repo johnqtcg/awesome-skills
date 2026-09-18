@@ -441,13 +441,29 @@ class CoverageDoc(unittest.TestCase):
         self.cov = read(os.path.join(here, "COVERAGE.md"))
         self.contract = len(re.findall(r"^\s*def test_", read(os.path.join(here, "test_skill_contract.py")), re.M))
         self.behavioral = len(re.findall(r"^\s*def test_", read(os.path.join(here, "test_behavioral_integration.py")), re.M))
+        self.eval = len(re.findall(r"^\s*def test_", read(os.path.join(here, "test_llm_skill_eval.py")), re.M))
+        # Every test_*.py in this directory must be in the sum. A hand-listed set of modules
+        # goes stale the moment a layer is added — which is exactly what happened when the
+        # skill-output eval arrived and the total silently stopped covering it.
+        self.modules = sorted(f for f in os.listdir(here)
+                              if f.startswith("test_") and f.endswith(".py"))
+
+    def test_every_test_module_is_counted(self):
+        self.assertEqual(
+            ["test_behavioral_integration.py", "test_llm_skill_eval.py", "test_skill_contract.py"],
+            self.modules,
+            "a test module was added or removed; the totals below must account for it")
 
     def test_totals_match_reality(self):
-        total = self.contract + self.behavioral
+        total = self.contract + self.behavioral + self.eval
         self.assertIn(f"{total} runnable test methods", self.cov,
-                      f"COVERAGE.md total != {total} (contract {self.contract} + behavioral {self.behavioral})")
-        self.assertIn(f"{self.contract} contract + {self.behavioral} behavioral", self.cov,
-                      "COVERAGE.md contract/behavioral split is stale")
+                      f"COVERAGE.md total != {total} (contract {self.contract} + behavioral "
+                      f"{self.behavioral} + skill-output {self.eval})")
+        self.assertIn(f"{self.contract} contract + {self.behavioral} behavioral + "
+                      f"{self.eval} skill-output", self.cov,
+                      "COVERAGE.md layer split is stale")
+        self.assertIn(f"Actual skill-output eval methods: {self.eval}", self.cov,
+                      "COVERAGE.md per-file skill-output count is stale")
 
     def test_helper_count_matches_reality(self):
         self.assertIn(f"{len(HELPERS)} safety helpers", self.cov,
@@ -456,6 +472,244 @@ class CoverageDoc(unittest.TestCase):
     def test_no_stale_counts_resurface(self):
         for stale in ("4 safety helpers", "10 safety helpers", "(22 tests)", "59 runnable"):
             self.assertNotIn(stale, self.cov, f"stale coverage figure resurfaced: {stale}")
+
+
+# ══════════════════════════════════════════════════════════════════════════════════════
+# Structural guards — added after a mutation sweep found the normative PROSE unpinned
+# ══════════════════════════════════════════════════════════════════════════════════════
+
+def md_section(text: str, heading: str) -> str:
+    """Body under `heading`, to the next heading of the same or higher level.
+
+    Scoping matters: an `assertIn` over a whole document stays green while the occurrence
+    that *decides* something is edited. Measured — flipping both Skip-vs-Fail rows to
+    `t.Skip`, inverting four of the nine "executable" vendor rules, and restoring the
+    false "shared file" claim all passed the full 93-test suite together."""
+    lines = text.splitlines()
+    for start, ln in enumerate(lines):
+        if ln.startswith("#") and ln.lstrip("#").strip() == heading:
+            level = len(ln) - len(ln.lstrip("#"))
+            break
+    else:
+        raise AssertionError(f"heading not found: {heading!r}")
+    for end in range(start + 1, len(lines)):
+        nxt = lines[end]
+        if nxt.startswith("#") and (len(nxt) - len(nxt.lstrip("#"))) <= level:
+            return "\n".join(lines[start + 1:end])
+    return "\n".join(lines[start + 1:])
+
+
+def md_rows(section: str) -> list:
+    """Markdown table rows in `section` as cell lists (header/separator dropped, `**` stripped)."""
+    rows, seen_header = [], False
+    for ln in section.splitlines():
+        s = ln.strip()
+        if not s.startswith("|"):
+            seen_header = False
+            continue
+        cells = [c.strip().replace("**", "") for c in s.strip("|").split("|")]
+        if set("".join(cells)) <= set("-: "):
+            continue
+        if not seen_header:
+            seen_header = True
+            continue
+        rows.append(cells)
+    return rows
+
+
+class NormativeRuleGuards(unittest.TestCase):
+    """22 mutations were applied; **11 survived the full suite**. The Go helpers and the
+    runner were caught every time (full-body identity + 21 runner tests), but the prose that
+    states the rules was unguarded — including the section that calls itself
+    "concrete, testable rules — not principles. A behavioral fixture exercises each".
+
+    The behavioral fixture exercises the *Go helpers*, which are a separate copy; inverting
+    the *rule text* changed nothing it looks at. Each test below was confirmed to fail
+    against the mutation it names."""
+
+    SKIP_VS_FAIL = {
+        "Run gate unset (`THIRDPARTY_INTEGRATION != 1`)": "`t.Skip` (not requested)",
+        "Gate set, a required var missing/empty": "`t.Fatalf`",
+        "Gate set, target is prod/live (ENV, host not on `VENDOR_SANDBOX_HOSTS`, or non-test account) without `INTEGRATION_ALLOW_PROD=1`": "`t.Fatalf`",
+        "Gate set, destructive op without `INTEGRATION_ALLOW_DESTRUCTIVE=1`": "`t.Skip` (opt-in tier — keep in a separate CI job)",
+    }
+
+    def test_skip_vs_fail_cells_are_pinned(self):
+        rows = {r[0]: r[1] for r in md_rows(md_section(SKILL_TEXT, "Skip vs Fail (CI Integrity)"))}
+        self.assertEqual(set(self.SKIP_VS_FAIL), set(rows),
+                         "a Skip-vs-Fail row was added or removed without being pinned")
+        for situation, behavior in self.SKIP_VS_FAIL.items():
+            with self.subTest(situation=situation[:48]):
+                self.assertEqual(behavior, rows[situation])
+
+    # The nine rules the skill itself calls executable. Each entry is the exact opening
+    # clause that carries the rule's *direction* — allowlist vs denylist, require vs may,
+    # forbidden vs permitted. Those are the words a mutation flips.
+    VENDOR_RULES = [
+        "1. **Sandbox host allowlist (fail closed).**",
+        "2. **Test account allowlist (fail closed).**",
+        "3. **Production writes forbidden under ALL flags.**",
+        "4. **Mutations require an idempotency key.**",
+        "5. **Bounded call budget (cost control).**",
+        "6. **Retry-After / 429 handling.**",
+        "7. **Mask sensitive IDs and secrets.**",
+        "8. **gRPC specifics**",
+        "9. **Retry policy bounded and explicit.**",
+    ]
+
+    def test_the_nine_vendor_rules_keep_their_direction(self):
+        section = md_section(SKILL_TEXT, "Vendor-Specific Safety Additions (executable rules)")
+        for rule in self.VENDOR_RULES:
+            with self.subTest(rule=rule[:44]):
+                self.assertIn(rule, section)
+        # The direction-carrying phrases, checked inside this section only.
+        self.assertIn("Unset or non-matching host → treated as production (refuse)", section)
+        self.assertIn("`VENDOR_TEST_ACCOUNTS` is required", section)
+        self.assertIn("fails even with\n   `ALLOW_PROD=1` + `ALLOW_DESTRUCTIVE=1`", section)
+        self.assertIn("must pass a non-empty\n   `Idempotency-Key`", section)
+        self.assertIn("`VENDOR_MAX_CALLS` (default 20)", section)
+        self.assertIn("classify the failure as `rate-limit`, never `contract`", section)
+        self.assertIn("Never log tokens, API keys, or raw customer/tenant/account", section)
+        # and the count claimed by the heading's own framing
+        numbered = re.findall(r"(?m)^(\d+)\. \*\*", section)
+        self.assertEqual([str(i) for i in range(1, 10)], numbered,
+                         f"the executable-rule list is no longer 1..9: {numbered}")
+
+    def test_retry_budget_and_timeout_band_are_pinned(self):
+        pattern = md_section(SKILL_TEXT, "Required Pattern")
+        self.assertIn("**max 2 retries (3 total attempts)**", pattern)
+        self.assertIn("`getHonoringRateLimit` is called with `maxRetries=2`", pattern)
+        safety = md_section(SKILL_TEXT, "Safety Rules")
+        self.assertIn("Keep timeout strict (for example 10-30s)", safety)
+
+    def test_build_tag_is_the_integration_tag_in_every_document(self):
+        """Rename the tag in one place and the CI target runs nothing while reporting success."""
+        docs = {"SKILL.md": SKILL_TEXT,
+                "go-baseline.md": BASELINE_TEXT,
+                "common-integration-gate.md": read(os.path.join(REFS_DIR, "common-integration-gate.md")),
+                "checklists.md": read(os.path.join(REFS_DIR, "checklists.md"))}
+        for name, text in docs.items():
+            with self.subTest(doc=name):
+                self.assertIn("//go:build integration", text)
+                self.assertNotIn("//go:build vendortest", text)
+
+    def test_the_skill_is_not_model_invocable(self):
+        """This skill makes real, billable calls to an external vendor. It must never be
+        auto-selected — a user asks for it by name or it does not run."""
+        fm = SKILL_TEXT.split("---")[1]
+        self.assertIn("disable-model-invocation: true", fm)
+
+    def test_the_parallel_files_are_not_claimed_to_be_shared(self):
+        """A previous round had to remove a false "shared with $api-integration-test" claim:
+        the files are independent copies and had drifted ~118 lines. The claim must not come
+        back, because it tells a maintainer an edit here propagates when it does not."""
+        for name, text in (("SKILL.md", SKILL_TEXT),
+                           ("common-integration-gate.md",
+                            read(os.path.join(REFS_DIR, "common-integration-gate.md"))),
+                           ("common-output-contract.md",
+                            read(os.path.join(REFS_DIR, "common-output-contract.md")))):
+            with self.subTest(doc=name):
+                self.assertIsNone(
+                    re.search(r"shared with\s+`?\$?api-integration-test", text, re.I),
+                    f"{name} claims the file is shared; it is a separate copy")
+        self.assertIn("it is a **separate file**, not shared; edits do not propagate between skills.",
+                      SKILL_TEXT)
+
+    def test_the_quality_rubric_has_tiers_and_is_reachable(self):
+        """`checklists.md` shipped 9 flat items with no tiers and no pass criteria, and the
+        output contract asked for no verdict — so nothing defined whether the authored tests
+        were acceptable, only whether the run passed. A rubric nobody reports is a rubric
+        nobody applies."""
+        ck = read(os.path.join(REFS_DIR, "checklists.md"))
+        self.assertIn("`Critical`: any single FAIL → overall **FAIL**", ck)
+        self.assertIn("`Standard`: ≥ 4/5", ck)
+        self.assertIn("`Hygiene`: ≥ 3/4", ck)
+        quality = ck.split("## Test Quality Checklist", 1)[1]
+        for tier, prefix, want in (("Critical", "C", 4), ("Standard", "S", 5), ("Hygiene", "H", 4)):
+            body = quality.split(f"### {tier}", 1)[1]
+            ids = re.findall(rf"(?m)^\|\s*({prefix}\d+)\s*\|", body)
+            with self.subTest(tier=tier):
+                self.assertEqual(want, len(set(ids)),
+                                 f"{tier} tier has {sorted(set(ids))} but the bar says /{want}")
+        oc = read(os.path.join(REFS_DIR, "common-output-contract.md"))
+        self.assertIn("Quality scorecard verdict", oc,
+                      "the output contract must require the verdict")
+        self.assertIn("Critical FAIL", oc)
+        self.assertIn("MUST then score it", SKILL_TEXT,
+                      "SKILL.md must instruct that authored code is scored, not merely that "
+                      "the checklist file may be read")
+
+    def test_the_shared_claim_detector_still_detects(self):
+        """Synthetic input: the guard above is pinned to text that is correct today, so a
+        pattern edited into one that matches nothing would pass vacuously."""
+        pat = re.compile(r"shared with\s+`?\$?api-integration-test", re.I)
+        for bad in ("shared with $api-integration-test", "Shared with `api-integration-test`",
+                    "shared with api-integration-test"):
+            self.assertIsNotNone(pat.search(bad), bad)
+        self.assertIsNone(pat.search("a separate file from $api-integration-test's gate"))
+
+
+class ShippedSurfaceIntegrity(unittest.TestCase):
+    """Structure and reachability across SKILL.md + every reference."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.docs = {"SKILL.md": SKILL_TEXT}
+        cls.docs.update({f: read(os.path.join(REFS_DIR, f))
+                         for f in sorted(os.listdir(REFS_DIR)) if f.endswith(".md")})
+
+    @staticmethod
+    def unclosed_fence(text: str):
+        """Line of an unclosed fence, or None. CommonMark: a closing fence carries NO info
+        string, so a ```go line inside a ``` block is content, not a closer."""
+        open_at, opener_len, opener_ch = None, 0, ""
+        for i, ln in enumerate(text.splitlines(), 1):
+            m = re.match(r"^\s{0,3}(`{3,}|~{3,})(.*)$", ln)
+            if not m:
+                continue
+            fence, info = m.groups()
+            if open_at is None:
+                open_at, opener_len, opener_ch = i, len(fence), fence[0]
+            elif fence[0] == opener_ch and len(fence) >= opener_len and not info.strip():
+                open_at = None
+        return open_at
+
+    def test_every_code_fence_is_balanced(self):
+        for name, text in self.docs.items():
+            with self.subTest(doc=name):
+                self.assertIsNone(self.unclosed_fence(text),
+                                  f"{name}: a fence is never closed — the rest renders as code")
+
+    def test_the_fence_detector_still_detects(self):
+        self.assertEqual(1, self.unclosed_fence("```\nx\n"))
+        self.assertIsNone(self.unclosed_fence("```\nx\n```\n"))
+        self.assertEqual(7, self.unclosed_fence("a\n\n```\n```go\nx\n```\n```\n"))
+        self.assertIsNone(self.unclosed_fence("````text\n```go\nx\n```\n````\n"))
+
+    def test_every_reference_pointer_resolves(self):
+        pointers = {(n, t) for n, text in self.docs.items()
+                    for t in re.findall(r"references/([A-Za-z0-9._-]+\.md)", text)}
+        self.assertGreaterEqual(len(pointers), 5, "the pointer regex stopped matching")
+        for source, target in sorted(pointers):
+            with self.subTest(source=source, target=target):
+                self.assertTrue(os.path.isfile(os.path.join(REFS_DIR, target)),
+                                f"{source} cites references/{target}, which does not exist")
+
+    def test_every_reference_file_is_reachable(self):
+        pointed = {t for text in self.docs.values()
+                   for t in re.findall(r"references/([A-Za-z0-9._-]+\.md)", text)}
+        for f in sorted(os.listdir(REFS_DIR)):
+            if f.endswith(".md"):
+                with self.subTest(reference=f):
+                    self.assertIn(f, pointed, f"references/{f} is never referenced")
+
+    def test_every_intra_document_anchor_resolves(self):
+        for name, text in self.docs.items():
+            slugs = {re.sub(r"[^a-z0-9\s-]", "", h.lower()).strip().replace(" ", "-")
+                     for h in re.findall(r"(?m)^#{1,6}\s+(.+?)\s*$", text)}
+            for anchor in re.findall(r"\]\(#([A-Za-z0-9_-]+)\)", text):
+                with self.subTest(doc=name, anchor=anchor):
+                    self.assertIn(anchor, slugs, f"{name} links to a dead #{anchor}")
 
 
 if __name__ == "__main__":
