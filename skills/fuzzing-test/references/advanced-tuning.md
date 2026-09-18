@@ -163,6 +163,30 @@ Guidelines:
 - For memory-heavy targets: reduce `-parallel` to avoid OOM.
 - CI runners: set explicit `-parallel=2` to avoid starving other jobs.
 
+## Deserialization Cost in a Harness
+
+Template D feeds `[]byte` and deserializes inside the harness, so the decoder runs on every
+iteration. These are the measured costs of the four options:
+
+| Method | Measured cost | When to use |
+|--------|--------------|-------------|
+| `encoding/binary.Read` | **57 ns/op**, 64 B, 2 allocs | Fixed-layout structs; highest `execs/sec` |
+| `json.Unmarshal` | **441 ns/op**, 232 B, 5 allocs | Readable seeds, nested/optional fields — the default |
+| `encoding/gob` (`NewDecoder` per input) | **5 293 ns/op**, 7 216 B, 163 allocs | Rarely worth it in a harness — see below |
+| `go-fuzz-headers` `GenerateStruct` | not measured here | Complex nested structs; see §Structured Input with `go-fuzz-headers` below |
+
+Conditions: Go 1.26.1, darwin/arm64 (Apple M4), one 4-field struct (`uint8,int32,uint32,uint16`),
+`-benchmem -count=3`. **These are one machine's numbers — the ordering is the transferable
+part, and even that depends on your struct.** Re-measure before optimising:
+
+```bash
+go test -run='^$' -bench=. -benchmem -count=5 . | tee bench.txt && benchstat bench.txt
+```
+
+Why `gob` loses here: a harness gets a fresh `[]byte` per iteration, so it builds a new
+`gob.Decoder` and re-reads the type descriptor every time — 163 allocations against JSON's 5.
+`gob` is fast on a long-lived stream, which a harness never has.
+
 ## Structured Input with `go-fuzz-headers`
 
 When `json.Unmarshal`-based struct generation has too high a skip rate, use `go-fuzz-headers` for deterministic structured consumption:

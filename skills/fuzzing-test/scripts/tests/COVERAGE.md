@@ -76,7 +76,7 @@ skill text, with no model in the loop. Layer 4 is where behaviour is actually ve
 | CoverageDocConsistencyTests | test_declared_anti_example_count_matches_reference | This document's anti-example count is not hand-drifted |
 | CoverageDocConsistencyTests | test_skill_md_anti_example_count_matches_reference | SKILL.md's cited anti-example count matches the reference |
 
-**Contract test count: 70**
+**Contract test count: 86**
 
 ## Golden Fixture Tests (test_golden_scenarios.py)
 
@@ -131,8 +131,9 @@ immediately-red test. Replay closes that hole; the anti-vacuity test proves it c
 
 ## Behavioral Eval (test_llm_fuzz_eval.py)
 
-Five fixtures: four suitable targets and — since a skill whose first rule is "stop when
-the target is unsuitable" must be graded on stopping — one that must be refused. Each
+Six fixtures: five suitable targets — one per fuzz mode the skill offers — and, since a
+skill whose first rule is "stop when the target is unsuitable" must be graded on stopping,
+one that must be refused. Each
 fixture grades a **distinct defect** — sharing a mode is allowed only when the graded
 failure differs (enforced by `test_each_fixture_grades_a_distinct_defect`):
 
@@ -142,6 +143,7 @@ failure differs (enforced by `test_each_fixture_grades_a_distinct_defect`):
 | `llm_eval/kv_codec/` | round-trip / B | `Decode` drops the value's most-significant byte | Silent corruption — `Value:-1` decodes as `16777215`; only a round-trip assertion catches it |
 | `llm_eval/json_roundtrip/` | round-trip / B | `Encode` silently truncates `Name` to 8 bytes | Grades the **other** direction: the codec normalizes (invalid UTF-8 → U+FFFD), so an oracle without a domain guard fails on the CORRECT implementation. Its bad exemplar *does* detect the mutation and is still wrong |
 | `llm_eval/split_differential/` | **differential** / C | index advances by 1 instead of `len(sep)` after a match | Grades the third fuzz mode: the oracle is agreement with `strings.Split`, so a harness that calls both implementations and drops a result cannot see a divergence |
+| `llm_eval/struct_router/` | **multi-parameter** / D | `resp.Location = alias` deleted on the redirect branch | Grades the fourth and last mode, and the sharpest C2 case in the set: the mutant returns 301 with no target, which is a *valid* status and no panic, so the assertion Template D's own example ships (`100 ≤ status ≤ 599`) passes on it. Only a harness that asserts the invariant **its own gate declared** kills it. `alias` stays referenced by the surrounding `if`, so the mutated package still compiles |
 | `llm_eval/trivial_add/` | **refusal** (gate items 1+3 fail) | none — no harness may exist | Grades the path every other fixture skips: a correct response writes no harness, names no fuzz command, and points at unit/property tests. Without it, "always write a harness" scored as well as running the gate |
 
 The first two mutations are non-panicking on purpose: a no-assertion "the runtime catches
@@ -151,7 +153,7 @@ fails on every input also kills it. Only `fuzz_stays_clean` separates the two.
 
 | Test | Validates |
 |------|-----------|
-| GraderSelfTest.test_grader_passes_good_exemplars | The grader accepts a correct response, for both fixtures |
+| GraderSelfTest.test_grader_passes_good_exemplars | The grader accepts a correct response, for every fixture |
 | GraderSelfTest.test_grader_fails_bad_exemplars | It rejects weak ones for the defect each fixture declares in `bad_expected_reasons` |
 | GraderSelfTest.test_mutation_is_reachable_at_all | Anti-vacuity: each good harness really does find its defect |
 | GraderSelfTest.test_good_harness_seeds_are_representable | Exemplar seeds pass on correct code (the Template B trap) |
@@ -163,9 +165,13 @@ fails on every input also kills it. Only `fuzz_stays_clean` separates the two.
 | GraderUnitTests.test_each_fixture_grades_a_distinct_defect | A fixture must add a grading axis, not repeat one |
 | GraderUnitTests.test_every_fixture_declares_expected_bad_reasons | Each fixture pins why its bad exemplar must fail |
 | GraderUnitTests.test_every_fixture_dir_is_registered | A fixture on disk but absent from `FIXTURES` is never silently ungraded |
-| LiveSkillEval.test_live_model_output_passes_grader | Opt-in live model run over both fixtures (skipped unless configured) |
+| LiveSkillEval.test_live_model_output_passes_grader | Opt-in live model run over every fixture (skipped unless configured) |
 
 **Behavioral eval count: 22** (6 need `go`; 1 is opt-in via `FUZZING_TEST_SKILL_EVAL_CMD`)
+
+The fixture *count* is not declared here: `test_fixtures_cover_every_fuzz_mode` derives the
+required set from SKILL.md's own mode list, so a mode added to the skill fails the suite
+until it has a fixture. A hand-written number here would be a third copy of that taxonomy.
 
 What the grader checks, in order: declared applicability verdict → (for a refusal target:
 no harness, no fuzz command, an alternative named — and stop) → fuzz mode → scorecard
@@ -182,6 +188,50 @@ capacity-bounded, so reading past `len` does not reliably crash). A no-assertion
 therefore cannot kill it, which makes the check a real test of oracle strength and exercises
 the distinction scorecard C2 draws.
 
+## The guards that could not fail
+
+A mutation sweep applied 16 changes to this skill's documents. **Nine survived the full
+141-test suite**, and every one was a number or a table cell that decides an outcome:
+
+| Survived mutation | Why the guard missed it |
+|---|---|
+| `Standard (≥4/5 must pass)` → `≥1/5`; `Hygiene (≥3/4)` → `≥0/4` | `test_scorecard_standard_tier` asserts `assertIn("Standard (", content)` and never reads the ratio |
+| `All Critical pass AND ≥4/5 …` → `≥2/3 Critical pass` | `test_scorecard_pass_fail_rule` pins only the FAIL half of the rule |
+| `S1 ≥3 seeds` → `≥1`; `S3 skip rate <50%` → `<95%` | no guard at all |
+| Go version gate `< 1.18` → `< 1.22` | no guard — and this reinstates the false hard stop an earlier round removed |
+| cost-class budgets (`Low: 30-60s` → `1-2s`) | no guard |
+| 5 × `references/*.md` → a file that does not exist | nothing checked that a cited reference resolves |
+| **corpus-location table swapped back to the pre-fix model** | `assertIn("$GOCACHE/fuzz", skill)` stayed satisfied by an occurrence in Quick Commands |
+
+The last one is the worst in kind: it is the fact this skill spent a whole round getting
+right, and reverting it was invisible to all 141 tests.
+
+`NormativeThresholdTests` and `ShippedSurfaceIntegrityTests` close them by parsing the
+structure — `md_section` slices to the section that owns a rule, `md_tables` reads cells —
+so an assertion refers to the place the rule lives instead of to the document as a whole.
+Denominators are derived where possible: the Standard and Hygiene bars are checked against
+the number of rows in their own tier tables, so adding an item forces the bar to move with
+it. Each test was confirmed to fail against the mutation it names.
+
+Three documentation defects were fixed in the same pass, each now guarded:
+
+- **`ci-strategy.md`'s corpus table was structurally broken** — a paragraph sat between two
+  rows, which ends a markdown table, so the `$GOCACHE/fuzz` row rendered as literal pipes.
+  `test_ci_reference_corpus_table_agrees_with_the_skill` requires exactly one table there.
+- **`anti-examples.md` ranked idempotence above guarded equality**, contradicting SKILL.md's
+  measured "strictly weaker". An agent loading the reference first would pick the weaker
+  oracle. Now identical in both, pinned by `RuleConsistencyTests`.
+- **`crash-handling.md` had no slot for the triage verdict** SKILL.md mandates recording
+  there, nor for the contract clause without which "a harness fix is indistinguishable from
+  suppressing a bug". Added as §4, with the section numbering checked for contiguity.
+
+Two more surfaced while fixing those: SKILL.md linked to `#go-fuzz-headers-bridge`, an
+anchor no heading produces (`test_every_intra_document_anchor_link_resolves`), and
+`Bash(gh issue*)` sat on the `allowed-tools` auto-approval surface for one optional line in
+a reference — pre-approving the posting of a crash reproducer to a public tracker.
+`test_allowed_tools_pre_approves_no_outward_write` now rejects that class, with a
+synthetic-input test so the detector cannot be edited into one that matches nothing.
+
 ## Coverage Summary
 
 | Category | Total | Tested | Coverage |
@@ -197,11 +247,11 @@ the distinction scorecard C2 draws.
 | Applicability verdicts | 2 (suitable/not) | 2 | 100% |
 | Golden fixtures | 15 | 15 | 100% |
 | Template seeds pass on correct code | 4 | 4 | 100% |
-| Fuzz modes with compile-and-kill fixture | 4 | 2 (parser, round-trip) | 50% |
-| Behavioral: harness compiles | 2 | 2 | 100% |
-| Behavioral: harness kills a real defect | 2 | 2 | 100% |
+| Fuzz modes with compile-and-kill fixture | 4 | 4 (parser, round-trip, differential, multi-parameter) | 100% |
+| Behavioral: harness compiles | 5 | 5 | 100% |
+| Behavioral: harness kills a real defect | 5 | 5 | 100% |
 
-**Total tests: 141** (70 contract + 38 golden + 11 template + 22 behavioral)
+**Total tests: 157** (86 contract + 38 golden + 11 template + 22 behavioral)
 
 Runtime is ~40s; the `go` build cache is shared across the session, since a per-module
 `GOCACHE` forced a cold stdlib recompile per invocation and doubled the wall clock.
@@ -210,10 +260,11 @@ Runtime is ~40s; the `go` build cache is shared across the session, since a per-
 
 1. The live model eval (`LiveSkillEval`) is wired but unconfigured — the honest remaining
    boundary between "grader validated" and "skill behaviour validated" for a real model.
-2. Three of four fuzz modes have a compile-and-kill fixture (parser robustness, round-trip —
-   the latter twice, grading opposite failure directions — and differential).
-   **Struct-aware / multi-parameter** does not. The refusal path is covered separately by
-   `trivial_add`.
+2. ~~Struct-aware / multi-parameter has no compile-and-kill fixture.~~ **Closed** by
+   `struct_router`. All four fuzz modes now have one (round-trip has two, grading opposite
+   failure directions), and `test_fixtures_cover_every_fuzz_mode` derives the required set
+   from SKILL.md rather than listing it, so a fifth mode cannot be added without a fixture.
+   The refusal path is covered separately by `trivial_add`.
 3. ~~Only `testing` is imported when compiling a graded response.~~ **Closed**: the runner
    now derives the import block from the harness text (`test_file_for`), so a response using
    `unicode/utf8` (the round-trip domain guard), `encoding/json` (Template D), `bytes`, and

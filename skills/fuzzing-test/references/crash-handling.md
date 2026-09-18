@@ -29,11 +29,34 @@ Content:  <hex dump or description of crashing input>
 Committed: yes/no (always yes for regression)
 ```
 
-### 4. Root Cause
+### 4. Triage Verdict (round-trip / differential failures — mandatory)
+
+A round-trip or differential failure can come from either side, and SKILL.md §Crash
+Handling requires the verdict to be decided **from the contract**, not from confidence in
+the code. Record which, and on what basis:
+
+```
+Verdict:         harness_wrong | implementation_wrong | contract_ambiguous
+Contract clause: <the documented sentence that decided it, quoted or cited>
+Basis:           <why that clause settles this input>
+```
+
+- `harness_wrong` — the contract says this input is outside what the target must preserve.
+  Fix: add the domain guard or the canonical comparison. **Cite the clause.**
+- `implementation_wrong` — the contract says the value must survive. Keep the input as a
+  regression corpus entry.
+- `contract_ambiguous` — neither is settled. Report it as an open question with the
+  reproducer attached; do **not** change the assertion to hide it.
+
+A harness fix filed with `Contract clause: (none)` is indistinguishable from suppressing a
+bug, and must be reviewed as one. For a plain panic/OOM finding this section is `N/A —
+no-panic oracle`.
+
+### 5. Root Cause
 
 One paragraph: why the code failed on this input. Reference specific line numbers and conditions.
 
-### 5. Fix Summary
+### 6. Fix Summary
 
 ```
 Files changed:  <list>
@@ -41,7 +64,7 @@ Approach:       <minimal description>
 Diff size:      <lines changed>
 ```
 
-### 6. Verification
+### 7. Verification
 
 ```
 Corpus replay:  PASS (go test -run=^FuzzParseXxx$ ./pkg/)
@@ -49,7 +72,7 @@ Short fuzz:     PASS (go test -run=^$ -fuzz=^FuzzParseXxx$ -fuzztime=30s ./pkg/)
 Unit test:      <added regression test name, if applicable>
 ```
 
-### 7. Prevention Guard
+### 8. Prevention Guard
 
 What was added to prevent this class of bug:
 - Input validation / bounds check
@@ -69,7 +92,8 @@ What was added to prevent this class of bug:
 
 ## Post-Fix Checklist
 
-- [ ] Crashing input saved to `testdata/fuzz/FuzzXxx/`
+- [ ] Crashing input saved to `<pkg>/testdata/fuzz/FuzzXxx/`
+- [ ] Triage verdict recorded with its contract clause (round-trip / differential only)
 - [ ] Corpus replay passes
 - [ ] Short fuzz run (30s) passes
 - [ ] Deterministic regression test added (if applicable)

@@ -152,5 +152,14 @@ if err != nil || again != got {
 }
 ```
 
-Idempotence is the stronger property when one normalization pass is legitimate: it still
-forbids drift on every pass after the first.
+**Order of preference — this is the same ruling SKILL.md §Template B states, and it must
+read the same wherever you load it.** Idempotence is **strictly weaker** than a guarded
+equality check: it forbids drift, not a one-shot wrong transform. Measured on Go 1.26.1
+against a codec mutated to flip the sign of large integers, same seeds in both harnesses:
+guarded equality **caught** it, the idempotent variant **missed** it — the corrupted value
+re-encodes to itself, so pass 2 agrees with pass 1.
+
+So: reach for a domain guard plus strict equality first (option 1 above, or
+`utf8.ValidString`-style filtering); fall back to idempotence only when no guard can
+express the contract. Idempotence beats raw `got != orig` on a normalizing codec, which is
+the only comparison Mistake 9 is about — it does not beat the guard.

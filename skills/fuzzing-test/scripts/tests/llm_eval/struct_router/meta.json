@@ -1,0 +1,22 @@
+{
+  "id": "struct_router",
+  "description": "Struct-aware target: ProcessRequest takes a Request that exceeds Go's native fuzz parameter types, so the harness feeds []byte and deserializes (Template D). The mutation drops the Location assignment on the redirect branch, producing a 301 with no target. It is silent: the status stays in range, no panic, and the template's own example assertion (100 <= status <= 599) passes on the mutant.",
+  "expected_verdict": "suitable",
+  "expected_fuzz_mode": "multi-parameter",
+  "expected_template": "Template D",
+  "min_seeds": 3,
+  "requires_size_guard": true,
+  "mutation": {
+    "find": "\t\t\tresp.Location = alias\n",
+    "replace": "",
+    "defect": "3xx response with an empty Location — a redirect to nowhere",
+    "witness": "{\"method\":\"GET\",\"path\":\"/old\"}"
+  },
+  "fuzztime_clean": "5s",
+  "fuzztime_kill": "10s",
+  "witness_corpus": "go test fuzz v1\n[]byte(\"{\\\"method\\\":\\\"GET\\\",\\\"path\\\":\\\"/old\\\"}\")\n",
+  "notes": "Closes the last uncovered fuzz mode. `alias` stays referenced by the surrounding `if`, so the mutated package still compiles — a mutation that breaks the build proves nothing and can never be credited as a kill. The graded distinction is C2: the response must assert the invariant its own gate declared, not the one the template happened to show.",
+  "bad_expected_reasons": [
+    "does NOT find the seeded defect"
+  ]
+}

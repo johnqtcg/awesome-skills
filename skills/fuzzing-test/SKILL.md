@@ -1,7 +1,7 @@
 ---
 name: fuzzing-test
 description: Generate Go fuzz tests (Go 1.18+ testing.F) for specified code when users ask for fuzzing/模糊测试/fuzz test generation, parser robustness, round-trip, or differential fuzzing. Always run an applicability gate first; if the target is not suitable, explain concrete reasons and stop without writing fuzz test code.
-allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go clean*), Bash(go tool cover*), Bash(gh issue*)
+allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go clean*), Bash(go tool cover*)
 ---
 
 # Fuzzing Test Skill (Go)
@@ -86,12 +86,8 @@ Set budget policy per class:
 
 ### Execution Integrity Gate
 
-Never claim fuzz commands ran unless actually executed.
-
-If not run, output:
-- `Not run in this environment`
-- reason
-- exact commands to run
+Never claim fuzz commands ran unless actually executed. If not run, output
+`Not run in this environment`, the reason, and the exact commands to run.
 
 ## Output Contract
 
@@ -146,9 +142,8 @@ Then:
 6. Run checks:
 - corpus/regression: `go test -run=^FuzzXxx$ .`
 - short fuzz: `go test -run=^$ -fuzz=^FuzzXxx$ -fuzztime=30s .`
-7. If crash found and fixed:
-- retain corpus under `testdata/fuzz/FuzzXxx/`
-- add deterministic regression assertion if applicable
+7. If a crash is found: retain corpus under `<pkg>/testdata/fuzz/FuzzXxx/`, add a
+   deterministic regression assertion if applicable, and follow §Crash Handling.
 
 ## Crash Handling (Mandatory)
 
@@ -157,23 +152,22 @@ When fuzz finds a failure: capture the minimal reproducer → keep the crashing 
 timeout-resource blowup) → fix with a minimal change → re-run corpus replay **and** a short
 fuzz → report root cause and the guard that prevents recurrence.
 
-A round-trip or differential failure can come from either side. Decide which **from the
-contract**, not from confidence in the code (§Template B): the harness is wrong only when
-the contract says the input is outside what the target must preserve. Keep the reproducer
-either way, and never relax an assertion to restore green.
+A round-trip or differential failure can come from either side — triage it **from the
+contract**, never from confidence in the code (full procedure in §Template B). Keep the
+reproducer either way, and never relax an assertion to restore green.
 
-→ Report format in `references/crash-handling.md`.
+→ Report format, including the mandatory triage-verdict section, in
+`references/crash-handling.md`.
 
 ## CI Strategy
 
-Use two-lane strategy (see `references/ci-strategy.md`):
+Use two-lane strategy (workflows, cache keys and artifact globs in
+`references/ci-strategy.md`):
 
-- PR lane:
-  - run corpus replay (`go test -run=^Fuzz`)
-  - optional short fuzz only for low-cost targets
-- Scheduled lane (nightly/periodic):
-  - run bounded fuzz time per package
-  - upload artifacts/crash corpus
+- **PR lane** — corpus replay (`go test -run=^Fuzz`), plus a short fuzz only for low-cost
+  targets.
+- **Scheduled lane** (nightly/periodic) — bounded fuzz time per package; upload the crash
+  corpus as an artifact.
 
 ## Minimal Templates
 
@@ -389,34 +383,23 @@ func FuzzProcessRequest(f *testing.F) {
 Key points:
 - `t.Skip()` on unmarshal failure to let the fuzzer focus on structurally valid inputs.
 - Seed with multiple structurally distinct valid inputs to help coverage-guided exploration.
-- Bound `len(data)` to avoid spending time on enormous payloads.
 
-**Deserialization strategy (choose by performance need):**
+**Deserialization strategy.** `json.Unmarshal` is the default: readable seeds, nested and
+optional fields, and fast enough that the target usually dominates. Reach for
+`encoding/binary.Read` on a fixed-layout struct when `execs/sec` is the bottleneck, and
+`go-fuzz-headers` `GenerateStruct` when native fuzz types cannot express the struct at all.
+Avoid `encoding/gob` here — a harness decodes a fresh `[]byte` per iteration, so it rebuilds
+the decoder and re-reads the type descriptor every time.
 
-| Method | Measured cost | When to use |
-|--------|--------------|-------------|
-| `encoding/binary.Read` | **57 ns/op**, 64 B, 2 allocs | Fixed-layout structs; highest `execs/sec` |
-| `json.Unmarshal` | **441 ns/op**, 232 B, 5 allocs | Readable seeds, nested/optional fields |
-| `encoding/gob` (`NewDecoder` per input) | **5 293 ns/op**, 7 216 B, 163 allocs | Rarely worth it in a harness — see below |
-| `go-fuzz-headers` `GenerateStruct` | not measured here | Complex nested structs; see [go-fuzz-headers bridge](#go-fuzz-headers-bridge) |
-
-Conditions: Go 1.26.1, darwin/arm64 (Apple M4), one 4-field struct (`uint8,int32,uint32,uint16`),
-`-benchmem -count=3`. **These are one machine's numbers — the ordering is the transferable
-part, and even that depends on your struct.** Re-measure before optimising:
-
-```bash
-go test -run='^$' -bench=. -benchmem -count=5 . | tee bench.txt && benchstat bench.txt
-```
-
-Why `gob` loses here: a harness gets a fresh `[]byte` per iteration, so it builds a new
-`gob.Decoder` and re-reads the type descriptor every time — 163 allocations against JSON's 5.
-`gob` is fast on a long-lived stream, which a harness never has.
+→ Measured per-op costs, their conditions, and the re-measure command:
+`references/advanced-tuning.md` (§Deserialization Cost in a Harness). Do not optimise on
+those numbers without re-running them on your struct and your machine.
 
 ## Fuzz vs Property-Based Testing
 
 - **Use fuzz** when: inputs are byte/string-like, you want crash discovery, or target is a parser/decoder.
 - **Use property-based** (`rapid`/`gopter`) when: inputs need complex generators with domain constraints, or `t.Skip`-based filtering would waste >80% of iterations.
-- **Use both** when: fuzz for crash discovery + property-based for domain invariants on the same target.
+- **Use both** when: fuzz for crash discovery + property-based for domain invariants on one target.
 
 ## Corpus Management
 
@@ -429,9 +412,8 @@ fuzz-workflow error:
 | Coverage-growing "interesting" input | `$GOCACHE/fuzz/<module>/<pkg>/FuzzXxx/` | Never committed; cache it in CI |
 
 So a clean 30-minute run reporting `new interesting: 2000` adds **nothing** to
-`testdata/fuzz` — those entries are in the build cache
-(`find "$(go env GOCACHE)/fuzz" -type f | wc -l`). `<pkg>` is the tested package's own
-directory, not the repo root. Clean with `go clean -fuzzcache`.
+`testdata/fuzz` — count them with `find "$(go env GOCACHE)/fuzz" -type f | wc -l`. `<pkg>`
+is the tested package's own directory, not the repo root. Clean with `go clean -fuzzcache`.
 
 → `references/ci-strategy.md` (§Corpus Sharing Between Lanes) owns the cache keys, the
 artifact glob, and who commits a crasher.
@@ -454,13 +436,10 @@ per-release behaviour worth knowing when tuning.
 
 ### Tuning: race, parallelism, structured input, baseline
 
-Four knobs share one home — `references/advanced-tuning.md` — so the numbers stay in one
-place: `-race` with fuzz (cost multiplier, when it is worth it, when to say you skipped it),
-worker parallelism (`GOMAXPROCS`/`-parallel` for memory-heavy targets and CI runners),
-`go-fuzz-headers` `GenerateStruct` for structs that native fuzz types cannot express, and the
-`execs/sec` baseline table that decides whether a longer fuzz window is worth buying.
-
-Record a baseline (`execs/sec`, skip rate, measurement window) before scaling up any budget.
+Record a baseline (`execs/sec`, skip rate, measurement window) before scaling any budget.
+All five knobs live in `references/advanced-tuning.md`, so the numbers stay in one place:
+`-race` with fuzz, worker parallelism (`GOMAXPROCS`/`-parallel`), `go-fuzz-headers`
+`GenerateStruct`, deserialization cost, and the `execs/sec` baseline table.
 
 ## Quality Scorecard
 

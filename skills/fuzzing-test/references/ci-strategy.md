@@ -7,14 +7,14 @@ Use two-lane fuzz strategy to balance speed and depth.
 Getting this wrong is the most common fuzz-CI bug: caching the wrong directory
 produces a pipeline that looks like it accumulates corpus but never does.
 
+`<pkg>` below is the directory of the package under test, **not** the repo root. Fuzzing
+`./pkg/parser/` writes to `pkg/parser/testdata/fuzz/`. Every path and glob in this file is
+written accordingly — this is the detail that most often breaks crash artifact upload.
+
 | What | Location | In git? | Cache in CI? |
 |------|----------|---------|--------------|
 | **Seed corpus** you author by hand | `<pkg>/testdata/fuzz/FuzzXxx/` | **Yes** — you wrote it | n/a (already in repo) |
 | **Failing input** found by the fuzzer | `<pkg>/testdata/fuzz/FuzzXxx/` — written automatically **on failure only** | **Yes** — commit it, it becomes a regression test | n/a (in repo once committed) |
-
-`<pkg>` is the directory of the package under test, **not** the repo root. Fuzzing
-`./pkg/parser/` writes to `pkg/parser/testdata/fuzz/`. Every path and glob below is written
-accordingly — this is the detail that most often breaks crash artifact upload.
 | **"Interesting" input** found by the fuzzer (grew coverage, did not fail) | `$GOCACHE/fuzz/<module>/<pkg>/FuzzXxx/` | **No** | **Yes — this is the directory to cache** |
 
 Verify on any machine:
@@ -178,7 +178,12 @@ Rules:
   `if-no-files-found: error` so a mis-scoped glob fails loudly instead of silently.
 - A crasher becomes a permanent regression test only once a human commits it to
   `<pkg>/testdata/fuzz/FuzzXxx/`.
-- File issues automatically for new crashes (optional: `gh issue create`).
+- Filing an issue for a new crash is optional, and it belongs in the **workflow**
+  (`gh issue create` in a CI step, with `GH_TOKEN` scoped by the job), not in the agent's
+  tool surface. `gh issue*` is deliberately **absent** from this skill's `allowed-tools`:
+  posting a crash reproducer to a tracker is an outward-facing write, and a fuzz harness
+  frequently carries payloads nobody vetted for publication. If a human asks for the issue
+  to be filed in-session, that goes through the normal permission prompt.
 
 ## Corpus Sharing Between Lanes
 

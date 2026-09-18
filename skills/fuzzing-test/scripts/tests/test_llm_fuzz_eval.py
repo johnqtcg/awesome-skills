@@ -27,6 +27,7 @@ opt-in (3), once wired to a backend, does that.
 import atexit
 import json
 import os
+import pathlib
 import re
 import shutil
 import subprocess
@@ -42,7 +43,8 @@ LIVE_CMD = os.environ.get("FUZZING_TEST_SKILL_EVAL_CMD")
 # frame_parser -> parser robustness (Template A); kv_codec -> round-trip, byte-exact codec;
 # json_roundtrip -> round-trip, NORMALIZING codec (grades false positives on correct code);
 # trivial_add -> the refusal path, where the correct output is no harness at all.
-FIXTURES = ("frame_parser", "kv_codec", "json_roundtrip", "split_differential", "trivial_add")
+FIXTURES = ("frame_parser", "kv_codec", "json_roundtrip", "split_differential",
+            "struct_router", "trivial_add")
 
 # A harness may legitimately need stdlib helpers (a domain guard needs unicode/utf8). The
 # runner assembles the test file, so it must supply the imports the emitted code uses --
@@ -60,6 +62,22 @@ _IMPORT_HINTS = {
     "time.": "time",
     "math.": "math",
 }
+
+
+def _skill_fuzz_modes() -> list:
+    """The fuzz modes SKILL.md offers, read from §Implementation Workflow step 2.
+
+    Single source: the grader's own `modes` list in `grade()` and the fixture-coverage
+    guard both derive from this, so a mode added to the skill cannot stay ungraded and a
+    mode removed from it cannot linger in the grader."""
+    skill = pathlib.Path(SKILL_MD).read_text()
+    block = skill.split("2. Select fuzz mode:", 1)[1].split("\n3. ", 1)[0]
+    modes = [ln[2:].strip() for ln in block.splitlines() if ln.startswith("- ")]
+    if len(modes) < 4:
+        raise AssertionError(
+            f"SKILL.md \u00a7Implementation Workflow no longer lists the fuzz modes as a "
+            f"bullet list; parsed {modes}")
+    return modes
 
 
 def test_file_for(harness: str) -> str:
@@ -329,9 +347,10 @@ def grade(output: str, fixture: dict, runner: "_GoRunner"):
             reasons.append("suggested a fuzz command for a target that failed the gate")
         return (len(reasons) == 0, reasons)
 
-    # 2. Fuzz mode.
-    modes = ["parser robustness", "round-trip", "differential", "multi-parameter"]
-    found_modes = [mode for mode in modes if mode in low]
+    # 2. Fuzz mode. The vocabulary comes from SKILL.md, not a copy of it: a mode the skill
+    #    adds must become gradeable without editing this file, and one it drops must stop
+    #    being accepted here.
+    found_modes = [mode for mode in _skill_fuzz_modes() if mode in low]
     if fixture["expected_fuzz_mode"] not in found_modes:
         reasons.append(f"fuzz mode: found {found_modes}, expected {fixture['expected_fuzz_mode']!r}")
 
@@ -667,11 +686,21 @@ class GraderUnitTests(unittest.TestCase):
                                 f"{name}: needs a witness corpus entry for the kill check")
 
     def test_fixtures_cover_every_fuzz_mode(self) -> None:
-        """Each fuzz mode with a compile-and-kill scenario must be graded at least once."""
-        modes = {_load_fixture(n).get("expected_fuzz_mode") for n in FIXTURES
-                 if _load_fixture(n)["expected_verdict"] == "suitable"}
-        self.assertEqual({"parser robustness", "round-trip", "differential"}, modes,
-                         f"fixtures must cover parser + round-trip + differential, got {modes}")
+        """Every fuzz mode the skill offers must have a compile-and-kill fixture.
+
+        The expected set is read from SKILL.md's own mode list rather than written here.
+        A hardcoded set is a second copy of the skill's taxonomy: it went stale the moment
+        `multi-parameter` got a fixture (this test then failed for adding coverage), and it
+        would have stayed silent had the skill grown a *fifth* mode with none."""
+        skill_modes = set(_skill_fuzz_modes())
+        self.assertGreaterEqual(len(skill_modes), 4,
+                                f"mode list parsed from SKILL.md looks wrong: {skill_modes}")
+        graded = {_load_fixture(n).get("expected_fuzz_mode") for n in FIXTURES
+                  if _load_fixture(n)["expected_verdict"] == "suitable"}
+        self.assertEqual(
+            skill_modes, graded,
+            f"every mode SKILL.md offers needs a compile-and-kill fixture; "
+            f"missing {sorted(skill_modes - graded)}, unknown {sorted(graded - skill_modes)}")
 
     def test_each_fixture_grades_a_distinct_defect(self) -> None:
         """A fixture costs a fuzz run, so it must add a grading axis, not repeat one.
