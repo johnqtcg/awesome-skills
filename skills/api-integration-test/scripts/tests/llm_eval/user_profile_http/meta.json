@@ -1,0 +1,149 @@
+{
+  "id": "user_profile_http",
+  "description": "Internal HTTP client for a user-profile service. In scope, Full config, Standard mode. The response is graded by RUNNING the integration test it emits across an env matrix: the gates must refuse BEFORE any network call, so none of the graded cases needs a server or a bindable socket.",
+  "expected_scope": "in_scope",
+  "expected_mode": "Standard",
+  "expected_degradation": "Full",
+  "package": "sut",
+  "_env_matrix": "Each case sets these vars and requires that outcome from `go test -tags=integration`.\n  skip         = rc 0 with a --- SKIP marker (the run was not requested).\n  refused      = the run FAILED *and never attempted a network call*. `fail` alone is\n                 not enough: a response that ignores the prod host dials it and fails\n                 on DNS, which would score as a correct refusal while doing the exact\n                 dangerous thing. The gates must stop it BEFORE the call.\n  reached_call = a network attempt IS visible — the gates let a legitimate config\n                 through. Without this row a test that t.Fatalf's unconditionally\n                 satisfies every refusal and scores perfectly.",
+  "env_matrix": [
+    {
+      "name": "gate unset is opt-out, not a failure",
+      "env": {},
+      "expect": "skip",
+      "why": "the user did not request the run — §Skip vs Fail row 1"
+    },
+    {
+      "name": "gate on with a required var missing must be refused, never skipped",
+      "env": {
+        "INTERNAL_API_INTEGRATION": "1",
+        "API_BASE_URL": "http://127.0.0.1:1",
+        "TEST_USER_ID": "1",
+        "TEST_TENANT_ID": "test-1",
+        "TEST_TENANT_ALLOWLIST": "test-1,test-2"
+      },
+      "expect": "refused",
+      "why": "ENV is absent. A t.Skip here false-greens CI — §Skip vs Fail row 2. The removed variable must be one EVERY test in the response needs: drop one that only the first test reads and a second test legitimately proceeds and dials, which reads as 'the gate let it through'."
+    },
+    {
+      "name": "ENV=production must be refused",
+      "env": {
+        "INTERNAL_API_INTEGRATION": "1",
+        "ENV": "production",
+        "API_BASE_URL": "http://127.0.0.1:1",
+        "TEST_USER_ID": "1",
+        "TEST_TENANT_ID": "test-1",
+        "TEST_TENANT_ALLOWLIST": "test-1,test-2"
+      },
+      "expect": "refused",
+      "why": "the label path; the host here is harmless loopback, so only the ENV check can stop it"
+    },
+    {
+      "name": "bare host with no scheme must be refused (fail closed)",
+      "env": {
+        "INTERNAL_API_INTEGRATION": "1",
+        "ENV": "dev",
+        "API_BASE_URL": "api.production.internal",
+        "TEST_USER_ID": "1",
+        "TEST_TENANT_ID": "test-1",
+        "TEST_TENANT_ALLOWLIST": "test-1,test-2"
+      },
+      "expect": "refused",
+      "why": "url.Parse accepts relative refs with no error — checking only err is a bypass. A bare host cannot be dialled either way, so this case is offline by construction"
+    },
+    {
+      "name": "host not on NONPROD_HOST_ALLOWLIST must be refused",
+      "env": {
+        "INTERNAL_API_INTEGRATION": "1",
+        "ENV": "dev",
+        "API_BASE_URL": "http://127.0.0.1:1",
+        "TEST_USER_ID": "1",
+        "TEST_TENANT_ID": "test-1",
+        "TEST_TENANT_ALLOWLIST": "test-1,test-2",
+        "NONPROD_HOST_ALLOWLIST": "10.0.0.1"
+      },
+      "expect": "refused",
+      "why": "the allowlist is the preferred mechanism and it is fail-closed: a host that is not on it is production as far as this run is concerned. This is the case that separates a real host check from an ENV-only one, and it stays on loopback so a response that ignores it fails with a local 'connection refused'"
+    },
+    {
+      "name": "no TEST_TENANT_ALLOWLIST must be refused (allowlist, not denylist)",
+      "env": {
+        "INTERNAL_API_INTEGRATION": "1",
+        "ENV": "dev",
+        "API_BASE_URL": "http://127.0.0.1:1",
+        "TEST_USER_ID": "1",
+        "TEST_TENANT_ID": "test-1"
+      },
+      "expect": "refused",
+      "why": "a denylist is fail-open — a real prod tenant named acme-main slips through"
+    },
+    {
+      "name": "tenant not on the allowlist must be refused",
+      "env": {
+        "INTERNAL_API_INTEGRATION": "1",
+        "ENV": "dev",
+        "API_BASE_URL": "http://127.0.0.1:1",
+        "TEST_USER_ID": "1",
+        "TEST_TENANT_ID": "acme-main",
+        "TEST_TENANT_ALLOWLIST": "test-1,test-2"
+      },
+      "expect": "refused",
+      "why": "the tenant is plausible-looking and must still be refused"
+    },
+    {
+      "name": "a fully valid non-prod config reaches the real call",
+      "env": {
+        "INTERNAL_API_INTEGRATION": "1",
+        "ENV": "dev",
+        "API_BASE_URL": "http://127.0.0.1:1",
+        "TEST_USER_ID": "1",
+        "TEST_TENANT_ID": "test-1",
+        "TEST_TENANT_ALLOWLIST": "test-1,test-2",
+        "NONPROD_HOST_ALLOWLIST": "127.0.0.1"
+      },
+      "expect": "reached_call",
+      "why": "the clean arm: the gates must not refuse a legitimate target. Port 1 is closed, so the run fails on a local connection refusal — which proves the call happened"
+    }
+  ],
+  "_gate_markers": "Substrings that identify a GATE refusal as opposed to a real call failure. Used by the `reached_call` case: if any appears, the response refused a legitimate config.",
+  "required_report_patterns": [
+    {
+      "name": "scope verdict",
+      "regex": "(?i)scope[^\\n]{0,40}(in scope|internal http|proceed)"
+    },
+    {
+      "name": "execution mode",
+      "regex": "(?i)\\bmode\\b[^\\n]{0,30}Standard"
+    },
+    {
+      "name": "degradation level",
+      "regex": "(?i)degradation[^\\n]{0,30}Full"
+    },
+    {
+      "name": "the exact run command",
+      "regex": "go test[^\\n]*-tags=integration"
+    },
+    {
+      "name": "-count=1 on the run command",
+      "regex": "-count=1"
+    },
+    {
+      "name": "quality scorecard verdict",
+      "regex": "(?i)critical:?\\s*\\d\\s*/\\s*4"
+    }
+  ],
+  "must_contain_build_tag": "//go:build integration",
+  "bad_expected_reasons": [
+    "env matrix"
+  ],
+  "_offline": "Every host in this matrix is loopback or a bare (undiallable) name. That is deliberate and load-bearing: a response that FAILS to refuse will attempt the call, so the matrix must be unable to reach anything real even when the thing under test is wrong — and the resulting error must be a local, predictable 'connection refused' rather than a DNS or sandbox message whose wording varies by environment.",
+  "_network_markers": "Substrings that prove the process tried to reach the network. Presence/absence is what separates `refused` from `reached_call`.",
+  "network_markers": [
+    "connection refused",
+    "dial tcp",
+    "no such host",
+    "lookup ",
+    "i/o timeout",
+    "operation not permitted"
+  ]
+}

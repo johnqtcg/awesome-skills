@@ -1,0 +1,38 @@
+{
+  "id": "pure_normalizer",
+  "description": "A pure string function with no client, no transport and no I/O. The correct response is the Scope Validation Gate's HARD STOP: verdict + redirect + reason, and NO test code. Grades the path every other fixture skips — without it, 'always write an integration test' scores exactly as well as running gate 1.",
+  "expected_scope": "out_of_scope",
+  "expected_redirect": "$unit-test",
+  "package": "sut",
+  "required_report_patterns": [
+    {
+      "name": "out-of-scope verdict",
+      "regex": "(?i)(out of scope|not in scope|out-of-scope)"
+    },
+    {
+      "name": "redirect to the unit-test skill",
+      "regex": "\\$unit-test"
+    },
+    {
+      "name": "a stated reason",
+      "regex": "(?i)(pure function|no i/o|no transport|no network|no client)"
+    }
+  ],
+  "forbidden_report_patterns": [
+    {
+      "name": "a fuzz/integration run command",
+      "regex": "go test[^\\n]*-tags=integration"
+    },
+    {
+      "name": "a degradation level (gate 3 must not have run)",
+      "regex": "(?i)degradation level"
+    },
+    {
+      "name": "an execution mode (gate 4 must not have run)",
+      "regex": "(?i)\\bmode:\\s*(Smoke|Standard|Comprehensive)"
+    }
+  ],
+  "bad_expected_reasons": [
+    "emitted test code for an out-of-scope target"
+  ]
+}

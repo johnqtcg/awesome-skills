@@ -16,10 +16,15 @@
 | Reference Loading | 2 | Gate always loads, trigger patterns present |
 | Safety Rules | 2 | No hardcode secrets, timeout bounded |
 | Size | 1 | SKILL.md ≤ 500 lines |
+| Normative rules | 14 | Skip-vs-Fail cells, `-count=1`, per-mode timeouts/retry caps, Comprehensive threshold, build tag, Go version rows, checklist tier bars + tier sizes, the scorecard's reachability, the gate reference's fail-closed rule |
+| Shipped surface | 5 | code fences balanced (+ a synthetic-input test for the detector), reference pointers resolve, intra-document anchors resolve |
+| Tool permissions | 4 | the documented run recipe is auto-approved, the wrapper exists and is a single invocation, SKILL.md explains the first-token rule, no over-broad pattern |
+| Coverage doc | 2 | declared per-file counts match the loader; no closed gap still listed |
 
-**Logical checks above: ~70. Actual `def test_*` methods: 38.** (The category
+**Logical checks above: ~70. Actual `def test_*` methods: 74.** (The category
 counts are assertions grouped by topic, several of which live inside one test
-method or a loop — they are NOT the runnable test count.)
+method or a loop — they are NOT the runnable test count. This number is no longer
+hand-maintained: `CoverageDocConsistencyTests` loads each module and compares.)
 
 ## Golden Scenario Tests (`test_golden_scenarios.py`)
 
@@ -77,9 +82,51 @@ inherited `GOROOT` so a stale one can't poison the build.
 **Actual behavioral test methods: 20** (15 run without socket binding; 5 need a
 bindable local socket and skip under a sandbox that denies it).
 
+## Skill-Output Eval (`test_llm_skill_eval.py`)
+
+The layer the other three cannot reach: they check that rule *text* exists, or that a
+fixture **this repo wrote** behaves. Neither looks at a response. A model could name every
+gate, ship a scorecard claiming 4/4 Critical, and emit a test that `t.Skip`s on missing
+config and trusts `ENV` alone — the exact false-green this skill exists to prevent — and
+score perfectly.
+
+So the grader **runs the emitted test**. Each fixture declares an `env_matrix`: environments
+plus the outcome §Skip vs Fail requires of each.
+
+| Fixture | Path graded | How it discriminates |
+|---------|-------------|----------------------|
+| `llm_eval/user_profile_http/` | in scope, Full, Standard | 8-case env matrix run against the response's own Go test |
+| `llm_eval/pure_normalizer/` | **refusal** — a pure function with no client | The Scope Validation Gate is a HARD STOP: the correct output is a verdict + redirect + reason and **no test code**. Its bad exemplar notes the target is unusual and writes the test anyway |
+
+`refused` is deliberately stronger than `fail`: the run must fail **without attempting the
+call**. A plain `fail` is satisfied by a response that ignores the host check, dials the
+prod target and fails on DNS — scoring a correct refusal for doing the exact dangerous
+thing. And `reached_call` is the clean arm: without it, a test that calls `t.Fatalf`
+unconditionally satisfies all six refusals and scores perfectly.
+
+Every host in the matrix is loopback or an undiallable bare name. That is load-bearing, not
+tidiness: a response that fails to refuse **will** attempt the call, so the matrix must be
+unable to reach anything real even when the thing under test is wrong — and the resulting
+error must be a local `connection refused`, not a DNS or sandbox message whose wording
+varies by environment. (Both alternatives were tried first: a real prod-looking hostname
+made the bad exemplar hang on a live connection, and the sandbox's denial text matched no
+marker, so the case scored as a correct refusal.)
+
+Two more traps the fixtures encode:
+
+- A matrix case that removes a required variable must remove one **every** test in the
+  response needs. Drop one that only the first test reads and a second test legitimately
+  proceeds and dials — which reads as "the gate let it through".
+- `_go_env` strips `ENV`, `API_BASE_URL`, `TEST_TENANT*`, `INTERNAL_API_*` and
+  `INTEGRATION_*` from the parent environment, so a case that is supposed to be missing a
+  variable cannot pick it up from the operator's shell.
+
+**Actual skill-output eval methods: 11** (10 need `go`; 1 is opt-in via
+`API_INTEGRATION_SKILL_EVAL_CMD`, which runs the same grader over every fixture).
+
 ## Combined Total
 
-**102 runnable test methods** = 51 contract + 31 golden + 20 behavioral. A
+**136 runnable test methods** = 74 contract + 31 golden + 20 behavioral + 11 skill-output. A
 call-site arity guard also checks that every doc call of a safety helper matches
 its definition, so a signature change can't leave a stale (non-compiling) example.
 (Counts are `def test_*` methods. An earlier revision's "108"/"81" were wrong —
@@ -88,9 +135,11 @@ actual suite each time it changes.)
 
 ## Known Gaps
 
-1. No live LLM-in-the-loop skill-output eval (the doc-contract + golden suites are
-   structural; the behavioral suite proves the *prescribed code* works, not that a
-   model emits it). A grader + fixtures like the unit-test skill's would close this.
+1. ~~No skill-output eval.~~ **Closed** by `test_llm_skill_eval.py`: a grader plus two
+   fixtures (one authoring path, one refusal path) that grade a response by running the
+   Go test it emits. The remaining boundary is the *live* arm — the grader is proven to
+   separate the hand-authored good and bad exemplars, which is not the same as proving a
+   live model passes. Set `API_INTEGRATION_SKILL_EVAL_CMD` to close that too.
 2. Golden scenarios cover common cases; edge cases (e.g., mixed HTTP+gRPC in one
    file) not yet covered.
 3. gRPC behavioral coverage: the behavioral fixture is HTTP (`httptest`); gRPC

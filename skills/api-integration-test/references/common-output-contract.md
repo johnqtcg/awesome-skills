@@ -21,6 +21,16 @@ When executing integration-test skills, always report these mandatory fields:
 9. **Missing prerequisites** (if any):
    - exact missing variables with purpose
    - actionable setup instructions (example commands)
+10. **Quality scorecard verdict** (whenever test code was authored or reviewed):
+    - the tier counts from `checklists.md` §Test Quality Checklist —
+      `Critical: n/4, Standard: n/5, Hygiene: n/4`
+    - the overall verdict under that file's rule: **any single Critical FAIL → overall
+      FAIL**, regardless of the other tiers
+    - each FAIL named with the item ID (`C2`, `S3`, …) and what would fix it
+
+    Scoring without reporting is the same as not scoring: the rubric exists so a reviewer
+    can see *which* check failed, not just that something did. Omit this field only when
+    no test code was produced or reviewed (Blocked level, or a scope redirect).
 
 ## Rules
 

@@ -499,5 +499,425 @@ class CrossFileConsistencyGuardTests(unittest.TestCase):
                 )
 
 
+# ══════════════════════════════════════════════════════════════════════════════════════
+# Structural guards — added after a mutation sweep found the normative prose unpinned
+# ══════════════════════════════════════════════════════════════════════════════════════
+
+def md_section(text: str, heading: str) -> str:
+    """Body under `heading`, to the next heading of the same or higher level.
+
+    Scoping is the point. `assertIn(x, whole_document)` stays green while the occurrence
+    that *decides* something is edited, as long as `x` survives anywhere else — measured:
+    flipping both Skip-vs-Fail rows from `t.Fatalf` to `t.Skip`, i.e. reverting this
+    skill's central CI-integrity rule to the broken form, passed all 102 tests."""
+    lines = text.splitlines()
+    for start, ln in enumerate(lines):
+        if ln.startswith("#") and ln.lstrip("#").strip() == heading:
+            level = len(ln) - len(ln.lstrip("#"))
+            break
+    else:
+        raise AssertionError(f"heading not found: {heading!r}")
+    for end in range(start + 1, len(lines)):
+        nxt = lines[end]
+        if nxt.startswith("#") and (len(nxt) - len(nxt.lstrip("#"))) <= level:
+            return "\n".join(lines[start + 1:end])
+    return "\n".join(lines[start + 1:])
+
+
+def md_rows(section: str) -> list:
+    """Every markdown table row in `section` as a cell list (header/separator dropped,
+    `**bold**` stripped so emphasis cannot change a value)."""
+    rows, seen_header = [], False
+    for ln in section.splitlines():
+        s = ln.strip()
+        if not s.startswith("|"):
+            seen_header = False
+            continue
+        cells = [c.strip().replace("**", "") for c in s.strip("|").split("|")]
+        if set("".join(cells)) <= set("-: "):
+            continue
+        if not seen_header:
+            seen_header = True
+            continue
+        rows.append(cells)
+    return rows
+
+
+class NormativeRuleGuardTests(unittest.TestCase):
+    """Seventeen mutations were applied to this skill's documents; **twelve survived the
+    full 102-test suite**. The Go safety helpers were caught every time (three layers guard
+    them), but the *prose* rules that decide behaviour were not guarded at all:
+
+    * both Skip-vs-Fail rows (`t.Fatalf` -> `t.Skip`) — the skill's signature rule,
+    * `-count=1` demoted from mandatory to optional,
+    * the per-mode timeouts and the retry cap,
+    * the Comprehensive auto-select threshold,
+    * the `//go:build integration` tag,
+    * the Go version gate rows,
+    * the checklists' tier bars, including the Critical one-veto rule,
+    * the gate reference's fail-closed sentence.
+
+    Each test below was confirmed to FAIL against the mutation it names before it was
+    committed.
+    """
+
+    # --- Skip vs Fail: the table IS the rule ---
+
+    SKIP_VS_FAIL = {
+        "Run gate unset (`INTERNAL_API_INTEGRATION != 1`)": "`t.Skip`",
+        "Gate set, a required runtime var missing/empty": "`t.Fatalf`",
+        "Gate set, target is production (by ENV or host) without `INTEGRATION_ALLOW_PROD=1`": "`t.Fatalf`",
+        "Gate set, destructive op without `INTEGRATION_ALLOW_DESTRUCTIVE=1`": "`t.Skip`",
+        "Scaffold test (a value could not be determined at authoring time)": "`t.Skip` + `// TODO`",
+    }
+
+    def test_skip_vs_fail_table_cells_are_pinned(self) -> None:
+        rows = {r[0]: r[1] for r in md_rows(md_section(SKILL_TEXT, "Skip vs Fail (CI Integrity)"))}
+        self.assertEqual(set(self.SKIP_VS_FAIL), set(rows),
+                         "a Skip-vs-Fail row was added or removed without being pinned")
+        for situation, behavior in self.SKIP_VS_FAIL.items():
+            with self.subTest(situation=situation):
+                self.assertEqual(behavior, rows[situation])
+
+    def test_skip_vs_fail_rule_is_restated_in_the_same_direction(self) -> None:
+        """The prose under the table must not contradict it — an agent may read either."""
+        section = md_section(SKILL_TEXT, "Skip vs Fail (CI Integrity)")
+        self.assertIn('Skip = "not opted in / incomplete"', section)
+        self.assertIn('Fatal = "opted in but broken or dangerous"', section)
+        # Two cells say Fatal; the prose must name both of those causes.
+        self.assertIn("config missing", section)
+        self.assertIn("prod target unauthorized", section)
+
+    # --- Execution integrity ---
+
+    def test_count1_is_stated_as_mandatory_in_both_places(self) -> None:
+        gate = md_section(SKILL_TEXT, "6) Execution Integrity Gate")
+        self.assertIn("MUST pass `-count=1`", gate)
+        self.assertIn("(cached)", gate)
+        cmds = md_section(SKILL_TEXT, "Execution Commands")
+        self.assertIn("**`-count=1` is mandatory on EVERY real integration run", cmds)
+        self.assertNotIn("optional", cmds.split("-count=1` is mandatory")[1][:200])
+
+    def test_every_documented_go_test_command_carries_count1(self) -> None:
+        """A documented command without `-count=1` is the cached-run trap, shipped."""
+        for line in SKILL_TEXT.splitlines():
+            if "go test -tags=integration" in line and not line.lstrip().startswith(("-", "*", "|")):
+                with self.subTest(line=line.strip()[:70]):
+                    self.assertIn("-count=1", line,
+                                  "documented integration command omits -count=1")
+
+    # --- Modes: the numbers that decide scope ---
+
+    MODE_BUDGETS = {
+        "Smoke (connectivity check)": ("Timeout: 5s. No retry.", None),
+        "Standard (default)": ("Timeout: 15s. Max 1 retry for transient failures only.", None),
+        "Comprehensive (full coverage)": ("Timeout: 30s. Max 2 retries with bounded backoff.", None),
+    }
+
+    def test_mode_timeouts_and_retry_caps_are_pinned(self) -> None:
+        for heading, (budget, _) in self.MODE_BUDGETS.items():
+            with self.subTest(mode=heading):
+                self.assertIn(budget, md_section(SKILL_TEXT, heading))
+
+    def test_retry_policy_stays_bounded(self) -> None:
+        pattern = md_section(SKILL_TEXT, "Required Test Pattern")
+        self.assertIn("max 1-2 retries, bounded backoff, no infinite loop", pattern)
+        self.assertIn("default: no retry", pattern)
+
+    def test_comprehensive_auto_select_threshold_is_pinned(self) -> None:
+        rows = md_rows(md_section(SKILL_TEXT, "4) Execution Mode Gate"))
+        signals = {r[0]: r[1] for r in rows}
+        self.assertIn("≥ 5 endpoints or security-sensitive API (auth/payment/PII)", signals)
+        self.assertEqual("Comprehensive",
+                         signals["≥ 5 endpoints or security-sensitive API (auth/payment/PII)"])
+        self.assertEqual("Standard (default)", signals["Everything else"])
+
+    # --- Build tag and version gate ---
+
+    def test_build_tag_is_the_integration_tag_everywhere(self) -> None:
+        """The tag is the isolation mechanism: rename it in one place and the CI target
+        runs nothing while reporting success."""
+        for text, name in ((SKILL_TEXT, "SKILL.md"),
+                           (read(os.path.join(REFS_DIR, "common-integration-gate.md")),
+                            "common-integration-gate.md")):
+            with self.subTest(file=name):
+                self.assertIn("//go:build integration", text)
+                self.assertNotIn("//go:build inttest", text)
+                self.assertIn("-tags=integration", text)
+
+    GO_VERSION_GATE = {
+        "`t.Setenv`": "1.17",
+        "`context.WithTimeout` (no leak)": "all",
+        "Range var capture fix": "1.22",
+        "`t.Chdir`": "1.24",
+    }
+
+    def test_go_version_gate_rows_are_pinned(self) -> None:
+        rows = {r[0]: r[1] for r in md_rows(md_section(SKILL_TEXT, "2) Go Version Gate"))}
+        self.assertEqual(set(self.GO_VERSION_GATE), set(rows))
+        for feature, version in self.GO_VERSION_GATE.items():
+            with self.subTest(feature=feature):
+                self.assertEqual(version, rows[feature])
+        # t.Setenv/t.Chdir + t.Parallel panic on EVERY version — not a version gate.
+        joined = " ".join(" ".join(r) for r in md_rows(md_section(SKILL_TEXT, "2) Go Version Gate")))
+        self.assertIn("Panics under `t.Parallel()` on every Go version", joined)
+
+    # --- The quality scorecard, and the fact that it is now reachable ---
+
+    CHECKLIST_TIERS = {
+        "Critical": "Any single FAIL → overall FAIL (one-veto rule)",
+        "Standard": "≥ 4/5 must pass",
+        "Hygiene": "≥ 3/4 must pass",
+    }
+
+    def test_checklist_tier_bars_are_pinned(self) -> None:
+        text = read(os.path.join(REFS_DIR, "checklists.md"))
+        for tier, rule in self.CHECKLIST_TIERS.items():
+            with self.subTest(tier=tier):
+                self.assertIn(f"- **{tier}**: {rule}", text)
+
+    def test_checklist_tier_sizes_match_the_bars(self) -> None:
+        """`≥ 4/5` and `≥ 3/4` must match the number of rows in those tiers, or the bar
+        describes a table that does not exist."""
+        text = read(os.path.join(REFS_DIR, "checklists.md"))
+        quality = text.split("## Test Quality Checklist", 1)[1]
+        for tier, prefix, want in (("Critical", "C", 4), ("Standard", "S", 5), ("Hygiene", "H", 4)):
+            body = quality.split(f"### {tier}", 1)[1]
+            ids = re.findall(rf"(?m)^\|\s*({prefix}\d+)\s*\|", body)
+            with self.subTest(tier=tier):
+                self.assertEqual(want, len(set(ids)), f"{tier} has {sorted(set(ids))}")
+
+    def test_the_scorecard_is_actually_reachable(self) -> None:
+        """Before this guard the word "scorecard" appeared exactly ONCE in the whole
+        skill — as the H1 of `checklists.md`. The three-tier rubric was defined and then
+        never applied: SKILL.md never asked for a score and the output contract never
+        asked for the verdict. A rubric nothing invokes is dead weight."""
+        contract = read(os.path.join(REFS_DIR, "common-output-contract.md"))
+        self.assertIn("Quality scorecard verdict", contract,
+                      "the output contract must require the scorecard verdict")
+        self.assertIn("Critical FAIL", contract,
+                      "the contract must restate the one-veto rule it is reporting")
+        loading = md_section(SKILL_TEXT, "7) Load References Selectively")
+        self.assertIn("checklists.md", loading)
+        self.assertIn("MUST then score it", loading,
+                      "SKILL.md must instruct that authored code is scored, not merely "
+                      "that the checklist file may be read")
+
+    # --- The gate reference's fail-closed rule ---
+
+    def test_gate_reference_keeps_the_fail_closed_url_rule(self) -> None:
+        gate = read(os.path.join(REFS_DIR, "common-integration-gate.md"))
+        self.assertIn("absolute `http(s)` URL with a non-empty host", gate)
+        self.assertIn("Checking only the parse error is a bypass", gate)
+        self.assertIn("refuse non-test tenants", gate)
+
+
+class ShippedSurfaceIntegrityTests(unittest.TestCase):
+    """Structure and reachability of the shipped documents."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.docs = {"SKILL.md": SKILL_TEXT}
+        cls.docs.update({f: read(os.path.join(REFS_DIR, f))
+                         for f in sorted(os.listdir(REFS_DIR)) if f.endswith(".md")})
+
+    @staticmethod
+    def unclosed_fence(text: str):
+        """Return the line number of an unclosed fence, or None.
+
+        CommonMark: a closing fence must have NO info string. So a ```bash line inside a
+        ``` block is literal content, not a closer — which is how `common-integration-gate.md`
+        ended up with a stray fence that swallowed its last 30 lines (23% of an always-load
+        reference, including the whole Output and Message-Quality sections) as code."""
+        open_at = opener_len = None
+        opener_ch = ""
+        for i, ln in enumerate(text.splitlines(), 1):
+            m = re.match(r"^\s{0,3}(`{3,}|~{3,})(.*)$", ln)
+            if not m:
+                continue
+            fence, info = m.groups()
+            if open_at is None:
+                open_at, opener_len, opener_ch = i, len(fence), fence[0]
+            elif fence[0] == opener_ch and len(fence) >= opener_len and not info.strip():
+                open_at = None
+        return open_at
+
+    def test_every_code_fence_is_balanced(self) -> None:
+        for name, text in self.docs.items():
+            with self.subTest(doc=name):
+                self.assertIsNone(
+                    self.unclosed_fence(text),
+                    f"{name}: a fence is never closed — everything after it renders as "
+                    f"code. A nested ```lang block does not close its parent; use a "
+                    f"four-backtick outer fence.")
+
+    def test_the_fence_detector_still_detects(self) -> None:
+        """Synthetic input: the guard above is pinned to documents that are correct today,
+        so a detector edited into one that matches nothing would pass vacuously."""
+        self.assertEqual(1, self.unclosed_fence("```\nx\n"))
+        self.assertIsNone(self.unclosed_fence("```\nx\n```\n"))
+        # The real defect shape: an inner info-string fence is NOT a closer.
+        self.assertEqual(7, self.unclosed_fence("a\n\n```\n```bash\nx\n```\n```\n"))
+        self.assertIsNone(self.unclosed_fence("````text\n```bash\nx\n```\n````\n"))
+
+    def test_every_reference_pointer_resolves(self) -> None:
+        pointers = {(name, t) for name, text in self.docs.items()
+                    for t in re.findall(r"references/([A-Za-z0-9._-]+\.md)", text)}
+        self.assertGreaterEqual(len(pointers), 5, "the pointer regex stopped matching")
+        for source, target in sorted(pointers):
+            with self.subTest(source=source, target=target):
+                self.assertTrue(os.path.isfile(os.path.join(REFS_DIR, target)),
+                                f"{source} cites references/{target}, which does not exist")
+
+    def test_every_intra_document_anchor_resolves(self) -> None:
+        for name, text in self.docs.items():
+            slugs = {re.sub(r"[^a-z0-9\s-]", "", h.lower()).strip().replace(" ", "-")
+                     for h in re.findall(r"(?m)^#{1,6}\s+(.+?)\s*$", text)}
+            for anchor in re.findall(r"\]\(#([A-Za-z0-9_-]+)\)", text):
+                with self.subTest(doc=name, anchor=anchor):
+                    self.assertIn(anchor, slugs, f"{name} links to a #{anchor} that no "
+                                                 f"heading in it produces")
+
+
+class ToolPermissionGuardTests(unittest.TestCase):
+    """`allowed-tools` is a least-privilege AUTO-APPROVAL surface: a listed pattern runs
+    with no prompt, and an unlisted command is not forbidden — it just prompts. Two things
+    must hold, and both were broken:
+
+    * every command the skill tells you to run must be matchable, or the documented
+      workflow stalls on a prompt at exactly the step that matters;
+    * nothing broader than the workflow needs may be pre-approved.
+    """
+
+    @staticmethod
+    def bash_patterns() -> list:
+        line = [ln for ln in SKILL_TEXT.splitlines() if ln.startswith("allowed-tools:")]
+        assert len(line) == 1, "expected exactly one allowed-tools line"
+        return re.findall(r"Bash\(([^)]*)\)", line[0])
+
+    @staticmethod
+    def matches(pattern: str, command: str) -> bool:
+        """Prefix match with `*` as the only wildcard, anchored at the START of the
+        command — which is the rule that broke this skill: `Bash(go test*)` does not match
+        `INTERNAL_API_INTEGRATION=1 … go test …`, because the first token is an assignment."""
+        return re.fullmatch(re.escape(pattern).replace(r"\*", ".*"), command, re.S) is not None
+
+    def documented_commands(self) -> list:
+        """Every runnable command line in a ```bash fence in SKILL.md."""
+        out = []
+        for block in re.findall(r"```bash\s*\n(.*?)```", SKILL_TEXT, re.S):
+            joined = re.sub(r"\\\n\s*", " ", block)          # unfold line continuations
+            for ln in joined.splitlines():
+                ln = ln.strip()
+                if ln and not ln.startswith(("#", "export ", "cat >", "EOF", "INTERNAL_")):
+                    out.append(ln)
+        return out
+
+    def test_the_primary_run_recipe_is_auto_approved(self) -> None:
+        """At least one documented way to actually run the tests must need no prompt."""
+        patterns = self.bash_patterns()
+        runnable = [c for c in self.documented_commands() if "run_integration.sh" in c]
+        self.assertTrue(runnable, "SKILL.md documents no wrapper invocation")
+        for cmd in runnable:
+            with self.subTest(cmd=cmd[:70]):
+                self.assertTrue(any(self.matches(p, cmd) for p in patterns),
+                                f"no allowed-tools pattern matches {cmd!r}")
+
+    def test_the_wrapper_exists_and_is_a_single_invocation(self) -> None:
+        path = os.path.join(SKILL_ROOT, "scripts", "run_integration.sh")
+        self.assertTrue(os.path.isfile(path), "scripts/run_integration.sh must exist")
+        body = read(path)
+        # Scoped to the line that actually runs go, not the file. `assertIn("-count=1",
+        # body)` passed while the exec line had lost the flag, because the `echo` that
+        # previews the command still carried it — the same unscoped-substring failure this
+        # whole class exists to fix, committed into one of its own guards.
+        execs = [ln for ln in body.splitlines() if ln.startswith("exec ") and "go test" in ln]
+        self.assertEqual(1, len(execs), "expected exactly one exec'd go test line")
+        self.assertIn("-count=1", execs[0],
+                      "the wrapper's exec line must carry -count=1: without it Go serves a "
+                      "cached result and the external service is never contacted")
+        self.assertIn("-tags=integration", execs[0])
+        # The preview echo must not drift from what is actually run.
+        echoes = [ln for ln in body.splitlines() if ln.startswith("echo \"+ go test")]
+        self.assertEqual(1, len(echoes))
+        for flag in ("-tags=integration", "-run Integration", "-count=1"):
+            self.assertIn(flag, echoes[0],
+                          f"the previewed command omits {flag} that the real one passes")
+        self.assertIn("INTERNAL_API_INTEGRATION", body,
+                      "the wrapper must refuse an env file with no run gate")
+        self.assertNotIn("source ", body)
+        self.assertNotIn(". \"$ENV_FILE\"", body)
+        self.assertIn("never `source`", body,
+                      "the wrapper must say why it parses rather than sources")
+
+    def test_skill_explains_why_the_inline_form_is_not_auto_approved(self) -> None:
+        cmds = md_section(SKILL_TEXT, "Execution Commands")
+        self.assertIn("first token", cmds.lower())
+        self.assertIn("do not carry env vars forward", cmds)
+
+    def test_no_overbroad_bash_pattern(self) -> None:
+        """`Bash(make*)` pre-approved every target in the project's Makefile — including
+        `make deploy` — for the sake of one integration target."""
+        for pattern in self.bash_patterns():
+            with self.subTest(pattern=pattern):
+                self.assertNotIn(pattern, ("make*", "go*", "bash*", "sh*", "*"),
+                                 f"`{pattern}` pre-approves far more than this skill needs")
+
+
+class CoverageDocConsistencyTests(unittest.TestCase):
+    """COVERAGE.md declares per-file test counts. They drifted: one line said the contract
+    file had 38 `def test_*` methods while another line in the SAME file said 51 (the
+    loader collects 51) — and nothing compared either number to the suite. The irony is
+    that the stale line is the one asserting the counts are "regenerated from the actual
+    suite each time"."""
+
+    COVERAGE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "COVERAGE.md")
+
+    def test_declared_counts_match_the_collected_suite(self) -> None:
+        here = os.path.dirname(os.path.abspath(__file__))
+        text = read(self.COVERAGE)
+        declared = {
+            "test_skill_contract.py": r"Actual `def test_\*` methods: (\d+)\.",
+            "test_golden_scenarios.py": r"Actual `def test_\*` methods: (\d+)\.",
+            "test_behavioral_integration.py": r"Actual behavioral test methods: (\d+)",
+            "test_llm_skill_eval.py": r"Actual skill-output eval methods: (\d+)",
+        }
+        # The two identical patterns appear in file order; consume them in that order.
+        generic = re.findall(r"Actual `def test_\*` methods: (\d+)\.", text)
+        order = ["test_skill_contract.py", "test_golden_scenarios.py"]
+        total = 0
+        for i, filename in enumerate(order):
+            spec = importlib.util.spec_from_file_location(
+                f"_count_{i}_" + filename[:-3], os.path.join(here, filename))
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            actual = unittest.defaultTestLoader.loadTestsFromModule(mod).countTestCases()
+            total += actual
+            self.assertEqual(actual, int(generic[i]),
+                             f"COVERAGE.md says {generic[i]} tests in {filename}, loader "
+                             f"collects {actual}")
+        for filename in ("test_behavioral_integration.py", "test_llm_skill_eval.py"):
+            m = re.search(declared[filename], text)
+            self.assertIsNotNone(m, f"COVERAGE.md must declare a count for {filename}")
+            spec = importlib.util.spec_from_file_location(
+                "_count_" + filename[:-3], os.path.join(here, filename))
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            actual = unittest.defaultTestLoader.loadTestsFromModule(mod).countTestCases()
+            total += actual
+            self.assertEqual(actual, int(m.group(1)),
+                             f"COVERAGE.md says {m.group(1)} tests in {filename}, loader "
+                             f"collects {actual}")
+        m = re.search(r"\*\*(\d+) runnable test methods\*\*", text)
+        self.assertIsNotNone(m, "COVERAGE.md must declare a combined total")
+        self.assertEqual(total, int(m.group(1)),
+                         f"COVERAGE.md total is {m.group(1)}, loader collects {total}")
+
+    def test_no_closed_gap_is_still_listed(self) -> None:
+        gaps = read(self.COVERAGE).split("## Known Gaps")[-1]
+        self.assertNotIn("No live LLM-in-the-loop skill-output eval", gaps,
+                         "the skill-output eval now exists; this gap is closed")
+
+
 if __name__ == "__main__":
     unittest.main()

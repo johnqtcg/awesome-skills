@@ -75,7 +75,7 @@ func TestOrderService_Integration(t *testing.T) {
 
 ### Blocked Mode Example Output
 
-```
+````text
 ## Blocked: Cannot Generate Integration Tests
 
 **Reason**: Service address and authentication method are unknown.
@@ -100,7 +100,7 @@ export TEST_TENANT_ALLOWLIST=???        # required — exact test tenant IDs (co
 # destructive runs also need: export INTEGRATION_ALLOW_DESTRUCTIVE=1 NONPROD_HOST_ALLOWLIST=<test hosts>
 go test -tags=integration ./internal/client/order -run Integration -v -count=1
 ```
-```
+````
 
 ## Required Output In Every Run
 

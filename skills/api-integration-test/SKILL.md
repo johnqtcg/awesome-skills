@@ -1,7 +1,7 @@
 ---
 name: api-integration-test
 description: "Create, maintain, and run gated Go integration tests for internal APIs and service-to-service clients (HTTP/gRPC). Use for endpoint verification, contract checks with real runtime config, opt-in execution, timeout/retry safety, and integration failure triage in Go services."
-allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(make*)
+allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(make test-api-integration*), Bash(bash scripts/run_integration.sh*)
 ---
 
 # API Integration Test
@@ -154,6 +154,9 @@ Always load:
 
 Load on condition:
 - `references/checklists.md` — **only when** authoring new tests or triaging failures.
+  When you author or review test code you MUST then score it against that file's
+  §Test Quality Checklist and report the verdict (output-contract field 10): any single
+  **Critical** FAIL is an overall FAIL, Standard needs ≥4/5, Hygiene ≥3/4.
 - `references/internal-api-patterns.md` — **only when** writing HTTP/gRPC test code (not for scope rejection or result reporting).
 - `references/advanced-patterns.md` — **only when** Comprehensive mode, CI integration, httptest adapter tests, or test data lifecycle management.
 
@@ -405,24 +408,44 @@ For Scaffold mode pattern (tests with `t.Skip` + `// TODO:` markers for missing 
 
 ## Execution Commands
 
+Put the variables in a **gitignored** env file, then run the one-invocation wrapper:
+
 ```bash
-# Smoke mode
+cat > .integration.env <<'EOF'
+INTERNAL_API_INTEGRATION=1
+ENV=dev
+API_BASE_URL=http://localhost:8080
+CONFIG_DIR=/path/to/config
+TEST_USER_ID=123
+TEST_TENANT_ID=test-tenant-1
+TEST_TENANT_ALLOWLIST=test-tenant-1
+EOF
+
+bash scripts/run_integration.sh .integration.env ./internal/pkg/client/user -timeout=30s   # Smoke
+bash scripts/run_integration.sh .integration.env ./internal/pkg/client/user -timeout=120s  # Standard
+bash scripts/run_integration.sh .integration.env ./internal/pkg/client/user -timeout=300s  # Comprehensive
+```
+
+**Why the wrapper rather than an inline `VAR=1 … go test …`** — two tool-runtime facts:
+
+1. A strict `Bash(go test*)` allowlist matches only a command whose **first token** is
+   `go test`. `INTERNAL_API_INTEGRATION=1 … go test …` starts with a variable assignment,
+   so it does not match and stalls on a permission prompt.
+2. Separate Bash invocations **do not carry env vars forward**, so "`export` … then
+   `go test`" runs the test with none of the exported variables.
+
+The env and the run therefore have to be one invocation. The wrapper **parses** the env
+file as `KEY=VALUE` data — it never `source`s it, because sourcing executes any shell
+hidden in a file that holds tenant IDs and tokens — appends `-count=1`, and refuses a file
+that does not set the run gate (without it the whole suite skips and CI goes green blind).
+
+The equivalent inline form is still correct when you are at a normal shell:
+
+```bash
 INTERNAL_API_INTEGRATION=1 ENV=dev API_BASE_URL=http://localhost:8080 \
   CONFIG_DIR=/path/to/config TEST_USER_ID=123 \
   TEST_TENANT_ID=test-tenant-1 TEST_TENANT_ALLOWLIST=test-tenant-1 \
   go test -tags=integration ./internal/pkg/client/user -run Integration -v -timeout=30s -count=1
-
-# Standard mode (default)
-INTERNAL_API_INTEGRATION=1 ENV=dev API_BASE_URL=http://localhost:8080 \
-  CONFIG_DIR=/path/to/config TEST_USER_ID=123 \
-  TEST_TENANT_ID=test-tenant-1 TEST_TENANT_ALLOWLIST=test-tenant-1 \
-  go test -tags=integration ./internal/pkg/client/user -run Integration -v -timeout=120s -count=1
-
-# Comprehensive mode
-INTERNAL_API_INTEGRATION=1 ENV=dev API_BASE_URL=http://localhost:8080 \
-  CONFIG_DIR=/path/to/config TEST_USER_ID=123 \
-  TEST_TENANT_ID=test-tenant-1 TEST_TENANT_ALLOWLIST=test-tenant-1 \
-  go test -tags=integration ./internal/pkg/client/user -run Integration -v -timeout=300s -count=1
 ```
 
 `TEST_TENANT_ALLOWLIST` is mandatory (tenant validation is fail-closed — §Go
