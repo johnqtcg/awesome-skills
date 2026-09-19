@@ -196,16 +196,33 @@ for i in $(seq 10); do
     git switch main -q    && go test -bench=. -count=1 ./... >> old.txt
     git switch feature -q && go test -bench=. -count=1 ./... >> new.txt
 done
+```
 
-# GOOD: build once per variant, restore your branch, then alternate two fixed binaries.
+```bash
+# GOOD: build each variant in its own worktree, then alternate two fixed binaries.
+# Worktrees never touch your checkout: a dirty tree is irrelevant and there is nothing
+# to restore, so an interrupted run cannot strand you on the wrong branch.
 # `go test -c` compiles a SINGLE package — `-o file` with ./pkg/... fails with
 # "with multiple packages, -o must refer to a directory or /dev/null".
-git switch main    -q && go test -c -o /tmp/old.bench ./pkg/mypkg
-git switch feature -q && go test -c -o /tmp/new.bench ./pkg/mypkg
-git switch -       -q
+git worktree add /tmp/wt-old <base-ref>
+git worktree add /tmp/wt-new <changed-ref>
+(cd /tmp/wt-old && go test -c -o /tmp/old.bench ./pkg/mypkg)
+(cd /tmp/wt-new && go test -c -o /tmp/new.bench ./pkg/mypkg)
 
 bash scripts/run_interleaved_bench.sh /tmp/old.bench /tmp/new.bench /tmp/bench-out 10
+
+git worktree remove /tmp/wt-old && git worktree remove /tmp/wt-new
 ```
+
+> **`git switch -` is not a way back.** It means `@{-1}`, the *previous* branch, not the one
+> you started on: from `topic`, doing `main` → `feature` → `-` leaves you on `main`
+> (verified). That is why the recipe above never switches branches at all. If you must,
+> capture the start point and restore it with a trap:
+>
+> ```bash
+> START=$(git symbolic-ref --quiet --short HEAD || git rev-parse HEAD)
+> trap 'git switch --quiet "$START"' EXIT
+> ```
 
 The script refuses to overwrite an existing `old.txt`/`new.txt` rather than appending to it,
 writes results outside the repository, validates its arguments, and runs benchstat at the end.

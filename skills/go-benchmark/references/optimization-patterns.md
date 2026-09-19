@@ -11,10 +11,20 @@ var bufPool = sync.Pool{
     New: func() any { return &bytes.Buffer{} },
 }
 
+// maxPooled bounds what goes back in. A pooled *bytes.Buffer keeps its capacity, so one
+// 50 MB payload leaves a 50 MB buffer in the pool for every worker that handled one — and
+// the pool holds it across GC cycles. The optimisation added to reduce memory then pins it.
+// This is the same fix the standard library applied to encoding/json's encoder pool.
+const maxPooled = 64 << 10
+
 func process(data []byte) []byte {
     buf := bufPool.Get().(*bytes.Buffer)
-    buf.Reset()        // always reset before use
-    defer bufPool.Put(buf)
+    buf.Reset() // reset on get: a Put path that returns early cannot leave stale bytes
+    defer func() {
+        if buf.Cap() <= maxPooled {
+            bufPool.Put(buf)
+        } // else: drop it, let the GC reclaim the oversized buffer
+    }()
 
     buf.Write(data)
     // ... processing ...
@@ -23,6 +33,11 @@ func process(data []byte) []byte {
     return result
 }
 ```
+
+**Reset on get or on put — pick one and keep it.** Resetting on get (above) is robust to a
+`Put` path that returns early; resetting on put keeps the pool free of stale references, which
+matters when the buffer can hold pointers. SKILL.md's inline version resets on put; both are
+correct, and mixing them within one codebase is how a buffer ends up reset twice or not at all.
 
 **Benchmark check:** `-alloc_objects` should drop dramatically. If it doesn't, the pool isn't being hit (check Reset and Put paths).
 

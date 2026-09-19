@@ -66,8 +66,34 @@ func BenchmarkRightClassic(b *testing.B) {
 
 ## AP-3: Using b.N to index into a pre-generated data slice
 
+**The modulo is not the problem.** This entry used to say the defect was "introduces modulo
+operation in hot loop". Measured on go1.26.1 darwin/arm64 (Apple M4), 5 runs each, a
+`//go:noinline` callee over a 1000-element slice:
+
+| Loop | ns/op (5 runs) |
+|---|---|
+| `search(data[i%len(data)])` | 0.81, 0.81, 1.03, 1.18, 1.52 |
+| `search(input)` — single input | 0.80, 1.16, 1.22, 1.32, 1.60 |
+
+<!-- measured: go1.26.1 darwin/arm64, Apple M4, 2026-09-18 -->
+
+The two ranges overlap almost completely; the difference is below the run-to-run noise this
+document tells you to distrust in AP-7. Citing a cost you have not measured is the mistake
+this skill exists to prevent, so the real reasons are below.
+
+**What actually goes wrong**, and it is about *what you are measuring*, not arithmetic:
+
+1. **The working set changes.** Sweeping 1000 inputs touches ~1000 cache lines; a single
+   input stays in L1. Those are two different questions, and neither is "wrong" — but the
+   numbers are not comparable, and a reader assumes they are.
+2. **The result depends on `b.N`.** With a data-dependent cost (search depth, branch
+   predictability), which elements get visited changes with the iteration count the harness
+   picks, so `-benchtime` changes the answer. That breaks `benchstat` comparisons between
+   runs that landed on different `b.N`.
+
 ```go
-// BAD: accesses data[i % len(data)]; introduces modulo operation in hot loop
+// AMBIGUOUS: measures "search over a 1000-element working set", but reads like
+// "measures search". State which one you meant.
 func BenchmarkSearch(b *testing.B) {
     data := generateData(1000)
     b.ResetTimer()
@@ -76,16 +102,27 @@ func BenchmarkSearch(b *testing.B) {
     }
 }
 
-// BETTER: use a single representative input or accept the small modulo overhead
-// and note it in the benchmark comment
-func BenchmarkSearch(b *testing.B) {
-    input := generateData(1)[0] // single representative input
-    b.ResetTimer()
-    for i := 0; i < b.N; i++ {
-        sinkResult = search(input)
-    }
+// GOOD: say it with sub-benchmarks, so both questions are answered and labelled.
+func BenchmarkSearchByScenario(b *testing.B) {
+    data := generateData(1000)
+    b.Run("hot-single-input", func(b *testing.B) {
+        in := data[0]
+        for b.Loop() {
+            sinkResult = search(in)
+        }
+    })
+    b.Run("sweep-1000", func(b *testing.B) {
+        i := 0
+        for b.Loop() {
+            sinkResult = search(data[i%len(data)])
+            i++
+        }
+    })
 }
 ```
+
+Note the sweep keeps its own counter rather than reusing the loop index: `b.Loop()` exposes
+none, and reaching for `b.N` inside a `b.Loop()` body is the bug this entry started as.
 
 ## AP-4: Benchmarking test helpers inside benchmarks
 

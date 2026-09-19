@@ -7,7 +7,7 @@ description: >
   implementations with benchstat, or measuring ns/op / B/op / allocs/op.
   In Go code contexts, also trigger when the user says "it's slow", "too many
   allocations", "find the bottleneck", or "profile this Go code".
-allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go vet*), Bash(go tool pprof*), Bash(go install golang.org/x/perf*), Bash(benchstat*), Bash(bash*run_interleaved_bench.sh*), Bash(bash*gc_claim_check.sh*)
+allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go vet*), Bash(go tool pprof*), Bash(go install golang.org/x/perf*), Bash(benchstat*)
 ---
 
 # Go Benchmark & pprof Profiling
@@ -93,13 +93,12 @@ func BenchmarkEncode(b *testing.B) {
 
 Use `b.Loop()` unless one of exactly two things is true:
 
-- **Sub-nanosecond operations.** `b.Loop()` is a real per-iteration call — ~1.7 ns/op empty on
-  an Apple M4 vs ~0.23 ns/op for an empty classic loop, so below that scale the harness
-  dominates. Use the classic loop and **subtract an empty-body baseline of the same shape**;
-  without one a 0.3 ns/op result is indistinguishable from a loop that measured nothing.
-- **Inside `b.RunParallel`** — not supported; `pb.Next()` is the loop condition. A package-level
-  sink is a **data race** there: every goroutine writes it and `-race` fails. Keep the
-  accumulator goroutine-local and publish once after the loop.
+- **Sub-nanosecond operations** — `b.Loop()` costs a real call per iteration (~1.7 ns/op empty
+  on an Apple M4 vs ~0.23 ns/op empty classic). Use the classic loop and **subtract an
+  empty-body baseline of the same shape**, or a 0.3 ns/op result cannot be told from a loop
+  that measured nothing.
+- **Inside `b.RunParallel`** — `pb.Next()` is the loop condition. A package-level sink is a
+  **data race** there; keep the accumulator goroutine-local and publish once after the loop.
 
 **For O(n) functions, always add size sub-benchmarks:**
 ```go
@@ -153,6 +152,8 @@ git worktree add /tmp/wt-new <changed-ref>
 (cd /tmp/wt-old && go test -c -o /tmp/old.bench ./pkg/mypkg)
 (cd /tmp/wt-new && go test -c -o /tmp/new.bench ./pkg/mypkg)
 
+# Approve this one when prompted: `bash` is deliberately not pre-approved, because any
+# glob over it (`bash*...`) also matches `bash -c '<anything>' ...`.
 bash "<path-to-skill>/scripts/run_interleaved_bench.sh" \
     /tmp/old.bench /tmp/new.bench /tmp/bench-out 10
 
@@ -183,9 +184,9 @@ go tool pprof -http=:6060 cpu-encode-before.prof
 ```bash
 go test -bench=BenchmarkEncode -benchmem -count=1 -run='^$' \
     -memprofile mem-encode-before.prof ./pkg/...
-go tool pprof -http=:6060 -alloc_objects mem-encode-before.prof  # allocation COUNT, cumulative
-go tool pprof -http=:6060 -alloc_space   mem-encode-before.prof  # allocated BYTES, cumulative
-go tool pprof -http=:6060 -inuse_space   mem-encode-before.prof  # live heap bytes at sample time
+go tool pprof -http=:6060 -alloc_objects mem-encode-before.prof  # alloc COUNT, cumulative
+go tool pprof -http=:6060 -alloc_space   mem-encode-before.prof  # alloc BYTES, cumulative
+go tool pprof -http=:6060 -inuse_space   mem-encode-before.prof  # live heap bytes at sample
 ```
 
 > **Never profile without `-run='^$'`.** `go test -bench=X` runs the package's unit tests too,
@@ -232,15 +233,9 @@ Encode/4096B   3602.0n ± 1%   375.0n ± 1%  -89.59% (p=0.002 n=6)
   percentage means **no significant difference** — report "no measurable change", never a small win.
 - **`vs base` on allocs/op** is often more actionable than time: fewer allocs = less GC.
 
-**Read benchmark output line:**
-```
-BenchmarkEncode/4096B-8   50000   24800 ns/op   8192 B/op   12 allocs/op
-                      │       │         │            │             └─ heap allocs per call
-                      │       │         │            └─ bytes allocated per call
-                      │       │         └─ nanoseconds per call
-                      │       └─ iterations run
-                      └─ GOMAXPROCS (number of logical CPUs used)
-```
+**Read benchmark output line:** `BenchmarkEncode/4096B-8   50000   24800 ns/op   8192 B/op
+12 allocs/op` — suffix `-8` is GOMAXPROCS, then iterations, then the three per-call metrics.
+Annotated breakdown: `references/benchmark-patterns.md` §Reading the Output Line.
 
 **Hot path in pprof:** `http://localhost:6060` → **Flame Graph** (wide boxes = time, flat tops =
 plateaus) → **Top** (`flat` = self-time, `cum` = call chains) → **Source** (`list FuncName`).
@@ -250,9 +245,16 @@ millions of times:
 ```go
 var bufPool = sync.Pool{New: func() any { return &bytes.Buffer{} }}
 
+const maxPooled = 64 << 10 // one oversized buffer would otherwise stay pinned in the pool
+
 func process(data []byte) []byte {
     buf := bufPool.Get().(*bytes.Buffer)
-    defer func() { buf.Reset(); bufPool.Put(buf) }() // reset before returning it
+    defer func() {
+        buf.Reset()
+        if buf.Cap() <= maxPooled { // else drop it; the GC reclaims the outlier
+            bufPool.Put(buf)
+        }
+    }()
     // ... use buf, then copy out anything that must outlive the pooled object ...
     out := make([]byte, buf.Len())
     copy(out, buf.Bytes())
@@ -261,6 +263,7 @@ func process(data []byte) []byte {
 ```
 
 > **Caveats:** pooled objects may be GC'd at any time — never keep state that must survive across calls, and never return a slice backed by the pooled buffer. Most effective when `New` is expensive.
+> The `maxPooled` check is not optional: without it one oversized item pins its capacity in the pool for every worker that touches it, turning a memory optimisation into a memory leak.
 > Verify the win: `-alloc_objects` should drop sharply. Full recipe: `references/optimization-patterns.md`.
 
 For detailed flame graph reading, alloc hotspot patterns, and fix recipes, read `references/pprof-analysis.md`.

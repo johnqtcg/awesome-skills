@@ -23,6 +23,19 @@ SKILL_DIR = Path(__file__).resolve().parents[2]
 SKILL_MD = SKILL_DIR / "SKILL.md"
 REF_DIR = SKILL_DIR / "references"
 
+def _is_counter_example(label: str, body_lines: list) -> bool:
+    """A segment is a counter-example when its *label* says so — never its body.
+
+    Letting the body vote exempts the wrong things: the GOOD interleave recipe explains that
+    an interrupted run "cannot strand you on the wrong branch", and the word `wrong` in that
+    sentence marked the whole recommended recipe as a counter-example. Prose routinely
+    contains BAD/WRONG/do-not while recommending something; the label is the only part that
+    states which kind of example this is.
+    """
+    del body_lines  # deliberately unused; see docstring
+    return bool(re.search(r"(?i)\b(BAD|AVOID|WRONG|do not|don't)\b", label))
+
+
 STUBS = '''package btpl
 
 import "fmt"
@@ -243,6 +256,18 @@ func makePayload(n int) []byte   { return make([]byte, n) }
 func compress([]byte) ([]byte, error) { return nil, nil }
 func generateRow() any           { return 1 }
 func (d *DB) Exec(string, ...any) error { return nil }
+
+// AP-3's templates entered the compile set on 2026-09-18. The entry used to be one
+// BAD-marked fence, which the GOOD-block filter skipped wholesale; rewritten into labelled
+// examples, they must type-check like every other shipped template.
+func generateData(n int) [][]byte {
+	out := make([][]byte, n)
+	for i := range out {
+		out[i] = []byte{byte(i)}
+	}
+	return out
+}
+func search(b []byte) []byte { return b }
 
 var sinkErr error
 '''
@@ -637,17 +662,153 @@ class InterleavedBenchScriptTests(unittest.TestCase):
                 capture_output=True, text=True, timeout=300, errors="replace")
         self.assertIn("odd count", proc.stdout)
 
-    def test_docs_never_claim_git_switch_dash_restores_the_start_branch(self) -> None:
-        """`git switch -` is @{-1} — the PREVIOUS branch, not the original. Verified:
-        starting on `other`, then main -> topic -> `-` lands on main."""
-        for doc in (SKILL_MD, SKILL_DIR / "references" / "benchstat-guide.md", self.SCRIPT):
-            with self.subTest(doc=doc.name):
-                for line in doc.read_text(encoding="utf-8").splitlines():
-                    if "git switch -" in line and "git switch --" not in line:
-                        self.assertNotRegex(
-                            line, r"(?i)back (to )?where you started|restore[sd]? your branch",
-                            f"{doc.name}: `git switch -` does not return to the start branch",
+    # Docs whose git guidance is checked. Kept as a constant so a new reference cannot
+    # quietly opt out of the rule by not being listed.
+    GIT_DOCS = ("SKILL.md", "references/benchstat-guide.md",
+                "scripts/run_interleaved_bench.sh")
+
+    @staticmethod
+    def _bash_blocks(text: str):
+        """Yield (is_counter_example, body) for each fenced bash block.
+
+        A block counts as a counter-example when it carries a BAD / AVOID / WRONG comment,
+        or when the paragraph immediately before it introduces one.
+        """
+        lines = text.splitlines()
+        # A shell script has no fences: the whole file is executable, so treat it as one
+        # non-counter-example block. Without this the guard covers nothing in a .sh file.
+        if not any(re.match(r"^```bash\s*$", l) for l in lines):
+            return [(False, text)]
+        out, i = [], 0
+        while i < len(lines):
+            if not re.match(r"^```bash\s*$", lines[i]):
+                i += 1
+                continue
+            start = i + 1
+            i += 1
+            body = []
+            while i < len(lines) and not re.match(r"^```\s*$", lines[i]):
+                body.append(lines[i])
+                i += 1
+            i += 1
+            lead = "\n".join(lines[max(0, start - 4):start - 1])
+            # Segment on `# BAD:` / `# GOOD:` labels rather than treating the fence as one
+            # unit. A single fence showing the wrong way and the right way together would
+            # otherwise be exempt as a whole — which is exactly how a `git switch -` sitting
+            # in the GOOD half of benchstat-guide.md stayed invisible to this guard.
+            seg_label, seg = lead, []
+            for line in body + ["# <<END>>"]:
+                if re.match(
+                    r"(?i)^\s*#\s*(BAD|ALSO BAD|GOOD|BETTER|WRONG|AVOID|CORRECT|<<END>>)\b",
+                    line,
+                ):
+                    if seg:
+                        out.append((_is_counter_example(seg_label, seg), "\n".join(seg)))
+                    seg_label, seg = line, []
+                    continue
+                seg.append(line)
+            if seg:
+                out.append((_is_counter_example(seg_label, seg), "\n".join(seg)))
+        return out
+
+    @staticmethod
+    def _is_switch_dash(line: str) -> bool:
+        """`git switch -` as an executed command.
+
+        Excluded: `git switch --quiet` / `--detach` (a long flag, not the dash), and any
+        comment line — the script header and this file's own prose discuss the command in
+        order to forbid it, and flagging a prohibition as a violation is the false positive
+        that gets a guard deleted.
+        """
+        if line.lstrip().startswith("#"):
+            return False
+        return re.search(r"(?<!\S)git switch\s+-(?:\s|$)", line) is not None
+
+    def test_git_switch_dash_never_appears_in_a_recommended_recipe(self) -> None:
+        """`git switch -` is `@{-1}` — the PREVIOUS branch, not the original. Verified:
+        starting on `other`, then main -> topic -> `-` lands on main.
+
+        The previous guard only rejected a *claim* ("restores your branch") on the *same
+        line* as the command. benchstat-guide.md then shipped the claim on the block's
+        comment line and the command five lines below, so neither half matched and a GOOD
+        recipe that strands the caller on `main` passed for a full release. This one is
+        scoped to the command inside a non-counter-example block, which is what actually
+        misleads a reader.
+        """
+        for rel in self.GIT_DOCS:
+            doc = SKILL_DIR / rel
+            with self.subTest(doc=rel):
+                for is_bad, block in self._bash_blocks(doc.read_text(encoding="utf-8")):
+                    if is_bad:
+                        continue
+                    for line in block.splitlines():
+                        self.assertFalse(
+                            self._is_switch_dash(line),
+                            f"{rel}: `git switch -` inside a recommended recipe — it "
+                            f"returns to @{{-1}}, not the branch you started on: {line!r}",
                         )
+
+    def test_docs_never_claim_git_switch_dash_restores_the_start_branch(self) -> None:
+        """The prose half, kept: a nearby claim is wrong even where the command is absent."""
+        for rel in self.GIT_DOCS:
+            doc = SKILL_DIR / rel
+            with self.subTest(doc=rel):
+                text = doc.read_text(encoding="utf-8")
+                for m in re.finditer(r"(?i)back (to )?where you started|restore[sd]? your branch",
+                                     text):
+                    window = text[max(0, m.start() - 400): m.end() + 400]
+                    self.assertFalse(
+                        any(self._is_switch_dash(l) for l in window.splitlines()),
+                        f"{rel}: a restore-your-branch claim within 400 chars of "
+                        f"`git switch -`, which does not restore it",
+                    )
+
+    def test_the_git_switch_guards_reject_the_shipped_defect(self) -> None:
+        """Anti-vacuity, against the exact text that escaped. Both halves must fire."""
+        shipped = (
+            "```bash\n"
+            "# GOOD: build once per variant, restore your branch, then alternate binaries.\n"
+            "git switch main    -q && go test -c -o /tmp/old.bench ./pkg/mypkg\n"
+            "git switch -       -q\n"
+            "```\n"
+        )
+        blocks = self._bash_blocks(shipped)
+        self.assertEqual(1, len(blocks))
+        is_bad, block = blocks[0]
+        self.assertFalse(is_bad, "the shipped block was GOOD-labelled; it must not be exempt")
+        self.assertTrue(any(self._is_switch_dash(l) for l in block.splitlines()),
+                        "command detector no longer sees `git switch -`")
+        # ...and the safe forms must not trip it.
+        for safe in ("git switch --quiet \"$START\"", "git switch main -q",
+                     "git switch --detach HEAD", "# git switch - is NOT a way back"):
+            self.assertFalse(self._is_switch_dash(safe), f"false positive on: {safe!r}")
+
+    def test_a_good_segment_sharing_a_fence_with_a_bad_one_is_not_exempt(self) -> None:
+        """One fence, both kinds. Treating the fence as a unit exempted the GOOD half — the
+        shape benchstat-guide.md actually shipped."""
+        mixed = ("```bash\n"
+                 "# BAD: switch branches inside the loop\n"
+                 "git switch main -q\n"
+                 "# GOOD: build in worktrees\n"
+                 "git switch -       -q\n"
+                 "```\n")
+        offenders = [b for bad, b in self._bash_blocks(mixed)
+                     if not bad and any(self._is_switch_dash(l) for l in b.splitlines())]
+        self.assertEqual(1, len(offenders),
+                         f"the GOOD segment was exempted by its BAD neighbour: {offenders}")
+
+    def test_body_prose_cannot_mark_a_recommended_segment_as_a_counter_example(self) -> None:
+        """`_is_counter_example` reads the label only. When it also read the body, the word
+        `wrong` inside "cannot strand you on the wrong branch" exempted the whole recipe."""
+        recipe = ("```bash\n"
+                  "# GOOD: worktrees\n"
+                  "# nothing to restore, so you cannot end up on the wrong branch\n"
+                  "git switch -       -q\n"
+                  "```\n")
+        blocks = self._bash_blocks(recipe)
+        self.assertTrue(any(not bad and any(self._is_switch_dash(l) for l in b.splitlines())
+                            for bad, b in blocks),
+                        "a GOOD segment was exempted because its prose contains 'wrong'")
 
     def test_docs_do_not_recommend_the_multi_package_compile(self) -> None:
         """`go test -c -o file ./pkg/...` fails: 'with multiple packages, -o must refer to
@@ -709,6 +870,18 @@ class GuardsAreNotVacuousTests(unittest.TestCase):
 
 
 class AllowedToolsContractTests(unittest.TestCase):
+    """`allowed-tools` is a least-privilege AUTO-APPROVAL surface, not a denylist: a listed
+    pattern runs with no prompt. Both directions are asserted — the workflow must stay
+    usable, and the surface must not widen into arbitrary execution.
+    """
+
+    @staticmethod
+    def _patterns() -> list[str]:
+        fm = SKILL_MD.read_text(encoding="utf-8").split("---")[1]
+        line = [l for l in fm.splitlines() if l.startswith("allowed-tools:")]
+        assert len(line) == 1, "exactly one allowed-tools line expected"
+        return re.findall(r"Bash\(([^)]*)\)", line[0])
+
     def test_workflow_commands_are_preapproved(self) -> None:
         text = SKILL_MD.read_text(encoding="utf-8")
         frontmatter = text.split("---")[1]
@@ -718,6 +891,43 @@ class AllowedToolsContractTests(unittest.TestCase):
         for pattern in ("Bash(go test*)", "Bash(go tool pprof*)", "Bash(benchstat*)"):
             self.assertIn(pattern, frontmatter,
                           f"Phase 2 tells the user to run this; pre-approve it: {pattern}")
+
+    # A shell name followed immediately by `*` pre-approves `-c`, i.e. everything.
+    # `Bash(bash*gc_claim_check.sh*)` shipped for a release and matched
+    # `bash -c '<anything>' gc_claim_check.sh`; naming the script after the wildcard bought
+    # nothing, because the wildcard sits exactly where `-c` goes.
+    SHELLS = ("bash", "sh", "zsh", "dash", "env", "xargs", "eval", "nohup", "sudo")
+
+    def test_no_shell_is_preapproved_with_a_wildcard(self) -> None:
+        for pattern in self._patterns():
+            with self.subTest(pattern=pattern):
+                head = pattern.split("*")[0].strip()
+                self.assertNotIn(
+                    head, self.SHELLS,
+                    f"`Bash({pattern})` pre-approves `{head} -c '<anything>'`; the wildcard "
+                    f"sits where the flag goes. Let these prompt instead.")
+                self.assertNotEqual("*", pattern, "`Bash(*)` pre-approves everything")
+
+    def test_the_shell_detector_rejects_the_shipped_pattern(self) -> None:
+        """Anti-vacuity, against the two entries that actually shipped."""
+        for shipped in ("bash*gc_claim_check.sh*", "bash*run_interleaved_bench.sh*",
+                        "sh -c*", "env*"):
+            with self.subTest(pattern=shipped):
+                self.assertIn(shipped.split("*")[0].strip().split()[0], self.SHELLS)
+        # ...and the entries the skill legitimately needs must not be caught.
+        for ok in ("go test*", "go tool pprof*", "benchstat*", "go install golang.org/x/perf*"):
+            with self.subTest(pattern=ok):
+                self.assertNotIn(ok.split("*")[0].strip(), self.SHELLS)
+
+    def test_the_go_test_tradeoff_is_recorded(self) -> None:
+        """`Bash(go test*)` also pre-approves `go test -exec=<anything>`, which is arbitrary
+        execution. The skill cannot work without `go test`, so this is accepted rather than
+        closed — but it is written down, not overlooked."""
+        text = SKILL_MD.read_text(encoding="utf-8")
+        self.assertRegex(
+            text, r"(?i)`bash` is deliberately not pre-approved",
+            "the reason `bash` is absent from allowed-tools is no longer stated, so the "
+            "next edit will 'fix' it by adding it back")
 
 
 if __name__ == "__main__":

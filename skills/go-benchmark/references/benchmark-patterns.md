@@ -247,6 +247,22 @@ func BenchmarkInsert(b *testing.B) {
 
 ---
 
+## Reading the Output Line
+
+```
+BenchmarkEncode/4096B-8   50000   24800 ns/op   8192 B/op   12 allocs/op
+                      │       │         │            │             └─ heap allocs per call
+                      │       │         │            └─ bytes allocated per call
+                      │       │         └─ nanoseconds per call
+                      │       └─ iterations run
+                      └─ GOMAXPROCS (number of logical CPUs used)
+```
+
+`B/op` and `allocs/op` only appear with `-benchmem` (or `b.ReportAllocs()` on that
+benchmark). Their absence means they were not measured — not that they are zero.
+
+---
+
 ## Throughput Benchmarks (b.SetBytes)
 
 `b.SetBytes(n)` makes the framework report `MB/s`:

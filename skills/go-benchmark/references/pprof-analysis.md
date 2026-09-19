@@ -154,6 +154,70 @@ Pick by the question being asked:
 
 ---
 
+## Profiling a Running Program
+
+The Scope Gate sends you here when there is no benchmark yet: profiling `go test -bench`
+before any benchmark exists is circular, so the first profile comes from the program
+itself. Expose the endpoint, then pull a profile over HTTP — no test binary involved.
+
+```go
+import _ "net/http/pprof" // registers /debug/pprof/* on http.DefaultServeMux
+
+func main() {
+    // Internal port only. DefaultServeMux is shared, so importing this package on your
+    // public listener exposes heap contents and goroutine stacks to anyone who can reach it.
+    go func() { log.Println(http.ListenAndServe("127.0.0.1:6060", nil)) }()
+    // ... the real server ...
+}
+```
+
+```bash
+# CPU: a 30-second sample of live traffic
+go tool pprof -http=:6061 'http://127.0.0.1:6060/debug/pprof/profile?seconds=30'
+
+# Heap: live bytes right now — the view that answers "why is this process big"
+go tool pprof -http=:6061 'http://127.0.0.1:6060/debug/pprof/heap'
+
+# Goroutine dump, readable without the UI
+curl -s 'http://127.0.0.1:6060/debug/pprof/goroutine?debug=2' | head -50
+```
+
+- **The heap endpoint carries all four sample types**, so the `-alloc_*` / `-inuse_*` flags
+  above apply unchanged to a profile fetched this way.
+- **`?seconds=N` blocks for N seconds** and returns nothing before then. A short sample of a
+  bursty service profiles whichever burst it happened to land in; take several.
+- **Mutex and block profiles are empty over HTTP until the rates are set** —
+  `runtime.SetMutexProfileFraction` / `SetBlockProfileRate`, which is the service-side
+  `init()` case described below. Unlike `go test`, nothing sets them for you here.
+- Save the fetched profile if you want to diff it later:
+  `go tool pprof -proto 'http://…/heap' > heap-before-pool.prof`.
+
+---
+
+## Profile-Guided Optimization (Go 1.21+)
+
+A CPU profile is not only a diagnosis — the compiler will consume it. This is the cheapest
+win in this document: no code change, and you already produced the input in Phase 2.
+
+```bash
+# Any representative CPU profile: from a benchmark, or from the live endpoint above.
+cp cpu-encode-before.prof default.pgo   # next to the main package
+go build ./...                          # picked up automatically; -pgo=off disables
+```
+
+- The file must be named `default.pgo` and sit in the `main` package's directory; `go build`
+  finds it with no flag. `-pgo=<path>` names one explicitly.
+- Published gains are typically a few percent — real, and smaller than most source changes.
+  Measure it the way you would measure any other change: two binaries, interleaved,
+  `benchstat` (see `benchstat-guide.md`).
+- **Feed it a profile from the workload you actually run.** A profile collected from a
+  microbenchmark optimises for the microbenchmark; the inlining decisions it drives are only
+  as representative as the samples behind them.
+- Re-collect when the workload shifts. A stale `default.pgo` keeps steering the compiler at
+  last quarter's hot path.
+
+---
+
 ## Mutex & Block Profiling
 
 **Under `go test` you do not enable these in code.** The testing package does it for you:

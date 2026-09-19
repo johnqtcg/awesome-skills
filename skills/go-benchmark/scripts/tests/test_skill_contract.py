@@ -473,6 +473,31 @@ class TestCoverageDocIsCurrent(unittest.TestCase):
         cls.collected = suite.countTestCases()
         cls.doc = cls.DOC.read_text(encoding="utf-8")
 
+    # Per-module counts, derived. Pinning only the total is what let the layered figures
+    # drift to 65-vs-69 while the total stayed right — the guard checked the sum, so any
+    # pair of offsetting errors passed.
+    LAYER_LABELS = {
+        "test_skill_contract.py": "Contract test count",
+        "test_golden_scenarios.py": "Golden test count",
+        "test_templates_compile.py": "Template/compile/script test count",
+    }
+
+    @classmethod
+    def _module_counts(cls) -> dict:
+        import importlib.util
+        import sys
+        import unittest as ut
+
+        here = Path(__file__).resolve().parent
+        out = {}
+        for path in sorted(here.glob("test_*.py")):
+            spec = importlib.util.spec_from_file_location("_cnt_" + path.stem, path)
+            mod = importlib.util.module_from_spec(spec)
+            sys.modules[spec.name] = mod
+            spec.loader.exec_module(mod)
+            out[path.name] = ut.defaultTestLoader.loadTestsFromModule(mod).countTestCases()
+        return out
+
     def test_total_matches_the_collected_suite(self) -> None:
         m = re.search(r"\*\*Total tests: (\d+) collected\*\*", self.doc)
         self.assertIsNotNone(m, "COVERAGE.md has no '**Total tests: N collected**' line")
@@ -480,6 +505,29 @@ class TestCoverageDocIsCurrent(unittest.TestCase):
             self.collected, int(m.group(1)),
             f"COVERAGE.md claims {m.group(1)}; the loader collects {self.collected}",
         )
+
+    def test_every_module_has_a_declared_count(self) -> None:
+        counts = self._module_counts()
+        self.assertEqual(set(self.LAYER_LABELS), set(counts),
+                         "a test module was added or removed; COVERAGE.md must account "
+                         "for it by name, not only inside the total")
+        for name, label in self.LAYER_LABELS.items():
+            with self.subTest(module=name):
+                m = re.search(rf"\*\*{re.escape(label)}: (\d+)\*\*", self.doc)
+                self.assertIsNotNone(m, f"COVERAGE.md has no '{label}: N' line")
+                self.assertEqual(counts[name], int(m.group(1)),
+                                 f"COVERAGE.md says {label} is {m.group(1)}; the loader "
+                                 f"collects {counts[name]} from {name}")
+
+    def test_the_layer_counts_sum_to_the_declared_total(self) -> None:
+        """Offsetting errors are the failure mode a total-only guard cannot see."""
+        declared = [int(m) for m in re.findall(
+            r"\*\*(?:Contract test count|Golden test count|"
+            r"Template/compile/script test count): (\d+)\*\*", self.doc)]
+        self.assertEqual(3, len(declared), "one of the three layer counts is missing")
+        total = re.search(r"\*\*Total tests: (\d+) collected\*\*", self.doc)
+        self.assertEqual(int(total.group(1)), sum(declared),
+                         f"layer counts sum to {sum(declared)}, total says {total.group(1)}")
 
     def test_line_budget_figure_matches_the_file(self) -> None:
         actual = len(SKILL_MD.read_text(encoding="utf-8").splitlines())
@@ -494,6 +542,471 @@ class TestCoverageDocIsCurrent(unittest.TestCase):
         overstatement this doc now has to avoid."""
         self.assertIn("fixture-consistency testing, not forward evaluation", self.doc)
         self.assertRegex(self.doc, r"(?i)no forward eval")
+
+
+# ------------------------------------------------------------------
+# Section-scoped guards
+#
+# Everything above this line asserts `assertIn(phrase, whole_file)`. That shape is
+# fail-open against the mutation that matters: a rule can be inverted and still keep its
+# vocabulary, because the phrase survives somewhere else in the document. Measured on
+# 2026-09-18 — rewriting Hard Rule 1 to "discarding with `_ =` is fine; the compiler keeps
+# the call" and Hard Rule 2 to "setup goes *after* b.ResetTimer()" both passed all 134
+# tests. The guards below read the deciding line and pin the direction-carrying words in it.
+# ------------------------------------------------------------------
+
+def md_section(text: str, heading: str) -> str:
+    """Return the body under `heading` up to the next heading of the same or higher level.
+
+    Line-indexed rather than `text.index(line)`: a heading string that also appears in body
+    prose would otherwise slice from the wrong offset.
+    """
+    lines = text.splitlines()
+    level = len(heading) - len(heading.lstrip("#"))
+    start = None
+    for i, line in enumerate(lines):
+        if line.strip() == heading:
+            start = i + 1
+            break
+    assert start is not None, f"heading not found: {heading!r}"
+    fenced = False
+    for j in range(start, len(lines)):
+        s = lines[j].lstrip()
+        if s.startswith("```"):
+            fenced = not fenced
+            continue
+        # A `#` inside a fence is a shell comment, not a heading. Without this the section
+        # ends at the first commented line of the first bash block, and every assertion
+        # against it silently checks a fraction of the section.
+        if fenced:
+            continue
+        if s.startswith("#") and len(s) - len(s.lstrip("#")) <= level:
+            return "\n".join(lines[start:j])
+    return "\n".join(lines[start:])
+
+
+def md_rows(section: str) -> list[list[str]]:
+    """Parse a markdown table into cell lists, skipping the header and separator rows."""
+    rows = []
+    for line in section.splitlines():
+        s = line.strip()
+        if not s.startswith("|"):
+            continue
+        cells = [c.strip() for c in s.strip("|").split("|")]
+        if all(set(c) <= set("-: ") for c in cells):
+            rows = []          # separator: everything before it was the header
+            continue
+        rows.append(cells)
+    return rows
+
+
+def numbered_rule(section: str, n: int) -> str:
+    """The full text of Hard Rule `n`, including any continuation lines."""
+    lines = section.splitlines()
+    out = []
+    for i, line in enumerate(lines):
+        if line.startswith(f"{n}. "):
+            out.append(line)
+            for nxt in lines[i + 1:]:
+                if re.match(r"^\d+\. ", nxt) or nxt.startswith("#"):
+                    break
+                out.append(nxt)
+            break
+    assert out, f"Hard Rule {n} not found"
+    return "\n".join(out)
+
+
+class SectionHelperTests(unittest.TestCase):
+    """The helpers every guard below depends on. A section that silently ends early makes
+    each assertion check a fraction of what it names — and still passes.
+    """
+
+    DOC = (
+        "# Top\n\nintro\n\n"
+        "## Alpha\n\nalpha body\n\n"
+        "```bash\n# a shell comment, not a heading\necho hi\n```\n\n"
+        "after the fence\n\n"
+        "### Alpha child\n\nchild body\n\n"
+        "## Beta\n\nbeta body\n"
+    )
+
+    def test_section_spans_a_fence_containing_a_hash_line(self) -> None:
+        body = md_section(self.DOC, "## Alpha")
+        self.assertIn("alpha body", body)
+        self.assertIn("after the fence", body,
+                      "section ended at a `#` inside a code fence")
+        self.assertIn("child body", body, "a deeper heading must stay inside the section")
+        self.assertNotIn("beta body", body, "section ran past the next same-level heading")
+
+    def test_section_stops_at_the_next_same_level_heading(self) -> None:
+        self.assertEqual("\nbeta body", md_section(self.DOC, "## Beta"))
+
+    def test_missing_heading_is_an_error_not_an_empty_string(self) -> None:
+        with self.assertRaises(AssertionError):
+            md_section(self.DOC, "## Nope")
+
+    def test_rows_skip_header_and_separator(self) -> None:
+        table = "| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |\n"
+        self.assertEqual([["1", "2"], ["3", "4"]], md_rows(table))
+
+    def test_numbered_rule_takes_continuation_lines_and_stops_at_the_next(self) -> None:
+        section = ("1. **One** — first line\n   continued here\n"
+                   "2. **Two** — second\n")
+        one = numbered_rule(section, 1)
+        self.assertIn("continued here", one)
+        self.assertNotIn("**Two**", one)
+
+
+class NormativeRuleDirectionTests(unittest.TestCase):
+    """Each Hard Rule is pinned by what it *requires*, inside its own numbered item.
+
+    The phrase-presence tests above cannot tell "always X" from "never X" — they only see
+    that the word X is somewhere in the file. These assert the deciding words are in the
+    deciding line, and that the opposite instruction is not.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.rules = md_section(_read(SKILL_MD), "## Hard Rules")
+
+    def test_rule_1_requires_a_sink_and_condemns_the_discard(self) -> None:
+        r = numbered_rule(self.rules, 1)
+        self.assertIn("assign the final output to a package-level `var sink T`", r)
+        self.assertRegex(r, r"`_ =`[^.]*(eliminate dead code|measures nothing)",
+                         "Rule 1 no longer states that `_ =` permits elision")
+        self.assertNotRegex(r, r"(?i)`_ =`[^.]*(is fine|is enough|is acceptable|keeps the call)",
+                            "Rule 1 has been inverted to bless the discard form")
+
+    def test_rule_2_puts_setup_before_the_reset(self) -> None:
+        r = numbered_rule(self.rules, 2)
+        self.assertRegex(r, r"setup[^.]*goes \*before\* `b\.ResetTimer\(\)`",
+                         "Rule 2 no longer places one-time setup before ResetTimer")
+        self.assertNotRegex(r, r"setup[^.]*goes \*after\* `b\.ResetTimer\(\)`",
+                            "Rule 2 has been inverted: timed setup is the defect it exists for")
+
+    def test_rule_3_makes_benchmem_mandatory(self) -> None:
+        r = numbered_rule(self.rules, 3)
+        self.assertRegex(r, r"\*\*Always `-benchmem` on measurement runs\*\*")
+        self.assertNotRegex(r, r"(?i)`-benchmem` is (optional|not required)",
+                            "Rule 3 has been downgraded from mandatory")
+        # The one documented exemption must stay an exemption, not become the rule.
+        self.assertIn("-race", r, "Rule 3 lost the -race exemption it scopes itself against")
+
+    def test_rule_4_requires_ten_samples_for_a_comparison(self) -> None:
+        r = numbered_rule(self.rules, 4)
+        self.assertRegex(r, r"\*\*`-count=10` for comparisons")
+        self.assertIn("a single run is statistically meaningless", r)
+        self.assertNotRegex(r, r"(?i)a single run is statistically (sufficient|enough|fine)")
+        self.assertIn("Interleave", r, "Rule 4 lost the interleaving instruction")
+
+    def test_rule_5_forbids_cross_environment_comparison(self) -> None:
+        r = numbered_rule(self.rules, 5)
+        self.assertIn("**Never compare across environments**", r)
+        self.assertIn("are not comparable", r)
+        self.assertNotRegex(r, r"(?i)(are comparable|is fine)\b",
+                            "Rule 5 has been inverted")
+
+    def test_every_hard_rule_is_pinned_here(self) -> None:
+        """Anti-vacuity: a rule added to SKILL.md without a direction guard would otherwise
+        inherit the fail-open shape this class exists to remove."""
+        numbers = sorted(int(m) for m in re.findall(r"(?m)^(\d+)\. \*\*", self.rules))
+        self.assertEqual([0, 1, 2, 3, 4, 5], numbers,
+                         "Hard Rules renumbered; the guards below must follow")
+        pinned = {1, 2, 3, 4, 5}
+        guarded = {int(m.group(1))
+                   for name in dir(self)
+                   if (m := re.match(r"test_rule_(\d+)_", name))}
+        self.assertEqual(pinned, guarded,
+                         "a Hard Rule has no direction guard")
+
+    def test_the_direction_guards_are_not_vacuous(self) -> None:
+        """Each assertion above must fail on the inverted text, not merely pass on the real
+        one. Proven against synthetic inversions rather than by inspection."""
+        inverted = {
+            1: "1. **Sink every result** — using `_ =` is fine; the compiler keeps the call.",
+            2: "2. **Timer discipline** — setup goes *after* `b.ResetTimer()`.",
+            3: "3. **`-benchmem` is optional on measurement runs** — skip it if you like.",
+            4: "4. **`-count=1` for comparisons** — a single run is statistically sufficient.",
+            5: "5. **Comparing across environments is fine** — results are comparable.",
+        }
+        for n, text in inverted.items():
+            with self.subTest(rule=n):
+                fake = "\n".join(inverted[k] if k == n else numbered_rule(self.rules, k)
+                                 for k in sorted(inverted))
+                probe = _DirectionProbe(fake)
+                with self.assertRaises(AssertionError,
+                                       msg=f"Rule {n} guard passes on the inverted text"):
+                    getattr(probe, f"check_{n}")()
+
+
+class _DirectionProbe(unittest.TestCase):
+    """Runs the same assertions as NormativeRuleDirectionTests against supplied text.
+
+    Kept as a helper the self-test drives, so the guard bodies and the bodies being probed
+    cannot drift apart into "the test tests a copy of the check".
+    """
+
+    def __init__(self, rules_text: str) -> None:
+        super().__init__("run")
+        self.rules = rules_text
+
+    def run(self) -> None:  # never collected as a test; satisfies TestCase.__init__
+        raise NotImplementedError
+
+    def check_1(self) -> None:
+        NormativeRuleDirectionTests.test_rule_1_requires_a_sink_and_condemns_the_discard(self)
+
+    def check_2(self) -> None:
+        NormativeRuleDirectionTests.test_rule_2_puts_setup_before_the_reset(self)
+
+    def check_3(self) -> None:
+        NormativeRuleDirectionTests.test_rule_3_makes_benchmem_mandatory(self)
+
+    def check_4(self) -> None:
+        NormativeRuleDirectionTests.test_rule_4_requires_ten_samples_for_a_comparison(self)
+
+    def check_5(self) -> None:
+        NormativeRuleDirectionTests.test_rule_5_forbids_cross_environment_comparison(self)
+
+
+class ScorecardAndGateValuesPinnedTests(unittest.TestCase):
+    """Thresholds and gate verdicts, derived where possible rather than restated.
+
+    A bar written as prose ("≥ 80%") drifts from the list it grades. These read the tier's
+    own checklist and recompute the pass count, so adding an item without revisiting the
+    rounding table fails here.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.text = _read(SKILL_MD)
+        cls.card = md_section(cls.text, "## Auto Scorecard")
+
+    def _tier_items(self, header_regex: str) -> int:
+        lines = self.card.splitlines()
+        for i, line in enumerate(lines):
+            if re.search(header_regex, line):
+                n = 0
+                for nxt in lines[i + 1:]:
+                    if nxt.strip().startswith("- [ ]"):
+                        n += 1
+                    elif nxt.strip().startswith("**") or nxt.startswith("#"):
+                        break
+                return n
+        self.fail(f"tier header not found: {header_regex}")
+
+    def test_tier_bars_match_their_own_checklists(self) -> None:
+        import math
+        for header, pct in ((r"\*\*Standard — ≥ (\d+)%", 80), (r"\*\*Hygiene — ≥ (\d+)%", 75)):
+            with self.subTest(tier=header):
+                m = re.search(header, self.card)
+                self.assertIsNotNone(m, f"tier bar missing: {header}")
+                self.assertEqual(pct, int(m.group(1)),
+                                 "the tier bar moved; the rounding table below it must too")
+                n = self._tier_items(header)
+                self.assertGreater(n, 0, "tier has no checklist items — bar grades nothing")
+                # The rounding table must contain the entry for the real item count.
+                need = math.ceil(pct / 100 * n)
+                self.assertRegex(self.card, rf"{n}→{need}",
+                                 f"{n} items at {pct}% needs {need}; the rounding table in "
+                                 f"SKILL.md does not list {n}→{need}")
+
+    def test_every_rounding_entry_is_arithmetically_right(self) -> None:
+        import math
+        for m in re.finditer(r"≥ (\d+)% of applicable items, rounded up \(([^)]*)\)", self.card):
+            pct = int(m.group(1))
+            for pair in m.group(2).split(","):
+                a, b = pair.strip().split("→")
+                with self.subTest(pct=pct, pair=pair.strip()):
+                    self.assertEqual(math.ceil(pct / 100 * int(a)), int(b),
+                                     f"{pct}% of {a} is not {b}")
+
+    def test_critical_na_is_not_a_pass(self) -> None:
+        self.assertIn("a Critical `N/A` is **not** a pass", self.card)
+        self.assertNotRegex(self.card, r"(?i)Critical `N/A`[^.]*(counts as|is) a pass")
+
+    def test_critical_tier_is_one_veto(self) -> None:
+        self.assertRegex(self.card, r"\*\*Critical — any applicable failure means redo:\*\*")
+        self.assertNotRegex(self.card, r"(?i)\*\*Critical — (advisory|optional)")
+
+    def test_profiling_needs_run_regex(self) -> None:
+        phase2 = md_section(self.text, "### Phase 2 — Run & Profile")
+        self.assertIn("**Never profile without `-run='^$'`.**", phase2)
+        self.assertNotRegex(phase2, r"(?i)`-run='\^\$'` is optional")
+
+    def test_alloc_space_is_not_described_as_footprint(self) -> None:
+        phase2 = md_section(self.text, "### Phase 2 — Run & Profile")
+        self.assertIn("**`alloc_space` is not memory footprint**", phase2)
+        self.assertNotRegex(phase2, r"(?i)\*\*`alloc_space` is memory footprint")
+        self.assertIn("no pprof view is RSS", phase2)
+
+    def test_interleaving_is_abba_not_ab_ab(self) -> None:
+        phase2 = md_section(self.text, "### Phase 2 — Run & Profile")
+        self.assertIn("**ABBA** order", phase2)
+        self.assertIn("the lead side swaps each", phase2)
+        self.assertNotRegex(phase2, r"(?i)\*\*AB-AB\*\*|old always leads")
+
+    def test_evidence_gate_modes_are_exactly_the_contract_values(self) -> None:
+        """Round 1 shipped an Output Contract no gate outcome could satisfy. Derive the
+        reachable values from the gate table instead of listing them twice."""
+        gate = md_section(self.text, "### 1) Evidence Gate — Before You Start: Honest Degradation")
+        modes, bases = set(), set()
+        for row in md_rows(gate):
+            if len(row) >= 3 and row[1].startswith("`"):
+                modes.add(row[1].strip("`"))
+                bases.add(row[2].strip("`"))
+        self.assertEqual({"write", "review", "analyze", "none"}, modes)
+        self.assertEqual({"static analysis only", "benchmark output", "pprof profile", "none"},
+                         bases)
+        contract = md_section(self.text, "## Output Contract")
+        for value in modes | bases:
+            with self.subTest(value=value):
+                self.assertIn(f"`{value}`", contract,
+                              f"the gate can produce {value!r} but the contract forbids it")
+
+
+class MeasuredClaimsPinnedTests(unittest.TestCase):
+    """Facts this skill corrected against a real measurement, pinned in their own file.
+
+    Each of these was wrong in a shipped release and fixed with a measurement. A
+    whole-document `assertIn` cannot tell the corrected statement from its inverse, so the
+    negation is asserted alongside the claim.
+    """
+
+    CASES = [
+        (BENCHSTAT_GUIDE, "**benchstat reports medians, not means.**",
+         r"(?i)benchstat reports means, not medians"),
+        (BENCHSTAT_GUIDE, "**Confidence-interval range** around the median",
+         r"(?i)`± 1%` \| \*\*Coefficient of variation"),
+        (BENCHSTAT_GUIDE, "the standard error shrinks with the *square root*",
+         r"(?i)standard error shrinks linearly"),
+        (OPT_PATTERNS, 'So the rule is "boxing that **escapes** allocates"',
+         r'(?i)the rule is simply "boxing allocates"'),
+        (PPROF_ANALYSIS, "`runtime/pprof` documents `-inuse_space` as the",
+         r"(?i)documents `-alloc_space` as the\s*\n?default"),
+        (BENCH_ANTIPATTERNS, "The allocation figures are byte-identical.",
+         r"(?i)allocation figures differ sharply"),
+        (BENCH_PATTERNS, "← `_ = add(...)`: EQUAL to baseline, call eliminated",
+         r"(?i)`_ = add\(\.\.\.\)`: ABOVE baseline, call survives"),
+        (BENCHSTAT_GUIDE, "## Interleave A and B — do not run all of A, then all of B",
+         r"(?m)^## Run all of A, then all of B"),
+    ]
+
+    def test_loop_overhead_figures_keep_their_order_of_magnitude(self) -> None:
+        """The whole sub-nanosecond exception rests on `b.Loop()` costing ~1.7 ns against a
+        ~0.23 ns empty classic loop. Flip either number and the rule inverts silently."""
+        text = _read(BENCH_PATTERNS)
+        loop = re.search(r"BenchmarkLoopEmpty-\d+\s+([\d.]+) ns/op", text)
+        classic = re.search(r"BenchmarkClassicEmpty-\d+\s+([\d.]+) ns/op", text)
+        self.assertIsNotNone(loop, "the b.Loop empty-harness figure is gone")
+        self.assertIsNotNone(classic, "the classic empty-loop figure is gone")
+        lo, cl = float(loop.group(1)), float(classic.group(1))
+        self.assertGreater(lo, cl * 3,
+                           f"b.Loop ({lo}) is no longer materially dearer than the classic "
+                           f"loop ({cl}); the sub-nanosecond exception has no basis")
+        self.assertGreater(lo, 1.0, "a sub-1ns b.Loop cost would not justify the exception")
+
+    def test_ap5_pool_table_still_shows_gc_off_suppressing_new(self) -> None:
+        """AP-5's second experiment only makes its point if GC-on runs `New` far more often
+        than GC-off. Parsed from the table, so editing the numbers to agree fails here."""
+        ap = md_section(_read(BENCH_ANTIPATTERNS),
+                        "## AP-5: Disabling GC to \"stabilise\" allocation counts")
+        # Anchor on the Pool.New table specifically: experiment 1's table also has GC
+        # on/off rows, and matching the first one compares B/op against itself (1024 vs
+        # 1024) — a guard that can never fail is not a guard.
+        pool = ap[ap.index("`Pool.New` calls"):] if "`Pool.New` calls" in ap else ""
+        self.assertTrue(pool, "AP-5 lost its Pool.New experiment")
+        on = re.search(r"\| GC on \| ([\d, ]+) \|", pool)
+        off = re.search(r"\| GC off \| ([\d, ]+) \|", pool)
+        self.assertIsNotNone(on, "AP-5 lost its GC-on row")
+        self.assertIsNotNone(off, "AP-5 lost its GC-off row")
+        on_vals = [int(x) for x in on.group(1).split(",")]
+        off_vals = [int(x) for x in off.group(1).split(",")]
+        self.assertGreater(min(on_vals), max(off_vals) * 5,
+                           f"GC-on {on_vals} no longer dwarfs GC-off {off_vals}; the "
+                           f"sync.Pool exception AP-5 documents has lost its evidence")
+
+    def test_the_gc_script_actually_disables_gc(self) -> None:
+        """`gc_claim_check.sh` is the evidence behind every AP-5 number. A run that leaves
+        the collector on produces two identical columns and a quietly meaningless table."""
+        src = (SKILL_DIR / "scripts" / "gc_claim_check.sh").read_text(encoding="utf-8")
+        self.assertIn("SetGCPercent(-1)", src,
+                      "the GC-off arm no longer switches the collector off")
+        self.assertRegex(src, r"SMOKE_POOL_ITERS=\d+")
+        self.assertRegex(src, r"FULL_POOL_ITERS=\d+")
+
+    def test_each_corrected_claim_survives_and_its_inverse_does_not(self) -> None:
+        for path, claim, inverse in self.CASES:
+            with self.subTest(file=path.name, claim=claim[:40]):
+                text = _read(path)
+                self.assertIn(claim, text, f"{path.name}: corrected claim removed")
+                self.assertNotRegex(text, inverse, f"{path.name}: claim inverted")
+
+    STAMP = re.compile(r"go1\.\d+\.\d+ \S+/\S+.*20\d\d-\d\d-\d\d")
+
+    def test_every_measured_block_carries_its_own_provenance_stamp(self) -> None:
+        """A figure without toolchain/platform/date is not re-checkable, and this skill's own
+        AP-5 says evidence that drifts from its source is worse than none.
+
+        Scoped per stamp, not per file: the first version searched the whole document, so
+        gutting one `<!-- measured: … -->` comment passed on the strength of a different
+        table's stamp two screens away.
+        """
+        for path in (BENCH_ANTIPATTERNS,):
+            text = _read(path)
+            stamps = re.findall(r"<!-- measured: (.*?) -->", text)
+            self.assertGreaterEqual(len(stamps), 2,
+                                    f"{path.name}: a measured table lost its stamp comment")
+            for stamp in stamps:
+                with self.subTest(file=path.name, stamp=stamp[:40]):
+                    self.assertRegex(stamp, self.STAMP,
+                                     "a measured block's stamp no longer names toolchain, "
+                                     "platform and date")
+
+    def test_the_stamp_guard_rejects_a_gutted_stamp(self) -> None:
+        """Anti-vacuity: the pattern must reject the shapes people actually write."""
+        for bad in ("recently", "go1.26.1", "darwin/arm64 2026-07-29", "2026-07-29"):
+            with self.subTest(stamp=bad):
+                self.assertNotRegex(bad, self.STAMP)
+        self.assertRegex("go1.26.1 darwin/arm64, Apple M4, 2026-07-29", self.STAMP)
+
+    def test_ap3_justifies_itself_with_a_measurement(self) -> None:
+        """AP-3 asserted a modulo cost it never measured; measured, the two forms are
+        indistinguishable. The entry must not return to arguing from the arithmetic."""
+        ap = md_section(_read(BENCH_ANTIPATTERNS),
+                        "## AP-3: Using b.N to index into a pre-generated data slice")
+        self.assertIn("**The modulo is not the problem.**", ap)
+        self.assertNotRegex(ap, r"(?i)introduces modulo operation in hot loop",
+                            "AP-3 is back to citing an unmeasured modulo cost")
+        self.assertRegex(ap, r"(?i)working set", "AP-3 lost the real reason")
+
+    def test_live_profiling_path_is_paved(self) -> None:
+        """The Scope Gate sends the reader to 'profile the running program'. For a full
+        release that instruction had no supporting content anywhere in the skill."""
+        scope = md_section(_read(SKILL_MD), "### 3) Scope Gate — Pick the right benchmark shape before writing")
+        self.assertIn("running program", scope)
+        pprof = _read(PPROF_ANALYSIS)
+        for needle in ("net/http/pprof", "/debug/pprof/profile?seconds=", "127.0.0.1"):
+            with self.subTest(needle=needle):
+                self.assertIn(needle, pprof,
+                              "pprof-analysis.md does not show how to profile a live process")
+
+    def test_pgo_is_documented(self) -> None:
+        """Phase 2 produces exactly the CPU profile PGO consumes; the skill used to stop
+        one step short of the zero-code-change win."""
+        pprof = _read(PPROF_ANALYSIS)
+        self.assertIn("default.pgo", pprof)
+        self.assertRegex(pprof, r"(?i)profile-guided optimization")
+
+    def test_pool_examples_cap_what_they_return(self) -> None:
+        """An uncapped sync.Pool turns a memory optimisation into a memory leak: one
+        oversized item keeps its capacity pinned for every worker that touches it."""
+        for path in (SKILL_MD, OPT_PATTERNS):
+            with self.subTest(file=path.name):
+                text = _read(path)
+                self.assertIn("maxPooled", text,
+                              f"{path.name}: sync.Pool example returns an uncapped buffer")
+                self.assertRegex(text, r"buf\.Cap\(\) <= maxPooled")
 
 
 if __name__ == "__main__":
