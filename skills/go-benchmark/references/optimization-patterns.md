@@ -104,15 +104,32 @@ signal, because those only appear for conversions that actually allocated.
 Similarly: `fmt.Sprintf` in hot paths boxes every argument. Replace with `strconv`:
 
 ```go
-// BAD: fmt.Sprintf boxes n into any
+// BAD: fmt.Sprintf boxes n into any — 24 B/op, 2 allocs/op measured
 s := fmt.Sprintf("count=%d", n)
 
-// GOOD: no allocation
+// GOOD: 0 allocs/op *while `s` stays on the stack*
 var buf [32]byte
 s := string(strconv.AppendInt(buf[:0], int64(n), 10))
-// or for simple appends:
+// or, with nothing to escape at all:
 b = strconv.AppendInt(b, int64(n), 10)
 ```
+
+**The same escape caveat as boxing applies to this one.** `string([]byte)` is a conversion, and
+escape analysis decides whether the result lives on the stack or the heap — so the line above is
+not unconditionally allocation-free. Measured on go1.26.1 darwin/arm64 (Apple M4), identical
+source both times:
+
+| Where the result goes | Result |
+|---|---|
+| passed to a `//go:noinline` function that only reads it | `0 B/op`, `0 allocs/op` |
+| stored to a package-level `string` (escapes) | `8 B/op`, `1 allocs/op` |
+
+<!-- measured: go1.26.1 darwin/arm64, Apple M4, 2026-09-18 -->
+
+Returning the string from the function, storing it in a struct that outlives the call, or putting
+it in a channel all escape. If the value must escape, the conversion allocates and the win over
+`fmt.Sprintf` is the *boxing and formatting* (2 allocs → 1), not zero. Check with
+`go build -gcflags='-m'` rather than assuming either way.
 
 ---
 

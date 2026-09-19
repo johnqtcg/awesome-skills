@@ -890,7 +890,20 @@ class MeasuredClaimsPinnedTests(unittest.TestCase):
          r"(?i)`_ = add\(\.\.\.\)`: ABOVE baseline, call survives"),
         (BENCHSTAT_GUIDE, "## Interleave A and B — do not run all of A, then all of B",
          r"(?m)^## Run all of A, then all of B"),
+        (OPT_PATTERNS, "**The same escape caveat as boxing applies to this one.**",
+         r"(?m)^// GOOD: no allocation$"),
     ]
+
+    def test_every_measured_table_lives_in_a_file_that_stamps_it(self) -> None:
+        """Anti-drift for the stamp rule itself: a measured table added to a reference that
+        has no stamp convention would otherwise carry no provenance at all."""
+        for path in (BENCH_ANTIPATTERNS, OPT_PATTERNS):
+            with self.subTest(file=path.name):
+                text = _read(path)
+                self.assertIn("<!-- measured:", text,
+                              f"{path.name} presents measured figures with no stamp comment")
+                for stamp in re.findall(r"<!-- measured: (.*?) -->", text):
+                    self.assertRegex(stamp, self.STAMP, f"{path.name}: weak stamp {stamp!r}")
 
     def test_loop_overhead_figures_keep_their_order_of_magnitude(self) -> None:
         """The whole sub-nanosecond exception rests on `b.Loop()` costing ~1.7 ns against a

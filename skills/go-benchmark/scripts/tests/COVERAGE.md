@@ -20,9 +20,9 @@
 | `SectionHelperTests` | 5 | `md_section` / `md_rows` / `numbered_rule` — including the fence-aware stop |
 | `NormativeRuleDirectionTests` | 7 | Each Hard Rule's **direction**, inside its own numbered item |
 | `ScorecardAndGateValuesPinnedTests` | 8 | Tier bars derived from their own checklists; gate ↔ contract reachability |
-| `MeasuredClaimsPinnedTests` | 11 | Every claim a measurement corrected, plus its inverse |
+| `MeasuredClaimsPinnedTests` | 12 | Every claim a measurement corrected, plus its inverse |
 
-**Contract test count: 101**
+**Contract test count: 102**
 
 ## Golden Fixtures + Per-Fixture Test Classes (`test_golden_scenarios.py`)
 
@@ -84,7 +84,7 @@ compiled and run under `-race` by
 
 **Template/compile/script test count: 42**
 
-**Total tests: 173 collected** — 101 contract + 30 golden + 42 template/compile/script
+**Total tests: 174 collected** — 102 contract + 30 golden + 42 template/compile/script
 (the compile module defines 40; `ReferenceTemplateCompileTests` inherits 2 more from
 `TemplateCompileTests`, which is why an AST count of `def test_` under-reports by 2).
 
@@ -188,6 +188,11 @@ one), then five classes built on them:
   modulo form and the "BETTER" fix are indistinguishable — 0.81–1.52 vs 0.80–1.60 ns/op. The
   entry now names the real problems (working-set size, `b.N`-dependent results) and carries
   the measurement that retired the old one.
+- **`string(strconv.AppendInt(…))` was labelled "GOOD: no allocation" unconditionally.** It is
+  0 allocs/op only while the result stays on the stack; stored to a package-level `string` it
+  measures 8 B/op, 1 allocs/op (go1.26.1 darwin/arm64). This is the *same* escape caveat the
+  file states for interface boxing twenty lines above — applied to one recipe and not its
+  neighbour.
 - **`allowed-tools` pre-approved two shells.** `Bash(bash*gc_claim_check.sh*)` matches
   `bash -c '<anything>' gc_claim_check.sh` — the wildcard sits exactly where `-c` goes. Both
   entries removed; the scripts prompt once, and SKILL.md says why so the next edit does not
