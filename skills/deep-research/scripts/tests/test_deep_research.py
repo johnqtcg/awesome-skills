@@ -350,6 +350,27 @@ class TestParseDuckduckgoLite(unittest.TestCase):
         self.assertEqual(1, len(out))
         self.assertEqual("real.com", out[0].domain)
 
+    # Trimmed from the page DDG Lite actually served on 2026-09-24. The parser used to
+    # return its "here" link as one T4 result pointing at https://duckduckgo.com/.
+    CHALLENGE = (
+        '<div class="anomaly-modal__title">Unfortunately, bots use DuckDuckGo too.</div>'
+        '<div>Please complete the following challenge to confirm this search was made '
+        'by a human.</div><a href="https://duckduckgo.com/">here</a>'
+    )
+
+    def test_bot_challenge_is_an_error_not_a_result(self):
+        with self.assertRaises(deep_research.SearchBlockedError):
+            deep_research.parse_duckduckgo_lite(self.CHALLENGE, query="q", limit=10)
+
+    def test_links_back_to_duckduckgo_are_not_results(self):
+        html_doc = (
+            '<a href="https://duckduckgo.com/">home</a>'
+            '<a href="//duckduckgo.com/settings">Settings</a>'
+            '<a href="/l/?uddg=https%3A%2F%2Fgo.dev%2Fdoc%2Fgo1.25">Go 1.25</a>'
+        )
+        out = deep_research.parse_duckduckgo_lite(html_doc, query="q", limit=10)
+        self.assertEqual(["go.dev"], [r.domain for r in out])
+
 
 # ---------------------------------------------------------------------------
 # validate_url_format

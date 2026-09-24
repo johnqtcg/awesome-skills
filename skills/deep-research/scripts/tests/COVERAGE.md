@@ -139,7 +139,7 @@ executed end to end.
 
 | Metric | Count |
 |---|---:|
-| Total tests | 397 |
+| Total tests | 415 |
 | Golden fixtures | 16 |
 | Claim-support corpus cases | 30 |
 | Behavioral fixtures executed through code | 8 |
@@ -206,6 +206,31 @@ The lesson generalises past this file: a suite can prove every guard rejects
 malformed input and still never ask what the cheapest *well-formed* input
 reaching the top grade is.
 
+
+## Guards Added After the 2026-09-24 Review
+
+| Guard | Defect it pins |
+|---|---|
+| `TestDescriptionTriggers` (8) | the description listed capabilities and measured recall 40% on 2026-09-09; the four gaps that eval named — verification framing, local-investigation framing, stakes, a push clause — plus Chinese terms, the google-search hand-off and the 1,536-character listing cap |
+| `TestNoGenericCommandPreapproval` (2) | `Bash(go test*)` pre-approved `go test -exec <any program>` and `Bash(git log*)` pre-approved `git log --output=<any file>` (both reproduced); every rule must now be a bundled subcommand |
+| `TestSandboxWritablePaths` (2) | every example wrote to `/tmp/`, which the Claude Code sandbox refuses (`Operation not permitted`) |
+| `TestSearchEngineFacts` (3) | `after:`/`before:` described as publication dates; Google-only queries routed to `WebSearch`, which ignores them; a template targeting Stack Overflow, which returns 403 to `fetch-content` and is refused by `WebSearch` and `WebFetch` |
+| `TestParseDuckduckgoLite` bot-challenge + self-link (2) | DDG Lite answered every query with a CAPTCHA page on 2026-09-24; the parser returned its "here" link as a T4 result pointing at https://duckduckgo.com/ and `retrieve` printed `retrieved=1`. It now raises `SearchBlockedError`, so `retrieve` exits 2 with the reason |
+| `TestTargetConfidenceIsTheEnum` (1) | Gate 3 offered `Medium–High` and `Tiered`, which are not confidence values |
+
+**Why wording alone may not fix recall.** With 102 skills installed, `--debug` logs
+`Skill listing over budget: 102 skills, 44715 chars > 8000 budget — descriptions will
+be truncated`, and Claude Code drops descriptions from the least-invoked skills first.
+A rarely used skill can therefore reach the model as a bare name. The trigger eval has
+to be run twice — at the default budget (the real path) and with
+`SLASH_COMMAND_TOOL_CHAR_BUDGET` raised (wording only) — or a description change and a
+listing-budget effect are indistinguishable.
+
+**Measured 2026-09-24** (`outputexample/deep-research/trigger-2026-09-24/`): old description
+11/30 should-trigger runs (37%, 4/10 queries); new description 14/28 (50%, 5/10) at the default
+budget and 16/29 (55%, 5/10) with the budget raised; 0/30 false triggers. The budget explains
+little of the gap, and at ~30 runs per cell (±18 points) the gain is directional. Audit and
+vendor-claim queries stay at 0/3: recall is still far below 90%.
 
 ## Adding Coverage
 

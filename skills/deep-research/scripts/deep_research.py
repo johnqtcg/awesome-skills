@@ -510,7 +510,27 @@ def _extract_snippets(html_text: str) -> Dict[str, str]:
     return snippets
 
 
+class SearchBlockedError(RuntimeError):
+    """The search engine answered with an anti-bot challenge instead of results."""
+
+
+# Measured 2026-09-24: from this machine DDG Lite answers every query with a CAPTCHA page
+# ("Unfortunately, bots use DuckDuckGo too ... Select all squares containing a duck"). The
+# parser used to read that page's single "here" link as a search result, so `retrieve`
+# printed `retrieved=1` and handed on https://duckduckgo.com/ as a T4 source — a silent
+# failure that looked like a thin but working search.
+DDG_CHALLENGE = re.compile(
+    r"bots use DuckDuckGo too|complete the following challenge|anomaly-modal",
+    re.IGNORECASE,
+)
+
+
 def parse_duckduckgo_lite(html_text: str, query: str, limit: int) -> List[SearchResult]:
+    if DDG_CHALLENGE.search(html_text):
+        raise SearchBlockedError(
+            "DuckDuckGo returned a bot challenge instead of results; use the host "
+            "search tool for this query and record it with reserve-budget"
+        )
     snippets_map = _extract_snippets(html_text)
     pattern = re.compile(r'<a[^>]+href="([^"]+)"[^>]*>(.*?)</a>', re.IGNORECASE | re.DOTALL)
     results: List[SearchResult] = []
@@ -527,6 +547,10 @@ def parse_duckduckgo_lite(html_text: str, query: str, limit: int) -> List[Search
         hostname = (urllib.parse.urlparse(normalized).hostname or "").lower()
         domain = registrable_domain(hostname)
         if not domain:
+            continue
+        # A link that still points at DuckDuckGo after decoding is page chrome (home,
+        # settings, feedback), never a result.
+        if domain == "duckduckgo.com":
             continue
         if not title:
             title = normalized

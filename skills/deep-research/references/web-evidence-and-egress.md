@@ -78,9 +78,9 @@ First collect content for finding authoring:
 
 ```bash
 python3 scripts/deep_research.py fetch-content \
-  --session /tmp/research_plan.json \
-  --results /tmp/results.json \
-  --output /tmp/content.json
+  --session /path/to/run-dir/research_plan.json \
+  --results /path/to/run-dir/results.json \
+  --output /path/to/run-dir/content.json
 ```
 
 For a final Web report, run live verification once:
@@ -89,13 +89,13 @@ For a final Web report, run live verification once:
 python3 scripts/deep_research.py report \
   --question "<question>" \
   --research-kind web \
-  --results /tmp/results.json \
-  --content /tmp/content.json \
-  --findings /tmp/findings.json \
-  --session /tmp/research_plan.json \
+  --results /path/to/run-dir/results.json \
+  --content /path/to/run-dir/content.json \
+  --findings /path/to/run-dir/findings.json \
+  --session /path/to/run-dir/research_plan.json \
   --live-web \
-  --validation-output /tmp/validation.json \
-  --output /tmp/report.md
+  --validation-output /path/to/run-dir/validation.json \
+  --output /path/to/run-dir/report.md
 ```
 
 Use `validate --live-web` instead when validation JSON is the final

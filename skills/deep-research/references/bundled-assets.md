@@ -55,3 +55,10 @@ catch it. An inventory nobody checks is a claim, not a record.
 | `scripts/tests/test_skill_contract.py` | documentation-to-code seam; guards this file and SKILL.md |
 | `scripts/tests/test_subcommand_smoke.py` | offline CLI end-to-end tests |
 | `scripts/tests/test_web_security.py` | local-scheme, private-address, mixed-DNS, redirect, and DNS-pinning negative tests |
+
+## Session ledger locking
+
+The ledger file is locked with `fcntl` on POSIX and `msvcrt` byte locking on
+Windows, failing closed if neither exists. The regression suite performs a real
+multi-process contention test on fork-capable POSIX; the Windows backend still
+requires Windows CI coverage.

@@ -321,7 +321,7 @@ These skills are suited for information gathering, fact-checking, comparison, an
 | Skill Name | Purpose | Main strengths / advantages |
 | --- | --- | --- |
 | `google-search` | Use Google-style search for information gathering, fact verification, and source checking | Emphasizes query classification, evidence chains, cross-checking, and reusable search strings |
-| `deep-research` | Produce source-backed deep research and analysis | Enforces content extraction, cross-verification, and anti-hallucination checks for research and comparison work |
+| `deep-research` | Produce source-backed deep research and analysis | Enforces content extraction, cross-verification, and anti-hallucination checks for research and comparison work. **Invoke it explicitly** (`/deep-research <question>`): it auto-triggers on only about half of the requests it is built for |
 
 ### Technical Docs and Writing
 

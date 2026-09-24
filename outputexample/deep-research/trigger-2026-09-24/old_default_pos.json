@@ -1,0 +1,453 @@
+[
+ {
+  "index": 1,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "WebSearch",
+   "WebSearch",
+   "ToolSearch",
+   "WebSearch",
+   "WebSearch"
+  ],
+  "duration_s": 49.9,
+  "error": ""
+ },
+ {
+  "index": 1,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "WebSearch",
+   "WebSearch",
+   "WebSearch"
+  ],
+  "duration_s": 55.2,
+  "error": ""
+ },
+ {
+  "index": 0,
+  "rep": 1,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 77.0,
+  "error": ""
+ },
+ {
+  "index": 0,
+  "rep": 0,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 81.3,
+  "error": ""
+ },
+ {
+  "index": 0,
+  "rep": 2,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 83.2,
+  "error": ""
+ },
+ {
+  "index": 1,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "Bash",
+   "mcp__plugin_claude-mem_mcp-search__get_observations",
+   "ToolSearch",
+   "WebSearch",
+   "WebSearch",
+   "ToolSearch"
+  ],
+  "duration_s": 46.0,
+  "error": ""
+ },
+ {
+  "index": 2,
+  "rep": 0,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 71.7,
+  "error": ""
+ },
+ {
+  "index": 3,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 53.6,
+  "error": ""
+ },
+ {
+  "index": 3,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 48.4,
+  "error": ""
+ },
+ {
+  "index": 2,
+  "rep": 2,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 65.6,
+  "error": ""
+ },
+ {
+  "index": 3,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 38.7,
+  "error": ""
+ },
+ {
+  "index": 4,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Read"
+  ],
+  "duration_s": 35.3,
+  "error": ""
+ },
+ {
+  "index": 2,
+  "rep": 1,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 101.0,
+  "error": ""
+ },
+ {
+  "index": 4,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 42.8,
+  "error": ""
+ },
+ {
+  "index": 5,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [],
+  "duration_s": 33.1,
+  "error": ""
+ },
+ {
+  "index": 4,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 79.1,
+  "error": ""
+ },
+ {
+  "index": 5,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "mcp__plugin_claude-mem_mcp-search__get_observations"
+  ],
+  "duration_s": 47.1,
+  "error": ""
+ },
+ {
+  "index": 6,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 42.2,
+  "error": ""
+ },
+ {
+  "index": 6,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "ToolSearch",
+   "WebSearch",
+   "WebSearch"
+  ],
+  "duration_s": 55.2,
+  "error": ""
+ },
+ {
+  "index": 5,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Read",
+   "Read"
+  ],
+  "duration_s": 75.5,
+  "error": ""
+ },
+ {
+  "index": 7,
+  "rep": 0,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Read"
+  ],
+  "duration_s": 49.1,
+  "error": ""
+ },
+ {
+  "index": 6,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "ToolSearch",
+   "WebSearch",
+   "WebSearch",
+   "WebSearch",
+   "WebSearch",
+   "WebSearch",
+   "WebSearch"
+  ],
+  "duration_s": 84.6,
+  "error": ""
+ },
+ {
+  "index": 8,
+  "rep": 0,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "WebSearch",
+   "WebSearch",
+   "Skill",
+   "Skill",
+   "Skill",
+   "Skill",
+   "Bash"
+  ],
+  "duration_s": 77.4,
+  "error": ""
+ },
+ {
+  "index": 7,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Bash",
+   "Read",
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 85.5,
+  "error": ""
+ },
+ {
+  "index": 7,
+  "rep": 1,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Bash",
+   "Bash",
+   "Bash",
+   "Skill"
+  ],
+  "duration_s": 115.8,
+  "error": ""
+ },
+ {
+  "index": 9,
+  "rep": 0,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "ToolSearch",
+   "mcp__plugin_claude-mem_mcp-search__get_observations",
+   "Bash",
+   "Skill"
+  ],
+  "duration_s": 34.7,
+  "error": ""
+ },
+ {
+  "index": 8,
+  "rep": 1,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "ToolSearch",
+   "ToolSearch",
+   "WebSearch",
+   "WebSearch",
+   "Skill",
+   "Skill",
+   "Skill",
+   "Skill"
+  ],
+  "duration_s": 87.1,
+  "error": ""
+ },
+ {
+  "index": 9,
+  "rep": 2,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "ToolSearch",
+   "mcp__plugin_claude-mem_mcp-search__get_observations",
+   "Bash",
+   "Skill"
+  ],
+  "duration_s": 52.8,
+  "error": ""
+ },
+ {
+  "index": 9,
+  "rep": 1,
+  "triggered": true,
+  "fired_via": "Skill tool",
+  "tools": [
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 83.0,
+  "error": ""
+ },
+ {
+  "index": 8,
+  "rep": 2,
+  "triggered": false,
+  "fired_via": "",
+  "tools": [
+   "Agent",
+   "ToolSearch",
+   "ToolSearch",
+   "ToolSearch",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Skill",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Read",
+   "Bash",
+   "WebSearch",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Read",
+   "Read",
+   "Read",
+   "Bash",
+   "Read",
+   "Read",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "Bash",
+   "SubagentHandback",
+   "Skill",
+   "Bash",
+   "Bash"
+  ],
+  "duration_s": 295.1,
+  "error": ""
+ }
+]

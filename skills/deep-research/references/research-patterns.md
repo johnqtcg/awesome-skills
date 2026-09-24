@@ -16,8 +16,12 @@ the skill's honest-degradation machinery never fires. Each block below is
 tagged with the engine its syntax targets.
 
 - **Any engine** — use directly with `retrieve`.
-- **Google-only** — run it through the host `WebSearch` tool, then record the
-  spend with `reserve-budget --budget retrieval_calls`.
+- **Google-only** — for the user to run in Google. The host `WebSearch` tool is
+  **not** Google: measured 2026-09-24, it ignores `before:` / `after:` (identical
+  results with and without them), so routing a Google-only query through it
+  silently drops the filter. It does honour `site:` (including a path prefix),
+  `-site:` and `filetype:`. Record any `WebSearch` call with
+  `reserve-budget --budget retrieval_calls`.
 - **GitHub-only** — run it in GitHub code search; `retrieve` cannot express it.
 
 Date filtering on DuckDuckGo is a request parameter, not a query operator. To
@@ -35,7 +39,11 @@ When researching error messages or unexpected behavior:
 "<exact error text>" <language/framework>
 
 # Stack trace keyword extraction
-"<key function name>" "<error type>" site:github.com OR site:stackoverflow.com
+"<key function name>" "<error type>" site:github.com
+# Stack Overflow is unreachable from this toolset (measured 2026-09-24): the bundled
+# fetch-content gets HTTP 403, WebFetch refuses stackoverflow.com, WebSearch's
+# allowed_domains rejects it with a 400, and site:stackoverflow.com silently returns
+# other hosts. No finding can cite it.
 
 # Known-issue search
 "<product>" "<error keyword>" issue OR bug 2025        # Google-only if you use after:2024
@@ -189,7 +197,7 @@ python3 scripts/deep_research.py search-codebase \
   --pattern "error handling" \
   --root /path/to/repo \
   --glob "*.go" \
-  --output /tmp/code_evidence.json
+  --output /path/to/run-dir/code_evidence.json
 ```
 
 Use the emitted `code-*` and `commit-head` IDs in findings. Inspect each
@@ -202,18 +210,18 @@ the versioned receipt:
 ```bash
 python3 scripts/deep_research.py snapshot-codebase \
   --root /path/to/repo \
-  --output /tmp/repository_snapshot_before.json
+  --output /path/to/run-dir/repository_snapshot_before.json
 
 go test -run TestAuth ./internal/auth
 
 python3 scripts/deep_research.py snapshot-codebase \
   --root /path/to/repo \
-  --output /tmp/repository_snapshot_after.json
+  --output /path/to/run-dir/repository_snapshot_after.json
 
 python3 scripts/deep_research.py import-test-receipt \
-  --receipt /tmp/host_test_receipt.json \
-  --code-evidence /tmp/code_evidence.json \
-  --output /tmp/code_and_test_evidence.json
+  --receipt /path/to/run-dir/host_test_receipt.json \
+  --code-evidence /path/to/run-dir/code_evidence.json \
+  --output /path/to/run-dir/code_and_test_evidence.json
 ```
 
 The snapshots are read-only identity metadata, not test proof. For High they
@@ -261,7 +269,7 @@ live execution proof or use it to produce High.
 | `-keyword` | Exclude results | `Go context -tutorial -beginner` |
 | `OR` | Either term matches | `gRPC OR "connect-go"` |
 | `*` | Wildcard placeholder | `"Go * pattern" concurrency` |
-| `after:YYYY` | Published after date — **Google-only**, ignored by DDG | `Kafka performance after:2024` |
-| `before:YYYY` | Published before date — **Google-only**, ignored by DDG | `before:2020` for historical context |
+| `after:YYYY` | Document **last updated** after the date, not published and not the event date — **Google-only**; ignored by DDG and by `WebSearch` | `Kafka performance after:2024` |
+| `before:YYYY` | Document **last updated** before the date — **Google-only**; ignored by DDG and by `WebSearch` | `before:2020` for historical context |
 | `related:` | Find similar sites — **removed by Google; supported nowhere** | `related:kubernetes.io` |
 | `inurl:` | URL must contain | `inurl:benchmark "Go HTTP"` |

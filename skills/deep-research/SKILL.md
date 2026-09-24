@@ -1,9 +1,9 @@
 ---
 name: deep-research
 description: |
-  Perform auditable research with executable mode budgets, mandatory source-content verification, typed web and repository evidence, confidence assessment, honest degradation, and one fixed nine-section report.
-  Use for web research, claim verification, technical comparisons, trend analysis, pure codebase research, and hybrid codebase-plus-web investigations that need traceable conclusions rather than search-result summaries.
-allowed-tools: Read, Write, Grep, Glob, WebSearch, WebFetch, Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py plan*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py reserve-budget*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py retrieve*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py fetch-content*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py quick-check*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py search-codebase*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py snapshot-codebase*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py import-test-receipt*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py validate*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py report*), Bash(git log*), Bash(go test*), Bash(python3 -m unittest*), Bash(python3 -m pytest*)
+  Source-verified research: fact-check a claim, settle documents that contradict each other, compare options for a decision someone will challenge, or trace how code in a repository actually behaves — citing the exact page excerpt, file line or test that proves each point.
+  Use when the answer will be questioned or being confidently wrong is costly — a board memo, design doc, audit, vendor contract, PR dispute — and for "is it true that…", "verify / fact-check this", "the docs disagree", "where does this number come from", "X vs Y with sources", "how does our retry logic work, cite files and lines", 核实 / 求证 / 查证 / 调研 / 文档互相矛盾. Use it even when the answer seems already known: recalled facts are what this checks. For a quick lookup that needs only a link or reusable search strings, use google-search instead.
+allowed-tools: Read, Write, Grep, Glob, WebSearch, WebFetch, Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py plan*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py reserve-budget*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py retrieve*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py fetch-content*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py quick-check*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py search-codebase*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py snapshot-codebase*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py import-test-receipt*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py validate*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py report*)
 ---
 
 # Deep Research
@@ -45,14 +45,19 @@ Run the executable classifier:
 ```bash
 python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py plan \
   --request "<user request>" \
-  --output /tmp/research_plan.json
+  --output /path/to/run-dir/research_plan.json
 ```
 
 **Every command below is written `python3 scripts/deep_research.py ...` for
 brevity; run it as `python3 ${CLAUDE_SKILL_DIR}/scripts/deep_research.py ...`.**
 For `codebase` and `hybrid` work the working directory is the user's
-repository, not this skill, so a bare relative path will not resolve. Write
-every `--output` outside the repository under study.
+repository, not this skill, so a bare relative path will not resolve.
+
+Create the run directory once with `mktemp -d "${TMPDIR:-/tmp}/deep-research.XXXXXX"`
+and use the path it prints, literally, wherever the examples say
+`/path/to/run-dir` — shell variables do not survive between Bash calls. Keep the
+template: on macOS, `mktemp` without one ignores `$TMPDIR` and writes under
+`/var/folders`, which Claude Code's sandbox refuses, as it refuses `/tmp` itself.
 
 The output is a versioned session ledger, not a disposable plan. Reuse that
 exact file for every budget-consuming command in the research run.
@@ -72,10 +77,10 @@ Define the evidence chain before retrieval.
 | Narrow single fact | 1 validator-controlled live capture + T1 re-derived from its effective final URL + exact supporting excerpt | High |
 | Direct code fact | Code line/excerpt verified by reading the declared Git blob at an existing hexadecimal commit | High |
 | Runtime code behavior | Every cited code item is pinned to one commit/tree + one host test receipt covers the finding and every code ID, names every tested path, passes relevance review, and matches that clean snapshot | High |
-| Best-practice recommendation | 1 primary basis + 2 independent practitioner or empirical sources | Medium–High |
+| Best-practice recommendation | 1 primary basis + 2 independent practitioner or empirical sources | Medium (High only under the Confidence Rule) |
 | Technology comparison | 3 independent benchmarks/reviews with methodology | Medium |
 | Trend/adoption claim | 2 data sources from different periods | Medium |
-| Disputed or fast-moving topic | 4 sources across tiers + explicit conflict treatment | Tiered |
+| Disputed or fast-moving topic | 4 sources across tiers + explicit conflict treatment | Per claim: High, Medium or Low |
 
 Each finding must also carry a claim-support review. Excerpt containment
 proves the quotation is real; it does not prove the quotation supports the
@@ -146,10 +151,10 @@ Use the selected mode as an executable ceiling:
 
 ```bash
 python3 scripts/deep_research.py retrieve \
-  --session /tmp/research_plan.json \
+  --session /path/to/run-dir/research_plan.json \
   --query "<subtopic 1>" \
   --query "<subtopic 2>" \
-  --output /tmp/results.json
+  --output /path/to/run-dir/results.json
 ```
 
 The parser rejects more than 10, 25, or 50 queries in one Quick, Standard, or
@@ -166,10 +171,10 @@ Before bypassing `retrieve` or `fetch-content` with a host `WebSearch` or
 
 ```bash
 python3 scripts/deep_research.py reserve-budget \
-  --session /tmp/research_plan.json \
+  --session /path/to/run-dir/research_plan.json \
   --budget retrieval_calls \
   --count 1 \
-  --output /tmp/budget_reservation.json
+  --output /path/to/run-dir/budget_reservation.json
 ```
 
 Final live re-verification has its own budget line, `live_verifications`
@@ -181,26 +186,24 @@ than fetching past the ceiling.
 
 The ledger is an operational concurrency-safe constraint, not a tamper-proof
 audit log. It cannot account for tool calls that bypass both the bundled
-commands and `reserve-budget`. `plan` refuses to overwrite an existing ledger.
-Locking uses `fcntl` on POSIX and `msvcrt` byte locking on Windows, failing
-closed if neither exists. The regression suite performs a real multi-process
-contention test on fork-capable POSIX; the Windows backend still requires
-Windows CI coverage.
+commands and `reserve-budget`. `plan` refuses to overwrite an existing ledger,
+but a second `plan` to a new path starts a fresh allowance: the ceiling is per
+ledger, not per question. Artifacts stamped with the first ledger's `session_id`
+are refused under the second, so nothing is double-counted — if you restart,
+say so under Gaps & Limitations and report the ledger actually used.
 
 ### 7) Content Extraction Gate
 
-For `web` and `hybrid`, fetch actual content before synthesis:
+For `web` and `hybrid`, content extraction is mandatory — fetch actual content before synthesis:
 
 ```bash
 python3 scripts/deep_research.py fetch-content \
-  --session /tmp/research_plan.json \
-  --results /tmp/results.json \
-  --output /tmp/content.json
+  --session /path/to/run-dir/research_plan.json \
+  --results /path/to/run-dir/results.json \
+  --output /path/to/run-dir/content.json
 ```
 
 Each web evidence object must identify an exact excerpt found in a successfully extracted item. A search snippet, reachable URL, or failed/low-yield page cannot support a finding.
-
-Content extraction is mandatory for web and hybrid research.
 
 `fetch-content` accepts only public `http`/`https` targets, connects to an
 already validated IP while preserving hostname verification, and revalidates
@@ -225,7 +228,7 @@ For `codebase`, use `search-codebase`; content extraction is not required:
 python3 scripts/deep_research.py search-codebase \
   --pattern "verifyToken" \
   --root /path/to/repo \
-  --output /tmp/code_evidence.json
+  --output /path/to/run-dir/code_evidence.json
 ```
 
 `search-codebase` pins clean tracked content to the real HEAD object ID and
@@ -239,18 +242,18 @@ create a `deep-research/host-test-receipt-v2` receipt and import it:
 ```bash
 python3 scripts/deep_research.py snapshot-codebase \
   --root /path/to/repo \
-  --output /tmp/repository_snapshot_before.json
+  --output /path/to/run-dir/repository_snapshot_before.json
 
 go test -run TestVerifyToken ./auth
 
 python3 scripts/deep_research.py snapshot-codebase \
   --root /path/to/repo \
-  --output /tmp/repository_snapshot_after.json
+  --output /path/to/run-dir/repository_snapshot_after.json
 
 python3 scripts/deep_research.py import-test-receipt \
-  --receipt /tmp/host_test_receipt.json \
-  --code-evidence /tmp/code_evidence.json \
-  --output /tmp/code_and_test_evidence.json
+  --receipt /path/to/run-dir/host_test_receipt.json \
+  --code-evidence /path/to/run-dir/code_evidence.json \
+  --output /path/to/run-dir/code_and_test_evidence.json
 ```
 
 `snapshot-codebase` only reads repository root, HEAD, tree hash, and dirty
@@ -260,9 +263,11 @@ never executes receipt argv.
 
 Runtime High treats the finding's complete code evidence set as atomic: one
 receipt must cover the finding, every code ID, and every tested path on one
-clean commit/tree. This skill pre-approves only Go, pytest, and unittest
-commands. Load `references/test-receipt-schema.md` for the full contract,
-including receipt-coverage failure modes and other frameworks.
+clean commit/tree. This skill pre-approves **no** test command: a test runs the
+repository's code, and a prefix rule cannot exclude flags — `go test*` also
+matches `go test -exec <any program>`, `git log*` matches `git log --output=<any
+file>`. The host's permission prompt is the review step. Load
+`references/test-receipt-schema.md` for the full contract.
 
 ### 8) Execution Integrity Gate
 
@@ -284,7 +289,7 @@ For a Quick single-fact check, collapse the collection half into one command:
 python3 scripts/deep_research.py quick-check \
   --request "<narrow question>" \
   --claim "<the claim to verify>" \
-  --workdir /tmp/qc
+  --workdir /path/to/run-dir/qc
 ```
 
 It plans, retrieves, extracts, and writes a findings skeleton with the
@@ -326,13 +331,13 @@ Final Web report:
 python3 scripts/deep_research.py report \
   --question "<question>" \
   --research-kind web \
-  --results /tmp/results.json \
-  --content /tmp/content.json \
-  --findings /tmp/findings.json \
-  --session /tmp/research_plan.json \
+  --results /path/to/run-dir/results.json \
+  --content /path/to/run-dir/content.json \
+  --findings /path/to/run-dir/findings.json \
+  --session /path/to/run-dir/research_plan.json \
   --live-web \
-  --validation-output /tmp/validation.json \
-  --output /tmp/report.md
+  --validation-output /path/to/run-dir/validation.json \
+  --output /path/to/run-dir/report.md
 ```
 
 Pure codebase report:
@@ -341,11 +346,11 @@ Pure codebase report:
 python3 scripts/deep_research.py report \
   --question "<question>" \
   --research-kind codebase \
-  --code-evidence /tmp/code_evidence.json \
-  --findings /tmp/findings.json \
-  --session /tmp/research_plan.json \
-  --validation-output /tmp/validation.json \
-  --output /tmp/report.md
+  --code-evidence /path/to/run-dir/code_evidence.json \
+  --findings /path/to/run-dir/findings.json \
+  --session /path/to/run-dir/research_plan.json \
+  --validation-output /path/to/run-dir/validation.json \
+  --output /path/to/run-dir/report.md
 ```
 
 ## Confidence Rule
@@ -486,11 +491,9 @@ GOOD: Finding (Medium): X was faster in this benchmark, with method limits. evid
 
 ## Search and Extraction Fallbacks
 
-If DDG Lite fails, use an available search tool with the same query plan and preserve its result metadata. If static extraction fails, use a browser-capable fetcher and save equivalent content records. Imported records stay untrusted and cannot produce Web High; the bundled validator must still make its own safe live capture. Report the actual method used.
+If DDG Lite fails, use an available search tool with the same query plan and preserve its result metadata. On 2026-09-24 DDG Lite answered every query from this machine with a bot challenge; `retrieve` now reports that as an error and exits 2 instead of returning the challenge page as a result. The host `WebSearch` tool is not Google: measured 2026-09-24, it ignores `before:`/`after:`, and `site:stackoverflow.com` silently returns other hosts — Stack Overflow is unreachable (403 to `fetch-content`, refused by `WebSearch` and `WebFetch`), so check result hosts against every filter. If static extraction fails, use a browser-capable fetcher and save equivalent content records. Imported records stay untrusted and cannot produce Web High; the bundled validator must still make its own safe live capture. Report the actual method used.
 
 ## Bundled Assets
 
-The shipped file inventory lives in `references/bundled-assets.md`, where a
-regression test compares it against the directory in both directions. A
-hand-maintained list in this file had drifted by five files, including the
-regression entry point and the suite that guards this document's own claims.
+The shipped file inventory lives in `references/bundled-assets.md`, checked
+against the directory in both directions by a regression test.

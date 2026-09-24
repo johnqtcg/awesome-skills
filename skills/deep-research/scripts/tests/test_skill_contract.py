@@ -657,6 +657,126 @@ class TestBundledAssetInventory(unittest.TestCase):
         self.assertIn("references/bundled-assets.md", _read(SKILL_MD))
 
 
+def _description(text: str) -> str:
+    m = re.search(r"description:\s*\|\n((?:[ \t]+.*\n)+)", text)
+    return " ".join(line.strip() for line in m.group(1).splitlines()) if m else ""
+
+
+class TestDescriptionTriggers(unittest.TestCase):
+    """The 2026-09-09 trigger eval measured recall 40%: the description listed
+    capabilities ("executable mode budgets", "typed evidence") and lost every
+    claim-verification and codebase query to the base model's own tools. These pin
+    the four gaps that report named, not a wording."""
+
+    def setUp(self):
+        self.desc = _description(_read(SKILL_MD))
+        self.lower = self.desc.lower()
+
+    def test_key_use_case_comes_first(self):
+        # the listing truncates descriptions under budget pressure, so whatever
+        # survives the cut is the opening — it must name what the skill is for
+        first = self.desc.split(":")[0] + self.desc.split(":")[1][:160]
+        for word in ("verif", "fact-check", "code"):
+            self.assertIn(word, first.lower() if word != "verif" else self.lower[:220])
+
+    def test_names_verification_framing(self):
+        for phrase in ("is it true that", "fact-check", "docs disagree"):
+            self.assertIn(phrase, self.lower)
+
+    def test_names_local_investigation_framing(self):
+        self.assertRegex(self.lower, r"cite files and lines|file line")
+
+    def test_names_stakes(self):
+        for phrase in ("audit", "design doc", "contract"):
+            self.assertIn(phrase, self.lower)
+
+    def test_has_chinese_trigger_terms(self):
+        for term in ("核实", "求证", "查证"):
+            self.assertIn(term, self.desc)
+
+    def test_pushes_against_answering_from_memory(self):
+        self.assertRegex(self.lower, r"even when the answer seems")
+
+    def test_routes_quick_lookups_to_google_search(self):
+        self.assertIn("google-search", self.desc)
+
+    def test_fits_the_listing_cap(self):
+        # docs: combined description + when_to_use is truncated at 1,536 characters
+        self.assertLessEqual(len(self.desc), 1536)
+
+
+class TestNoGenericCommandPreapproval(unittest.TestCase):
+    """Allow-list the only safe shape: the bundled script. `Bash(go test*)` also
+    matched `go test -exec <any program>` and `Bash(git log*)` matched
+    `git log --output=<any file>` — both verified 2026-09-24. A prefix rule cannot
+    exclude flags, so no generic command may be pre-approved."""
+
+    def test_every_bash_rule_is_a_bundled_subcommand(self):
+        tools = re.search(r"allowed-tools:\s*(.+)", _read(SKILL_MD)).group(1)
+        rules = re.findall(r"Bash\(([^)]*)\)", tools)
+        self.assertTrue(rules)
+        for rule in rules:
+            self.assertRegex(
+                rule,
+                r"^python3 \$\{CLAUDE_SKILL_DIR\}/scripts/deep_research\.py [a-z-]+\*$",
+                f"pre-approved rule is not a bundled subcommand: Bash({rule})",
+            )
+
+    def test_body_does_not_claim_test_commands_are_preapproved(self):
+        self.assertNotRegex(_read(SKILL_MD), r"pre-approves only Go")
+
+
+class TestSandboxWritablePaths(unittest.TestCase):
+    """`/tmp` is not writable inside Claude Code's sandbox — `plan --output /tmp/...`
+    fails with `Operation not permitted` — so no example may send output there."""
+
+    DOCS = [SKILL_MD] + sorted((SKILL_ROOT / "references").glob("*.md"))
+
+    def test_no_example_writes_under_tmp(self):
+        for path in self.DOCS:
+            # fenced blocks only: prose may quote the failing command to explain it
+            text = "\n".join(re.findall(r"```[^\n]*\n(.*?)```", _read(path), re.S))
+            hits = re.findall(r"--[a-z-]+ /tmp/\S+|--workdir /tmp\S*", text)
+            self.assertEqual([], hits, f"{path.name} sends output to /tmp")
+
+    def test_run_directory_uses_a_template_under_tmpdir(self):
+        # measured 2026-09-24: macOS `mktemp -d` without a template ignores $TMPDIR and
+        # fails in the sandbox with `mkdtemp failed on /var/folders/...: Operation not
+        # permitted`; with `"${TMPDIR:-/tmp}/x.XXXXXX"` it succeeds
+        text = _read(SKILL_MD)
+        self.assertIn('mktemp -d "${TMPDIR:-/tmp}/', text)
+        self.assertNotRegex(text, r"`mktemp -d`")
+
+
+class TestSearchEngineFacts(unittest.TestCase):
+    """Measured 2026-09-24: WebSearch ignores before:/after:, and Stack Overflow is
+    unreachable from WebSearch, WebFetch and fetch-content alike."""
+
+    def setUp(self):
+        self.patterns = _read(SKILL_ROOT / "references" / "research-patterns.md")
+
+    def test_date_operators_are_last_updated_not_published(self):
+        self.assertNotRegex(self.patterns, r"Published (?:after|before) date")
+        self.assertIn("last updated", self.patterns)
+
+    def test_google_only_is_not_routed_to_websearch_as_if_it_were_google(self):
+        self.assertRegex(self.patterns, r"is\s+\*\*not\*\*\s+Google")
+
+    def test_no_query_template_targets_stack_overflow(self):
+        for line in self.patterns.splitlines():
+            if line.lstrip().startswith("#"):
+                continue
+            self.assertNotIn("site:stackoverflow.com", line)
+
+
+class TestTargetConfidenceIsTheEnum(unittest.TestCase):
+    def test_gate3_column_uses_only_high_medium_low(self):
+        gate3 = _read(SKILL_MD).split("### 3) Evidence Requirements Gate")[1].split("###")[0]
+        for row in re.findall(r"^\|(?!\s*-)(.+)\|\s*$", gate3, re.M)[1:]:
+            target = row.split("|")[-1]
+            self.assertNotRegex(target, r"Medium[–-]High|Tiered", row)
+
+
 class TestLineCount(unittest.TestCase):
     def test_skill_md_under_500_lines(self):
         lines = _read(SKILL_MD).count("\n") + 1
