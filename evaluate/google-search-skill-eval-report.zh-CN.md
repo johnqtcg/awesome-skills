@@ -188,6 +188,10 @@ cd skills/google-search && python3 scripts/eval_forward.py --run --model sonnet 
 
 在那条命令跑完之前，本报告里没有任何数字能描述当前版本的实际行为。
 
+**2026-09-24 更新：首次真实运行，以及为了让它有效所做的修复。** 上面描述的 harness 实际上测不出任何东西：在 `--permission-mode dontAsk` 下没有配 `--allowedTools`，**两组**的 WebSearch 和 WebFetch 调用全部被拒绝，比较的是两组都无法搜索的回答。运行之前先修了这个问题，另外还修了三处隔离缺陷（工具调用里出现 skill 路径就算"读过 skill"；有 skill 那组能读到评测用例的标准答案；全局安装的 `~/.claude/skills/google-search` 可能混进无 skill 那组），并去掉了三条只查格式的判分标准。运行时两组都用 Sonnet，每组 1 个样本，共 8 个场景。新增的两个是：GS-E7，环境无法打开的来源；GS-E8，skill 文本里没有的事实。
+
+运行又暴露出判分器的三处误判，修正后的结果是：**28 条判分标准中 2 胜、0 负、1 条两组都失败、25 条两组都通过（无区分力）**。两场胜利分别是：GS-E1 有 skill 那组引用了来源；GS-E5 它说对了 `after:` 过滤的是最后更新时间。而第二个知识点本来就写在 skill 的参考文档里。在其余所有标准上，不用 skill 的模型也答对了，包括两个无法回答的场景里的诚实拒答，以及 Stack Overflow 陷阱。每组只有 1 个样本，结论只能看方向，不是定论；下一步是用 `--repeat 3` 重跑。这次运行还暴露了一个任何离线检查都发现不了的真实缺陷：GS-E5 中有 skill 那组没有执行任何查询、没有引用任何 URL，直接用 skill 的文本作答并声明 `Full`。SKILL.md 的 Gate 8 现在明确写了"skill 本身不是信息来源"。详见 `skills/google-search/scripts/tests/COVERAGE.md` 的 Fifth review pass 一节。
+
 离线回归测试存在方向相反的同一类局限。它现在检查的是取值、结构和作用范围，而不是关键词是否出现，也覆盖了查询语法有效性和输出契约的符合度——但它无法观察模式选择是否正确、列出的查询是否真的执行过、引用的页面是否真的打开过。详见 `skills/google-search/scripts/tests/COVERAGE.md` 的 "What these tests still cannot prove" 一节。
 
 ---

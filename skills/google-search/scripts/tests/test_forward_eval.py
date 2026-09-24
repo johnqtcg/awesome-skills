@@ -13,13 +13,15 @@ import sys
 import pytest
 
 
-def _write_arm(tmp_path, fid, arm, text, skill_read=True):
-    """Write a recorded arm plus the trace sidecar `--grade` requires for a with-skill arm."""
+def _write_arm(tmp_path, fid, arm, text, skill_read=True, denials=(), foreign=()):
+    """Write a recorded arm plus the trace sidecar `--grade` requires for every arm."""
     (tmp_path / f"{fid}.{arm}.md").write_text(text, encoding="utf-8")
     (tmp_path / f"{fid}.{arm}.meta.json").write_text(
         json.dumps({"arm": arm, "tools_used": ["Read", "WebSearch"],
                     "skill_files_opened": ["SKILL.md"] if skill_read else [],
-                    "skill_was_read": skill_read}),
+                    "skill_was_read": skill_read,
+                    "permission_denials": list(denials),
+                    "foreign_skill_access": list(foreign)}),
         encoding="utf-8",
     )
 
@@ -70,6 +72,66 @@ class TestGraderDiscriminates:
             assert "degradation_is_not_full" in E.FIXTURE_CRITERIA[fid]
 
 
+class TestNoVocabularyCriterion:
+    """A criterion the base model can only pass by using this skill's vocabulary is a
+    guaranteed skill win that measures formatting. Found in the first live run (2026-09-24):
+    the without-skill arm refused the WeChat question honestly in plain words and lost
+    `degradation_is_not_full` for not printing "Blocked"."""
+
+    PLAIN_REFUSAL = (
+        "I don't have access to WeChat 公众号 content, so I can't look up this article. "
+        "If you paste the text I can help interpret it."
+    )
+
+    def test_plain_language_refusal_is_not_a_full_verdict(self):
+        assert E.CRITERIA["degradation_is_not_full"](self.PLAIN_REFUSAL)[0]
+
+    def test_offering_no_query_is_not_an_invalid_query(self):
+        assert E.CRITERIA["queries_are_valid"](self.PLAIN_REFUSAL)[0]
+
+    def test_skill_label_vocabulary_is_not_graded(self):
+        assert "labels_key_numbers" not in E.CRITERIA
+
+
+class TestLiveRunFalsePositives:
+    """Excerpts from the first live run (2026-09-24). Each was a correct answer that a
+    criterion scored as wrong; these pin the fix so the grader cannot regress to it."""
+
+    GS_E2_WITH = (
+        "Notes on why this exact syntax and not alternatives:\n"
+        "- `filename:go.mod` and `extension:go` are legacy qualifiers no longer supported in "
+        "code search — `path:` is the current one.\n"
+        "- `stars:` does **not** work here — that's a repository-search qualifier, not code "
+        "search. If you also want to filter by popularity, do it in two steps: shortlist repos "
+        "with `language:go stars:>=500` in repository search first, then scope your code search "
+        "with `org:`/`repo:` to that shortlist.\n"
+    )
+    GS_E6_WITHOUT = (
+        "## Widely used but NOT officially documented\n\n"
+        "These work (or partly work) but Google has never published formal docs for them:\n"
+        "- `intitle:` / `allintitle:`\n- `inurl:` / `allinurl:`\n- `intext:` / `allintext:`\n"
+    )
+    GS_E6_WITH = (
+        "**Undocumented but generally still working (Tier B):**\n"
+        "`OR` (must be uppercase), `intitle:`, `allintitle:`, `intext:`, `inurl:`, `*` wildcard. "
+        "These aren't on Google's help page but are widely reported as functional.\n"
+    )
+
+    def test_a_dot_inside_a_filename_does_not_end_the_clause(self):
+        assert E.CRITERIA["no_filename_qualifier"](self.GS_E2_WITH)[0]
+
+    def test_a_repository_search_with_stars_is_not_a_code_search(self):
+        assert E.CRITERIA["no_stars_in_code_search"](self.GS_E2_WITH)[0]
+
+    def test_a_still_mixed_query_is_still_caught(self):
+        assert not E.CRITERIA["no_stars_in_code_search"](
+            "Use `path:go.mod stars:>100 \"go-redis\"` to get popular projects.")[0]
+
+    @pytest.mark.parametrize("text", [GS_E6_WITHOUT, GS_E6_WITH])
+    def test_a_caveat_in_the_heading_covers_its_list(self, text):
+        assert E.CRITERIA["marks_undocumented_as_such"](text)[0]
+
+
 class TestFixtures:
     def test_every_fixture_with_criteria_has_a_file(self):
         ids = {f["id"] for f in E.fixtures()}
@@ -106,9 +168,17 @@ class TestArmsAreComparable:
         skill the second arm cannot cite a URL or check a qualifier at all, so the delta was
         guaranteed and meaningless."""
         assert '"--tools", ""' not in self.SRC, "one arm is being denied tools"
-        assert 'if not with_skill:' not in self.SRC, (
+        body = self.SRC.split("def run_arm(")[1].split("\ndef ")[0]
+        assert 'if not with_skill:' not in body, (
             "no branch may vary the command by arm except the prompt"
         )
+
+    def test_granted_tools_are_pre_approved(self):
+        """`--tools` makes a tool available; under `dontAsk` it is still denied unless it is
+        also pre-approved. Measured 2026-09-24: without `--allowedTools`, every WebSearch and
+        WebFetch call in both arms came back "Permission to use WebSearch has been denied
+        because Claude Code is running in don't ask mode"."""
+        assert self.SRC.count('"--allowedTools", ARM_TOOLS') == 1
 
     def test_tool_grant_is_a_single_shared_constant(self):
         assert "ARM_TOOLS" in self.SRC
@@ -142,7 +212,94 @@ class TestArmsAreComparable:
     def test_without_skill_arm_is_never_told_the_path(self):
         body = self.SRC.split("def run_arm(")[1].split("\ndef ")[0]
         pointer_block = body.split("if with_skill:")[1].split("# --max-turns")[0]
-        assert "SKILL_DIR" in pointer_block, "the skill path must only appear in the with arm"
+        assert "{skill}" in pointer_block, "the skill path must only appear in the with arm"
+        assert "SKILL_DIR" not in body, (
+            "the arm must be pointed at the staged copy, not the package that holds the "
+            "fixtures' ground truth"
+        )
+
+
+class TestArmIsolation:
+    def test_with_arm_gets_instructions_not_the_grader(self, tmp_path):
+        cwd, skill = E.stage_arm_dir(tmp_path, True)
+        assert (skill / "SKILL.md").is_file()
+        assert (skill / "references" / "query-patterns.md").is_file()
+        assert not (skill / "scripts").exists(), "staged copy exposes the eval fixtures"
+
+    def test_without_arm_gets_an_empty_directory(self, tmp_path):
+        cwd, skill = E.stage_arm_dir(tmp_path, False)
+        assert skill is None and not any(cwd.iterdir())
+
+    def test_every_call_gets_a_fresh_directory(self, tmp_path):
+        a, _ = E.stage_arm_dir(tmp_path, False)
+        b, _ = E.stage_arm_dir(tmp_path, False)
+        assert a != b
+
+    def test_arm_directory_inside_the_repository_is_refused(self):
+        with pytest.raises(SystemExit):
+            E.stage_arm_dir(E.SKILL_DIR, False)
+
+
+def _stream(*events):
+    return "\n".join(json.dumps(e) for e in events)
+
+
+def _read_call(cid, path):
+    return {"type": "assistant", "message": {"content": [
+        {"type": "tool_use", "id": cid, "name": "Read", "input": {"file_path": path}}]}}
+
+
+def _result(cid, is_error):
+    return {"type": "user", "message": {"content": [
+        {"type": "tool_result", "tool_use_id": cid, "is_error": is_error, "content": "x"}]}}
+
+
+class TestTraceVerification:
+    SKILL = pathlib.Path("/tmp/gs-eval-x/google-search-skill")
+
+    def test_a_successful_read_counts(self):
+        raw = _stream(_read_call("a", f"{self.SKILL}/SKILL.md"), _result("a", False),
+                      {"type": "result", "result": "answer"})
+        _, meta = E.parse_stream(raw, self.SKILL)
+        assert meta["skill_was_read"] is True
+
+    def test_a_failed_read_does_not_count(self):
+        """The earlier trace check matched the path in the tool *call*, so a denied read of
+        SKILL.md still credited the answer to the skill."""
+        raw = _stream(_read_call("a", f"{self.SKILL}/SKILL.md"), _result("a", True),
+                      {"type": "result", "result": "answer"})
+        _, meta = E.parse_stream(raw, self.SKILL)
+        assert meta["skill_was_read"] is False
+
+    def test_permission_denials_are_recorded(self):
+        raw = _stream({"type": "result", "result": "answer",
+                       "permission_denials": [{"tool_name": "WebSearch"}]})
+        _, meta = E.parse_stream(raw, None)
+        assert meta["permission_denials"] == ["WebSearch"]
+
+    def test_without_arm_reading_a_global_copy_is_flagged(self):
+        raw = _stream(_read_call("a", "/Users/u/.claude/skills/google-search/SKILL.md"),
+                      _result("a", False), {"type": "result", "result": "answer"})
+        _, meta = E.parse_stream(raw, None)
+        assert meta["foreign_skill_access"]
+
+    def test_with_arm_relative_glob_of_its_own_copy_is_not_foreign(self):
+        """False positive from the first live run (2026-09-24, GS-E5)."""
+        assert not E.is_foreign_skill_access(
+            '{"pattern": "google-search-skill/references/*.md"}', with_skill=True)
+
+    @pytest.mark.parametrize("payload", [
+        '{"file_path": "/Users/u/.claude/skills/google-search/SKILL.md"}',
+        '{"path": "/repo/skills/google-search/scripts/tests/eval"}',
+    ])
+    def test_other_copies_are_foreign_to_both_arms(self, payload):
+        assert E.is_foreign_skill_access(payload, with_skill=True)
+        assert E.is_foreign_skill_access(payload, with_skill=False)
+
+    def test_string_message_does_not_crash_the_parser(self):
+        raw = _stream({"type": "system", "message": "init"}, {"type": "result", "result": "a"})
+        text, _ = E.parse_stream(raw, None)
+        assert text == "a"
 
 
 class TestRepeatAndOrder:
@@ -233,6 +390,21 @@ class TestHarnessSafety:
         for fx in E.fixtures():
             (tmp_path / f"{fx['id']}.with.md").write_text(E.GOOD[fx["id"]], encoding="utf-8")
             _write_arm(tmp_path, fx["id"], "without", E.BAD[fx["id"]])
+        assert E.grade_dir(tmp_path) == 3
+
+    @pytest.mark.parametrize("arm", ["with", "without"])
+    def test_grade_dir_refuses_a_run_where_tools_were_denied(self, tmp_path, arm):
+        for fx in E.fixtures():
+            for a in ("with", "without"):
+                _write_arm(tmp_path, fx["id"], a, E.GOOD[fx["id"]],
+                           denials=["WebSearch"] if a == arm else ())
+        assert E.grade_dir(tmp_path) == 3
+
+    def test_grade_dir_refuses_a_contaminated_without_arm(self, tmp_path):
+        for fx in E.fixtures():
+            _write_arm(tmp_path, fx["id"], "with", E.GOOD[fx["id"]])
+            _write_arm(tmp_path, fx["id"], "without", E.BAD[fx["id"]],
+                       foreign=["~/.claude/skills/google-search/SKILL.md"])
         assert E.grade_dir(tmp_path) == 3
 
     def test_grade_dir_scores_recorded_answers(self, tmp_path):

@@ -11,7 +11,7 @@ Google is the default, but significant Chinese-language content lives in walled 
 | Zhihu deep answers | Partially indexed by Google | `site:zhihu.com` on Google, or search Zhihu directly |
 | Xiaohongshu (小红书) | Mostly app-only, limited web index | Search within the app, or `site:xiaohongshu.com` |
 | Government notices (政务) | gov.cn domains | `site:gov.cn` on Google or Baidu |
-| Baidu Netdisk resources | Baidu Pan | Use specialized netdisk search engines |
+| Baidu Netdisk resources | Baidu Pan | Only for material the owner shares openly (e.g. an official download link). Netdisk search engines mostly index pirated books and courses — do not route users to them |
 
 ## Language Switching Strategy
 
@@ -76,7 +76,7 @@ These require searching on the platform directly, not via Google:
 | Xiaohongshu (小红书) | User experience reports, product comparisons | Search within the app |
 | Douyin (抖音) | Video tutorials, visual demonstrations | Search within the app |
 | Baidu Tieba (百度贴吧) | Niche community discussions | Search on tieba.baidu.com |
-| Baidu Netdisk (百度网盘) | Shared file resources | Use specialized netdisk search engines |
+| Baidu Netdisk (百度网盘) | Shared file resources | Follow a link the publisher itself posts; do not use netdisk search engines for copyrighted material |
 
 Tactics:
 - Always try Google first with `site:` constraints — some Chinese platform content is partially indexed
@@ -96,23 +96,33 @@ Add these `-site:` exclusions when Chinese search results are dominated by repos
 -site:php.cn
 -site:jb51.net
 -site:w3cschool.cn
--site:itmag.cn -site:itcoder.net
 -site:codenong.com
--site:cxybb.com
 -site:haicoder.net
 -site:codeleading.com
--site:programmerall.com
 -site:shuzhiduo.com
 -site:icode9.com
 ```
 
+Every host above was confirmed to exist on 2026-09-24. An exclusion for a domain that no longer
+resolves costs query length and filters nothing, so hosts that could not be confirmed were
+dropped rather than kept "just in case".
+
+`-site:csdn.net` is a default for repost-dominated results, not a verdict on every CSDN page —
+some original engineering posts live there. Lift it when a query is about a problem whose best
+write-up you already know is on CSDN.
+
 ### Quick Exclusion Template
 
-For technical Chinese searches, start with this base:
+For technical Chinese searches, use one of two shapes — not both in one query. Once the query
+names the sites it allows, excluding other sites changes nothing:
 
 ```
-"关键词" -site:csdn.net -site:php.cn -site:jb51.net -site:w3cschool.cn (site:zhihu.com OR site:juejin.cn OR site:segmentfault.com)
+"关键词" (site:zhihu.com OR site:juejin.cn OR site:segmentfault.com)
+"关键词" -site:csdn.net -site:php.cn -site:jb51.net -site:w3cschool.cn
 ```
+
+Allow-list first when you know which communities are credible for the topic; exclude when you do
+not, so unknown good sources can still surface.
 
 ### Content Farm Recognition Signs
 

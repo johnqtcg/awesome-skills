@@ -32,8 +32,8 @@ Maximum: 8 queries before stopping. If 8 queries do not produce a satisfactory a
 
 Stop searching and report what you have when:
 
-- A strong primary source directly answers the question
-- Two independent sources agree on the key facts
+- The Gate 3 evidence chain for the question is satisfied (for a single factual claim, one
+  official or primary source that directly answers it is the whole chain)
 - The budget is exhausted without direct evidence
 - The information does not appear to exist publicly
 
@@ -53,23 +53,15 @@ Recommend escalation beyond Google search when:
 
 ## Degradation Protocol
 
-When search results are insufficient, degrade gracefully instead of guessing:
+The Full / Partial / Blocked levels are defined in exactly one place:
+SKILL.md § Honest Degradation, including the decision tree that says which question to ask first. They are not
+restated here: a second definition drifts, and one strong source is not a Full verdict when the
+evidence chain has two or three links.
 
-### Full Mode
-Strong primary source directly answers the question. Provide direct conclusion with full evidence, confidence labels, and reusable queries.
+What this file adds is the hand-off when you stop at **Blocked**:
 
-### Partial Mode
-Only derivative or stale sources available. Provide:
-- Qualified answer with explicit caveats
-- What remains uncertain and why
-- Specific next search strategy to resolve gaps
-- Lower confidence labels
-
-### Blocked Mode
-No relevant results after budget exhaustion, or content behind paywall/walled garden. Provide:
-- Explicit statement of what was not found
-- Which platforms or tools to try next (e.g., "search directly on WeChat for 公众号 articles")
-- Whether AI synthesis tools (Perplexity, Deep Research) would be more appropriate
-- The queries attempted, so the user can reuse or modify them
+- The queries you attempted, so the user can reuse or modify them
+- Which platform or tool to try next (e.g., "search directly on WeChat for 公众号 articles")
+- Whether an AI synthesis tool (Perplexity, Deep Research) would be the better next step
 
 **Never fabricate content to fill gaps. Transparency about limitations is more valuable than false completeness.**

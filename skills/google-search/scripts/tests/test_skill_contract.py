@@ -282,6 +282,13 @@ class TestOutputContract:
                 f"field {field} is not listed as MUST in the Quick shape rule"
             )
 
+    def test_skill_is_not_a_source(self):
+        """Found by the first live eval: the with-skill arm answered GS-E5 from the skill's own
+        reference text, ran no query, cited no URL, and still declared Full."""
+        gate8 = SKILL_TEXT.split("### 8) Execution Integrity Gate")[1].split("\n## ")[0]
+        assert "This skill is not a source" in gate8
+        assert re.search(r"at\s+least\s+one\s+query", gate8)
+
     def test_reusable_queries_row_requires_marking_unrun_queries(self):
         row = next((l for l in SKILL_TEXT.split("\n") if "**Reusable queries**" in l), "")
         assert "not run" in row, (
@@ -392,9 +399,12 @@ class TestAISearchTermination:
     def content(self):
         return _read(os.path.join(REFS_DIR, "ai-search-and-termination.md"))
 
-    def test_degradation_protocol(self, content):
-        for level in ["Full Mode", "Partial Mode", "Blocked Mode"]:
-            assert level in content, f"Missing degradation level: {level}"
+    def test_degradation_protocol_defers_to_skill_md(self, content):
+        """This test used to require `Full Mode` / `Partial Mode` / `Blocked Mode` here —
+        it pinned the second, contradicting definition of the levels in place. The levels
+        live in SKILL.md; this file only adds the Blocked hand-off."""
+        assert "SKILL.md § Honest Degradation" in content
+        assert not re.search(r"^#+\s*(?:Full|Partial|Blocked) Mode", content, re.M)
 
     def test_search_budget(self, content):
         assert "8 queries" in content, "Must specify max query budget"

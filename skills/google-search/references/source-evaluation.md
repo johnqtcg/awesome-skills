@@ -30,6 +30,9 @@ Reject or down-rank sources that:
 - Copy language from another source without adding evidence
 - Use sensational summaries instead of primary facts
 - Conflict with a stronger source and cannot explain why
+- Sit on an authoritative host but are not that institution's publication. Compromised `.gov`
+  and `.edu` subdomains host keyword-stuffed spam PDFs (see `query-patterns.md` § Reports,
+  PDFs, and Research); the tier belongs to the publisher, not to the domain suffix
 
 ## Cross-Checking Rules
 

@@ -190,6 +190,27 @@ cd skills/google-search && python3 scripts/eval_forward.py --run --model sonnet 
 
 Until that runs, no number in this report describes the current skill's behaviour.
 
+**Update 2026-09-24 — the first live run, and what it took to make it valid.** The harness as
+described above could not have measured anything: under `--permission-mode dontAsk` without
+`--allowedTools`, every WebSearch and WebFetch call in *both* arms was denied, so the comparison
+would have been between two arms that could not search. That, three isolation defects (a
+path-in-a-tool-call counted as "skill read"; the with-skill arm could reach the fixtures'
+ground truth; a global `~/.claude/skills/google-search` could leak into the without-skill arm)
+and three format-only criteria were fixed first. The run then used Sonnet for both arms, one
+sample per arm, eight scenarios (two added: GS-E7, a source the environment cannot open, and
+GS-E8, a fact the skill's text does not contain).
+
+Result after also fixing three grader false positives that the run exposed: **2 wins, 0 losses,
+1 both-fail, 25 uninformative of 28 criterion-arms**. The wins are that the with-skill arm cited
+a source on GS-E1 and stated that `after:` filters on last-updated time on GS-E5 — and the
+second is a fact the skill's own references contain. On every other criterion the base model
+already answered correctly, including honest refusals on the two unanswerable scenarios and the
+Stack Overflow trap. One sample per arm is directional, not a result; `--repeat 3` is the next
+step. The run also surfaced a real skill defect no offline check could see: on GS-E5 the
+with-skill arm ran no query, cited no URL, answered from the skill's text and declared `Full`.
+SKILL.md Gate 8 now states that the skill is not a source. Details:
+`skills/google-search/scripts/tests/COVERAGE.md` § Fifth review pass.
+
 Offline regression tests have the mirror-image limitation. They now check values, structure, and scope instead of keyword presence, and they cover query-syntax validity and output-contract conformance — but they cannot observe mode selection, whether a listed query was executed, or whether a cited page was opened. See `skills/google-search/scripts/tests/COVERAGE.md` § "What these tests still cannot prove".
 
 ---

@@ -14,15 +14,16 @@ User request: *"Go 语言里 sync.Pool 的对象会不会被 GC 回收？"*
 objects, so an entry survives one GC and is collected on the next one if nobody retrieved it.
 Page opened: https://go.dev/src/sync/pool.go
 
-**Output Contract**:
+**Output** — Quick mode uses the four-line shape from SKILL.md § Output Contract: no table, no
+per-field headings, and every MUST field still present.
 
-| # | Field | Value |
-|---|-------|-------|
-| 1 | Execution mode | Quick |
-| 2 | Degradation level | Full |
-| 3 | Conclusion | Yes, `sync.Pool` objects are collected by GC. Since Go 1.13, Pool uses a victim cache — objects survive one GC cycle, then are fully collected if not retrieved. |
-| 7 | Key numbers | Victim cache survives 1 GC cycle (`High`, `Official`) |
-| 8 | Reusable queries | `sync.Pool GC behavior site:go.dev`, `Go sync.Pool garbage collection` |
+Quick · Full
+
+Yes, `sync.Pool` objects are collected by GC. Since Go 1.13 a victim cache keeps them for one extra cycle, so an unretrieved object is gone after the second GC.
+
+Key numbers: victim cache survives 1 GC cycle (`High`, `Official`) · source: https://go.dev/src/sync/pool.go
+
+Reusable queries: `sync.Pool GC behavior site:go.dev`, `Go sync.Pool garbage collection`
 
 A `Full` verdict has to name the page it rests on. "go.dev says so" is not traceable — the URL is
 what lets the user check the claim, and it is the difference between an opened source and a search

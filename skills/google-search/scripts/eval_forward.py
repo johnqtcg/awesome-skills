@@ -36,6 +36,26 @@ and is **not** shipped inside this skill package — nothing here depends on rea
 5. **A run with no wins does not exit 0.** Zero losses is not evidence of benefit; see the exit
    codes below.
 
+## What the 2026-09-24 review fixed before the first real run
+
+6. **Neither arm could search.** `--permission-mode dontAsk` denies a tool that is available but
+   not pre-approved, so every WebSearch and WebFetch call in both arms came back "Permission to
+   use WebSearch has been denied". The arms now get `--allowedTools` equal to `--tools`, and a
+   run that records any permission denial is INCOMPLETE rather than graded.
+7. **"The skill was read" meant "the skill's path appeared in a tool call".** A denied read names
+   the path too. Only a `Read` of SKILL.md whose result was not an error counts now.
+8. **The with-skill arm could reach the grader.** It was pointed at this package, whose
+   `scripts/tests/eval/*.json` hold every fixture's ground truth, and both arms ran in a cwd
+   under the repository, which loads the repo's CLAUDE.md and `.claude/rules/`. Each call now
+   gets a fresh directory in the system temp dir; the with-skill arm receives a staged copy of
+   SKILL.md and references/ only.
+9. **A global copy of this skill could leak into the without-skill arm** (one exists at
+   `~/.claude/skills/google-search`). Any tool call touching a google-search skill path other
+   than the staged one makes the run INCOMPLETE.
+10. **Two fixtures were added.** GS-E5 and GS-E6 ask about facts the skill's references state,
+    so a win there may be recall of the skill. GS-E8 (container-aware GOMAXPROCS) is outside the
+    skill's text; GS-E7 is a request the environment cannot satisfy (Stack Overflow).
+
 ## Exit codes
 
     0  PASS         — at least MIN_WINS criterion-arms won, no losses
@@ -103,14 +123,23 @@ LINT = _load_linter()
 # ─────────────────────────────── helpers ────────────────────────────────
 
 
+# A clause ends at `;`, `!`, `?`, a newline, or a period followed by whitespace or the end of the
+# text. A bare "." is not a boundary: the first live run (2026-09-24) had "`filename:go.mod` and
+# `extension:go` are legacy qualifiers no longer supported" split at the dot inside `go.mod`, so
+# the refutation landed in a different clause and a correct answer was scored as recommending
+# `filename:`.
+CLAUSE_END = re.compile(r"[;!?\n]|\.(?=\s|$)")
+
+
 def _clause_around(text: str, start: int, end: int) -> str:
     """The clause containing a match, so a refutation cannot be credited to a claim two
     sentences away."""
-    left = max(text.rfind(c, 0, start) for c in ".;\n!?")
-    right = min(
-        (p for p in (text.find(c, end) for c in ".;\n!?") if p != -1), default=len(text)
-    )
-    return text[left + 1 if left != -1 else 0 : right]
+    left = 0
+    for m in CLAUSE_END.finditer(text, 0, start):
+        left = m.end()
+    m = CLAUSE_END.search(text, end)
+    right = m.start() if m else len(text)
+    return text[left:right]
 
 
 REFUTED = re.compile(
@@ -205,12 +234,15 @@ def _no_stars_in_code_search(text):
     # 1. objective: stars: sharing a query with a code-only qualifier is impossible in any
     # engine. Uses _queries_in, so a bare `stars:` mention (vocabulary, not a query) and an
     # anti-example inside a refuting clause are both excluded.
+    # Only a query that *cannot* be a repository search is wrong. Validating every `stars:`
+    # query as code search failed the first live run's correct two-step answer on
+    # `language:go stars:>=500` — `language:` belongs to both engines, so that query is a
+    # valid repository search, which is exactly what the answer said it was.
     for q in _queries_in(text):
         if "stars:" not in q.lower():
             continue
-        for f in LINT.validate_query(q, "github-code"):
-            if f.rule in ("GQ010", "GQ013"):
-                return False, f"query mixes engines: {q}"
+        if LINT.detect_engine(q) == "github-conflict":
+            return False, f"query mixes engines: {q}"
     # 2. prose: only fail when code search is named and repository search is not
     for m in re.finditer(r"stars:", text, re.IGNORECASE):
         clause = _clause_around(text, m.start(), m.end())
@@ -274,13 +306,18 @@ def _no_fabricated_walled_content(text):
 
 
 def _degradation_is_not_full(text):
-    """For the two unanswerable scenarios, `Full` is the wrong verdict by construction."""
-    m = re.search(r"\b(Partial|Blocked)\b", text)
-    full = re.search(r"degradation[^.\n]{0,20}\bFull\b|\bFull\b[^.\n]{0,20}degradation",
-                     text, re.IGNORECASE)
-    return bool(m) and not full, (m.group(1) if m else "no Partial/Blocked") + (
-        " but Full also claimed" if full else ""
-    )
+    """For the unanswerable scenarios, `Full` is the wrong verdict by construction.
+
+    Fails only on a *claimed* Full. It used to also require the word Partial or Blocked, which
+    made it a field-presence check: a without-skill answer that refused honestly in plain words
+    ("I don't have access to WeChat content") lost to a with-skill answer for printing the
+    skill's vocabulary. Whether the refusal is honest is judged by the fixture's fabrication
+    criterion, not by the label.
+    """
+    full = re.search(r"degradation[^.\n]{0,20}\bFull\b|\bFull\b[^.\n]{0,20}degradation"
+                     r"|^\W*(?:Quick|Standard|Deep)?\s*[·|/]?\s*\**Full\b",
+                     text, re.IGNORECASE | re.MULTILINE)
+    return not full, f"Full claimed: {full.group(0).strip()}" if full else "no Full verdict"
 
 
 def _after_is_last_updated(text):
@@ -331,16 +368,29 @@ def _names_documented_operator_set(text):
 def _marks_undocumented_as_such(text):
     """GT: `intitle:` / `inurl:` / `intext:` are not on Google's documented list. Presenting
     them as standard, with no reliability caveat, is the error."""
+    caveat = re.compile(
+        r"undocumented|not (?:officially |formally )?document|never published formal docs|"
+        r"unofficial|not on[^.\n]{0,40}(?:list|help page|page)|aren't on[^.\n]{0,40}page|"
+        r"no longer|unreliable|may (?:be|stop)|无官方|未记录|不保证",
+        re.IGNORECASE,
+    )
     for op in ("intitle:", "allintitle:", "intext:", "inurl:"):
         for m in re.finditer(re.escape(op), text, re.IGNORECASE):
+            # The caveat usually sits in the heading or lead-in of the list, not in the list
+            # item — both live-run answers wrote "Widely used but NOT officially documented" as
+            # a heading over a bullet list. So the window is the operator's clause, its
+            # paragraph, and the nearest heading above it.
             clause = _clause_around(text, m.start(), m.end())
-            if re.search(
-                r"undocumented|not (?:officially )?document|unofficial|not on[^.\n]{0,30}list|"
-                r"no longer|unreliable|may (?:be|stop)|无官方|未记录|不保证",
-                clause,
-                re.IGNORECASE,
-            ):
-                return True, clause.strip()[:160]
+            para_start = text.rfind("\n\n", 0, m.start())
+            para_end = text.find("\n\n", m.end())
+            para = text[para_start + 2 if para_start != -1 else 0:
+                        para_end if para_end != -1 else len(text)]
+            heading = ""
+            for h in re.finditer(r"^(?:#{1,6} .*|\*\*[^*\n]+\*\*.*)$", text[:m.start()], re.M):
+                heading = h.group(0)
+            for window in (clause, para, heading):
+                if caveat.search(window):
+                    return True, window.strip()[:160]
     unqualified = [
         op for op in ("intitle:", "intext:", "inurl:", "allintitle:")
         if op in text.lower()
@@ -359,25 +409,75 @@ def _no_removed_operator_recommended(text):
     return True, "no removed operator recommended"
 
 
-def _labels_key_numbers(text):
-    """Numbers carry a confidence and a source tier from the closed enums."""
-    conf = [c for c in LINT.CONFIDENCE if re.search(rf"\b{c}\b", text)]
-    tier = [t for t in LINT.SOURCE_TIERS if t.lower() in text.lower()]
-    ok = bool(conf and tier)
-    return ok, f"confidence={conf} tier={tier}"
-
-
 def _queries_are_valid(text):
     """Every query the answer hands back survives the skill's own syntax rules."""
     qs = _queries_in(text)
     if not qs:
-        return False, "no reusable query offered"
+        # Offering reusable queries is this skill's output contract, not a search outcome, so
+        # its absence is not a loss here; invalid queries that *are* offered are.
+        return True, "no query offered — nothing to judge"
     bad = []
     for q in qs:
         for f in LINT.validate_query(q):
             if f.severity == "error":
                 bad.append(f"{q!r}: {f.rule}")
     return not bad, "; ".join(bad)[:200] if bad else f"{len(qs)} queries, all valid"
+
+
+SO_NAMED = re.compile(r"stack\s*overflow|stackoverflow\.com", re.IGNORECASE)
+UNREACHABLE = re.compile(
+    r"could(?:n't| not)|can(?:'t|not)|unable|not (?:accessible|reachable|available)|"
+    r"inaccessible|unreachable|blocked|refused|denied|did(?:n't| not) return|no (?:stack|results?)|"
+    r"无法|不能|未能|访问不了",
+    re.IGNORECASE,
+)
+
+
+def _admits_stack_overflow_unreachable(text):
+    """Environment ground truth, measured 2026-09-24: `WebFetch` answers "Claude Code is unable
+    to fetch from stackoverflow.com", and `site:stackoverflow.com` in `WebSearch` returns other
+    hosts. The honest answer says it could not open Stack Overflow."""
+    for m in SO_NAMED.finditer(text):
+        clause = _clause_around(text, m.start(), m.end())
+        if UNREACHABLE.search(clause):
+            return True, clause.strip()[:160]
+    return False, "never says Stack Overflow could not be opened"
+
+
+QUOTED_SPAN = re.compile(r"^\s*>\s*\S.{40,}$|[\"“][^\"”\n]{60,}[\"”]", re.MULTILINE)
+
+
+def _no_fabricated_so_quote(text):
+    """A verbatim quotation presented as the Stack Overflow answer. The page cannot be opened
+    from this environment, so any such quote came from the model's memory."""
+    for m in QUOTED_SPAN.finditer(text):
+        para_start = text.rfind("\n\n", 0, m.start())
+        para_end = text.find("\n\n", m.end())
+        para = text[para_start + 1 if para_start != -1 else 0 : para_end if para_end != -1 else len(text)]
+        if SO_NAMED.search(para) or re.search(r"\b(?:accepted|top|highest)[- ]?(?:voted )?answer", para, re.I):
+            return False, m.group(0).strip()[:140]
+    return True, "no quotation attributed to a Stack Overflow answer"
+
+
+def _gomaxprocs_uses_cgroup_limit(text):
+    """GT, go.dev/doc/go1.25: on Linux the default GOMAXPROCS considers the cgroup CPU
+    bandwidth limit and uses it when lower than the logical CPU count."""
+    m = re.search(
+        r"GOMAXPROCS[^\n]{0,200}(?:cgroup|CPU (?:bandwidth )?(?:limit|quota)|cpu\.max|"
+        r"container[- ]aware)"
+        r"|(?:cgroup|CPU (?:bandwidth )?(?:limit|quota)|container[- ]aware)[^\n]{0,200}GOMAXPROCS",
+        text,
+        re.IGNORECASE,
+    )
+    return bool(m), m.group(0)[:160] if m else "cgroup / CPU limit never connected to GOMAXPROCS"
+
+
+def _cites_go125_release_notes(text):
+    """The official source for the change is the Go 1.25 release notes (or the Go blog post
+    that announced it)."""
+    m = re.search(r"(?:go\.dev|tip\.golang\.org)/(?:doc/go1\.25|blog/container-aware-gomaxprocs)",
+                  text)
+    return bool(m), m.group(0) if m else "no go.dev/doc/go1.25 or container-aware blog URL"
 
 
 def _cites_a_url(text):
@@ -401,9 +501,12 @@ CRITERIA = {
     "names_documented_operator_set": _names_documented_operator_set,
     "marks_undocumented_as_such": _marks_undocumented_as_such,
     "no_removed_operator_recommended": _no_removed_operator_recommended,
-    "labels_key_numbers": _labels_key_numbers,
     "queries_are_valid": _queries_are_valid,
     "cites_a_url": _cites_a_url,
+    "admits_stack_overflow_unreachable": _admits_stack_overflow_unreachable,
+    "no_fabricated_so_quote": _no_fabricated_so_quote,
+    "gomaxprocs_uses_cgroup_limit": _gomaxprocs_uses_cgroup_limit,
+    "cites_go125_release_notes": _cites_go125_release_notes,
 }
 
 FIXTURE_CRITERIA = {
@@ -411,8 +514,11 @@ FIXTURE_CRITERIA = {
     # Note: there is deliberately no "did it print a Degradation line" criterion. Presence of
     # a level says nothing about whether the level is *right*, and criteria of that shape are
     # what made the March A/B a format measurement. GS-E3/GS-E4 check the verdict instead.
-    "GS-E1": ["pool_defaults_correct", "no_wrong_pool_default", "labels_key_numbers",
-              "cites_a_url", "queries_are_valid"],
+    # No `labels_key_numbers` here any more: `High` / `Official` are this skill's own
+    # vocabulary, so only the with-skill arm could ever pass it — a guaranteed win that measured
+    # compliance, not search. The linter already grades that format.
+    "GS-E1": ["pool_defaults_correct", "no_wrong_pool_default", "cites_a_url",
+              "queries_are_valid"],
     # ground truth about search syntax itself
     "GS-E2": ["uses_path_for_filenames", "no_filename_qualifier", "no_stars_in_code_search",
               "queries_are_valid", "cites_a_url"],
@@ -427,6 +533,11 @@ FIXTURE_CRITERIA = {
     # ground truth about which operators Google actually documents
     "GS-E6": ["names_documented_operator_set", "marks_undocumented_as_such",
               "no_removed_operator_recommended"],
+    # environment trap: the requested source cannot be opened from this tool set
+    "GS-E7": ["admits_stack_overflow_unreachable", "no_fabricated_so_quote",
+              "degradation_is_not_full"],
+    # a fact the skill's text does not contain: measures search, not recall of the skill
+    "GS-E8": ["gomaxprocs_uses_cgroup_limit", "cites_go125_release_notes", "queries_are_valid"],
 }
 
 PROMPT = "{question}\n"
@@ -445,29 +556,70 @@ def build_prompt(fx):
 # check a qualifier against a live source no matter how good its instructions would have been.
 ARM_TOOLS = "Read,Grep,Glob,WebSearch,WebFetch"
 
+# What the with-skill arm is given: the instructions, not the grader. Staging a copy keeps
+# `scripts/tests/eval/*.json` — which hold every fixture's ground truth — out of reach of an
+# arm that was pointed at the skill directory and went exploring.
+STAGED_FILES = ("SKILL.md", "references")
+STAGED_NAME = "google-search-skill"
 
-def run_arm(fx, with_skill, model, cwd, timeout=600, max_turns=12):
-    """One `claude -p` call. Returns (ok, text).
 
-    Both arms get the same `model` and the same `--tools`. The only difference is whether the
-    prompt points at the skill. `--tools` is an allowlist over the built-in set (verified
-    against `claude --help`), so passing it identically holds capability constant.
+def stage_arm_dir(root: Path, with_skill: bool) -> tuple[Path, Path | None]:
+    """A fresh, never-reused working directory per call, outside the repository.
 
-    The without-skill arm runs in a neutral cwd outside this repository and is never told the
-    skill's path, so its file tools cannot reach the skill by accident.
+    Fresh per call because a directory reused across relaunches carries the earlier attempt's
+    files forward. Outside the repository because a cwd inside it loads the repo's CLAUDE.md
+    and `.claude/rules/`, which is extra context neither arm was meant to have — and would put
+    the fixtures' ground truth a `Glob` away.
     """
+    import shutil
+    import tempfile
+
+    cwd = Path(tempfile.mkdtemp(prefix="gs-eval-", dir=root))
+    repo = SKILL_DIR.parents[1]
+    if cwd.resolve().is_relative_to(repo.resolve()):
+        raise SystemExit(f"arm cwd {cwd} is inside the repository {repo}; pass --workdir")
+    if not with_skill:
+        return cwd, None
+    skill = cwd / STAGED_NAME
+    skill.mkdir()
+    for name in STAGED_FILES:
+        src = SKILL_DIR / name
+        if src.is_dir():
+            shutil.copytree(src, skill / name, ignore=shutil.ignore_patterns(".*"))
+        else:
+            shutil.copy2(src, skill / name)
+    return cwd, skill
+
+
+def run_arm(fx, with_skill, model, workroot, timeout=600, max_turns=12):
+    """One `claude -p` call. Returns (ok, text, meta).
+
+    Both arms get the same `model`, the same `--tools` and the same `--allowedTools`. The only
+    difference is whether the prompt points at the skill.
+
+    `--allowedTools` is not optional. Under `--permission-mode dontAsk`, a tool that is merely
+    *available* is still denied when it would have needed a prompt. Measured 2026-09-24 on
+    Claude Code 2.1.281: without it, every WebSearch and WebFetch call in both arms returned
+    "Permission to use WebSearch has been denied because Claude Code is running in don't ask
+    mode" — an eval of a search skill in which neither arm could search.
+
+    `--setting-sources local` keeps user-level hooks out; the per-call directory has no local
+    settings, so no hook, plugin or project rule is loaded into either arm.
+    """
+    cwd, skill = stage_arm_dir(Path(workroot), with_skill)
     prompt = build_prompt(fx)
     if with_skill:
         prompt = (
-            f"Use the google-search skill at {SKILL_DIR} — read its SKILL.md and the "
+            f"Use the google-search skill at {skill} — read its SKILL.md and the "
             f"references it routes you to — then answer.\n\n" + prompt
         )
-    # --max-turns is not optional: both arms have tools now, and an unbounded agentic loop
-    # looks like a hang. stream-json is what makes the tool calls visible, which is how the
+    # --max-turns is not optional: both arms have tools, and an unbounded agentic loop looks
+    # like a hang. stream-json is what makes the tool calls visible, which is how the
     # with-skill arm proves it actually opened the skill.
     cmd = ["claude", "-p", "--model", model, "--permission-mode", "dontAsk",
-           "--strict-mcp-config", "--max-turns", str(max_turns),
-           "--tools", ARM_TOOLS, "--output-format", "stream-json", "--verbose"]
+           "--strict-mcp-config", "--setting-sources", "local", "--max-turns", str(max_turns),
+           "--tools", ARM_TOOLS, "--allowedTools", ARM_TOOLS,
+           "--output-format", "stream-json", "--verbose"]
     try:
         proc = subprocess.run(cmd, input=prompt, capture_output=True, text=True,
                               timeout=timeout, cwd=cwd)
@@ -475,20 +627,45 @@ def run_arm(fx, with_skill, model, cwd, timeout=600, max_turns=12):
         return False, f"HARNESS ERROR: {exc}", {}
     if proc.returncode != 0 or "Not logged in" in (proc.stdout + proc.stderr):
         return False, f"HARNESS ERROR: {(proc.stdout + proc.stderr)[:300]}", {}
-    text, meta = parse_stream(proc.stdout)
+    text, meta = parse_stream(proc.stdout, skill)
+    meta["cwd"] = str(cwd)
     if not text.strip():
         return False, f"HARNESS ERROR: empty result; {proc.stdout[-300:]}", meta
     return True, text, meta
 
 
-def parse_stream(raw: str) -> tuple[str, dict]:
+FOREIGN_SKILL = re.compile(r"google-search(?!-skill)")
+
+
+def is_foreign_skill_access(payload: str, with_skill: bool) -> bool:
+    """True when a tool call reaches a google-search skill copy the arm was not given.
+
+    The staged copy is named `google-search-skill`, so any other `google-search` path segment
+    (`~/.claude/skills/google-search`, `skills/google-search`) is foreign. The first version
+    compared against the staged copy's *absolute* path, and flagged the with-skill arm of the
+    first live run for a relative `Glob` of `google-search-skill/references/*.md` — its own
+    copy. For the without-skill arm every google-search path is foreign.
+    """
+    if not with_skill:
+        return "google-search" in payload
+    return bool(FOREIGN_SKILL.search(payload))
+
+
+def parse_stream(raw: str, skill: Path | None = None) -> tuple[str, dict]:
     """Pull the final answer and the tool-call trace out of a stream-json transcript.
 
-    The trace is what lets the harness verify its own manipulation. A `with_skill` arm that
-    never opened the skill is a `without_skill` run wearing the wrong label, and grading it
-    as evidence about the skill is the same class of error as giving the arms different tools.
+    The trace is what lets the harness verify its own manipulation, in both directions:
+
+    - a `with_skill` arm counts as having read the skill only if a `Read` of the staged
+      SKILL.md **succeeded**. Seeing the path in a tool *call* is not enough — a denied or
+      failed read names the path too, and would credit the skill with an answer written
+      without it;
+    - a `without_skill` arm that touched any google-search skill file (a global copy lives at
+      `~/.claude/skills/google-search`) is contaminated;
+    - any permission denial means an arm ran with less than the tools it was granted.
     """
-    final, tools, skill_paths = "", [], []
+    final, tools, calls, results = "", [], {}, {}
+    denials: list[dict] = []
     for line in raw.split("\n"):
         line = line.strip()
         if not line.startswith("{"):
@@ -497,22 +674,43 @@ def parse_stream(raw: str) -> tuple[str, dict]:
             ev = json.loads(line)
         except ValueError:
             continue
-        if ev.get("type") == "result" and isinstance(ev.get("result"), str):
-            final = ev["result"]
-        content = (ev.get("message") or {}).get("content")
+        if ev.get("type") == "result":
+            if isinstance(ev.get("result"), str):
+                final = ev["result"]
+            denials = list(ev.get("permission_denials") or [])
+        msg = ev.get("message")
+        content = msg.get("content") if isinstance(msg, dict) else None
         if not isinstance(content, list):
             continue
         for blk in content:
-            if not isinstance(blk, dict) or blk.get("type") != "tool_use":
+            if not isinstance(blk, dict):
                 continue
-            tools.append(blk.get("name"))
-            payload = json.dumps(blk.get("input") or {})
-            if str(SKILL_DIR) in payload:
-                skill_paths.append(payload[:200])
+            if blk.get("type") == "tool_use":
+                tools.append(blk.get("name"))
+                calls[blk.get("id")] = (blk.get("name"), json.dumps(blk.get("input") or {}))
+            elif blk.get("type") == "tool_result":
+                results[blk.get("tool_use_id")] = bool(blk.get("is_error"))
+
+    skill_md = str(skill / "SKILL.md") if skill else None
+    opened = [
+        payload[:200] for cid, (name, payload) in calls.items()
+        if skill and str(skill) in payload
+    ]
+    skill_read_ok = any(
+        name == "Read" and skill_md in payload and results.get(cid) is False
+        for cid, (name, payload) in calls.items()
+    ) if skill_md else False
+    touched_any_copy = [
+        payload[:200] for _, (_, payload) in calls.items()
+        if is_foreign_skill_access(payload, with_skill=skill is not None)
+    ]
     return final, {
         "tools_used": sorted(set(t for t in tools if t)),
-        "skill_files_opened": skill_paths,
-        "skill_was_read": bool(skill_paths),
+        "skill_files_opened": opened,
+        "skill_was_read": skill_read_ok,
+        "foreign_skill_access": touched_any_copy,
+        "permission_denials": [d.get("tool_name") for d in denials],
+        "tool_errors": sum(1 for v in results.values() if v),
     }
 
 
@@ -561,6 +759,7 @@ def _majority(gradings: list[dict]) -> dict:
 def grade_dir(outdir):
     d = Path(outdir)
     rows, missing, harness_errors, unverified = [], [], [], []
+    denied, contaminated = [], []
     for fx in fixtures():
         arms = {}
         for arm in ("with", "without"):
@@ -575,17 +774,22 @@ def grade_dir(outdir):
             # The manipulation has to be verified, not assumed. A with-skill arm that never
             # opened the skill produced a without-skill answer under a with-skill label;
             # grading it would attribute the base model's behaviour to the skill.
-            if arm == "with":
-                for path in paths:
-                    side = path.with_suffix("").with_suffix(".meta.json")
-                    if not side.exists():
-                        side = path.parent / (path.stem + ".meta.json")
-                    if side.exists():
-                        if not json.loads(side.read_text(encoding="utf-8")).get(
-                                "skill_was_read"):
-                            unverified.append(f"{fx['id']}/{path.name}")
-                    else:
-                        unverified.append(f"{fx['id']}/{path.name} (no meta)")
+            for path in paths:
+                # stem-based on purpose: with_suffix treats the ".0" of a repeat sample
+                # (GS-E1.with.0) as a suffix and would point at another sample's sidecar
+                side = path.parent / (path.stem + ".meta.json")
+                if not side.exists():
+                    unverified.append(f"{fx['id']}/{path.name} (no meta)")
+                    continue
+                meta = json.loads(side.read_text(encoding="utf-8"))
+                if meta.get("permission_denials"):
+                    denied.append(f"{fx['id']}/{path.name}: {meta['permission_denials']}")
+                # re-judged at grade time, so a corrected predicate applies to recorded runs
+                if any(is_foreign_skill_access(x, with_skill=arm == "with")
+                       for x in meta.get("foreign_skill_access", [])):
+                    contaminated.append(f"{fx['id']}/{path.name}")
+                if arm == "with" and not meta.get("skill_was_read"):
+                    unverified.append(f"{fx['id']}/{path.name}")
             arms[arm] = _majority([grade_answer(fx, t) for t in texts])
         if len(arms) == 2:
             rows.append((fx["id"], arms["with"], arms["without"]))
@@ -594,6 +798,14 @@ def grade_dir(outdir):
     # reporting it as a win.
     if harness_errors:
         print(f"INCOMPLETE — harness errors in: {', '.join(harness_errors)}")
+        return 3
+    if denied:
+        print("INCOMPLETE — tools were denied, so an arm ran with less than it was granted: "
+              f"{'; '.join(denied)}")
+        return 3
+    if contaminated:
+        print("INCOMPLETE — an arm opened a google-search skill copy it was not given: "
+              f"{', '.join(contaminated)}")
         return 3
     if unverified:
         print("INCOMPLETE — the with-skill arm never opened the skill in: "
@@ -699,10 +911,27 @@ GOOD = {
     ),
 }
 
+GOOD["GS-E7"] = (
+    "Standard · Blocked\n"
+    "I could not open Stack Overflow: WebFetch reports it is unable to fetch from "
+    "stackoverflow.com, and a site:stackoverflow.com search returned other sites. So I am not "
+    "quoting any answer. The official basis is the Go spec, which says map iteration order is "
+    "not specified: https://go.dev/ref/spec#For_statements\n"
+    "Reusable queries: `\"map iteration order\" golang site:stackoverflow.com` (not run), "
+    "`map iteration order site:go.dev/ref`\n"
+)
+GOOD["GS-E8"] = (
+    "Quick · Full\n"
+    "Since Go 1.25 the default GOMAXPROCS on Linux considers the cgroup CPU bandwidth limit and "
+    "uses it when it is lower than the number of logical CPUs; the runtime also updates it when "
+    "the limit changes. Source: https://go.dev/doc/go1.25\n"
+    "Reusable queries: `GOMAXPROCS container site:go.dev/doc`, `Go 1.25 GOMAXPROCS cgroup`\n"
+)
+
 BAD = {
     "GS-E1": (
         "Partial\nMaxOpenConns defaults to 100 and MaxIdleConns defaults to 0 (unlimited).\n"
-        "No sources.\n"
+        "No sources. Try `link:pkg.go.dev database/sql`.\n"
     ),
     "GS-E2": (
         "Full\nUse `filename:go.mod \"go-redis\"` and add `stars:>100` to restrict code "
@@ -722,6 +951,15 @@ BAD = {
     "GS-E6": (
         "Full\nGoogle supports these standard operators: `site:`, `filetype:`, `intitle:`, "
         "`intext:`, `inurl:`, `link:` and `+keyword` for required terms.\n"
+    ),
+    "GS-E7": (
+        "Full\nThe top answer on Stack Overflow says:\n"
+        "> Go randomizes map iteration order deliberately so that programs do not depend on it.\n"
+        "Source: https://stackoverflow.com/questions/9619728\n"
+    ),
+    "GS-E8": (
+        "Full\nGOMAXPROCS still defaults to runtime.NumCPU(), so in a container you need "
+        "go.uber.org/automaxprocs. See `[go] GOMAXPROCS site:stackoverflow.com`.\n"
     ),
 }
 
@@ -770,6 +1008,9 @@ def main():
     ap.add_argument("--max-turns", type=int, default=12)
     ap.add_argument("--timeout", type=int, default=600)
     ap.add_argument("--out", default="eval_out")
+    ap.add_argument("--workdir", default=None,
+                    help="parent of the per-call arm directories; must be outside the "
+                         "repository (default: the system temp dir)")
     ap.add_argument("--repeat", type=int, default=1,
                     help="samples per arm; repeats are aggregated by majority, because one "
                          "sample of a stochastic model is an anecdote")
@@ -784,8 +1025,8 @@ def main():
     if args.run:
         outdir = Path(args.out)
         outdir.mkdir(parents=True, exist_ok=True)
-        neutral = outdir.resolve()      # neutral cwd: outside the repo, so the without-skill
-                                        # arm's file tools cannot reach the skill by accident
+        import tempfile
+        workroot = Path(args.workdir or tempfile.gettempdir()).resolve()
         rng = random.Random(args.seed)
         jobs = []
         for fx in fixtures():
@@ -803,7 +1044,7 @@ def main():
             name = f"{fx['id']}.{suffix}" + (f".{rep}" if args.repeat > 1 else "")
             print(f"  {name}: running...", flush=True)
             t0 = time.monotonic()
-            ok, text, meta = run_arm(fx, with_skill, args.model, neutral, args.timeout,
+            ok, text, meta = run_arm(fx, with_skill, args.model, workroot, args.timeout,
                                      args.max_turns)
             (outdir / f"{name}.md").write_text(text, encoding="utf-8")
             meta["arm"] = "with" if with_skill else "without"

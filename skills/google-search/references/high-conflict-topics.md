@@ -44,7 +44,7 @@ Use for active wars, air campaigns, missile exchanges, insurgencies, and other a
 
 Build a fixed query bundle that always includes:
 
-1. `as of DATE`
+1. `as of <Month D>` — the date in the form the press writes it (see below)
 2. `casualties`
 3. `losses`
 4. `official statement`
@@ -53,23 +53,32 @@ Build a fixed query bundle that always includes:
 
 ### Required query bundle
 
+**Quote the date the way reporting writes it, never as ISO.** A quoted phrase must appear
+verbatim on the page. Wire copy and ministry bulletins write "as of September 1" or "as of 1
+September", and almost never "as of 2026-09-01", so a quoted ISO date excludes the very reports
+you are looking for. Use the month form of the outlet's style, and read the cutoff date off the
+page rather than trusting the query to have enforced it.
+
 Start with at least these four query shapes:
 
-- `"<war or operation name>" casualties losses "as of YYYY-MM-DD"`
-- `"<country or force name>" casualties losses "as of YYYY-MM-DD" "official statement"`
+- `"<war or operation name>" casualties losses "as of <Month D>"`
+- `"<country or force name>" casualties losses "as of <Month D>" "official statement"`
 - `site:official-domain.tld "<country or force name>" casualties losses`
-- `"<country A>" "<country B>" casualties losses "as of YYYY-MM-DD" -site:repost-domain.com -site:low-value-domain.com`
+- `"<country A>" "<country B>" casualties losses "as of <Month D>" -site:repost-domain.com -site:low-value-domain.com`
 
 ### Expansion patterns
 
 Use these when the first pass is weak:
 
-- `("<country A>" OR "<operation name>") casualties "as of YYYY-MM-DD" Reuters`
+- `("<country A>" OR "<operation name>") casualties "as of <Month D>" Reuters`
 - `("<country A>" OR "<country B>") losses "official statement" site:mil.tld`
-- `site:gov.<tld> "<country or city>" casualties "as of YYYY-MM-DD"`
-- `site:redcross.org OR site:who.int OR site:un.org "<country or city>" casualties`
+- `site:gov.<tld> "<country or city>" casualties "as of <Month D>"`
+- `site:icrc.org OR site:reliefweb.int OR site:who.int OR site:un.org "<country or city>" casualties`
+  — `icrc.org` is the International Committee of the Red Cross; `redcross.org` is the American
+  Red Cross, a domestic relief charity, and is the wrong target for a war
 - `site:x.com "<official spokesperson name>" casualties losses`
-- `site:telegram.me OR site:t.me "<official channel name>" casualties losses`
+- `site:t.me "<official channel name>" casualties losses` — channel posts live at
+  `t.me/<channel>/<n>`; `telegram.me` only redirects to the Telegram home page
 
 ### Domain targeting
 

@@ -34,6 +34,7 @@ So the rules here check **values, structure, and scope** rather than vocabulary:
     GQ011  GitHub repository search does not use code-only qualifiers
     GQ012  a GitHub query declares which engine it targets (reported `unknown`, not passed)
     GQ013  no query mixes qualifiers from both GitHub engines
+    GQ014  no `[tag]` in a Google query (Google ignores the brackets)
 
   Output report -- lint_report(text)
     GS001  execution mode declared, and one of Quick / Standard / Deep
@@ -53,6 +54,7 @@ So the rules here check **values, structure, and scope** rather than vocabulary:
     GS015  Standard/Deep state key evidence
     GS016  Deep states source assessment
     GS017  one query does not declare two different engines in two places
+    GS018  a Quick report contains no table (the Quick output shape)
 
   Docs -- lint_docs()
     GD001  no recommended query example uses an invalid qualifier
@@ -62,6 +64,9 @@ So the rules here check **values, structure, and scope** rather than vocabulary:
     GD005  worked-example key numbers use only enum labels
     GD006  mode budgets agree across SKILL.md, query-patterns.md, ai-search-and-termination.md
     GD007  the source-tier enum is enumerated in exactly one file
+    GD008  every `site:` target is on the verified allow-list, with its evidence
+    GD009  degradation levels are defined in SKILL.md only
+    GD010  every recommended Google example is valid Google syntax
 
 Three rules deliberately return `unknown` instead of a pass, because the input does not let
 them decide: GS003 and GS011 need an explicit executed-query list, and GQ012 needs to know
@@ -147,6 +152,60 @@ ENGINE_TAG = re.compile(r"\[(google|github-code|github-repo)\]", re.IGNORECASE)
 
 DATE_RE = re.compile(r"^\d{4}$|^(\d{4})([-/])(\d{1,2})\2(\d{1,2})$")
 OPERATOR_RE = re.compile(r"(?<![\w/.])-?([A-Za-z][\w-]*):")
+# `[go]` filters by tag inside Stack Overflow's own search box; Google drops the brackets and
+# searches the bare word, so in a Google query it only *looks* like a filter.
+BRACKET_TAG = re.compile(r"\[[A-Za-z0-9.+#-]+\]")
+
+# ── `site:` targets (GD008) ─────────────────────────────────────────────────────
+# An allow-list, not a deny-list: every `site:` value the docs use must be here with the
+# evidence that it exists and holds the content the docs send people to. A deny-list only
+# catches the wrong domains someone already noticed; the 2026-09-24 review found five that
+# nobody had (`xinhua.net`, `tax.gov.cn`, `gov.uk/dhsc`, `site:government`, `redcross.org`
+# for war casualties). Adding a domain to the docs therefore means checking it first.
+#
+# curl = `curl https://<host>/` status on 2026-09-24 (403 = exists, bot-blocked).
+# websearch = `WebSearch` with allowed_domains=[host] returned pages on that host, used where
+# the sandbox proxy could not complete a TLS connection (common for .gov.cn hosts).
+VERIFIED_SITES = {
+    **{h: "curl 200" for h in (
+        "go.dev", "github.com", "pkg.go.dev", "juejin.cn", "x.com", "wanfangdata.com.cn",
+        "unicode.org", "studygolang.com", "redis.io", "pubmed.ncbi.nlm.nih.gov",
+        "learnku.com", "kubernetes.io", "kafka.apache.org", "icode9.com", "haicoder.net",
+        "forum.golangbridge.org", "finance.yahoo.com", "docs.docker.com", "reliefweb.int",
+        "go.dev/blog", "go.dev/doc", "go.dev/ref", "go.dev/doc/devel",
+        "github.com/redis/go-redis",
+    )},
+    **{h: "curl 3xx" for h in (
+        "zhihu.com", "ietf.org", "csdn.net", "who.int", "w3cschool.cn", "reuters.com",
+        "php.cn", "jb51.net", "youtube.com", "xinhuanet.com", "news.cn", "xiaohongshu.com",
+        "w3.org", "tiktok.com", "t.me", "quora.com", "pinterest.com", "nih.gov", "irs.gov",
+        "federalregister.gov", "fda.gov", "eastmoney.com", "docs.github.com", "codenong.com",
+        "cnki.net", "cnblogs.com", "caixin.com", "gov.uk", "techempower.com", "icrc.org",
+    )},
+    **{h: "curl 403" for h in (
+        "stackoverflow.com", "dev.mysql.com", "platform.openai.com", "medium.com",
+        "csdnimg.cn", "codeleading.com", "cms.gov", "apnews.com",
+    )},
+    **{h: "websearch allowed_domains" for h in (
+        "gov.cn", "mof.gov.cn", "stats.gov.cn", "chinatax.gov.cn", "nhsa.gov.cn",
+        "nhc.gov.cn", "cninfo.com.cn", "yicai.com", "segmentfault.com", "shuzhiduo.com",
+        "un.org", "gov.au", "europa.eu",
+    )},
+    # a top-level domain, not a host: `.gov` and `.edu` are US registries
+    "gov": "US TLD — never matches gov.uk / gov.cn",
+    "edu": "US TLD",
+}
+# Values that are real but wrong for the use the docs once made of them. They may appear only
+# inside a sentence that refutes them.
+KNOWN_BAD_SITES = {
+    "github.com/issues": "the signed-in dashboard (404 anonymously), never a repo's issues",
+    "gov.uk/dhsc": "a redirect; the department's pages live under /government/",
+}
+SITE_VALUE = re.compile(r"(?<![\w.-])-?site:([^\s`)\"'|,]+)")
+PLACEHOLDER_SITES = {
+    "official-domain.com", "vendor.com", "vendor.com/docs", "domain.com",
+    "publisher-domain.com", "repost-domain.com", "low-value-domain.com",
+}
 
 SNIPPET_AS_FACT = re.compile(
     r"according to (?:the )?search results"
@@ -426,6 +485,18 @@ def validate_query(query: str, engine: str | None = None) -> list[Finding]:
                         where=where,
                     )
                 )
+
+    if engine == "google":
+        tag = BRACKET_TAG.search(ENGINE_TAG.sub(" ", bare))
+        if tag:
+            findings.append(
+                Finding(
+                    "GQ014",
+                    f"`{tag.group(0)}` does not filter by tag in Google, which ignores the "
+                    f"brackets; tag syntax works only in Stack Overflow's own search box",
+                    where=where,
+                )
+            )
 
     if re.search(r"(?:^|\s)\+\w", bare):
         findings.append(
@@ -756,6 +827,14 @@ def lint_report(text: str) -> list[Finding]:
                     f"contributed)",
                 )
             )
+    if mode_name == "Quick" and any(True for _ in table_rows(body)):
+        findings.append(
+            Finding(
+                "GS018",
+                "Quick mode output shape forbids tables: one leading `Quick · <level>` line, "
+                "then the answer, key numbers and reusable queries as lines",
+            )
+        )
     if mode_name == "Deep" and not _field_value(body, "Source assessment").strip():
         findings.append(
             Finding(
@@ -1004,15 +1083,74 @@ def lint_docs(overrides: dict[str, str] | None = None) -> list[Finding]:
             Finding("GD007", f"source-tier enum lives in {enumerators[0]}, "
                              f"expected source-evaluation.md")
         )
+
+    all_docs = [(p.name, read(p.name)) for p in [SKILL_MD, *sorted(REFS_DIR.glob("*.md"))]]
+
+    # GD008 -- every `site:` target is on the verified list. Fenced blocks are included on
+    # purpose: the exclusion templates people copy live inside them.
+    for name, text in all_docs:
+        for sent in sentences(text):
+            for m in SITE_VALUE.finditer(sent):
+                value = m.group(1).rstrip(".;:").lower()
+                if "<" in value or value.endswith(".tld") or value in PLACEHOLDER_SITES:
+                    continue
+                if value in VERIFIED_SITES:
+                    continue
+                if value in KNOWN_BAD_SITES and NEGATION.search(sent):
+                    continue
+                reason = KNOWN_BAD_SITES.get(value, "not on the verified list")
+                findings.append(
+                    Finding("GD008", f"`site:{value}` — {reason}; verify it and add it to "
+                                     f"VERIFIED_SITES with the evidence", where=name)
+                )
+
+    # GD009 -- degradation levels are defined in SKILL.md only. A second definition is how
+    # ai-search-and-termination.md came to define Full as "one strong source answers it",
+    # the exact test SKILL.md's decision tree was written to reject.
+    level = "|".join(DEGRADATION)
+    for name, text in all_docs:
+        if name == "SKILL.md":
+            continue
+        heading = re.search(rf"^#{{1,6}}\s*\**(?:{level})(?:\s+Mode)?\**\s*$", text, re.M)
+        row = next(
+            (c for c in table_rows(text)
+             if c and re.fullmatch(rf"\**(?:{level})\**", c[0]) and len(c) > 1),
+            None,
+        )
+        if heading or row:
+            findings.append(
+                Finding("GD009", "defines a degradation level; point at SKILL.md § Honest "
+                                 "Degradation instead of restating it", where=name)
+            )
+
+    # GD010 -- every recommended Google example is a Google query that does what it says.
+    # Sections written for another engine are removed first, so their syntax is not judged
+    # by Google's rules.
+    blocking = {"GQ001", "GQ002", "GQ003", "GQ004", "GQ005", "GQ007", "GQ008", "GQ014"}
+    for name, text in all_docs:
+        for other_engine in ("GitHub Code Search", "In Stack Overflow's Search Box"):
+            body = section(text, other_engine)
+            if body:
+                text = text.replace(body, "\n")
+        for q in _recommended_examples(text):
+            for f in validate_query(q, "google"):
+                if f.rule not in blocking:
+                    continue
+                if f.rule == "GQ008" and re.search(r"YYYY|<", f.message):
+                    continue      # a date placeholder, not a malformed date
+                findings.append(
+                    Finding("GD010", f"recommended example: {f.rule} {f.message}",
+                            where=f"{name}: {q}")
+                )
     return findings
 
 
 # ── Self-test ───────────────────────────────────────────────────────────────────
 
 ALL_RULES = (
-    [f"GQ{n:03d}" for n in range(1, 14)]
-    + [f"GS{n:03d}" for n in range(1, 18)]
-    + [f"GD{n:03d}" for n in range(1, 8)]
+    [f"GQ{n:03d}" for n in range(1, 15)]
+    + [f"GS{n:03d}" for n in range(1, 19)]
+    + [f"GD{n:03d}" for n in range(1, 11)]
 )
 
 
@@ -1037,6 +1175,7 @@ def self_test() -> int:
     q("GQ012", 'language:go "sync.Pool"')          # valid for both engines, undeclared
     q("GQ012", "language:go errgroup stars:>100")  # guessed engine, intent unknowable
     q("GQ013", 'path:go.mod stars:>100')           # no engine accepts both
+    q("GQ014", "[go] context cancellation site:stackoverflow.com", "google")
 
     reports = {
         "GS001": "Degradation level: Full\nAnswer.\nReusable queries: `a b c`, `d e f`",
@@ -1112,6 +1251,13 @@ def self_test() -> int:
             "Reusable queries: [github-code] `language:go errgroup stars:>=1000`, "
             "`errgroup site:go.dev`"
         ),
+        "GS018": (
+            "Quick · Full\nThe default is 2 idle connections.\n"
+            "Round 1\n- `one two three`\n- `four five six`\n"
+            "| Field | Value |\n|---|---|\n| Degradation | Full |\n"
+            "Source: https://go.dev/x\n"
+            "Reusable queries: `one two three`, `four five six`"
+        ),
         "GS016": (
             "Deep · Partial\nThe three frameworks differ mostly under keep-alive load, "
             "and no benchmark published this year discloses its hardware.\n"
@@ -1150,7 +1296,7 @@ def self_test() -> int:
     covered = {r for r, _, fs in cases for f in fs if f.rule == r}
     # GD rules are exercised by the doc mutations in tests/test_lint_mutations.py, which
     # feed lint_docs() overrides; the self-test only runs them against the live docs.
-    doc_rules = {f"GD{n:03d}" for n in range(1, 8)}
+    doc_rules = {f"GD{n:03d}" for n in range(1, 11)}
     uncovered = sorted(set(ALL_RULES) - covered - doc_rules)
     if uncovered:
         failed.append(f"rules never exercised by self-test: {uncovered}")

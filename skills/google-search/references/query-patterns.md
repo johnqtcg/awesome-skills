@@ -101,6 +101,10 @@ Tactics:
 - Combine `filetype:pdf` with official domains whenever possible
 - Search the exact title in quotes if you already know the document name
 - Compare publication dates and edition numbers
+- A `.gov` or `.edu` host does not make a PDF official. A `filetype:pdf` probe on 2026-09-24
+  returned keyword-stuffed spam PDFs hosted on `sbc.oksenate.gov`, `hgvalladolid.yucatan.gob.mx`
+  and `climber.uml.edu.ni` — compromised subdomains. Check that the document belongs to the
+  site's own publications before ranking it as `Official`
 
 ## Materials and Assets
 
@@ -112,8 +116,9 @@ Patterns:
 - `<asset topic> template filetype:pptx`
 - `<asset topic> png` or `<asset topic> filetype:png`
 - `<asset topic> site:official-domain.com media kit`
-- `<asset topic> imagesize:1920x1080` — Google **Images** only; ignored in web search, and the
-  Tools → Size filter overrides it. Do not rely on it to prove a resolution was available.
+- Size: set it in Google **Images** → Tools → Size. The `imagesize:` operator works only there,
+  is ignored in web search, and is overridden by the Tools filter — do not rely on it to prove a
+  resolution was available.
 
 Tactics:
 
@@ -177,7 +182,7 @@ Patterns:
 Tactics:
 
 - Lead with wire services (Reuters, AP, Bloomberg) for factual reporting, not opinion outlets
-- For China news, add `site:caixin.com` or `site:yicai.com` for business, `site:xinhua.net` for official state media
+- For China news, add `site:caixin.com` or `site:yicai.com` for business, `site:xinhuanet.com` or `site:news.cn` for official state media (Xinhua)
 - For personnel changes, cross-check with the organization's own press releases
 - Always verify the date — many news aggregators repost old articles with today's date
 
@@ -187,7 +192,9 @@ Use for regulations, public notices, legislative changes, and government statist
 
 Patterns:
 
-- `"<policy topic>" site:gov OR site:government` — government domains across countries
+- `"<policy topic>" site:gov` — US government only: `.gov` is a US top-level domain, so it
+  never matches `gov.uk` or `gov.cn`. Name the country's own suffix instead: `site:gov.uk`,
+  `site:gov.cn`, `site:gov.au`, `site:europa.eu`
 - `"<regulation name>" "effective date" filetype:pdf` — regulatory PDF documents
 - `"<统计数据关键词>" site:stats.gov.cn` — China National Bureau of Statistics
 - `"<policy>" "Federal Register" site:federalregister.gov` — US federal regulations
@@ -197,8 +204,8 @@ Tactics:
 
 - Government sites are the primary source for policy — do not rely on news summaries alone
 - Check for PDF attachments — the actual regulation text is usually in a PDF, not the announcement page
-- For healthcare policy: `site:nhsa.gov.cn` (China), `site:cms.gov` (US), `site:gov.uk/dhsc` (UK)
-- For tax/finance: `site:tax.gov.cn`, `site:irs.gov`, `site:mof.gov.cn`
+- For healthcare policy: `site:nhsa.gov.cn` (China), `site:cms.gov` (US), `site:gov.uk "Department of Health and Social Care"` (UK) — not `site:gov.uk/dhsc`: `site:` is a URL prefix, and `/dhsc` is only a redirect, while the department's pages live under `/government/`
+- For tax/finance: `site:chinatax.gov.cn` (State Taxation Administration), `site:irs.gov`, `site:mof.gov.cn`
 
 ## Healthcare and Medical Information
 

@@ -89,6 +89,92 @@ Golden fixtures are scoped JSON:
 `scope` omitted means the whole corpus, which is only appropriate for a claim that really is
 corpus-wide. A `scope` that names a missing file or section is a hard error.
 
+## Fifth review pass, 2026-09-24 — the executing tool, the long tail, and the first live run
+
+The first four passes checked the docs against Google and GitHub. None checked them against the
+tool that actually executes the queries, and none checked the long tail of `site:` targets.
+
+**The executing engine.** Twelve `WebSearch` probes (recorded in SKILL.md § Execution
+Environment): `site:` including path prefixes, `-site:` and `filetype:` are honoured;
+`before:` / `after:` are ignored; `site:stackoverflow.com` returns other hosts with no error;
+`allowed_domains: ["stackoverflow.com"]` is refused with a 400, and `WebFetch` on a Stack
+Overflow URL answers "Claude Code is unable to fetch from stackoverflow.com". The skill sent
+agents to Stack Overflow throughout and relied on date operators for recency, with no statement
+that either fails here.
+
+**Wrong targets nobody had flagged**, all found by checking every `site:` value in the docs:
+
+| Was | Problem | Now |
+|---|---|---|
+| `site:gov OR site:government` "across countries" | `.gov` is a US TLD; it never matches `gov.uk` / `gov.cn` | `site:gov` labelled US-only, plus per-country suffixes |
+| `site:gov.uk/dhsc` | `site:` is a URL prefix; `/dhsc` is a 301 to `/government/organisations/…` | `site:gov.uk "Department of Health and Social Care"` |
+| `site:xinhua.net` | no results under `allowed_domains`; Xinhua is `xinhuanet.com` / `news.cn` | corrected |
+| `site:tax.gov.cn` | no results; the State Taxation Administration is `chinatax.gov.cn` | corrected |
+| `site:redcross.org` for war casualties | the American Red Cross; the ICRC is `icrc.org` | `icrc.org`, `reliefweb.int` |
+| `site:telegram.me` | redirects to the Telegram home page; posts live on `t.me` | `t.me` only |
+| `site:github.com/go-redis` | the repository moved to `github.com/redis/go-redis` | corrected |
+| `[go] <topic> site:stackoverflow.com` "Go-tagged" | Google ignores the brackets | tag syntax confined to Stack Overflow's own box |
+| `"as of YYYY-MM-DD"` as an exact phrase | reporting writes "as of September 1", so the phrase excludes it | month form, date read from the page |
+
+Four hosts in the Chinese exclusion list could not be confirmed to exist and were removed.
+
+**Rules added so the class, not the instances, is guarded:**
+
+- **GD008** is an allow-list: every `site:` value must be in `VERIFIED_SITES` with its evidence.
+  A deny-list would only have caught the domains someone had already noticed — the table above
+  is the list of ones nobody had. Two known-bad values are allowed only inside a sentence that
+  refutes them, so the docs can still warn against them.
+- **GD009**: degradation levels are defined in SKILL.md only. `ai-search-and-termination.md`
+  carried a second definition — Full = "a strong primary source directly answers the question",
+  the single-strongest-source test SKILL.md's decision tree exists to reject — and
+  `test_degradation_protocol` **required** that copy to exist. It was replaced by a test that it
+  does not.
+- **GD010**: every recommended Google example passes Google syntax rules (it caught
+  `imagesize:` still listed as a web-search example on its first run).
+- **GS018**: a Quick report has no table. The Quick worked example was itself a table while
+  SKILL.md said "No tables"; `test_example_passes_report_lint` passed it because no rule looked.
+- **GQ014**: `[tag]` in a Google query.
+
+**The live eval had never been able to measure search.** Four harness defects, all fixed before
+the first run and each pinned by a test in `test_forward_eval.py`:
+
+1. `--permission-mode dontAsk` without `--allowedTools` denied every WebSearch and WebFetch call
+   in **both** arms (measured with a nested `claude -p`). Had it been run, it would have compared
+   two arms that could not search.
+2. "Skill was read" matched the path in a tool *call*; a denied read satisfied it.
+3. The with-skill arm was pointed at this package, whose `eval/*.json` hold the ground truth, and
+   both arms ran under the repository, loading its CLAUDE.md and `.claude/rules/`.
+4. A global `~/.claude/skills/google-search` could reach the without-skill arm undetected.
+
+Two fixtures were added because GS-E5/GS-E6 test facts the skill states: GS-E8 asks for one the
+skill does not contain, GS-E7 for a source the environment cannot open.
+
+**First live run** — Sonnet, both arms, one sample, `--seed 7`, 16 calls. The first grading
+exited INCOMPLETE/FAIL, and every cause was in the harness or the grader:
+
+| Reported | Cause | Fix |
+|---|---|---|
+| INCOMPLETE: with-skill arm opened a foreign skill copy | the new contamination check compared against the staged copy's *absolute* path; a relative `Glob` of `google-search-skill/references/*.md` was its own copy | `is_foreign_skill_access`, re-applied at grade time |
+| SKILL LOSS `no_filename_qualifier` | clause split at the "." inside `go.mod`, stranding "no longer supported" in another clause | a period ends a clause only before whitespace |
+| SKILL LOSS `no_stars_in_code_search` | every `stars:` query was validated as code search; `language:go stars:>=500` is a valid repository search, as the answer said | fail only a query no engine accepts (GQ013) |
+| both fail `marks_undocumented_as_such` | both answers put "NOT officially documented" in the heading over the list | window = clause, paragraph, nearest heading |
+| (pre-emptive) `degradation_is_not_full`, `queries_are_valid`, `labels_key_numbers` | passable only with this skill's vocabulary — an honest plain-language refusal lost for not printing "Blocked" | removed or made vocabulary-free |
+
+Graded after the fixes: **2 win / 0 loss / 1 both-fail / 25 uninformative of 28**. The base model
+already gets almost every criterion right, including both refusals and the Stack Overflow trap.
+The two wins are a cited source (GS-E1) and the `after:` semantics (GS-E5) — the latter stated in
+the skill's own references. This is one sample per arm: directional, not a result.
+
+What the run found that nothing offline could: on GS-E5 the with-skill arm wrote "no live search
+needed, the skill's own reference answers it", ran no query, cited no URL, and declared
+`Quick · Full`. SKILL.md Gate 8 now says the skill is not a source and that every mode runs at
+least one query; `test_skill_is_not_a_source` pins it. The without-skill arm of GS-E6 also found
+something the skill had wrong: Google Search Central documents `imagesize:` and `src:` (Images
+only), so "Google documents only the Tier A group" was scoped too broadly.
+
+Next step: `--repeat 3`, and criteria aimed at what this base model gets wrong — 25 of 28
+criterion-arms measured the model, not the skill.
+
 ## Fourth review pass, 2026-08-13 — the eval design itself
 
 The skill's text was by now well covered; the open question was whether the *evaluation* could

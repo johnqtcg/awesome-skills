@@ -128,17 +128,29 @@ dashboard — never a repository's issues, which live at `github.com/<org>/<repo
 
 High-quality Q&A, but noisy at volume. Use Google + `site:` for better filtering than SO's native search.
 
+**Not reachable from `WebSearch`.** `site:stackoverflow.com` returns other hosts in its place and
+`allowed_domains: ["stackoverflow.com"]` is refused (SKILL.md § Execution Environment). The
+patterns below are for the user to run in Google; mark them accordingly and do not cite Stack
+Overflow content you could not open.
+
 ### Patterns
 
-- `[go] <topic> site:stackoverflow.com` — Go-tagged questions
-- `[mysql] <topic> site:stackoverflow.com` — MySQL-tagged questions
+- `<topic> golang site:stackoverflow.com` — Go questions. Tag syntax such as `[go]` does nothing
+  in Google, which ignores the brackets; tags only filter inside Stack Overflow's own search box
+- `<topic> mysql site:stackoverflow.com` — MySQL questions
 - `"<exact error>" site:stackoverflow.com` — error-specific Q&A
-- `<topic> "accepted answer" site:stackoverflow.com` — prioritize accepted answers
+
+There is no Google operator for "accepted answers only". Open the question and read the answer
+marked accepted, and its date, before using it.
 
 ### In Stack Overflow's Search Box
 
 - `[go] is:answer score:10 <topic>` — high-score answers only
 - `[go] is:question votes:5 <topic>` — well-upvoted questions
+
+These run in Stack Overflow's own search box, where `[tag]` is a real filter. They were not
+re-verified in the 2026-09-24 review: Stack Overflow's help page is not reachable from this
+environment either.
 
 ### Tactics
 
@@ -172,7 +184,7 @@ For technical selection, performance data must be recent and sourced.
 ### Patterns
 
 - `benchmark <technology A> vs <technology B> after:YYYY-MM-DD` — recent comparison
-- `"TechEmpower" <framework> benchmark` — authoritative web framework benchmarks
+- `"TechEmpower" <framework> benchmark` — the most widely cited cross-framework benchmark
 - `<technology> benchmark filetype:pdf` — benchmark reports
 - `<technology> 性能对比 实测 after:YYYY-MM-DD` — Chinese real-world benchmarks
 
@@ -188,7 +200,10 @@ For technical selection, performance data must be recent and sourced.
 1. Always add `after:` — benchmark results from 2020 are irrelevant for 2026 decisions
 2. Prefer benchmarks that disclose hardware specs, methodology, and version numbers
 3. Cross-check with at least one independent benchmark source
-4. For Go frameworks, TechEmpower is the gold standard for HTTP throughput comparisons
+4. TechEmpower is the most widely cited HTTP throughput comparison, not a neutral one: entries are
+   written by each framework's own contributors and tuned for the test. Name the round and test
+   type (plaintext, JSON, fortunes) you are quoting, and treat a plaintext lead as saying little
+   about an application that talks to a database
 
 ## Common Mistakes in Programmer Search
 
@@ -200,9 +215,12 @@ For technical selection, performance data must be recent and sourced.
 
 ## Quick-Reference: Google Search Syntax
 
-Operators are graded by support level. Google documents only the first group; the rest are
-community knowledge that Google may change or drop without notice — the `+` operator was
-removed outright. Build the evidence chain on Tier A operators; treat Tier B as convenience and
+Operators are graded by support level. Google documents operators on two official pages: the
+Search Help page "Refine web searches" (support.google.com/websearch/answer/2466433) lists the
+seven Tier A rows below, and Search Central's "Debugging with Google Search Operators"
+(developers.google.com/search/docs/monitor-debug/search-operators) adds two that work in Google
+**Images** only — `imagesize:` and `src:`. Everything else is community knowledge that Google may
+change or drop without notice — the `+` operator was removed outright. Build the evidence chain on Tier A operators; treat Tier B as convenience and
 Tier C as expendable.
 
 ### Tier A — documented in Google's own help page
@@ -237,13 +255,19 @@ on the page itself. Both `2026-01-01` and `2026/01/01` are accepted, as is a bar
 If a Tier B operator returns obviously unfiltered results, it is being ignored — fall back to a
 quoted phrase plus `site:` rather than assuming the filter applied.
 
+### Documented for Google Images only
+
+| Syntax | Effect | Note |
+|--------|--------|------|
+| `imagesize:WxH` | Images of exactly that size | Ignored in web search; the Images Tools → Size filter overrides it |
+| `src:` | Pages whose `src` attribute references an image URL | Images only; matches pages on any domain |
+
 ### Tier C — unreliable, verify before relying on it
 
 | Syntax | Status |
 |--------|--------|
 | `related:` | Frequently returns nothing; do not build a source list on it |
 | `define:` | Redirects into the dictionary panel, not a document search |
-| `imagesize:WxH` | Image-search-only, and often overridden by the Tools size filter |
 | `link:` | Removed by Google — always empty |
 | `+keyword` | Removed by Google — use `"keyword"` |
 
@@ -251,5 +275,6 @@ quoted phrase plus `site:` rather than assuming the filter applied.
 
 - Official docs on time-limited topic: `Go context 最佳实践 site:go.dev after:2024-01-01`
 - Exclude noise, target community: `Redis集群 踩坑 site:zhihu.com -广告 -培训`
-- Error in specific project: `"connection reset by peer" site:github.com/go-redis`
+- Error in specific project: `"connection reset by peer" site:github.com/redis/go-redis` — the
+  repository moved from the `go-redis` org to `redis`; a stale prefix silently misses its issues
 - Multiple frameworks comparison: `(Gin OR Echo OR Fiber) benchmark Go after:2025-01-01`

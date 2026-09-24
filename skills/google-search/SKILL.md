@@ -11,6 +11,7 @@ allowed-tools: Read, Grep, Glob, WebSearch, WebFetch
 | If you need to… | Go to |
 |---|---|
 | Mode budgets: Quick (1–2 queries) / Standard (3–5) / Deep (5–8) | §6 Execution Mode Gate |
+| Know which operators the `WebSearch` tool actually honours | Execution Environment |
 | Search for Go / Python / JS errors, API docs, or RFCs | Load `references/programmer-search-patterns.md` |
 | Search Chinese-language sources (Baidu, Zhihu, WeChat) | Load `references/chinese-search-ecosystem.md` |
 | Search on a fast-changing / conflict-prone topic | Load `references/high-conflict-topics.md` |
@@ -54,13 +55,16 @@ Map the request into one primary category and one goal before writing any query.
 
 ### 2) Ambiguity Resolution Gate
 
-**STOP and ASK** if:
-- The request maps to multiple categories (e.g., "help me with Redis")
-- The goal is ambiguous (know vs. learn vs. troubleshoot)
+**STOP and ASK** only when the readings would send you to different sources, so that guessing
+wrong spends the whole budget on the wrong question:
 - The target entity is ambiguous (e.g., "苹果" — fruit or Apple Inc.?)
-- The time scope is unclear for time-sensitive topics
+- The request maps to categories with disjoint sources (e.g., "help me with Redis" — learn it,
+  debug an error, or compare it with Memcached?)
 
-Confirm category, goal, and scope before proceeding.
+For everything else — an unstated time scope, a goal that could be "know" or "learn" — pick the
+most likely reading, **state it as an assumption in the first line of the conclusion**, and
+search. A question costs the user a round trip; a stated assumption costs one sentence and is
+just as easy to correct.
 
 ### 3) Evidence Requirements Gate
 
@@ -124,7 +128,7 @@ Auto-select mode based on task signals, then state the selection in output:
 
 | Mode | Queries | Cross-check | Output |
 |------|---------|-------------|--------|
-| Quick | 1–2 | Not required if source is official/primary | Conclusion + 1–2 queries |
+| Quick | 1–2 | Not required if source is official/primary | Conclusion + ≥2 reusable queries |
 | Standard | 3–5 | 2 independent sources for key claims | Full 4-section output |
 | Deep | 5–8 | 3+ sources, explicit conflict resolution | Full output + source comparison table |
 
@@ -150,6 +154,49 @@ Never claim a search was performed unless it actually ran.
 - If a source was not opened, do not claim to have verified its content.
 - Never report "confirmed" when the evidence is only from snippets.
 - Distinguish between "I found X" and "search snippet mentions X."
+- Never report that a filter applied unless the results show it did. A `site:` query whose
+  results come from other hosts ran *unfiltered* — see Execution Environment.
+- **This skill is not a source.** Its references tell you how to search; they are not evidence
+  for the answer, including answers about search operators. Every mode, Quick included, runs at
+  least one query, and a `Full` verdict rests on a page opened in this session. In the first live
+  eval (2026-09-24) an agent answered "no live search needed, the skill's own reference answers
+  it" and returned `Quick · Full` with no URL — a Full verdict with nothing a user could check.
+
+## Execution Environment — `WebSearch` Is Not Google
+
+The reusable queries this skill hands back are Google syntax, for the user to run in Google. The
+queries **you** execute go through Claude Code's `WebSearch` tool, which is a different engine
+with different behaviour. Measured 2026-09-24 on Claude Code 2.1.281, one sample per probe — if
+results look different, re-probe rather than trust this table:
+
+| In the executed query | Observed in `WebSearch` | Probe |
+|---|---|---|
+| `site:` with a host or a path prefix | honoured — every result inside the prefix | `site:go.dev/blog generics` |
+| `-site:` | honoured — the excluded host never appeared | `Go 教程 goroutine -site:csdn.net` |
+| `filetype:pdf` | honoured — every result a PDF | `kubernetes production best practices filetype:pdf` |
+| `before:` / `after:` | **ignored** — same results as without it | `"Go 1.25" release notes before:2023-01-01` returned the 2025 release notes |
+| `site:stackoverflow.com` | **silently unfulfilled** — no Stack Overflow result at all, other hosts returned in its place | `go context cancellation site:stackoverflow.com` |
+| `allowed_domains: ["stackoverflow.com"]` | **refused** — `400 … domains are not accessible to our user agent` | same query |
+| `allowed_domains: ["go.dev"]` | honoured, subdomains included (`pkg.go.dev`) | `sync.Pool victim cache` |
+
+Rules that follow:
+
+1. **Prefer the tool's `allowed_domains` / `blocked_domains` parameters for domain constraints.**
+   They are enforced by the tool, and an unreachable domain fails loudly with a 400 instead of
+   quietly returning other hosts.
+2. **Check that every filter held.** After each executed query, look at the result hosts. If a
+   `site:` or `allowed_domains` constraint was not honoured, the results are unfiltered: say so
+   under Evidence chain status and do not treat them as coming from the site you asked for.
+3. **Date operators carry no weight in an executed query.** `WebSearch` ignores them, so the date
+   of every time-sensitive claim comes from the page you opened. Keep `after:` in the reusable
+   queries — it does work in Google.
+4. **Stack Overflow is unreachable from here.** Do not cite a Stack Overflow page you could not
+   open, and never present a dev.to or Medium result returned for a `site:stackoverflow.com` query
+   as Stack Overflow content. Go to the official docs, the project's GitHub issues, or the
+   language forum instead, and hand the Stack Overflow query to the user under Reusable queries.
+5. **The operator support tiers in `references/programmer-search-patterns.md` describe Google**,
+   not `WebSearch`. The tool describes itself as US-only; Chinese queries still returned Chinese
+   hosts in these probes, but Baidu-only and in-app content is not reachable either way.
 
 ## Workflow
 
@@ -202,12 +249,12 @@ When degraded to snippet-only, the answer must:
 
 2. **Running one vague query and declaring the search complete** — prepare the Primary / Precision / Expansion set before searching. One executed query is enough only when it was the Precision variant and it landed an official or primary source that directly answers the question; anything less specific means running the next variant, not writing the conclusion.
 
-3. **Ignoring time-sensitivity** — searching "latest Go version" without a date bound surfaces pages from 2019. Technical topics go stale fast.
+3. **Ignoring time-sensitivity** — searching "latest Go version" with no anchor surfaces pages from 2019. Technical topics go stale fast.
    ```
    BAD: Go latest features
-   GOOD: Go 1.24 new features after:2025-01-01
+   GOOD: Go release history site:go.dev/doc/devel
    ```
-   `after:` filters on when the document was **last updated**, not when the event happened, so it thins a stale result set but never proves a claim is current. Take the date from the page itself.
+   The release-history page lists every release with its date, so its newest entry answers "latest" without writing a version number into the query that will itself go stale. A date bound is not the fix: `after:` filters on when the document was **last updated**, not when the event happened, and `WebSearch` ignores it entirely (see Execution Environment). Take the date from the page itself.
 
 4. **Returning raw links without synthesis** — the user wants an answer, not a link dump. Synthesize first, then provide sources and reusable queries.
 
@@ -218,6 +265,8 @@ When degraded to snippet-only, the answer must:
 7. **Searching indefinitely without stopping** — respect the query budget. 8 queries without a satisfactory answer means the problem is framing, not insufficient searching.
 
 8. **Omitting confidence and source-tier labels on key numbers** — every key numeric claim must carry both labels. If you cannot label it, do not present it as settled.
+
+9. **Assuming a filter worked because you typed it** — `site:stackoverflow.com` in `WebSearch` returns dev.to and GitHub pages with no error. A result list you did not check against the filter is an unfiltered result list.
 
 ## Honest Degradation
 
@@ -268,6 +317,13 @@ Never guess to fill gaps. State uncertainty clearly.
 4. For high-conflict topics, follow the full protocol in `references/high-conflict-topics.md`.
 5. Every key numeric claim must carry both a confidence label and a source-tier label.
 6. If the evidence is weak, say so and provide the next search strategy instead of guessing.
+7. Public-information lookup covers a person's **public role** — publications, official
+   positions, filings, press statements. Do not assemble a profile of a private individual (home
+   address, phone number, family members, daily movements, or tying an anonymous handle to a real
+   name), even when each piece is public on its own: the aggregation is the harm. Decline that
+   part and say why.
+8. Do not route the user to pirated copies. For books, courses, and paid reports, point to the
+   publisher, a library, or the author's own page rather than to netdisk search engines.
 
 ## Output Contract
 

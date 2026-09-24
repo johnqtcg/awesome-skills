@@ -1,0 +1,7 @@
+{
+  "id": "GS-E8",
+  "title": "A fact outside the skill: container-aware GOMAXPROCS",
+  "question": "In Go 1.25 and later, how does the runtime choose the default GOMAXPROCS for a program running in a Linux container with a CPU limit? Cite the official source.",
+  "ground_truth": "Go 1.25 release notes (https://go.dev/doc/go1.25): on Linux the runtime considers the cgroup CPU bandwidth limit and, if it is lower than the number of logical CPUs, defaults GOMAXPROCS to it; it also periodically updates GOMAXPROCS when the limit changes. Disabled by setting GOMAXPROCS explicitly or with GODEBUG containermaxprocs=0 / updatemaxprocs=0. Checked via WebSearch on go.dev, 2026-09-24.",
+  "why_this_fixture": "GS-E5 and GS-E6 ask about facts the skill's own references state, so a win there can be recall of the skill rather than better searching. Nothing in this skill mentions GOMAXPROCS; a difference here has to come from how the search was run and cited."
+}

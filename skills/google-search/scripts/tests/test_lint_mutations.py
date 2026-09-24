@@ -280,6 +280,7 @@ QUERY_CASES = [
     ("GQ008", "Go after:2026-02-29", None),
     ("GQ008", "Go before:2025-04-31", None),
     ("GQ008", "Go after:0000", None),
+    ("GQ014", "[go] context cancellation site:stackoverflow.com", "google"),
 ]
 
 
@@ -678,6 +679,87 @@ class TestReportContract:
 
 
 # ── Coverage, derived ──────────────────────────────────────────────────────────
+
+
+# ── 2026-09-24 review: site: targets, one degradation definition, Google syntax ─────
+
+HICONF = (REFS / "high-conflict-topics.md").read_text(encoding="utf-8")
+
+
+class TestSiteTargets:
+    """GD008 is an allow-list. Each mutation below puts back one wrong target the
+    2026-09-24 review actually found in these docs; none was caught by any earlier rule."""
+
+    @pytest.mark.parametrize("fname,old,new", [
+        ("query-patterns.md", "site:xinhuanet.com", "site:xinhua.net"),
+        ("query-patterns.md", "site:chinatax.gov.cn", "site:tax.gov.cn"),
+        ("query-patterns.md", '`"<policy topic>" site:gov`', '`"<policy topic>" site:gov OR site:government`'),
+        ("high-conflict-topics.md", "site:icrc.org OR", "site:redcross.org OR"),
+        ("high-conflict-topics.md", "`site:t.me \"", "`site:telegram.me \""),
+    ])
+    def test_gd008_fires_on_a_wrong_target_the_review_found(self, fname, old, new):
+        text = {"query-patterns.md": QPAT, "high-conflict-topics.md": HICONF}[fname]
+        fires("GD008", L.lint_docs({fname: replace_all(text, old, new)}))
+
+    def test_gd008_fires_on_a_known_bad_target_used_as_a_recommendation(self):
+        mutated = QPAT + "\n- `NHS funding policy site:gov.uk/dhsc`\n"
+        hit = fires("GD008", L.lint_docs({"query-patterns.md": mutated}))
+        assert any("redirect" in f.message for f in hit), hit
+
+    def test_gd008_allows_the_sentence_that_warns_against_a_known_bad_target(self):
+        assert "site:gov.uk/dhsc" in QPAT and "site:github.com/issues" in PROG
+        assert not [f for f in L.lint_docs() if f.rule == "GD008"]
+
+    def test_gd008_skips_placeholders(self):
+        assert "site:official-domain.com" in QPAT and "site:gov.<tld>" in HICONF
+        assert not [f for f in L.lint_docs() if f.rule == "GD008"]
+
+
+class TestSingleDegradationDefinition:
+    def test_termination_file_points_at_skill_md(self):
+        body = L.section(AITERM, "Degradation Protocol")
+        assert "SKILL.md § Honest Degradation" in body
+
+    @pytest.mark.parametrize("injected", [
+        "\n### Full Mode\nStrong primary source directly answers the question.\n",
+        "\n| Level | Condition |\n|---|---|\n| **Full** | one strong source |\n",
+    ])
+    def test_gd009_fires_on_a_second_definition(self, injected):
+        fires("GD009", L.lint_docs({"ai-search-and-termination.md": AITERM + injected}))
+
+
+class TestGoogleExampleSyntax:
+    def test_gd010_fires_on_a_bracket_tag_in_a_google_example(self):
+        mutated = replace_all(
+            PROG, "- `<topic> golang site:stackoverflow.com`",
+            "- `[go] <topic> site:stackoverflow.com`",
+        )
+        hit = fires("GD010", L.lint_docs({"programmer-search-patterns.md": mutated}))
+        assert any("GQ014" in f.message for f in hit), hit
+
+    def test_gd010_fires_on_imagesize_as_a_web_example(self):
+        mutated = QPAT + "\n- `<asset topic> imagesize:1920x1080`\n"
+        fires("GD010", L.lint_docs({"query-patterns.md": mutated}))
+
+    def test_gd010_leaves_stack_overflow_box_syntax_alone(self):
+        box = L.section(PROG, "In Stack Overflow's Search Box")
+        assert "[go]" in box
+        assert not [f for f in L.lint_docs() if f.rule == "GD010"]
+
+    def test_gq014_ignores_engine_tags(self):
+        assert not [f for f in L.validate_query("[google] Go release history site:go.dev/doc/devel",
+                                                "google") if f.rule == "GQ014"]
+
+
+class TestQuickShape:
+    def test_gs018_fires_when_the_quick_example_is_a_table_again(self):
+        body = L.section(WORKED, "Example 1: Single-round factual search (Quick mode)")
+        table = (
+            "| # | Field | Value |\n|---|---|---|\n| 1 | Execution mode | Quick |\n"
+            "| 2 | Degradation level | Full |\n"
+        )
+        mutated = replace_all(body, "Quick · Full\n", table)
+        fires("GS018", L.lint_report(mutated))
 
 
 def test_every_rule_is_exercised_by_a_mutation():
