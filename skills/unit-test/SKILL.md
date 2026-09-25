@@ -1,7 +1,7 @@
 ---
 name: unit-test
 description: 'Use when the user asks for unit tests (e.g, "单元测试", "unit test"), wants to add/fix Go tests, wants table-driven and subtest organization, or wants to enforce a minimum coverage gate (default 80% for logic packages). Prioritize bug discovery (especially boundary, mapping loss, and concurrency defects) over test volume. Do NOT use for benchmarks, fuzz tests, integration tests, E2E tests, load tests, or mock generation.'
-allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go build*), Bash(go vet*), Bash(go list*), Bash(git diff*), Bash(go tool cover*), Bash(dirname *), Bash(sort *)
+allowed-tools: Read, Write, Grep, Glob, Bash(dirname *)
 ---
 
 # Go Unit Test
@@ -37,7 +37,7 @@ Create and refine Go tests for this repository with table-driven cases and expli
 - For service-layer code with interfaces, focus on methods declared in the interface. For pure functions/handlers, focus on exported functions/endpoints.
 - Run with the race detector (`go test -race`). Scope is the **tested package set**, not always `./...`: PR mode narrows it to changed packages, and a Light pure-function target with no `go`/`chan`/`sync` may run `-race` on just that package rather than the whole repo. **Precedence when the rules below disagree: `race.required` config > PR scope > mode default.** `race.required: false` disables `-race` entirely (state it in the report); otherwise `-race` is required on every tested package.
 - **Killer Case hard constraint (Standard + Strict)**: each test target (interface method / exported function / handler endpoint) must include at least 1 "killer case" (fault-injection or boundary-kill case) that is expected to fail on a known bad mutation/path.
-- In the report, for each killer case, name its critical assertion(s) and report **`Kill: Verified`** — you injected the named defect on a scratch copy, re-ran the test, observed the FAIL, and quote the failure line — or **`Kill: Unverified`** plus why you could not run it. An unverified kill is a **defect hypothesis, not a demonstrated result**: never write it as one.
+- In the report, for each killer case, name its critical assertion(s) and report **`Kill: Verified`** — you injected the named defect through `go test -overlay` (never by editing the source), re-ran the test, observed the FAIL, and quote the failure line — or **`Kill: Unverified`** plus why you could not run it. An unverified kill is a **defect hypothesis, not a demonstrated result**: never write it as one.
 - **Do NOT claim an assertion is indispensable unless you checked that separately.** Injecting the defect shows the *case* catches it; only deleting the named assertion **while the defect is still injected** and seeing the test PASS shows that *assertion* is what catches it. Redundant assertions are normal — report `Assertion necessity` only when that removal check was actually run, never as a blanket statement. → recipe: `references/killer-case-patterns.md` § Verifying the Kill.
 
 ### Killer Case — Definition (Standard + Strict Modes)
@@ -102,6 +102,11 @@ Before generating tests, check `go.mod` for the project's Go version. Adapt test
 
 If `go.mod` cannot be read, state the assumption and proceed with Go 1.21 defaults.
 
+### Tool Approval and Sandbox
+
+- **No `go`, `git` or `sort` command is pre-approved**, because a prefix rule cannot exclude flags: `go test -exec <prog>` and `go vet -vettool=<prog>` run any program (and `go test -exec` still prints `ok` when the program exits 0), while `git diff --output=<file>` and `sort -o <file>` write any file — all four reproduced. Each such command asks once; that prompt is the review step.
+- **Inside Claude Code's sandbox the default build cache is not writable**: `go test` fails with `open …/go-build/…: operation not permitted`. Prefix Go commands with `GOCACHE="${TMPDIR:-/tmp}/go-build"` — this skill's own test harness does the same.
+
 ### Test Execution Hardening
 
 - **Shuffle**: Run with `go test -shuffle=on` to catch tests that depend on execution order. If any test fails only under shuffle, it has hidden state coupling — fix the test, not the ordering.
@@ -124,7 +129,7 @@ When testing in a CI / PR review context:
 - Run `go test -race` on the resulting package set; the coverage gate applies only to changed packages, not the whole repo.
 - If a changed package has no `_test.go` file, flag it as a gap.
 
-Discovery uses `git`, `dirname`, `sort`, and `go list` (all in `allowed-tools`); the optional dependents step also uses `grep`. If your tool policy restricts any, run discovery in your shell and pass the package list in.
+Discovery uses `git`, `dirname`, `sort`, and `go list`; only `dirname` is pre-approved (see §Tool Approval and Sandbox), so the others ask once. The optional dependents step also uses `grep`.
 
 ### Generated Code Exclusion
 
@@ -398,7 +403,7 @@ When the task is fixing failing tests or adding tests to existing code, use thes
   - `go test ./path/to/pkg -coverprofile=coverage.out -covermode=atomic -race`
   - `go tool cover -func=coverage.out`
 11. If coverage < required gate OR key hypotheses untested, add targeted cases only.
-12. **(Standard + Strict only)** Verify each killer case *by executing it*: apply its named defect to a scratch copy of the source, re-run the test, confirm it FAILS, then revert (recipe: `references/killer-case-patterns.md` § Verifying the Kill). Report `Kill: Verified` with the observed failure line, or `Kill: Unverified` + reason if the environment cannot run it.
+12. **(Standard + Strict only)** Verify each killer case *by executing it*: inject its named defect with `go test -overlay` — the source file is never edited — re-run the test and confirm it FAILS (recipe: `references/killer-case-patterns.md` § Verifying the Kill). Report `Kill: Verified` with the observed failure line, or `Kill: Unverified` + reason if the environment cannot run it.
 
 ### Reporting Integrity (Mandatory)
 
@@ -496,8 +501,4 @@ Also output a compact JSON block for CI/pipeline ingestion (skip for Light mode)
 ```
 
 ## Skill Maintenance
-Run regression checks for this skill with:
-
-```bash
-bash "<path-to-skill>/scripts/run_regression.sh"
-```
+Regression checks: `bash "<path-to-skill>/scripts/run_regression.sh"`.

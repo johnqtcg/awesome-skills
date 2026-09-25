@@ -86,7 +86,7 @@ Two, one per hypothesis. Each is bound to a named defect and each kill was execu
 
 Critical assertions: the length check and the per-position identity check in `assertIDs`.
 
-`Kill: Verified` — injected H1 into a scratch copy
+`Kill: Verified` — injected H1 through `go test -overlay`
 (`for i := 0; i < len(items)-1; i++`), re-ran, observed:
 
 ```
@@ -120,7 +120,7 @@ empty input); with only the length and element assertions it **survives**.
     --- FAIL: TestExtractIDs/empty_slice (0.00s)
 ```
 
-Reverting each mutation returns the suite to PASS.
+Without the overlay the suite passes again; the source file was never edited.
 
 **Assertion necessity: not claimed.** The removal check was run and does *not* support an
 indispensability claim for either assertion: with H1 still injected, deleting the length

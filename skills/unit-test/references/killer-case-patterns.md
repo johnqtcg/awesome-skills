@@ -203,20 +203,30 @@ optional; make it only after running it.
 
 ### A. Kill check — mandatory
 
+**Never edit the file under test.** Inject the defect through `go test -overlay` (Go 1.16+),
+which swaps a file's contents at build time and leaves the source on disk untouched:
+
 ```bash
-cp path/to/target.go /tmp/target.go.orig
-# apply ONLY the named defect, e.g. H1: i < len(items)  ->  i < len(items)-1
-go test ./path/to/pkg -run TestXxx -v          # MUST fail; keep the failure line
-cp /tmp/target.go.orig path/to/target.go
-go test ./path/to/pkg -run TestXxx -v          # MUST pass again
+SRC="$PWD/path/to/target.go"        # absolute path of the file under test
+MUT=$(mktemp -d "${TMPDIR:-/tmp}/kill.XXXXXX")
+# Write the mutated copy to "$MUT/target.go" with the Write tool — ONLY the named defect,
+# e.g. H1: i < len(items)  ->  i < len(items)-1
+printf '{"Replace":{"%s":"%s"}}' "$SRC" "$MUT/target.go" > "$MUT/overlay.json"
+go test -count=1 -overlay="$MUT/overlay.json" ./path/to/pkg -run TestXxx -v   # MUST fail
+go test -count=1 ./path/to/pkg -run TestXxx -v                                 # MUST pass
 ```
 
-`cp` is **not** on this skill's `allowed-tools` auto-approval surface, so the snapshot and
-the restore will each ask for permission. That is a prompt, not a block — but in a
-non-interactive run it stalls the one step the report's `Kill: Verified` depends on. The
-equivalent with tools the skill already carries: read the file, keep the original text,
-write the mutated text, run the test, write the original text back. Whichever you use,
-**the restore is not optional** — see the last line of this section.
+Why not copy the original aside, edit the real file and copy it back:
+
+- **An interruption ships the defect.** If the session ends between the edit and the
+  restore, the user's source is left mutated, and nothing in the tree says so.
+- **The backup can fail silently.** `cp target.go /tmp/...` is refused inside Claude Code's
+  sandbox (`/tmp` is not writable), so the "restore" would restore nothing.
+
+Keep the `mktemp` template: on macOS, `mktemp -d` without one ignores `$TMPDIR` and the
+sandbox refuses the directory it picks. `-count=1` keeps a cached PASS from standing in for
+the run. On Go < 1.16 there is no `-overlay`: copy the package into a scratch module and
+mutate the copy instead.
 
 Report `Kill: Verified` and quote the observed failure, e.g.
 `--- FAIL: TestExtractIDs/three_elements (0.00s) sut_test.go:31: len = 2, want 3`.
@@ -226,12 +236,14 @@ then explicitly a hypothesis.
 
 ### B. Assertion-necessity check — optional, and usually negative
 
-Keep the defect injected, delete **only** the assertion in question, re-run.
+Keep the defect injected, delete **only** the assertion in question, re-run. Use the same
+overlay: add the test file with that one assertion removed as a second `Replace` entry.
 
 ```bash
-# defect still applied from step A
-# comment out ONLY the named assertion in the test
-go test ./path/to/pkg -run TestXxx -v
+# "$MUT/target_test.go" = the test file with ONLY the named assertion removed
+printf '{"Replace":{"%s":"%s","%s":"%s"}}' "$SRC" "$MUT/target.go" \
+  "$PWD/path/to/target_test.go" "$MUT/target_test.go" > "$MUT/overlay.json"
+go test -count=1 -overlay="$MUT/overlay.json" ./path/to/pkg -run TestXxx -v
 #   PASSES -> that assertion is what caught the defect: necessity holds
 #   FAILS  -> a different assertion caught it: NO necessity claim
 ```
@@ -258,5 +270,6 @@ Keep both; just do not claim either is indispensable without the experiment.
 | Test fails on the mutation **and** on the original | The test is wrong, not the code | Fix the test first |
 | Test fails with a different assertion than the named one | The named assertion is not what fired | Re-bind the case, or drop the necessity claim |
 
-Revert every mutation and every deleted assertion before finishing. A mutation left in
-the tree is a shipped defect.
+With the overlay there is nothing to revert — confirm it anyway: `git diff` on the target
+and test files must show only the tests you meant to add. A mutation left in the tree is a
+shipped defect.

@@ -202,6 +202,37 @@ def _skill_recipe(section: str) -> str:
     return m.group(1)
 
 
+PATTERNS_MD = os.path.abspath(os.path.join(
+    os.path.dirname(__file__), os.pardir, os.pardir, "references", "killer-case-patterns.md"))
+
+
+def _patterns_recipe(heading: str) -> str:
+    """First ```bash block under `heading` in references/killer-case-patterns.md — the
+    shipped kill-check recipe, executed as written rather than re-typed here."""
+    with open(PATTERNS_MD, encoding="utf-8") as fh:
+        text = fh.read()
+    start = text.index(heading)
+    m = re.search(r"```bash\s*\n(.*?)```", text[start:], re.S)
+    if m is None:
+        raise AssertionError(f"killer-case-patterns.md § {heading} ships no bash recipe")
+    return m.group(1)
+
+
+def _bind_recipe(recipe: str) -> str:
+    """Point the placeholders at the fixture, and give each `go test` line a marker so
+    the two runs' outputs can be told apart."""
+    bound = (recipe.replace("path/to/target_test.go", "transform_test.go")
+                   .replace("path/to/target.go", "transform.go")
+                   .replace("./path/to/pkg", ".")
+                   .replace("TestXxx", "TestExtractIDs_Killer"))
+    out = []
+    for n, line in enumerate(bound.splitlines()):
+        if line.startswith("go test"):
+            out.append(f"echo '==RUN {n}=='")
+        out.append(line)
+    return "\n".join(out) + "\n"
+
+
 def _go_env(root: str) -> dict:
     """Isolate caches under `root`, pin the toolchain, and DROP any inherited
     GOROOT. A stale GOROOT — e.g. the shell exports one toolchain's stdlib while
@@ -390,6 +421,59 @@ class BehavioralKillerTests(unittest.TestCase):
         )
         self.assertEqual(
             0, self._go(correct, "test", "-run", "TestExtractIDs_Killer", "./...").returncode)
+
+    # 9. The kill check must not edit the file under test. The shipped recipe used to
+    #    `cp` the source to /tmp, mutate it in place and copy it back: an interrupted
+    #    session left the user's source mutated, and inside Claude Code's sandbox the
+    #    /tmp backup is refused, so the "restore" restored nothing. The recipe now uses
+    #    `go test -overlay`; this runs it as shipped.
+    def test_shipped_overlay_kill_recipe_fails_the_mutant_and_never_edits_the_source(self):
+        root = self._module({"go.mod": _GO_MOD, "transform.go": _TRANSFORM_CORRECT,
+                             "transform_test.go": _TRANSFORM_TEST})
+        self._preflight()
+        with open(os.path.join(root, "transform.go"), "rb") as fh:
+            before = fh.read()
+        recipe = _bind_recipe(_patterns_recipe("### A. Kill check — mandatory"))
+        # the one step the recipe leaves to the Write tool: the mutated copy
+        mutate = ('sed "s/i < len(items); i++/i < len(items)-1; i++/" "$SRC" '
+                  '> "$MUT/target.go"\n')
+        recipe = recipe.replace("printf '{", mutate + "printf '{", 1)
+        try:
+            res = subprocess.run(["bash", "-c", recipe], cwd=root, env=_go_env(root),
+                                 capture_output=True, text=True, timeout=180)
+        except OSError as exc:
+            self.skipTest(f"cannot exec bash/go: {exc}")
+        runs = re.split(r"==RUN \d+==\n", res.stdout + res.stderr)
+        self.assertEqual(3, len(runs), f"expected two go test runs:\n{res.stdout}{res.stderr}")
+        self.assertIn("--- FAIL: TestExtractIDs_Killer", runs[1],
+                      f"the overlaid mutant must fail:\n{runs[1]}")
+        self.assertIn("ok", runs[2], f"the untouched source must pass:\n{runs[2]}")
+        with open(os.path.join(root, "transform.go"), "rb") as fh:
+            self.assertEqual(before, fh.read(), "the recipe edited the file under test")
+
+    def test_shipped_overlay_necessity_recipe_replaces_the_test_file_too(self):
+        root = self._module({"go.mod": _GO_MOD, "transform.go": _TRANSFORM_CORRECT,
+                             "transform_test.go": _TRANSFORM_TEST})
+        self._preflight()
+        with open(os.path.join(root, "transform_test.go"), "rb") as fh:
+            test_before = fh.read()
+        setup = ('SRC="$PWD/transform.go"\n'
+                 'MUT=$(mktemp -d "${TMPDIR:-/tmp}/kill.XXXXXX")\n'
+                 'sed "s/i < len(items); i++/i < len(items)-1; i++/" "$SRC" > "$MUT/target.go"\n'
+                 'cat > "$MUT/target_test.go" <<\'GO\'\n' + _TRANSFORM_TEST_NO_LEN + 'GO\n')
+        recipe = setup + _bind_recipe(_patterns_recipe("### B. Assertion-necessity check"))
+        try:
+            res = subprocess.run(["bash", "-c", recipe], cwd=root, env=_go_env(root),
+                                 capture_output=True, text=True, timeout=180)
+        except OSError as exc:
+            self.skipTest(f"cannot exec bash/go: {exc}")
+        combined = res.stdout + res.stderr
+        # the overlaid test has no length assertion, so the identity assertion must be the
+        # one that fires — proof the _test.go replacement was actually applied
+        self.assertIn("last ID", combined, combined)
+        self.assertNotIn("length = ", combined, combined)
+        with open(os.path.join(root, "transform_test.go"), "rb") as fh:
+            self.assertEqual(test_before, fh.read(), "the recipe edited the test file")
 
     # 8. The coverage-scope fact behind § Multi-Package Coverage, executed rather than
     #    asserted: under -coverpkg a package with no _test.go prints 0.0% on the console

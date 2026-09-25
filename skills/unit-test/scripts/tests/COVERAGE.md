@@ -404,6 +404,20 @@ and code cannot be satisfied by a coincidence.
 Round-7 mutation run: **10 mutations, 10 killed**, against a verified-effective harness
 (a control mutation was killed and an unchanged baseline was green first).
 
+## Round 8 — execution layer (2026-09-25)
+
+Rounds 4–7 hardened the grader and the doc contract. None of them touched what the skill lets
+the agent *run*. Three defects, each reproduced before the fix:
+
+| Guard | Defect it pins |
+|---|---|
+| `ToolApprovalSurfaceTests` (3) | `allowed-tools` pre-approved `go test*`, `go build*`, `go vet*`, `go list*`, `git diff*`, `go tool cover*`, `sort *`. Reproduced: `go vet -vettool=<script>` and `go test -exec <script>` ran an arbitrary script (and `go test -exec` printed `ok` with no test run); `git diff --output=<file>` and `sort -o <file>` wrote arbitrary files. Only `dirname *` remains, by allow-list |
+| `KillCheckNeverEditsTheSourceTests` (3) + `test_shipped_overlay_*` (2, executed) | the kill check `cp`-ed the source to `/tmp`, mutated it in place and copied it back — an interrupted session ships the defect, and the sandbox refuses the `/tmp` backup. It now uses `go test -overlay`; the behavioral tests run the shipped recipe and assert the mutant fails, the clean run passes and the source bytes are unchanged. Both were mutation-checked: dropping `-overlay` fails both; dropping the test-file `Replace` entry fails the necessity test |
+| `test_sandbox_build_cache_workaround_is_documented` | in Claude Code's sandbox the default build cache is unwritable (`go test` → `operation not permitted`); this skill's own harness set `GOCACHE` while SKILL.md told the agent nothing |
+
+Two tests pinned the old flow and were rewritten, not deleted: step 12 was required to say
+"revert", and the reference to say "Revert every mutation".
+
 ## Coverage Summary
 
 | Metric | Count |

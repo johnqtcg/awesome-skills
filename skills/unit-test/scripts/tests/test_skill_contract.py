@@ -779,7 +779,11 @@ class KillerCaseVerificationGuardTests(unittest.TestCase):
         step = [ln for ln in workflow.splitlines() if ln.startswith("12. ")]
         self.assertTrue(step, workflow)
         self.assertIn("by executing it", step[0])
-        self.assertIn("revert", step[0].lower())
+        # 2026-09-25: this used to require "revert" — i.e. it pinned the edit-then-restore
+        # flow, which leaves the user's source mutated if the session is interrupted.
+        self.assertIn("go test -overlay", step[0])
+        self.assertIn("never edited", step[0])
+        self.assertNotIn("revert", step[0].lower())
         self.assertIn("Kill: Verified", step[0])
 
     def test_output_expectations_report_the_kill_status(self):
@@ -798,7 +802,8 @@ class KillerCaseVerificationGuardTests(unittest.TestCase):
         self.assertIn("so the claim is **false**", self.patterns)
         self.assertIn("(assertion, defect) pair", self.patterns)
         self.assertIn("Expect the negative result more often than not", self.patterns)
-        self.assertIn("Revert every mutation", self.patterns)
+        self.assertIn("Never edit the file under test", self.patterns)
+        self.assertIn("nothing to revert", self.patterns)
         for fake in ("does not compile", "on the original", "different assertion"):
             self.assertTrue(fake in self.patterns,
                             f"§ Verifying the Kill no longer names the {fake!r} fake-kill mode")
@@ -1331,6 +1336,61 @@ class ShippedSurfaceIntegrityTests(unittest.TestCase):
         self.assertGreaterEqual(hits, 5,
                                 "the `Kill:` label has nearly vanished from the shipped "
                                 "surface — the retired-label guards now pass vacuously")
+
+
+class ToolApprovalSurfaceTests(unittest.TestCase):
+    """Allow-list the only safe shape. The frontmatter used to pre-approve `go test*`,
+    `go build*`, `go vet*`, `go list*`, `git diff*`, `go tool cover*` and `sort *`; a prefix
+    rule cannot exclude flags, and on 2026-09-25 `go vet -vettool=<script>` and
+    `go test -exec <script>` ran an arbitrary script while `git diff --output=<file>` and
+    `sort -o <file>` wrote arbitrary files — all without a prompt."""
+
+    SAFE_BASH_RULES = {"dirname *"}  # dirname has no flag that writes or executes
+
+    def setUp(self):
+        self.text = SKILL_MD.read_text(encoding="utf-8")
+        self.tools = re.search(r"^allowed-tools:\s*(.+)$", self.text, re.M).group(1)
+
+    def test_only_allow_listed_bash_rules(self):
+        rules = set(re.findall(r"Bash\(([^)]*)\)", self.tools))
+        self.assertEqual(set(), rules - self.SAFE_BASH_RULES,
+                         f"pre-approved Bash rules outside the allow-list: {rules}")
+
+    def test_the_reason_is_stated_where_the_agent_reads_it(self):
+        section = md_section(self.text, "Tool Approval and Sandbox")
+        for flag in ("go test -exec", "go vet -vettool", "git diff --output", "sort -o"):
+            self.assertIn(flag, section)
+
+    def test_sandbox_build_cache_workaround_is_documented(self):
+        section = md_section(self.text, "Tool Approval and Sandbox")
+        self.assertIn('GOCACHE="${TMPDIR:-/tmp}/go-build"', section)
+
+
+class KillCheckNeverEditsTheSourceTests(unittest.TestCase):
+    """The kill check used to back the source up to /tmp, mutate it in place and copy it
+    back. Interrupted, that leaves the user's code mutated; in Claude Code's sandbox the
+    /tmp backup is refused outright. The executable proof that the replacement recipe works
+    lives in test_behavioral_killer.py; these pin that the old one does not come back."""
+
+    def setUp(self):
+        self.patterns = (SKILL_DIR / "references" / "killer-case-patterns.md").read_text(
+            encoding="utf-8")
+        self.skill = SKILL_MD.read_text(encoding="utf-8")
+
+    def test_no_shipped_recipe_copies_the_source_aside(self):
+        for name, text in (("SKILL.md", self.skill), ("killer-case-patterns.md", self.patterns)):
+            blocks = "\n".join(re.findall(r"```bash\s*\n(.*?)```", text, re.S))
+            self.assertNotRegex(blocks, r"^cp .*\.go", f"{name} ships an edit-in-place recipe")
+
+    def test_both_experiments_use_the_overlay(self):
+        for heading in ("### A. Kill check — mandatory", "### B. Assertion-necessity check"):
+            body = self.patterns[self.patterns.index(heading):]
+            block = re.search(r"```bash\s*\n(.*?)```", body, re.S).group(1)
+            self.assertIn('-overlay="$MUT/overlay.json"', block, heading)
+
+    def test_hard_rule_names_the_overlay(self):
+        rules = md_section(self.skill, "Hard Rules")
+        self.assertIn("go test -overlay", rules)
 
 
 if __name__ == "__main__":

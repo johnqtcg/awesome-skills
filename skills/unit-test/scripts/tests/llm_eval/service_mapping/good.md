@@ -170,7 +170,7 @@ Two, covering four hypotheses. Each is bound to a named defect and each kill was
 Critical assertions: the length check in `assertChain`, and the per-position
 `NextLevelID` comparison.
 
-`Kill: Verified` — H1 injected into a scratch copy
+`Kill: Verified` — H1 injected through `go test -overlay`
 (`for i := 0; i < len(levels)-1; i++`), re-ran, observed:
 
 ```
@@ -216,7 +216,7 @@ The two mutations land on the same line of the implementation and are still diff
 defects: the first loses the error's identity while keeping its text, the second returns
 a failure with a payload. An `errors.Is` assertion alone kills only the first.
 
-Reverting each mutation returns the suite to PASS.
+Without the overlay the suite passes again; the source file was never edited.
 
 **Assertion necessity: not claimed.** No removal check was run for these four, so no
 assertion here is reported as indispensable. What the mutation runs *do* show is weaker
