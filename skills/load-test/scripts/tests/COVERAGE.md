@@ -164,6 +164,21 @@ both `RealK6RunTests` methods and `RemoteImportReachabilityTests`)
 
 **Golden test count: 54** (8 integrity + 46 behavioral)
 
+## Empty sub-metric thresholds (2026-09-25)
+
+`k6 inspect` checks syntax; nothing checked what a filtered threshold actually filters.
+SKILL.md AE-1's "RIGHT" example thresholded `http_req_duration{phase:test}` while only the
+warmup scenario carried a `phase` tag. Measured on k6 v1.3.0: the sub-metric stayed empty
+and the run exited **0** with every measured sample at 900 ms against a 200 ms SLO; adding
+`tags: { phase: 'test' }` made the same run exit 99.
+
+| Test | Tests | Validates |
+|---|:-:|---|
+| `FilteredThresholdTests::test_every_filter_is_set_and_guarded_where_samples_are_produced` | 1 | every `metric{tag:value}` threshold in a sample-producing block of SKILL.md or k6-patterns.md has that tag set **and** a lower-bound guard on the same filter (`count>0`, `rate>=N`). Mutation-checked: reverting AE-1, dropping only its guard, and dropping one §9 guard each fail it |
+| `FilteredThresholdTests::test_skill_ae1_right_example_matches_its_filter` / `..._guard_fails_the_run_when_the_tag_is_forgotten` | 2 | runs SKILL.md's AE-1 block **as shipped** (time scale shrunk): exit 0; with the tag removed, the guard fails the run with exit 99. No server or bind needed — requests to an unresolvable host still produce tagged `http_reqs` samples, so these run inside the sandbox |
+| `FilteredThresholdTests::test_k6_still_passes_a_threshold_on_an_empty_sub_metric` | 1 | pins the k6 behaviour the rule exists for; if it starts failing, k6 fails empty sub-metrics itself and the warning in k6-patterns.md §3 should be revisited |
+| `LowerBoundGuardPredicateTests` | 2 | the guard predicate accepts `count>0`, `rate>0.5`, `rate>=1990` and rejects `count>=0`, `count==0`, `rate<0.01` — a ceiling passes on an empty sub-metric, so it is not a guard |
+
 ## Coverage Summary (documentation-contract presence, not domain correctness)
 
 Every "100%" below means "a test asserts this section/item exists and

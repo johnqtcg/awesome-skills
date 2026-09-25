@@ -55,6 +55,7 @@ export const options = {
     'http_req_duration{phase:test}': ['p(99)<200', 'p(50)<50'],
     'http_req_failed{phase:test}': ['rate<0.001'],
     'errors{phase:test}': ['rate<0.01'],
+    'http_reqs{phase:test}': ['count>0'],  // the filter must match something — see §3
   },
 };
 
@@ -248,10 +249,24 @@ thresholds: {
   'http_req_duration{name:login}': ['p(99)<500'],
   'http_req_duration{name:list_orders}': ['p(99)<100'],
 
-  // Phase-filtered (exclude warmup)
+  // Phase-filtered (exclude warmup). Needs `tags: { phase: 'test' }` on the measured
+  // scenario, and a count guard — an empty sub-metric passes every threshold on it.
   'http_req_duration{phase:test}': ['p(99)<200'],
+  'http_reqs{phase:test}': ['count>0'],
 }
 ```
+
+**A filtered threshold that matches nothing passes.** k6 evaluates a threshold on a
+sub-metric (`metric{tag:value}`) over whatever samples carry that tag; when none do, the
+aggregate is 0 and `p(99)<200` holds. Measured on k6 v1.3.0: a `test` scenario that forgot
+`tags: { phase: 'test' }` produced only 900 ms samples against a 200 ms SLO, and `k6 run`
+exited **0** — the summary line `{ phase:test }: avg=0s` was the only trace. A typo in the
+tag name, a `name` tag set on some requests but not others, or a scenario renamed during
+review all fail the same silent way. Guard every filter you threshold with a `count>0`
+threshold on a counter that shares it (`http_reqs{...}` for HTTP, your own `Counter` for
+custom metrics); with the tag missing that guard fails the run with exit 99. A throughput
+floor on the same filter (`'http_reqs{phase:test}': ['rate>=1990']`) already is such a guard —
+an empty sub-metric has rate 0. A ceiling (`count==0`, `rate<0.01`) is not: it passes empty.
 
 ### Threshold aggregation methods
 - `p(N)` — Nth percentile
@@ -376,7 +391,8 @@ export default function () {
 ```
 
 Threshold the measured phase only, the same way warmup is excluded in §1:
-`'http_req_duration{phase:measure}': ['p(99)<200']`. Without the `phase`
+`'http_req_duration{phase:measure}': ['p(99)<200']`, guarded by
+`'http_reqs{phase:measure}': ['count>0']` (§3 — an empty filter passes). Without the `phase`
 tags and early `return`, the one-time login latency for every VU blends into
 whatever metric you threshold, inflating tail latency for no reason.
 
@@ -585,6 +601,10 @@ export const options = {
     'http_req_duration{scenario:smoke}': ['p(99)<100'],
     'http_req_duration{scenario:load}': ['p(99)<200'],
     'http_req_duration{scenario:stress}': ['p(99)<500'],
+    // one guard per filtered verdict: a renamed scenario must fail, not pass (§3)
+    'http_reqs{scenario:smoke}': ['count>0'],
+    'http_reqs{scenario:load}': ['count>0'],
+    'http_reqs{scenario:stress}': ['count>0'],
     // breakpoint has no threshold — its goal is finding the ceiling, not a
     // verdict (SKILL.md §2 Gate 2 exploratory case); read dropped_iterations.
   },

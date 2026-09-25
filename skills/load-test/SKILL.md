@@ -221,11 +221,6 @@ Never fabricate performance numbers. Never claim SLO compliance without data.
 Default to k6 unless: (a) user explicitly requests another tool, (b) constant-rate
 is the only requirement (vegeta), or (c) maximum raw throughput measurement (wrk).
 
-This skill ships k6 and vegeta reference patterns. `wrk` is listed for
-tool-selection completeness but has no dedicated pattern reference here — use it
-only for simple raw-throughput probes. Distributed k6 (Operator / execution
-segments / Cloud) is named but not yet backed by a reference pattern.
-
 ### 6.2 Scenario Selection
 
 | Goal                        | Scenario        | Pattern                                             |
@@ -259,14 +254,18 @@ export const options = {
   scenarios: {
     warmup: { executor: 'constant-vus', vus: 10, duration: '30s',
               gracefulStop: '0s', tags: { phase: 'warmup' } },
-    test:   { executor: 'ramping-vus', startTime: '30s',
+    test:   { executor: 'ramping-vus', startTime: '30s', tags: { phase: 'test' },
               stages: [{ duration: '1m', target: 100 }] },
   },
   thresholds: {
     'http_req_duration{phase:test}': ['p(99)<200'],  // warmup excluded
+    'http_reqs{phase:test}': ['count>0'],  // fails if the filter matches nothing
   },
 };
 ```
+
+A filtered threshold whose sub-metric gets **no samples passes** (k6 v1.3.0: exit 0 with
+every sample over the SLO), so tag the measured scenario and pin the filter — `k6-patterns.md §3`.
 
 ### AE-2: No SLO — testing into the void
 

@@ -382,6 +382,138 @@ def options_fragments() -> list[tuple[int, str]]:
     return out
 
 
+SKILL_MD_PATH = SKILL_DIR / "SKILL.md"
+FILTERED_KEY_RE = re.compile(r"""['"](\w+)\{(\w+):([\w-]+)\}['"]\s*:\s*\[([^\]]*)\]""")
+SAMPLE_PRODUCING_RE = re.compile(r"executor\s*:|\bhttp\.\w+\(|export default")
+BOUND_RE = re.compile(r"\b(?:count|rate)\s*(>=|>)\s*([\d.]+)")
+
+
+def is_lower_bound_guard(exprs: str) -> bool:
+    """True for a bound an empty sub-metric (count 0, rate 0) cannot meet:
+    `count>0`, `rate>0.5`, `rate>=1990` — but not `count>=0`, `count==0`, `rate<0.01`."""
+    for op, num in BOUND_RE.findall(exprs):
+        value = float(num)
+        if (op == ">" and value >= 0) or (op == ">=" and value > 0):
+            return True
+    return False
+
+
+def js_blocks(path: Path) -> list[tuple[int, str]]:
+    text = path.read_text(encoding="utf-8")
+    return list(enumerate(re.findall(r"```(?:javascript|js)?\n(.*?)```", text, re.DOTALL)))
+
+
+def _k6_env() -> dict:
+    env = dict(os.environ)
+    env["K6_NO_USAGE_REPORT"] = "true"   # k6 otherwise phones stats.grafana.org
+    return env
+
+
+def _k6_run(test, source: str) -> subprocess.CompletedProcess:
+    d = tempfile.mkdtemp(prefix="k6-filter-")
+    test.addCleanup(shutil.rmtree, d, ignore_errors=True)
+    path = os.path.join(d, "script.js")
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(source)
+    return subprocess.run(["k6", "run", "--quiet", path], capture_output=True, text=True,
+                          env=_k6_env(), timeout=180)
+
+
+class LowerBoundGuardPredicateTests(unittest.TestCase):
+    def test_accepts_bounds_an_empty_sub_metric_cannot_meet(self) -> None:
+        for expr in ("'count>0'", "'rate>0.5'", "'rate>=1990'"):
+            self.assertTrue(is_lower_bound_guard(expr), expr)
+
+    def test_rejects_bounds_an_empty_sub_metric_meets(self) -> None:
+        for expr in ("'count>=0'", "'count==0'", "'rate<0.01'", "'p(99)<200'"):
+            self.assertFalse(is_lower_bound_guard(expr), expr)
+
+
+class FilteredThresholdTests(unittest.TestCase):
+    """A threshold on a tagged sub-metric that receives no samples PASSES.
+
+    Measured 2026-09-25 on k6 v1.3.0: SKILL.md AE-1's "RIGHT" example thresholded
+    `http_req_duration{phase:test}` while only the warmup scenario carried a `phase`
+    tag, so the sub-metric stayed empty and every run passed — exit 0 with every
+    measured sample over the SLO. `k6 inspect` validates syntax and cannot see it;
+    these tests look at what the threshold actually filters.
+    """
+
+    DOCS = (SKILL_MD_PATH, K6_PATTERNS)
+
+    def test_every_filter_is_set_and_guarded_where_samples_are_produced(self) -> None:
+        checked, problems = 0, []
+        for path in self.DOCS:
+            for idx, block in js_blocks(path):
+                if not SAMPLE_PRODUCING_RE.search(block):
+                    continue    # a thresholds-only catalog: no scenario to tag
+                keys = FILTERED_KEY_RE.findall(block)
+                for tag, val in sorted({(t, v) for _, t, v, _ in keys}):
+                    checked += 1
+                    where = f"{path.name} block {idx} {{{tag}:{val}}}"
+                    if not re.search(rf"\b{tag}\s*:\s*['\"]{re.escape(val)}['\"]", block):
+                        problems.append(f"{where}: no `{tag}: '{val}'` tag is set, so the "
+                                        f"sub-metric is empty and its threshold passes")
+                    if not any(t == tag and v == val and is_lower_bound_guard(e)
+                               for _, t, v, e in keys):
+                        problems.append(f"{where}: no lower-bound guard (count>0, rate>=N) "
+                                        f"on the same filter")
+        self.assertGreaterEqual(checked, 5, "filtered thresholds no longer found — guard inert")
+        self.assertEqual([], problems)
+
+    def _ae1_right(self) -> str:
+        text = SKILL_MD_PATH.read_text(encoding="utf-8")
+        section = text[text.index("### AE-1"):text.index("### AE-2")]
+        body = section[section.index("# RIGHT"):].split("\n", 1)[1].split("```")[0]
+        # shipped options as written; only the time scale and VU count are shrunk, and the
+        # unresolvable host makes each request fail fast (a failed request is still a
+        # tagged http_reqs sample), so no server or bind is needed
+        for old, new in (("'30s'", "'1s'"), ("'1m'", "'1s'"), ("vus: 10", "vus: 1"),
+                         ("target: 100", "target: 1")):
+            body = body.replace(old, new)
+        return ("import http from 'k6/http';\nimport { sleep } from 'k6';\n" + body +
+                "\nexport default function () { http.get('http://api/endpoint'); sleep(0.2); }\n")
+
+    @unittest.skipUnless(shutil.which("k6"), "k6 not installed")
+    def test_skill_ae1_right_example_matches_its_filter(self) -> None:
+        source = self._ae1_right()
+        self.assertIn("tags: { phase: 'test' }", source)
+        proc = _k6_run(self, source)
+        self.assertEqual(0, proc.returncode, proc.stdout + proc.stderr)
+
+    @unittest.skipUnless(shutil.which("k6"), "k6 not installed")
+    def test_guard_fails_the_run_when_the_tag_is_forgotten(self) -> None:
+        source = self._ae1_right().replace(" tags: { phase: 'test' },", "")
+        self.assertNotIn("phase: 'test'", source)
+        proc = _k6_run(self, source)
+        self.assertEqual(99, proc.returncode,
+                         "with the measured scenario untagged, the count>0 guard must fail "
+                         "the run:\n" + proc.stdout + proc.stderr)
+
+    @unittest.skipUnless(shutil.which("k6"), "k6 not installed")
+    def test_k6_still_passes_a_threshold_on_an_empty_sub_metric(self) -> None:
+        """Pins the k6 behaviour the rule exists for. If this starts failing, k6 now fails
+        empty sub-metrics itself — revisit the warning in k6-patterns.md §3."""
+        source = (
+            "import { Trend } from 'k6/metrics';\n"
+            "const lat = new Trend('lat', true);\n"
+            "export const options = {\n"
+            "  scenarios: {\n"
+            "    warmup: { executor: 'constant-vus', vus: 1, duration: '1s', gracefulStop: '0s',\n"
+            "              tags: { phase: 'warmup' }, exec: 'warm' },\n"
+            "    test: { executor: 'constant-vus', vus: 1, duration: '1s', startTime: '1s',\n"
+            "            exec: 'run' },\n"
+            "  },\n"
+            "  thresholds: { 'lat{phase:test}': ['p(99)<200'] },\n"
+            "};\n"
+            "export function warm() { lat.add(5); }\n"
+            "export function run() { lat.add(900); }\n"
+        )
+        proc = _k6_run(self, source)
+        self.assertEqual(0, proc.returncode,
+                         "k6 no longer passes an empty sub-metric:\n" + proc.stdout + proc.stderr)
+
+
 class OptionsFragmentTests(unittest.TestCase):
     def test_options_fragments_found(self) -> None:
         self.assertGreaterEqual(
