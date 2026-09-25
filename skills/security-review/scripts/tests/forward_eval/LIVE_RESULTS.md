@@ -398,3 +398,54 @@ SECURITY_REVIEW_EVAL_CMD="$PWD/scripts/eval_live.sh" \
 Budget ~60 min and 8 model calls at roughly 60-80k prompt tokens each. `claude` needs its
 credentials; under a sandboxed parent this surfaces as "Not logged in", which is the sandbox
 denying `~/.claude/.credentials.json`, not an expired session.
+
+## Run 5 — 2026-09-25, first run with a control arm (`scripts/eval_ab.py`)
+
+Every earlier run graded the with-skill arm alone, so "the skill finds more" had no baseline.
+Run 5 sends each fixture through `eval_live.sh` twice: the skill prompt (unchanged from Run 4)
+and a control prompt — the code, the same no-authorization fact, and a one-line request for
+`{"findings": [{"cwe": ...}]}`. Both arms are graded by `detection_outcome()` (true positive:
+the expected CWE is reported; false positive: the tested class is not). Only the skill arm can
+be held to the full `grade()` — the control was never shown the contract.
+
+| | |
+|---|---|
+| Reviewer | `claude -p`, `claude-opus-5` (unchanged since Run 3), 4 workers |
+| Wall clock | skill arm 261–509 s per scenario; control arm 49–176 s |
+| **Detection / suppression** | **skill 7/8 · control 8/8** |
+| Full grade (skill arm) | **4/8** — up from Run 4's 1/8 |
+
+| Scenario | Pol. | Skill det. | Control det. | Skill full | Skill-arm grader reason |
+|---|---|---|---|---|---|
+| `idor_true_positive` | TP | ✅ | ✅ | PASS | — |
+| `ssrf_false_positive` | FP | ❌ | ✅ | FAIL | CWE-918 reported (see below) + CWE-79 not in the adjacent allowlist |
+| `python_pickle_true_positive` | TP | ✅ | ✅ | PASS | — |
+| `python_stdlib_xxe_false_positive` | FP | ✅ | ✅ | FAIL | CWE-190, CWE-770 not in the adjacent allowlist |
+| `nodejs_prototype_pollution_true_positive` | TP | ✅ | ✅ | FAIL | severity P0 outside the band [P1]; `ASVS 4.0.3 V5.1 (section-level)` fails the ASVS pattern |
+| `nodejs_execfile_false_positive` | FP | ✅ | ✅ | PASS | — |
+| `java_deserialization_true_positive` | TP | ✅ | ✅ | FAIL | `impact_basis` missing on the CWE-502 finding |
+| `java_xxe_hardened_false_positive` | FP | ✅ | ✅ | PASS | — |
+
+**What moved.** The `suppressed[]` schema violations that failed 7 of 8 scenarios in Run 4 are
+gone: the clarification added after Run 4 (`candidate`, **not** `class`; `residual_risk`, **not**
+`residual`) reached the reviewer through the attached `authorization-and-policy.md` and worked.
+
+**What the control arm shows.** On the tested classes the skill did not detect more: the
+control found all four true positives and reported none of the four tested false-positive
+classes. The skill arm also reported 2–4 adjacent CWEs per scenario (CWE-209, -306, -400, -770,
+-674 …) where the control reported only the tested one — breadth the skill asks for, noise if
+the fixture's adjacent allowlist does not cover it.
+
+**The SSRF "loss" is a fixture-scope question, not settled here.** The skill arm *did* suppress
+the tested class — its `suppressed[]` records "SSRF via user-controlled fetch URL", rule 2 — and
+then reported a different path under the same CWE: `http.Get` follows up to 10 redirects by
+default and the allowlist is checked once, so a compromised or open-redirecting partner can
+steer the request to `169.254.169.254`. It rated that `P3`, `likely`, `assessed`, requiring a
+hostile partner. The grader counts any CWE-918 finding as the false positive. Whether a
+redirect-following hardening note is the tested class is a decision about the fixture; the
+grader was deliberately not loosened to turn this row green.
+
+**Reading.** N = 1 per arm, one model. The skill's measurable effect in this run is the
+audit-grade report — suppression records, severity rationale, domain coverage, reproducers
+labelled unexecuted — at 3–5× the latency, not additional detection on these eight fixtures.
+Raw outputs of this run are not committed; re-run with `scripts/eval_ab.py --out <dir>`.

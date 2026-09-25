@@ -1,7 +1,7 @@
 ---
 name: security-review
 description: Exploitability-first standalone security review of code changes, diffs, PRs, or services. Use when asked for a security review, security audit, vulnerability assessment, or pre-merge security check (安全审查/安全评审/漏洞排查) — covers auth, input, secrets, API, data, concurrency, container, third-party, and dependency risk across Go, Node.js/TypeScript, Java, and Python, with mandatory evidence, false-positive suppression, scope-based depth (Lite/Standard/Deep), and CWE/OWASP-mapped machine-readable output. NOT for general-purpose Go code review — use go-review-lead for that (it dispatches go-security-review as its security dimension); this skill is the deeper security-only process with mandatory gates and audit-grade output.
-allowed-tools: Read, Grep, Glob, Bash(git diff*), Bash(go vet*), Bash(go build*), Bash(go test -race*), Bash(gosec*), Bash(govulncheck*), Bash(semgrep*), Bash(npm audit*), Bash(curl*), Bash(mvn dependency:tree*), Bash(mvn org.owasp:dependency-check-maven:check*), Bash(mvn spotbugs:check*), Bash(pip-audit*), Bash(safety scan*), Bash(bandit*)
+allowed-tools: Read, Grep, Glob
 ---
 
 # Security Review
@@ -346,8 +346,21 @@ Basis: <who authorized it, or which local/test environment it is>
 `Active verification` is `NOT permitted`. Do not infer authorization from the presence of a
 hostname in the code, a `.env` file, a README, or a CI config.
 
-Always allowed: reading code/config/diffs, static scanners on local source, local test runs,
-and requests to `127.0.0.1`/`localhost` or a container you started.
+Always allowed: reading code/config/diffs, static scanners on local source, and requests to
+`127.0.0.1`/`localhost` or a container you started.
+
+**Executing the code under review is its own gate.** A PR is untrusted input: its tests, its
+`init()` functions, its install scripts and its build plugins are code the author controls.
+Running `go test`, `go generate`, `npm install` / `npm audit fix`, `pip install`, or a Maven /
+Gradle build executes that code on the reviewer's machine. Ask the user before the first such
+command, prefer a throwaway container with no credentials and no network, and treat an external
+or fork PR as static-only until they say otherwise. If it does not run, record the skipped check
+(e.g. Gate D7's race run) under `Uncovered Risk List` — never report it as passed.
+
+**No command is pre-approved** (`allowed-tools` is `Read, Grep, Glob`): a prefix rule cannot
+exclude flags, and the old grants reached far past their names — `go test -race*` ran a PR's
+`init()` unprompted, `curl*` covers `curl -o <file>` and `curl -d @<file> <host>`, `npm audit*`
+covers `npm audit fix`. The permission prompt is where the user applies this gate.
 
 Never without explicit authorization: any request to a host you did not stand up (including
 read-only `GET` to staging/production), authenticating with credentials found in the repo, or

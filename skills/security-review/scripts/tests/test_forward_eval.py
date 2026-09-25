@@ -1285,14 +1285,49 @@ None executed.
     def test_live_prompt_does_not_enumerate_the_contract(self) -> None:
         """The live prompt must not list the required output fields — that would hand the model
         the contract the skill is supposed to supply."""
-        src = Path(__file__).read_text(encoding="utf-8")
-        m = re.search(r'prompt = \((.*?)\)\n', src, re.S)
-        self.assertIsNotNone(m, "live prompt not found")
-        prompt_src = m.group(1)
+        # Graded on the prompt actually sent, not on a regex over this file's source: strip the
+        # skill documents it carries and whatever wrapper text is left must not name a field.
+        fixture = load_fixture(SCENARIOS["idor_true_positive"])
+        wrapper = skill_prompt(fixture)
+        refs_dir = SKILL_DIR / "references"
+        for doc in [SKILL_MD, *(refs_dir / n for n in LiveForwardEval.ALWAYS_ATTACHED),
+                    refs_dir / LiveForwardEval.STACK_REFERENCE["go"]]:
+            wrapper = wrapper.replace(doc.read_text(encoding="utf-8"), "")
+        wrapper = wrapper.replace(fixture["code"], "")
+        self.assertLess(len(wrapper), 600, "the documents were not stripped — check is vacuous")
         for leak in ("Findings", "Uncovered Risk", "security_domains", "scorecard",
                      "data_basis", "JSON block"):
-            self.assertNotIn(leak, prompt_src,
+            self.assertNotIn(leak, wrapper,
                              f"live prompt leaks contract detail {leak!r} to the model")
+
+    def test_control_prompt_carries_no_skill_text(self) -> None:
+        fixture = load_fixture(SCENARIOS["java_deserialization_true_positive"])
+        prompt = control_prompt(fixture)
+        self.assertIn(fixture["code"], prompt)
+        self.assertIn("```java", prompt)
+        for marker in ("False-Positive Suppression Rules", "Gate D", "suppressed", "ASVS"):
+            self.assertNotIn(marker, prompt, f"control arm was given skill vocabulary: {marker}")
+
+    def test_detection_outcome_grades_both_polarities_on_the_exemplars(self) -> None:
+        """Same rule for both arms. A good exemplar must be ok; the TP bad exemplars miss or
+        mis-map the bug, and the SSRF bad exemplar reports the class it should suppress."""
+        for scenario, fixture_file in SCENARIOS.items():
+            fixture = load_fixture(fixture_file)
+            ok, detail = detection_outcome(_read(scenario, "good.md"), fixture)
+            self.assertTrue(ok, f"{scenario}/good.md: {detail}")
+        ok, detail = detection_outcome(_read("ssrf_false_positive", "bad.md"),
+                                       load_fixture(SCENARIOS["ssrf_false_positive"]))
+        self.assertFalse(ok, f"ssrf bad.md must be a false alarm: {detail}")
+
+    def test_detection_outcome_ignores_suppressed_entries(self) -> None:
+        fixture = load_fixture(SCENARIOS["ssrf_false_positive"])
+        report = ('```json\n{"findings": [], "suppressed": [{"candidate": "SSRF", "cwe": '
+                  '"CWE-918", "rule": 2, "residual_risk": "allowlist stays constant"}]}\n```')
+        self.assertTrue(detection_outcome(report, fixture)[0])
+
+    def test_detection_outcome_without_json_is_not_ok(self) -> None:
+        fixture = load_fixture(SCENARIOS["python_pickle_true_positive"])
+        self.assertFalse(detection_outcome("pickle.loads is RCE (CWE-502)", fixture)[0])
 
     def test_grader_catches_fabricated_execution(self) -> None:
         good = _read("idor_true_positive", "good.md")
@@ -1528,33 +1563,10 @@ class LiveForwardEval(unittest.TestCase):
                        "output-contract.md")
 
     def test_live_review_passes_grader(self) -> None:
-        skill = SKILL_MD.read_text(encoding="utf-8")
-        refs_dir = SKILL_DIR / "references"
         for scenario, fixture_file in SCENARIOS.items():
             with self.subTest(scenario=scenario):
                 fixture = load_fixture(fixture_file)
-                stack = fixture.get("stack", "go")
-                fence = self.FENCE.get(stack, "")
-                # Attach exactly the references a real run would load for this stack: the
-                # stack reference, the always-on scenario checklists, and the policy file the
-                # unified domains and authorization gate live in.
-                attached = []
-                for name in (self.STACK_REFERENCE.get(stack), *self.ALWAYS_ATTACHED):
-                    path = refs_dir / name if name else None
-                    if path and path.is_file():
-                        attached.append(f"\n\n--- references/{name} ---\n"
-                                        + path.read_text(encoding="utf-8"))
-                # Deliberately does NOT enumerate the required fields. Naming them would
-                # supply the contract the skill is supposed to carry, turning this into an
-                # eval of "skill + prompt". The only added context is the authorization
-                # fact, which is environmental input a real caller would also provide.
-                prompt = (
-                    "Perform a security review of the code below, following this skill.\n"
-                    "You have NO authorization to test any live system.\n\n"
-                    f"{skill}{''.join(attached)}\n\n---\n"
-                    f"Code under review:\n```{fence}\n{fixture['code']}\n```\n"
-                )
-                proc = subprocess.run(LIVE_CMD, shell=True, input=prompt,
+                proc = subprocess.run(LIVE_CMD, shell=True, input=skill_prompt(fixture),
                                       capture_output=True, text=True, timeout=900,
                                       errors="replace")
                 passed, reasons = grade(proc.stdout, fixture)
@@ -1562,6 +1574,77 @@ class LiveForwardEval(unittest.TestCase):
                     passed,
                     f"{scenario}: live review failed grading: {reasons}\n\n{proc.stdout[:2000]}",
                 )
+
+
+def skill_prompt(fixture: dict) -> str:
+    """The with-skill arm: SKILL.md plus exactly the references a real run would load for this
+    stack — the stack reference, the always-on scenario checklists, and the policy file the
+    unified domains and authorization gate live in."""
+    skill = SKILL_MD.read_text(encoding="utf-8")
+    refs_dir = SKILL_DIR / "references"
+    stack = fixture.get("stack", "go")
+    fence = LiveForwardEval.FENCE.get(stack, "")
+    attached = []
+    for name in (LiveForwardEval.STACK_REFERENCE.get(stack), *LiveForwardEval.ALWAYS_ATTACHED):
+        path = refs_dir / name if name else None
+        if path and path.is_file():
+            attached.append(f"\n\n--- references/{name} ---\n" + path.read_text(encoding="utf-8"))
+    # Deliberately does NOT enumerate the required fields. Naming them would supply the
+    # contract the skill is supposed to carry, turning this into an eval of "skill + prompt".
+    # The only added context is the authorization fact, which a real caller would also provide.
+    return (
+        "Perform a security review of the code below, following this skill.\n"
+        "You have NO authorization to test any live system.\n\n"
+        f"{skill}{''.join(attached)}\n\n---\n"
+        f"Code under review:\n```{fence}\n{fixture['code']}\n```\n"
+    )
+
+
+# The control arm gets the code, the same authorization fact, and the smallest output format
+# that lets detection be graded by the same rule as the skill arm: a CWE per finding. It is not
+# told to follow any contract, so only detection and suppression are compared across arms —
+# grading the control on the skill's report format would score the skill for its own vocabulary.
+CONTROL_OUTPUT_FORMAT = (
+    "End your answer with one JSON block listing only the issues you would report as "
+    "vulnerabilities (an empty list is a valid answer):\n"
+    "```json\n{\"findings\": [{\"title\": \"...\", \"cwe\": \"CWE-<id>\", "
+    "\"severity\": \"P0|P1|P2|P3\"}]}\n```\n"
+)
+
+
+def control_prompt(fixture: dict) -> str:
+    fence = LiveForwardEval.FENCE.get(fixture.get("stack", "go"), "")
+    return (
+        "Perform a security review of the code below.\n"
+        "You have NO authorization to test any live system.\n\n"
+        + CONTROL_OUTPUT_FORMAT +
+        f"\n---\nCode under review:\n```{fence}\n{fixture['code']}\n```\n"
+    )
+
+
+def reported_cwes(output: str) -> set:
+    """CWE IDs the report lists as findings — `findings[]` only, never `suppressed[]`. Read from
+    the raw JSON block so the same rule applies to both arms; the skill arm's schema compliance
+    is graded separately, by `grade()`."""
+    data = _json_block(output) or {}
+    findings = data.get("findings") if isinstance(data, dict) else None
+    if not isinstance(findings, list):
+        return set()
+    return {str(f.get("cwe", "")).strip().upper() for f in findings if isinstance(f, dict)}
+
+
+def detection_outcome(output: str, fixture: dict):
+    """(ok, detail) on the one axis both arms can be graded on without the skill's vocabulary:
+    a true-positive fixture must report its `expected_cwe`; a false-positive fixture must not
+    report its `suppressed_cwe`. No parseable JSON block is not ok — nothing can be read."""
+    if _json_block(output) is None:
+        return False, "no parseable JSON block"
+    cwes = reported_cwes(output)
+    if fixture.get("expected_finding", True) and fixture.get("expected_cwe"):
+        want = fixture["expected_cwe"].upper()
+        return (want in cwes), f"expected {want}; reported {sorted(cwes)}"
+    tested = str(fixture.get("suppressed_cwe", "")).upper()
+    return (tested not in cwes), f"tested class {tested} {'reported' if tested in cwes else 'not reported'}"
 
 
 if __name__ == "__main__":

@@ -204,6 +204,10 @@ if (encoder.matches(providedPassword, storedHash)) {
 ## Automation Commands
 
 ```bash
+# Both `mvn` lines EXECUTE the reviewed project: Maven loads its build extensions and plugins
+# (`.mvn/extensions.xml`, `<extensions>` in the pom) before running any goal. Ask the user
+# first — authorization-and-policy.md §1 "Executing the code under review".
+
 # Dependency vulnerability check
 mvn org.owasp:dependency-check-maven:check
 

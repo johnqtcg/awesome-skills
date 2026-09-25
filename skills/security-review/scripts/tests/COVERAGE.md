@@ -98,13 +98,13 @@ direction — see `../../references/lang-python.md § Python XML` and the execut
 | False positives | 8 |
 | Categories covered | auth, secrets, injection, concurrency, resource_lifecycle, session, container, endpoint, ssrf, crypto, deserialization, prototype_pollution, xxe |
 | Stacks with both polarities | go, python, nodejs, java (enforced by `test_every_supported_stack_has_a_behavioural_fixture`) |
-| Contract tests | 89 |
+| Contract tests | 94 |
 | Golden-fixture tests | 37 |
 | Executable-example tests | 49 |
-| Forward-eval tests | 71 |
+| Forward-eval tests | 75 |
 | Report-schema tests | 80 |
-| **Total tests** | **326** |
-| SKILL.md lines | 446 (budget: ≤ 500, 54 lines headroom) |
+| **Total tests** | **335** |
+| SKILL.md lines | 459 (budget: ≤ 500, 41 lines headroom) |
 
 These counts are **self-checking** — `test_skill_contract.py::TestCoverageDocAccuracy` recomputes
 them from disk and fails if this table drifts. They previously read 46 tests / 494 lines while the
@@ -121,7 +121,7 @@ skills/security-review` collects them directly.
 | `examples/python/xml_facts_test.py` adds 18 more: | 18 | yes (lxml installed; Expat rows always) |
 | `examples/python/jinja_ssti_facts_test.py` adds 10 more: | 6 | **no** — jinja2 is not installed and no package index is reachable, so § SSTI is documentation-verified here and execution-verified wherever Jinja exists. `run_regression.sh` reports it as a named skip |
 
-`pytest` collects it directly and reports 354. Both numbers are correct for what they count;
+`pytest` collects it directly and reports 363. Both numbers are correct for what they count;
 neither is the other's error.
 
 ## Test Layers
@@ -145,6 +145,20 @@ skill well-formed?". See `forward_eval/README.md` for the honesty boundary.
 | Node.js | `examples/node` (`node --test`) | `safeTokenEqual` never throws on attacker-chosen lengths; raw-buffer misuse raises `RangeError` |
 | Python | `examples/python/xml_facts_test.py` | every row of §Python XML: no stdlib XXE (ElementTree, minidom, AND sax — each run directly, not inferred from ElementTree), `sax`'s `feature_external_ges` opt-in reopens it, bounded substitution occurs, amplification bomb refused on Expat ≥ 2.4.0, lxml ordinary parsers safe since 5.0.0, `iterparse`/`ETCompatXMLParser` XXE below 6.1.0 (CVE-2026-41066), `no_network=False` alone makes no fetch attempt |
 | Java | **none** | Known gap: the Java guidance has golden + forward-eval coverage (GOLDEN-024/025) but no compiled probe, so its `disallow-doctype-decl` claim is asserted from documentation rather than measured. Adding one requires a JDK + Maven in CI. |
+
+## Round 4 — execution boundary and a control arm (2026-09-25)
+
+| Guard | Defect it pins |
+|---|---|
+| `TestExecutingReviewedCodeIsGated` (5) | the frontmatter pre-approved 17 prefix rules (`go test -race*`, `go build*`, `go vet*`, `npm audit*`, `curl*`, `mvn …`, `pip-audit*` …) and the policy called "local test runs" always allowed. Reproduced: a `_test.go` `init()` ran unprompted under `go test -race ./...`; `curl -o` wrote a file. `allowed-tools` is now `Read, Grep, Glob`, executing the reviewed code is its own gate, and the `go test` / `mvn` commands are marked as executing. Mutation-checked: restoring the old tools line or the "local test runs" phrase each fail a test |
+| `test_control_prompt_carries_no_skill_text`, `test_detection_outcome_*` (4) | `scripts/eval_ab.py` grades both arms on the one axis a reviewer never shown the contract can be held to; the skill arm still gets the full `grade()` |
+| `test_live_prompt_does_not_enumerate_the_contract` (rewritten) | it regex-matched `prompt = (...)` in this file's source; it now strips the attached documents from the prompt actually sent and checks what is left |
+
+`jinja2` added to `requirements.txt` (`jsonschema` was already declared). With both installed,
+the schema cross-check and the SSTI fact rows run and pass; without them they still skip loudly.
+
+Run 5 (first A/B): detection skill 7/8, control 8/8; skill full grade 4/8 (Run 4: 1/8).
+Details and the SSRF fixture-scope question: `forward_eval/LIVE_RESULTS.md` § Run 5.
 
 ## Gap Analysis
 

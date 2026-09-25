@@ -137,6 +137,23 @@ host repo's coding policy), inherited MCP servers, tool access (which lets the r
 fixture's own JSON and recall the expected verdict instead of deriving it), and multi-turn
 agentic loops.
 
+### With-skill vs. control (A/B)
+
+```bash
+cd skills/security-review
+SECURITY_REVIEW_EVAL_CMD="$PWD/scripts/eval_live.sh" \
+  python3 scripts/eval_ab.py --out /path/to/run-dir --workers 4
+```
+
+Runs every fixture twice through the same command: once with the skill (`skill_prompt()`, the
+prompt the unittest hook sends) and once without it (`control_prompt()`: the code, the same
+authorization fact, and a one-line request for `{"findings": [{"cwe": ...}]}`). Both arms are
+graded by `detection_outcome()` — the true positive's CWE reported, the false positive's tested
+class not reported — because that is the only axis a reviewer never shown the contract can fairly
+be held to. The skill arm is also graded by the full `grade()`. Outputs are saved before grading;
+`--grade-only` re-grades a run directory after a grader fix. Without a control arm, "the skill
+finds more" was never measured — every run before this graded the with-skill arm alone.
+
 Results are recorded in `LIVE_RESULTS.md` alongside this file, with the date, model, and the
 grader verdict per scenario — including failures. A live eval whose results are not written down
 is indistinguishable from one that never ran.

@@ -16,9 +16,31 @@ not authorized to test is unauthorized activity, regardless of intent.
 | Always allowed | Never allowed without explicit authorization |
 |---|---|
 | Reading code, config, diffs, manifests | Any request to a host you did not stand up |
-| Static scanners on local source (`gosec`, `semgrep`, `bandit`, `govulncheck`, `npm audit`) | Requests to staging/production, even read-only `GET` |
-| `go test -race` and other local test runs | Authenticating with credentials found in the repo |
-| Requests to `127.0.0.1` / `localhost` / a container you started for this review | Scanning a third party's host or a vendor API |
+| Static scanners on local source (`gosec`, `semgrep`, `bandit`, `govulncheck`, `npm audit` without `fix`) | Requests to staging/production, even read-only `GET` |
+| Requests to `127.0.0.1` / `localhost` / a container you started for this review | Authenticating with credentials found in the repo |
+| | Scanning a third party's host or a vendor API |
+
+### Executing the code under review needs the user's go-ahead
+
+This is a third category, separate from both columns above: it touches no remote system, yet it
+is not static either. A change under review is untrusted input, and running it runs its author's
+code with the reviewer's privileges:
+
+| Command | What of the reviewed code it executes |
+|---|---|
+| `go test` (incl. `-race`) | every `init()` and test function in the package and its test files |
+| `go generate` | every `//go:generate` directive — an arbitrary command line |
+| `npm install`, `npm audit fix`, `pip install`, `pip-audit` on an unpinned tree | install / build scripts of the declared dependencies |
+| `mvn …`, `gradle …` | the project's own build extensions and plugins (`.mvn/extensions.xml`, `buildSrc`) |
+
+Verified 2026-09-25: a `_test.go` whose `init()` writes a file ran as soon as `go test -race ./...`
+was invoked — under this skill's former `Bash(go test -race*)` pre-approval, with no prompt.
+
+- Ask the user before the first command in this table, and say which one and why.
+- Prefer a disposable container with no credentials, no SSH agent, and no network.
+- Treat an external or fork PR as **static-only** until the user says otherwise.
+- A check that did not run because approval was withheld goes under `Uncovered Risk List` (Gate
+  D7's race run is the usual one) — never reported as passed, never silently dropped.
 
 Ambiguous cases — a `.test`/`.local` domain, a shared dev cluster, a hostname in
 `docker-compose.yml` you did not launch — are **not permitted**; ask first. Never infer
@@ -234,7 +256,8 @@ All of these run against local source. Anything targeting a running system first
 # secret pattern sweep
 rg -n "(AKIA[0-9A-Z]{16}|-----BEGIN (RSA|EC|OPENSSH|PRIVATE) KEY-----|ghp_[A-Za-z0-9]{36}|xox[baprs]-|AIza[0-9A-Za-z\-_]{35}|password\s*=|secret\s*=|token\s*=)" .
 
-# Go race detector on changed packages (mandatory for Standard/Deep if tests exist)
+# Go race detector on changed packages (Standard/Deep if tests exist) — EXECUTES the reviewed
+# code: only after the user approves it (§1 "Executing the code under review")
 go test -race -count=1 ./path/to/changed/...
 
 # Go security scanners
@@ -244,8 +267,8 @@ govulncheck ./...
 # Optional cross-check: module exposure view (may include unreachable vulns).
 # binary mode takes a BUILT ARTIFACT, not a package pattern —
 # `govulncheck -mode=binary ./...` fails with `"./..." is not a file`.
-go build -o /tmp/scan-target ./cmd/server
-govulncheck -mode=binary /tmp/scan-target
+go build -o "${TMPDIR:-/tmp}/scan-target" ./cmd/server   # /tmp itself is not writable in the sandbox
+govulncheck -mode=binary "${TMPDIR:-/tmp}/scan-target"
 ```
 
 Node / Java / Python equivalents live in the matching `lang-*.md` reference.

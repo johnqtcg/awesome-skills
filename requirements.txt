@@ -6,6 +6,8 @@ pyyaml>=6,<7
 # Both degrade to an accounted-for skip rather than a silent pass.
 lxml>=5,<7
 jsonschema>=4,<5
+# skills/security-review: verifies the SSTI rows (autoescape is not a sandbox) against real Jinja.
+jinja2>=3,<4
 reportlab>=4,<5
 python-docx>=1.1,<2
 opencc-python-reimplemented>=0.1.7,<1

@@ -996,5 +996,45 @@ class TestRunNumbersAreNotReadAsDetectionRates(unittest.TestCase):
         self.assertRegex(text, r"(?i)categories explain results; they do not improve")
 
 
+class TestExecutingReviewedCodeIsGated(unittest.TestCase):
+    """A PR under review is untrusted input. The frontmatter used to pre-approve
+    `go test -race*`, `go build*`, `go vet*`, `npm audit*`, `mvn …`, `pip-audit*` and `curl*`,
+    and the authorization table listed "local test runs" as always allowed. Verified
+    2026-09-25: a `_test.go` whose `init()` wrote a file ran the moment `go test -race ./...` was
+    invoked, with no prompt; `curl -o` wrote an arbitrary file under `curl*`."""
+
+    def setUp(self):
+        self.skill = SKILL_MD.read_text(encoding="utf-8")
+        self.policy = (REFERENCES_DIR / "authorization-and-policy.md").read_text(encoding="utf-8")
+
+    def test_no_bash_command_is_pre_approved(self):
+        tools = re.search(r"(?m)^allowed-tools:\s*(.+)$", frontmatter(self.skill)).group(1)
+        self.assertEqual([], re.findall(r"Bash\(([^)]*)\)", tools),
+                         "allow-list the safe shape: a prefix rule cannot exclude flags")
+
+    def test_skill_gate_separates_executing_the_code_from_static_review(self):
+        always = re.search(r"Always allowed:(.*?)\n\n", self.skill, re.S).group(1)
+        self.assertNotRegex(always, r"(?i)test run", "test runs execute the reviewed code")
+        self.assertIn("Executing the code under review is its own gate", self.skill)
+        self.assertRegex(self.skill, r"static-only until")
+
+    def test_policy_table_lists_what_each_command_executes(self):
+        table = self.policy.split("### Executing the code under review")[1].split("\n- ")[0]
+        for cmd in ("go test", "go generate", "npm audit fix", "mvn"):
+            self.assertIn(cmd, table)
+        always_col = self.policy.split("### What is permitted without asking")[1].split("###")[0]
+        self.assertNotRegex(always_col, r"(?i)go test -race|local test runs")
+
+    def test_race_command_is_marked_as_executing(self):
+        section = self.policy.split("## 7. Automation Commands")[1]
+        line_idx = section.index("go test -race -count=1")
+        self.assertIn("EXECUTES the reviewed", section[max(0, line_idx - 250):line_idx])
+
+    def test_maven_commands_are_marked_as_executing(self):
+        java = (REFERENCES_DIR / "lang-java.md").read_text(encoding="utf-8")
+        block = java.split("## Automation Commands")[1].split("```")[1]
+        self.assertIn("EXECUTE the reviewed project", block)
+
+
 if __name__ == "__main__":
     unittest.main()
