@@ -74,4 +74,22 @@ fi
 echo "discovery script completes on an empty directory"
 echo ""
 
-echo "=== All tests passed ==="
+# Opt-in layers need npm, network, or a model. Run what was asked for, and name what
+# was not: a green line that hides a skipped layer reads as coverage it is not.
+SKIPPED=()
+if [ "${E2E_VERIFY_EXAMPLES:-}" = "1" ]; then
+  echo "--- GOOD examples load in real Playwright ---"
+  python3 "${SCRIPT_DIR}/verify_examples_load.py"
+  echo ""
+else
+  SKIPPED+=("example load check (E2E_VERIFY_EXAMPLES=1; needs npm + network)")
+fi
+SKIPPED+=("hook semantics (bash scripts/verify_hook_semantics.sh; needs npm + network)")
+if [ "${E2E_LLM_EVAL:-}" != "1" ]; then
+  SKIPPED+=("live model eval (E2E_LLM_EVAL=1)")
+fi
+
+echo "=== PASS WITH SKIPS — offline suite green; not run here: ==="
+for s in "${SKIPPED[@]}"; do
+  echo "  - ${s}"
+done

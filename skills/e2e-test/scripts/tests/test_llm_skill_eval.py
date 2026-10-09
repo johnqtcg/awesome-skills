@@ -28,6 +28,7 @@ import json
 import os
 import re
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -36,20 +37,19 @@ SKILL_DIR = TESTS_DIR.parent.parent
 EVAL_DIR = TESTS_DIR / "llm_eval"
 
 CODE_LANGS = {"ts", "typescript", "tsx", "js", "javascript", "jsx"}
-FENCE_RE = re.compile(r"^```([A-Za-z0-9_+-]*)\s*$")
 
 
-def load_linter(alias: str):
-    """Import scripts/lint_e2e_spec.py by path.
+def _load_script(stem: str, alias: str):
+    """Import scripts/<stem>.py by path.
 
-    Registered in sys.modules *before* exec_module: the module uses
+    Registered in sys.modules *before* exec_module: the scripts use
     `from __future__ import annotations`, so @dataclass resolves its field types via
     sys.modules[cls.__module__] and raises AttributeError on None when it is absent.
     """
     import importlib.util
     import sys
 
-    path = SKILL_DIR / "scripts" / "lint_e2e_spec.py"
+    path = SKILL_DIR / "scripts" / f"{stem}.py"
     spec = importlib.util.spec_from_file_location(alias, path)
     assert spec and spec.loader, f"cannot load {path}"
     module = importlib.util.module_from_spec(spec)
@@ -58,36 +58,13 @@ def load_linter(alias: str):
     return module
 
 
-def code_blocks(markdown: str) -> list[tuple[int, str, str]]:
-    """Yield (start_line, lang, body) for every fenced block.
+def load_linter(alias: str):
+    return _load_script("lint_e2e_spec", alias)
 
-    Line-oriented rather than regex-over-the-whole-document, and it follows the
-    CommonMark closing rule: a fence line carrying an info string (```` ```ts ````) is
-    *content* inside an open block, never a closer. Only a bare fence closes. A
-    non-greedy regex gets this wrong on any response that shows a fence inside a
-    fence — and a skill that teaches by example does that constantly.
-    """
-    out: list[tuple[int, str, str]] = []
-    lines = markdown.split("\n")
-    i = 0
-    while i < len(lines):
-        m = FENCE_RE.match(lines[i])
-        if not m:
-            i += 1
-            continue
-        lang = m.group(1).lower()
-        start = i
-        i += 1
-        body: list[str] = []
-        while i < len(lines):
-            close = FENCE_RE.match(lines[i])
-            if close and not close.group(1):
-                break
-            body.append(lines[i])
-            i += 1
-        i += 1  # consume the closing fence
-        out.append((start + 1, lang, "\n".join(body)))
-    return out
+
+# One CommonMark-aware fence parser for the whole skill: the real-Playwright example
+# loader owns it, and this grader and its tests use the same function.
+code_blocks = _load_script("verify_examples_load", "verify_examples_load_llm_eval").code_blocks
 
 
 def grade(response: str, meta: dict, linter) -> list[str]:
@@ -247,6 +224,68 @@ class GraderSelfTests(unittest.TestCase):
         self.assertEqual([(3, "ts", "const a = 1;")], blocks)
 
 
+RUN_CONTEXT = (
+    "Run context: this is a single-turn, non-interactive evaluation. You have no tools, "
+    "no shell and no access to the repository; everything known about it is stated in "
+    "the task. Do not attempt tool calls. Wherever the skill says to run or inspect "
+    "something, use the stated facts, report the step as not run, and give the exact "
+    "command the user should run. Answer the task completely in this one response."
+)
+
+
+def live_prompt(skill_md: str, task: str) -> str:
+    """The skill, the run context, and the task.
+
+    The run context is stated because the skill's own first steps are "run the discovery
+    script" and "inspect the repository". Without it a tool-less model emits a pseudo
+    tool call and stops — measured: an 88-character response ending in "**Tool: bash**",
+    graded as missing every required item. That grades the harness, not the skill.
+    """
+    return ("You are following this skill. Obey it exactly.\n\n"
+            "<skill>\n" + skill_md + "\n</skill>\n\n"
+            + RUN_CONTEXT + "\n\nTask:\n" + task)
+
+
+def live_command(prompt: str) -> list[str]:
+    """The nested model call, isolated from the session that launches it.
+
+    A bare `claude -p` inherits the parent's permission mode, MCP servers, working
+    directory and CLAUDE.md, and has tools: it explores whatever repository it lands in
+    instead of answering the task, so the run measures the harness. The skill is
+    inlined in the prompt, so the model needs no tools at all.
+
+    `--strict-mcp-config` is not enough on its own. User-level plugin hooks still run
+    and inject the parent session's context: measured on CLI 2.1.283, the child quoted
+    the launching session's own in-flight command and refused to "run" it before
+    answering. `--setting-sources local` from a temp directory loads no user settings,
+    so no plugins or hooks. (`--bare` also skips hooks, but reads only an API key —
+    never OAuth — so it cannot authenticate a subscription login.)
+    """
+    return ["claude", "-p", "--model", os.environ.get("E2E_LLM_MODEL", "sonnet"),
+            "--tools", "", "--permission-mode", "dontAsk", "--strict-mcp-config",
+            "--setting-sources", "local", "--max-turns", "3", prompt]
+
+
+class LiveCommandIsolationTests(unittest.TestCase):
+    """Offline: the live arm's isolation is part of what it measures, so pin it."""
+
+    def test_nested_call_is_isolated(self) -> None:
+        cmd = live_command("PROMPT")
+        joined = " ".join(cmd)
+        for flag in ('--tools', '--permission-mode dontAsk', '--strict-mcp-config',
+                     '--setting-sources local', '--max-turns'):
+            with self.subTest(flag=flag):
+                self.assertIn(flag, joined)
+        self.assertEqual("", cmd[cmd.index("--tools") + 1], "the model must answer without tools")
+        self.assertEqual("PROMPT", cmd[-1])
+
+    def test_prompt_states_the_tool_less_run_context(self) -> None:
+        prompt = live_prompt("SKILL BODY", "TASK BODY")
+        self.assertIn("<skill>\nSKILL BODY\n</skill>", prompt)
+        self.assertIn("no tools", prompt)
+        self.assertLess(prompt.index("Run context"), prompt.index("TASK BODY"))
+
+
 class LiveSkillEval(unittest.TestCase):
     """Opt-in: run the real skill against each prompt and grade what comes back.
 
@@ -267,17 +306,16 @@ class LiveSkillEval(unittest.TestCase):
         for d in fixture_dirs():
             with self.subTest(fixture=d.name):
                 meta = load_fixture(d)
-                prompt = (
-                    "You are following this skill. Obey it exactly.\n\n"
-                    "<skill>\n" + skill_md + "\n</skill>\n\n"
-                    "Task:\n" + meta["prompt"]
-                )
                 proc = subprocess.run(
-                    ["claude", "-p", prompt],
+                    live_command(live_prompt(skill_md, meta["prompt"])),
                     capture_output=True, text=True, timeout=900,
+                    cwd=tempfile.gettempdir(),
                 )
                 self.assertEqual(0, proc.returncode,
                                  f"model invocation failed: {proc.stderr[:400]}")
+                # exit 0 with this text is an infrastructure failure, never a graded answer
+                self.assertNotIn("Not logged in", proc.stdout[:200],
+                                 "nested claude could not authenticate — run unsandboxed; NOT a result")
                 defects = grade(proc.stdout, meta, self.linter)
                 self.assertEqual([], defects,
                                  f"{d.name} live response defects:\n  " + "\n  ".join(defects))

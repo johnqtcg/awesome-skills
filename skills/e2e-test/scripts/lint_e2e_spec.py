@@ -18,6 +18,8 @@ Coverage is partial, and the exact subset matters — do not read a clean report
                   H2 (vague test name)
     Extra         W1 (network wait armed after its trigger) — not a scorecard
                   item; an additional check this linter performs
+                  L1 (test.info() evaluated while the file loads) — not a
+                  scorecard item, but CRITICAL: the file runs zero tests
     NOT checked   S2 auth strategy, S4 artifact policy, S6 mock boundaries,
                   H1 reusable fixtures, H3 CI strategy, H4 repeat-run validation
 
@@ -267,9 +269,25 @@ def _is_guarded_read(src: str) -> bool:
     """True when this specific read supplies its own fallback.
 
     Covers `?? default`, `|| default`, and the ternary form
-    `process.env.CI ? a : b` — all three make an unset value harmless.
+    `process.env.CI ? a : b` — all three make an unset value harmless. `?.` is
+    optional chaining on the value, not a ternary, and does not count.
     """
-    return bool(re.search(r"process\.env\.\w+\s*(?:\?\?|\|\||\?[^?])", src))
+    return bool(re.search(r"process\.env\.\w+\s*(?:\?\?|\|\||\?(?![.?]))", src))
+
+
+def _is_presence_test(code: str, start: int, end: int) -> bool:
+    """True when the read at code[start:end] only tests whether the variable is set.
+
+    `!process.env.X` and `process.env.X ? a : b` decide what happens when the value is
+    missing — they are the guard, not a use. The line-based check above cannot see a
+    ternary whose `?` wraps onto the next line, which is how a formatter lays out
+    `webServer: process.env.E2E_BASE_URL\n ? undefined\n : {...}` in a config file.
+    `?.` is optional chaining on the value, not a test, so it does not count.
+    """
+    before = code[:start].rstrip()
+    if before.endswith("!") and not before.endswith("!="):
+        return True
+    return bool(re.match(r"\s*(?:\?\?|\|\||&&|\?(?![.?]))", code[end:]))
 
 
 def _guard_expressions(code: str) -> list[str]:
@@ -513,7 +531,9 @@ def check_c4(code: str, raw: str) -> list[Finding]:
         if inside_declaration(m.start()) or is_guarded_at(name, m.start()):
             continue
         line_no = code.count("\n", 0, m.start()) + 1
-        if _is_guarded_read(_source_line(code, line_no)):
+        if _is_guarded_read(_source_line(code, line_no)) or _is_presence_test(
+            code, m.start(), m.end()
+        ):
             continue
         report(name, m.start(), f"Required env {name} is used but {unguarded_msg}")
 
@@ -569,6 +589,153 @@ def check_w1(code: str, raw: str) -> list[Finding]:
                 "Network wait awaited inline: it can only catch events that "
                 "arrive after this line. Store the promise before the action "
                 "that triggers it, or assert the user-visible result instead.",
+                _source_line(raw, line_no),
+            )
+        )
+    return findings
+
+
+# --- L1: runtime-only API evaluated while the file loads --------------------
+def _mask_strings(code: str) -> str:
+    """Blank string-literal text, keeping length, newlines and `${...}` interpolations.
+
+    A test titled "reads test.info() at runtime" is not a call, but the code inside a
+    template interpolation is — `\\`e2e-${test.info().parallelIndex}\\`` is exactly the
+    shape this check exists for. Brace matching also has to ignore a `{` inside text.
+    """
+    out = list(code)
+    i, n = 0, len(code)
+
+    def blank(j: int) -> None:
+        if out[j] != "\n":
+            out[j] = " "
+
+    while i < n:
+        ch = code[i]
+        if ch in "'\"":
+            i += 1
+            while i < n and code[i] != ch and code[i] != "\n":
+                blank(i)
+                if code[i] == "\\" and i + 1 < n:
+                    blank(i + 1)
+                    i += 1
+                i += 1
+            i += 1
+        elif ch == "`":
+            i += 1
+            while i < n and code[i] != "`":
+                if code[i] == "\\" and i + 1 < n:
+                    blank(i)
+                    blank(i + 1)
+                    i += 2
+                elif code.startswith("${", i):
+                    depth, i = 1, i + 2
+                    while i < n and depth:
+                        depth += {"{": 1, "}": -1}.get(code[i], 0)
+                        i += 1
+                else:
+                    blank(i)
+                    i += 1
+            i += 1
+        else:
+            i += 1
+    return "".join(out)
+
+
+def _match_close(code: str, open_index: int) -> int:
+    """Index just past the bracket matching the one at open_index."""
+    depth = 0
+    for i in range(open_index, len(code)):
+        if code[i] in "([{":
+            depth += 1
+        elif code[i] in ")]}":
+            depth -= 1
+            if depth == 0:
+                return i + 1
+    return len(code)
+
+
+_METHOD_HEAD = re.compile(
+    r"(?<![\w$.])(?!(?:if|for|while|switch|catch|function|return)\b)"
+    r"[A-Za-z_$][\w$]*\s*\([^()]*\)\s*(?::\s*[^{=;]+)?\{"
+)
+_DESCRIBE_CALL = re.compile(r"\btest\.describe(?:\.(?:serial|parallel|only|skip|fixme))?\s*\(")
+
+
+def _deferred_spans(code: str) -> list[tuple[int, int]]:
+    """Function bodies that do not run while the file loads.
+
+    Every function body counts — test bodies, hooks, fixtures, helpers — except a
+    `test.describe` callback, which Playwright calls during collection.
+    """
+    spans = []  # (head, body_start, body_end)
+    for m in re.finditer(r"=>", code):
+        j = m.end()
+        while j < len(code) and code[j] in " \t\r\n":
+            j += 1
+        if j < len(code) and code[j] == "{":
+            spans.append((m.start(), j, _match_close(code, j)))
+            continue
+        k, depth = j, 0
+        while k < len(code):
+            ch = code[k]
+            if ch in "([{":
+                depth += 1
+            elif ch in ")]}":
+                if depth == 0:
+                    break
+                depth -= 1
+            elif depth == 0 and (ch in ",;" or (ch == "\n" and k > j)):
+                break
+            k += 1
+        spans.append((m.start(), j, k))
+    for m in re.finditer(r"\bfunction\b[^{;]*\{", code):
+        brace = m.end() - 1
+        spans.append((m.start(), brace, _match_close(code, brace)))
+    for m in _METHOD_HEAD.finditer(code):
+        brace = m.end() - 1
+        spans.append((m.start(), brace, _match_close(code, brace)))
+
+    describe_args = []
+    for m in _DESCRIBE_CALL.finditer(code):
+        describe_args.append((m.end(), _match_close(code, m.end() - 1)))
+
+    def is_describe_callback(head: int) -> bool:
+        for start, end in describe_args:
+            if start <= head < end:
+                between = code[start:head]
+                depth = sum(between.count(c) for c in "([{") - sum(between.count(c) for c in ")]}")
+                if depth == 0:
+                    return True
+        return False
+
+    return [(b, e) for head, b, e in spans if not is_describe_callback(head)]
+
+
+def check_l1(code: str, raw: str) -> list[Finding]:
+    """`test.info()` reached while the file loads throws, and the file runs no tests.
+
+    Measured on Playwright 1.62.0: at file scope or in a `test.describe` callback it
+    raises "test.info() can only be called while test is running" during collection,
+    and the run reports "No tests found". Inside a test body, a hook, a fixture, or a
+    helper that one of them calls, it is fine. CRITICAL because no other finding in
+    the file matters when none of its tests execute.
+    """
+    masked = _mask_strings(code)
+    deferred = _deferred_spans(masked)
+    findings = []
+    for m in re.finditer(r"\btest\.info\s*\(", masked):
+        if any(b <= m.start() < e for b, e in deferred):
+            continue
+        line_no = masked.count("\n", 0, m.start()) + 1
+        findings.append(
+            Finding(
+                "L1",
+                CRITICAL,
+                line_no,
+                "test.info() runs while the file loads (file scope or a "
+                "test.describe callback) and throws, so the file runs zero tests. "
+                "Call it inside the test body, a hook, or a fixture.",
                 _source_line(raw, line_no),
             )
         )
@@ -747,6 +914,7 @@ CHECKS = [
     check_c3,
     check_c4,
     check_w1,
+    check_l1,
     check_s1,
     check_s3,
     check_s5,

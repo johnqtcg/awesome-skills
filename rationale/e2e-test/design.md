@@ -2,7 +2,7 @@
 title: e2e-test skill design rationale
 owner: awesome-skills maintainers
 status: active
-last_updated: 2026-03-27
+last_updated: 2026-10-09
 applicable_versions: current repository version
 ---
 
@@ -96,7 +96,7 @@ Without explicit classification, tool choice, output shape, and quality expectat
 
 ### 4.2 Repository Fact Discovery Comes Before Judgment
 
-The skill requires `scripts/discover_e2e_needs.sh` before gate decisions, so it can detect:
+The skill requires `scripts/discover_e2e_needs.sh` before gate decisions, invoked as `bash ${CLAUDE_SKILL_DIR}/scripts/discover_e2e_needs.sh` from the target repository's root. The script ships with the skill, not with the repository under test, and a bare `scripts/…` path from the target repository names that repository's own directory. The discovery step lets the skill detect:
 
 - whether Playwright is installed,
 - Node.js and framework signals,
@@ -195,6 +195,8 @@ That is why `e2e-test` keeps the Side-Effect Gate as a separate mandatory layer.
 
 This is crucial because E2E work is much closer to real system behavior than unit testing. Without an explicit side-effect gate, "test automation" can cross directly into "real operation."
 
+The gate is prose, and `allowed-tools` only auto-approves; it never forbids. So the tool surface is cut to match the gate instead of contradicting it. Only Agent Browser's observing commands (`snapshot`, `screenshot`, `wait`) are pre-approved. `open`, `click`, `fill`, `select` and `evaluate` act on whatever environment the browser has open, so each goes through a permission prompt where the user sees the step and its target. `npm ci` / `npm install` run the repository's lifecycle scripts and also prompt. An earlier `agent-browser*` grant let every state-changing browser action run silently, which is exactly the surface this gate exists to control.
+
 ### 4.9 The Agent Browser Bridge Is an Explicit Rule
 
 `e2e-test` does not treat Agent Browser as a one-off helper. It explicitly requires bridge steps:
@@ -235,6 +237,8 @@ That is a mature design for three reasons:
 
 Because of this, the skill is useful not only for generating tests, but also for E2E governance.
 
+The Standard and Hygiene bars are ratios of applicable items, rounded up (⌈⅔ n⌉ and ⌈¾ n⌉), printed as a lookup table so the count is read, not computed. The earlier fixed `≥ 4/6` contradicted the N/A rule it sat next to: a Go HTTP suite, where S1 and S4 never apply, has at most four applicable Standard items and could never pass, and the skill's own Go golden example reported PASS on three. With every row applicable the ratios reproduce the old bars (4/6, 3/4), so a full Playwright suite is held to the same standard as before.
+
 ### 4.12 Output Contract for Humans and Tooling
 
 The Output Contract always requires 9 human-readable fields, and machine-readable JSON must be appended when the result is meant for CI or downstream tooling. If code was generated, the output must also include files created or updated, plus skip conditions or TODO markers for scaffold-only results.
@@ -245,6 +249,22 @@ Those two layers serve different needs:
 - for automation, JSON answers "can this result be consumed directly by pipelines, reporting, or governance systems?"
 
 The evaluation report makes this difference very clear: the base model could still produce good content, but without standardized structure or JSON summaries it could not provide the same cross-task governance value.
+
+### 4.13 Shipped Examples Are Verified by Execution, Not Only by Reading
+
+A skill that generates code teaches mostly by example: a model copies the GOOD block far more reliably than it applies a rule. So every GOOD TypeScript example has to survive three checks, each answering a different question:
+
+| Check | Question | Limit |
+|-------|----------|-------|
+| `lint_e2e_spec.py` over every GOOD example | does it break a scorecard rule the linter can decide? | heuristic; cannot see through helpers |
+| `verify_examples_load.py` (opt-in, real Playwright) | does the file load at all? | not a type check, not a browser run |
+| live skill-output eval (opt-in, real model) | does a model following the skill produce a passing answer? | one sample per fixture; no without-skill arm yet |
+
+The second check exists because the first was not enough. Anti-example 3 shipped a GOOD fix with `test.info()` at file scope. That throws during collection, so the file runs zero tests, and the linter passed it. Reading code cannot settle what a runtime does at load time. The linter now has an L1 check for this shape, but the load check is the one that would have caught it without anyone knowing the shape in advance.
+
+Which blocks count as GOOD is decided by their **label** (`BAD:` / `GOOD:` above the fence, `// WRONG` / `// CORRECT` segments inside it), never by searching nearby prose. The earlier selector skipped any block with a BAD marker in the 200 characters before it. That window always contains the BAD block a GOOD fix is paired with, so all seven SKILL.md anti-example fixes were never graded. That is how the crashing example went unnoticed. One function now owns the split, and both the linter self-check and the load check use it.
+
+The live eval's first run graded the harness three times before it graded the skill. The causes were missing isolation flags; user-level plugin hooks injecting the launching session's context into the child; and a prompt that never said the run was tool-less. Isolation is therefore part of what the eval measures, and it is pinned by offline tests.
 
 ## 5. Problems This Design Solves
 
@@ -314,6 +334,8 @@ This document should be updated when:
 - the runner strategy, Mandatory Gates, Output Contract, Quality Scorecard, or CI Strategy in `skills/e2e-test/SKILL.md` change,
 - key rules in `skills/e2e-test/references/checklists.md`, `environment-and-dependency-gates.md`, `agent-browser-workflows.md`, `golden-examples.md`, or the Playwright references change,
 - the detected fields, verdict logic, or report shape in `skills/e2e-test/scripts/discover_e2e_needs.sh` change,
+- the checks in `skills/e2e-test/scripts/lint_e2e_spec.py`, the GOOD/BAD selection or loading rules in `scripts/verify_examples_load.py`, or the live-eval isolation in `scripts/tests/test_llm_skill_eval.py` change,
+- the `allowed-tools` surface changes,
 - key supporting conclusions in `evaluate/e2e-test-skill-eval-report.md` change,
 - the skill is materially refactored around runner adaptation or output structure.
 
@@ -329,4 +351,7 @@ Review quarterly; review immediately if the gates, runner strategy, or discovery
 - `skills/e2e-test/references/playwright-patterns.md`
 - `skills/e2e-test/references/playwright-deep-patterns.md`
 - `skills/e2e-test/scripts/discover_e2e_needs.sh`
+- `skills/e2e-test/scripts/lint_e2e_spec.py`
+- `skills/e2e-test/scripts/verify_examples_load.py`
+- `skills/e2e-test/scripts/tests/COVERAGE.md`
 - `evaluate/e2e-test-skill-eval-report.md`

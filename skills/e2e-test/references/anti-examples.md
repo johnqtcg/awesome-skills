@@ -29,7 +29,7 @@ adds nothing on those.
 - [Skip guard in an `after` hook](#skip-guard-in-an-after-hook)
 - [`test.describe` body doing async setup](#testdescribe-body-doing-async-setup)
 
-Mechanically checked by `python3 scripts/lint_e2e_spec.py`: `networkidle`,
+Mechanically checked by this skill's linter, `scripts/lint_e2e_spec.py`: `networkidle`,
 network-wait ordering, and skip-guard-in-an-`after`-hook (via C4). Not checked:
 iframe boundary, retries hiding bugs, unmasked snapshots, visibility branching,
 third-party internals, async describe body — those need your judgement.

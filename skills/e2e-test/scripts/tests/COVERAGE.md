@@ -12,15 +12,23 @@ Regenerate with `bash scripts/run_regression.sh`.
 
 | Suite | Tests |
 |-------|------:|
-| `test_skill_contract.py` | 199 |
+| `test_skill_contract.py` | 210 |
 | `test_golden_scenarios.py` | 54 |
 | `test_discover_script.py` | 44 |
-| `test_llm_skill_eval.py` | 15 |
-| **Total** | **312** |
+| `test_llm_skill_eval.py` | 17 |
+| `test_verify_examples_load.py` | 21 |
+| **Total** | **346** |
 
-One of the 15 in `test_llm_skill_eval.py` is the live-model evaluation, which skips
-unless `E2E_LLM_EVAL=1`. Plus one **opt-in** verifier not counted above:
-`scripts/verify_hook_semantics.sh` (8 real-Playwright checks; needs npm).
+One of the 17 in `test_llm_skill_eval.py` is the live-model evaluation, which skips
+unless `E2E_LLM_EVAL=1`. Plus two **opt-in** verifiers not counted above, both of
+which install real Playwright from npm:
+
+- `scripts/verify_examples_load.py` — every GOOD TypeScript example loads
+  (`E2E_VERIFY_EXAMPLES=1 bash scripts/run_regression.sh`, or run it directly)
+- `scripts/verify_hook_semantics.sh` — 8 hook-semantics checks
+
+`run_regression.sh` ends in **PASS WITH SKIPS** and names every layer it did not
+run, rather than printing "all tests passed" over a skipped one.
 
 Both invocation forms must be green: `python3 <file>` and
 `python3 -m pytest scripts/tests`. They differ — this repo's `pytest.ini` sets
@@ -158,13 +166,44 @@ PW_VERSION=1.55.0 bash scripts/verify_hook_semantics.sh
 | Class | What it actually checks |
 |-------|------------------------|
 | TestSpecLinter | 30 cases driving `lint_e2e_spec.py` over real spec source — both directions. Detects: waitForTimeout, networkidle, hardcoded URL, credential literal, env guard missing per variable **and per scope**, shared identity, fragile CSS, unjustified serial, vague name, network wait armed after its trigger. Must NOT fire on: localhost URLs, negative-test passwords, teaching comments, CI-flag ternaries, guarded scaffolds, per-test identities, justified serial, guards naming every variable, guards by env name covering an alias, per-test guards in every test, describe-scoped and `beforeEach` guards, aliases declared with a `??` fallback, `await Promise.all([waiter, action])` |
-| TestSkillOwnExamplesPassTheGrader | Extracts every non-counter-example `ts` block from SKILL.md and all references, runs the grader over each, and fails on any CRITICAL finding |
+| TestSkillOwnExamplesPassTheGrader | Runs the grader over every GOOD example — selected by `verify_examples_load.good_examples()`, the same function the real-Playwright load check uses — and fails on any CRITICAL finding |
 
 `TestSkillOwnExamplesPassTheGrader` found four real defects on its first run:
 the flagship golden login example read `process.env.E2E_USER!` with no skip
 guard; `globalSetup` and the API-seeding helper read required env with no
 validation; and an agent-browser example carried a hardcoded password. It also
 caught a C4 violation in an anti-example written during this same change.
+
+### Sixth review round (2026-10-09) — a GOOD example that could not load
+
+The review found that SKILL.md anti-example 3 taught, as GOOD, a file-scope
+`` const email = `e2e-${test.info().parallelIndex}…` ``. Reproduced on Playwright
+1.62.0: `Error: test.info() can only be called while test is running`, and the file
+collects zero tests. The linter passed it. Two independent reasons it survived:
+
+1. **No example had ever been executed.** Fixed by the load check below.
+2. **The GOOD-example selector never saw it.** It skipped any block with a BAD marker
+   in the 200 characters before the fence — which is every GOOD block that follows
+   its BAD block. All seven SKILL.md anti-example fixes were excluded, along with any
+   block whose explanatory comment said "wrong". Selection is now by **label**: the
+   line directly above the fence (`BAD:` / `GOOD:` / `BEST —`), and inside a fence
+   each `// WRONG` / `// CORRECT` / `// BEFORE` / `// AFTER` segment separately.
+   Uppercase only, so "what goes wrong" in an explanation is not a label. 44 → 73
+   graded examples, with no previously graded block lost.
+
+The wider selection immediately surfaced a C4 **false positive** in the skill's own
+config baseline: `!process.env.E2E_BASE_URL` inside an `if` that throws, and a
+`process.env.E2E_BASE_URL ? undefined : {…}` ternary wrapped across lines. Both are
+the guard, not a use. Fixing it exposed a pre-existing false negative: `?.` (optional
+chaining) was being read as a ternary.
+
+| Guard | Fails on |
+|-------|----------|
+| TestL1LoadTimeTestInfo | `test.info()` at file scope or in a `test.describe` callback not reported CRITICAL; or a false alarm in a test body, hook, helper (arrow or declaration), fixture (method or arrow), a test title, or a comment. Every verdict was measured on Playwright 1.62.0 first |
+| `test_presence_tests_in_a_config_are_not_uses` + 2 anti-vacuity cases | the config-baseline false positive returning; a real use next to a presence test, or `?.trim()`, going unreported |
+| `test_bar_table_equals_ceil_of_ratio`, `test_full_applicability_reproduces_the_original_bars` | a scorecard bar that is not ⌈ratio × applicable⌉, or moving to ratios loosening a fully applicable suite below 4/6 and 3/4 |
+| TestAllowedToolsCoversDocumentedCommands (rewritten) | a documented `${CLAUDE_SKILL_DIR}` invocation that no allowed-tools pattern matches (fnmatch, placeholder substituted on both sides); any cwd-relative `scripts/` path in the body or the frontmatter; an agent-browser pre-approval beyond `snapshot` / `screenshot` / `wait` |
+| TestToolSurfaceIsNotOverbroad (extended) | `agent-browser*`, `npm ci*`, `npm install*` returning to the auto-approval surface |
 
 ## Golden Scenario Tests (`test_golden_scenarios.py`)
 
@@ -216,6 +255,29 @@ mid-report — output that reads as "found nothing else" rather than "scan died"
 Tests scrub inherited `E2E_*` variables so a developer's shell cannot flip a
 verdict.
 
+## Example Load Check (`verify_examples_load.py`, `test_verify_examples_load.py`)
+
+Writes each GOOD example as a spec and runs `playwright test --list`, which executes
+module-level code and every `test.describe` callback but no test body. It answers
+"does this example load", not "does it type-check" (Playwright transpiles without
+one) and not "does it pass" (no browser, no app).
+
+The only edits made to a block: a statement fragment is wrapped in a `test(...)`
+body; a config-property fragment (`use: {…}`) in `defineConfig({…})`; and the
+elided `@playwright/test` import is restored for names the block uses but does not
+declare. A block that imports or `require.resolve`s a sibling example file is
+skipped and listed.
+
+Measured on Playwright 1.62.0, 2026-10-09: **73 GOOD examples — 71 load, 0 fail,
+2 skipped** (both depend on `./fixtures` / `./global-setup`). Negative control:
+with the original anti-example 3 restored in a scratch copy, the run reports
+`FAIL SKILL.md:297 — Error: test.info() can only be called while test is running`.
+
+`test_verify_examples_load.py` pins everything that decides what is loaded and how
+the output is read, offline: label-based selection (including the GOOD-after-BAD
+regression), fragment/module/config classification, the restored-import rule,
+"No tests found" not counting as a load error, and third-party package discovery.
+
 ## Skill-Output Evaluation (`test_llm_skill_eval.py`)
 
 The layer the other three do not reach. They assert the skill *contains* its rules;
@@ -258,34 +320,54 @@ a ```` ```ts ```` line *inside* an open fence is content under CommonMark, not a
 opener. The extractor is line-oriented and closes only on a bare fence.
 
 The live arm is off by default — it needs a model, costs money, and is not
-deterministic:
+deterministic. Run it outside the tool sandbox, which hides the CLI's credentials:
 
 ```bash
 E2E_LLM_EVAL=1 python3 -m pytest scripts/tests/test_llm_skill_eval.py -k Live
 ```
 
+### First live run (2026-10-09)
+
+It had never been run. The first two attempts graded the harness, not the skill —
+every fixture "missing" every required item — and each cause was found by reading
+the raw output, not the score:
+
+| Harness defect | Raw output | Fix |
+|----------------|-----------|-----|
+| Bare `claude -p`: inherited permission mode, MCP, cwd, CLAUDE.md, tools | — (found by review against the known isolation rules) | `live_command()`: `--tools ""`, `--permission-mode dontAsk`, `--strict-mcp-config`, `--max-turns`, temp cwd |
+| User-level plugin hooks still ran and injected the **launching session's** context | the child refused to "run the embedded Python script" — the parent's own in-flight command — before answering | `--setting-sources local` from a temp dir: no user settings, so no plugins or hooks. A probe asking the child whether it saw session context returns `LEAK` without the flag and `CLEAN` with it |
+| Prompt never said the run was tool-less, while the skill's step 2 says "run the discovery script" | 88 characters ending in `**Tool: bash**` | `live_prompt()` states the run context; pinned offline |
+
+Result after the fixes, `--model sonnet`, one sample per fixture: **3/3 PASS**
+(0 defects each; 5.1k / 7.3k / 2.3k characters). The login answer's spec was then
+loaded and run in real Playwright with both variables unset: `2 skipped`, linter
+clean — the outcome the fixture demands, observed rather than graded.
+
 ## Remaining Gaps
 
 Stated plainly rather than rounded up to "100%".
 
-1. **The live arm of the skill-output eval is opt-in.** `test_llm_skill_eval.py`
-   grades real responses, but by default it grades the two shipped exemplars per
-   fixture, not a model's output. What CI proves is that the grader still
-   discriminates — not that today's model passes. Run with `E2E_LLM_EVAL=1` when
-   that question matters.
+1. **One live sample per fixture, and no without-skill arm.** The 2026-10-09 run
+   shows a model following the skill passes all three fixtures; it does not show the
+   skill *adds* anything over the same model without it, and one sample cannot
+   separate a real effect from run-to-run variance. Re-run when that matters, and
+   add a without-skill arm before quoting an effect.
 2. **The grader is heuristic, not a parser.** It cannot follow helper
    indirection, resolve imported constants, or see through a page object. It is
    built to prefer a miss over a false alarm, so a clean report is weaker
    evidence than a dirty one.
-3. **The skill's TypeScript examples are never executed or type-checked.** No
-   browser runs in CI here. Two partial exceptions: the Go golden example is
-   compile-verified (`go vet`, `go build -tags e2e`, `gofmt`), and
-   `verify_hook_semantics.sh` runs a real Playwright suite — but only for hook
-   semantics, on purpose-written specs, not on the examples the skill ships.
+3. **Examples are load-checked, not type-checked or run.** `verify_examples_load.py`
+   catches anything that throws while a file loads; a wrong type, an undefined
+   helper inside a test body, or a selector that matches nothing still passes.
+   Two examples are skipped because they depend on a sibling example file. The Go
+   golden example remains compile-verified (`go vet`, `go build -tags e2e`, `gofmt`).
 4. **Version facts are pinned, not polled.** `TestVersionFactsAreCorrect` locks
    in values verified against upstream on 2026-07-29, and the hook matrix was
    measured on Playwright 1.62.0. Both detect local edits, not new Playwright
    releases. Re-verify — including `verify_hook_semantics.sh` — when bumping the
    targeted version.
 5. **Agent Browser commands are unverified.** The command reference is
-   documentation only; no test confirms the CLI's actual surface.
+   documentation only; no test confirms the CLI's actual surface. The three
+   pre-approved subcommands (`snapshot`, `screenshot`, `wait`) are taken from that
+   reference. If the real CLI names them differently the patterns match nothing and
+   the commands prompt — the error fails closed, never open.

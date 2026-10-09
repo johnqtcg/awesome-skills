@@ -487,10 +487,15 @@ then dividing by a smaller denominator is how a scorecard inflates itself.
 | H3 | CI strategy present | **FAIL** — build tag exists, no CI lane is defined yet |
 | H4 | Repeat-run validation | **FAIL** — not executed, so not validated |
 
-Applicable tallies: Critical 4/4 PASS. Standard 4 applicable (S3, S5, S6, and
-S2 counted N/A → 3 scored), all PASS. Hygiene 2/4 PASS — below the ≥ 3/4 bar,
-so this deliverable is **incomplete on hygiene** and the report must say so
-rather than round up.
+Applicable tallies, using the bar table in SKILL.md §Quality Scorecard:
+
+- Critical: 4/4 PASS.
+- Standard: 3/3 applicable PASS (S1, S2, S4 N/A). Three applicable items need 2.
+- Hygiene: 2/4 applicable (0 N/A). Four applicable items need 3, so this is
+  **below the bar**.
+
+The deliverable is **incomplete on hygiene**, and the report must say so rather
+than round up.
 
 ### Machine-Readable Summary
 
@@ -505,7 +510,7 @@ rather than round up.
   "tests_failed": 0,
   "tests_skipped": 4,
   "artifacts": [],
-  "scorecard": { "critical": "4/4 PASS", "standard": "3/3 applicable PASS", "hygiene": "2/4 BELOW BAR" },
+  "scorecard": { "critical": "4/4 PASS", "standard": "3/3 applicable PASS (3 N/A)", "hygiene": "2/4 applicable BELOW BAR (0 N/A)" },
   "blockers": [],
   "next_actions": [
     "copy files to tests/e2e/web/",

@@ -1,7 +1,7 @@
 ---
 name: e2e-test
 description: "Design, maintain, and execute reliable end-to-end tests for critical user journeys with Agent Browser as first choice for exploration and Playwright as the preferred code path for suites and CI. Use for E2E strategy, journey coverage, flaky test triage, artifact collection, CI gating, regression prevention, and browser automation tasks."
-allowed-tools: Read, Write, Grep, Glob, Bash(go test*), Bash(go vet*), Bash(npx playwright*), Bash(playwright*), Bash(npm run test:e2e*), Bash(npm run e2e*), Bash(npm ci*), Bash(agent-browser*), Bash(bash scripts/discover_e2e_needs.sh*), Bash(bash scripts/verify_hook_semantics.sh*), Bash(python3 scripts/lint_e2e_spec.py*)
+allowed-tools: Read, Write, Edit, Grep, Glob, Bash(go test*), Bash(go vet*), Bash(npx playwright*), Bash(playwright*), Bash(npm run test:e2e*), Bash(npm run e2e*), Bash(agent-browser snapshot*), Bash(agent-browser screenshot*), Bash(agent-browser wait*), Bash(bash ${CLAUDE_SKILL_DIR}/scripts/discover_e2e_needs.sh*), Bash(python3 ${CLAUDE_SKILL_DIR}/scripts/lint_e2e_spec.py*)
 ---
 
 # E2E test
@@ -21,7 +21,7 @@ Use this skill to create E2E coverage that is deterministic, evidence-backed, an
 | Avoid common Playwright mistakes | Load `references/anti-examples.md` |
 | Test content inside an iframe (payment, editor, OAuth) | Load `references/playwright-deep-patterns.md` §Iframes |
 | Handle a Tauri or native-mobile app | §Version and Platform Gate → Platform Scope Boundary |
-| Check generated spec code before reporting | Run `python3 scripts/lint_e2e_spec.py <file.spec.ts>` |
+| Check generated spec code before reporting | Run `python3 ${CLAUDE_SKILL_DIR}/scripts/lint_e2e_spec.py <file.spec.ts>` |
 | See a fully worked E2E output example | Load `references/golden-examples.md` |
 
 Do not use this skill for visual design review with no automated journey value,
@@ -29,6 +29,10 @@ performance/load testing, or tests that would require guessed secrets, endpoints
 or private accounts.
 
 ## Load References Selectively
+
+The scripts ship with this skill, not with the repository under test: invoke them
+via `${CLAUDE_SKILL_DIR}` as written. From the target repository a bare `scripts/…`
+path names that repository's own directory — missing, or a different program.
 
 Load on demand, not up front. A typical Playwright coding task needs the two
 every-task rows plus `playwright-patterns.md` — three files. Everything below that
@@ -38,13 +42,13 @@ is conditional; open it when the trigger in the first column actually applies.
 |------|-----------|----------|
 | Every task, before coverage or gate decisions | `references/checklists.md` | 5 checklists: pre-run readiness, journey coverage, flaky triage, quarantine, result reporting |
 | Every task, before claiming runnable | `references/environment-and-dependency-gates.md` | Readiness gates per context (local / preview / staging / CI), `available` vs `declared` vs `missing`, dependency matrix |
-| Before gate decisions | `bash scripts/discover_e2e_needs.sh` | Detects runner, Node, framework, existing tests, env-var states, CI platform. Report facts, not guesses |
+| Before gate decisions | `bash ${CLAUDE_SKILL_DIR}/scripts/discover_e2e_needs.sh` | Detects runner, Node, framework, existing tests, env-var states, CI platform. Report facts, not guesses |
 | Writing Playwright code (JS only) | `references/playwright-patterns.md` | Selector order (`getByRole` first), wait patterns, assertion contracts, config baseline, API-introduction + Node tables |
 | Auth, fixtures, data isolation, mocking, iframes, sharding | `references/playwright-deep-patterns.md` | The advanced layer — large; open the section you need |
 | A mistake not among the seven below | `references/anti-examples.md` | Extended catalog only, no overlap with §Anti-Examples here |
 | Using Agent Browser | `references/agent-browser-workflows.md` | Commands, exploration→code conversion, repro steps, handoff format |
 | Shaping the final report | `references/golden-examples.md` | Full output-contract examples (Playwright + Go). **All figures in it are synthetic** |
-| Grading generated spec code | `python3 scripts/lint_e2e_spec.py <file>` | Deterministic check of C1–C4 / S1 / S3 / S5 / H2 + W1. Evidence, not a verdict |
+| Grading generated spec code | `python3 ${CLAUDE_SKILL_DIR}/scripts/lint_e2e_spec.py <file>` | Deterministic check of C1–C4 / S1 / S3 / S5 / H2 + W1, L1. Evidence, not a verdict |
 
 ## Runner Strategy
 
@@ -71,7 +75,7 @@ If a task starts in Agent Browser and the flow is valuable long-term, convert th
    - exploratory browser reproduction
    - test architecture or CI gate design
 
-2. Run `scripts/discover_e2e_needs.sh` to collect repository facts (Playwright version, framework, existing tests, env vars, CI platform). Use its structured output for gate decisions instead of guessing.
+2. Run `bash ${CLAUDE_SKILL_DIR}/scripts/discover_e2e_needs.sh` from the target repository's root to collect repository facts (Playwright version, framework, existing tests, env vars, CI platform). Use its structured output for gate decisions instead of guessing.
 
 3. Run the environment and configuration gate.
 
@@ -194,6 +198,12 @@ Default to safe behavior for real-world side effects:
 - avoid real-money or irreversible flows unless explicitly configured for safe test execution
 - require explicit approval or isolation for destructive actions
 
+Agent Browser is where these side effects happen. Only its observing commands
+(`snapshot`, `screenshot`, `wait`) are pre-approved; `open`, `click`, `fill`,
+`select` and `evaluate` deliberately prompt, so the user sees each state-changing
+step and its target environment. `npm ci` / `npm install` run the repository's
+lifecycle scripts and also prompt.
+
 ## Version and Platform Gate
 
 Before recommending Playwright code or config, adapt to the repository's actual platform:
@@ -294,8 +304,11 @@ test("profile update", async ({ page }) => { /* mutates same account */ });
 ```
 GOOD:
 ```ts
-const email = `e2e-${test.info().parallelIndex}-${Date.now()}@example.com`;
-test("profile update", async ({ page }) => { /* isolated data per test */ });
+test("profile update", async ({ page }) => {
+  // test.info() exists only while a test runs; at file scope the file fails to load.
+  const email = `e2e-${test.info().parallelIndex}-${Date.now()}@example.com`;
+  /* isolated data per test */
+});
 ```
 
 ### 4) Guessing env values or credentials
@@ -378,7 +391,7 @@ Key rules:
 For PR automation, separate **Blocking** critical journeys from broader nightly coverage:
 
 - Blocking PR gate:
-  - run `playwright install --with-deps chromium` during setup when browsers are not pre-baked
+  - run `npx playwright install --with-deps chromium` during setup when browsers are not pre-baked
   - use Secret injection for base URL, auth state bootstrap, and sandbox-only credentials
   - upload-artifact for trace, screenshot, video, and HTML report on failure
   - keep retries and timeout values explicit in config and CI job output
@@ -419,7 +432,7 @@ When the output will be consumed by CI or downstream tooling, append:
   "tests_failed": 0,
   "tests_skipped": 0,
   "artifacts": ["playwright-report/index.html", "test-results/"],
-  "scorecard": { "critical": "PASS", "standard": "5/6", "hygiene": "4/4" },
+  "scorecard": { "critical": "4/4 PASS", "standard": "5/6 applicable PASS (0 N/A)", "hygiene": "4/4 applicable PASS (0 N/A)" },
   "blockers": [],
   "next_actions": ["add password-reset edge case"]
 }
@@ -432,9 +445,23 @@ For non-Playwright runners (Go HTTP, Python requests, etc.), mark Playwright-spe
 List every item including the N/A ones. Dropping a row and dividing by a smaller
 denominator inflates the score.
 
-For Playwright output, run `python3 scripts/lint_e2e_spec.py <file>` before
-reporting. It mechanically checks C1, C2, C3, C4, S1, S3, S5, and H2, plus W1
-(network wait armed after its trigger — an extra check, not a scorecard item).
+The Standard and Hygiene bars are **ratios of applicable items**, rounded up — a
+fixed `≥ 4/6` is unreachable for a Go HTTP suite, where S1 and S4 never apply.
+Read the required count off this table:
+
+| Applicable items | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
+|------------------|---|---|---|---|---|---|---|
+| Standard needs (⌈⅔ n⌉) | 4 | 4 | 3 | 2 | 2 | 1 | n/a — passes |
+| Hygiene needs (⌈¾ n⌉) | — | — | 3 | 3 | 2 | 1 | n/a — passes |
+
+Report the arithmetic, not only the verdict: `Standard: 3/3 applicable (3 N/A) → PASS`.
+
+For Playwright output, run `python3 ${CLAUDE_SKILL_DIR}/scripts/lint_e2e_spec.py <file>` before
+reporting. It mechanically checks C1, C2, C3, C4, S1, S3, S5, and H2, plus two
+extra checks that are not scorecard items: W1 (network wait armed after its
+trigger) and L1 (`test.info()` evaluated while the file loads). An L1 finding is
+CRITICAL and means overall FAIL: that file throws during collection and runs no
+tests at all.
 It does **not** check S2, S4, S6, H1, H3, H4 — those need repository and CI
 context it cannot see, so assess them yourself. A clean report is weaker
 evidence than a dirty one: it is a heuristic pass, not a parser, and cannot see
@@ -449,7 +476,7 @@ through helpers or page objects.
 | C3 | No guessed secrets or URLs | All external values from env/config with skip guard |
 | C4 | All 5 mandatory gates addressed | Configuration, Environment, Execution Integrity, Stability, Side-Effect |
 
-### Standard (≥ 4/6 PASS)
+### Standard (≥ ⅔ of applicable items PASS)
 
 | # | Item | PASS rule |
 |---|------|-----------|
@@ -460,7 +487,7 @@ through helpers or page objects.
 | S5 | Serial vs parallel justified | Serial only with documented reason |
 | S6 | Mock boundaries documented | Each mocked dependency has rationale |
 
-### Hygiene (≥ 3/4 PASS)
+### Hygiene (≥ ¾ of applicable items PASS)
 
 | # | Item | PASS rule |
 |---|------|-----------|

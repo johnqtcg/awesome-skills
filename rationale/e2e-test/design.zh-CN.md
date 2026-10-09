@@ -2,7 +2,7 @@
 title: e2e-test skill 设计解析
 owner: awesome-skills maintainers
 status: active
-last_updated: 2026-03-27
+last_updated: 2026-10-09
 applicable_versions: current repository version
 ---
 
@@ -96,7 +96,7 @@ applicable_versions: current repository version
 
 ### 4.2 先运行仓库事实发现 vs 靠经验猜
 
-这个 skill 要求在做 gate 决策前运行 `scripts/discover_e2e_needs.sh`，去识别：
+这个 skill 要求在做 gate 决策前，在目标仓库根目录以 `bash ${CLAUDE_SKILL_DIR}/scripts/discover_e2e_needs.sh` 运行发现脚本。脚本随 skill 分发，不在被测仓库里；从目标仓库写裸的 `scripts/…` 路径，指向的是那个仓库自己的目录。发现脚本用来识别：
 
 - 是否安装了 Playwright
 - Node.js 与框架信息
@@ -195,6 +195,8 @@ E2E 测试天然容易碰到真实副作用，例如：
 
 这一层的重要性在于，E2E 工作和单元测试不同，它常常真的会碰到完整业务路径。如果不把副作用控制做成门禁，测试就可能直接越过“验证”边界，进入“真实操作”边界。
 
+门禁本身是文字规则，而 `allowed-tools` 只负责自动放行，从不禁止。所以工具权限要按门禁来收窄，不能与门禁相矛盾。Agent Browser 只自动放行观察类命令（`snapshot`、`screenshot`、`wait`）。`open`、`click`、`fill`、`select`、`evaluate` 会作用于浏览器当前打开的环境，因此每一步都要经过权限确认，让用户看到这一步和它的目标环境。`npm ci` / `npm install` 会执行仓库依赖的安装脚本，同样需要确认。之前的 `agent-browser*` 授权让所有改变状态的浏览器操作都静默执行，而这恰恰是这道门禁要控制的范围。
+
 ### 4.9 把探索到代码的桥接做成显式规则
 
 `e2e-test` 不是把 Agent Browser 当成一次性辅助工具，而是明确规定探索到代码的桥接步骤：
@@ -235,6 +237,8 @@ E2E 测试天然容易碰到真实副作用，例如：
 
 也正因为如此，这个 skill 的输出不仅适合生成测试，也适合做测试治理。
 
+Standard 和 Hygiene 两档的通过线按适用项的比例计算并向上取整（⌈⅔ n⌉、⌈¾ n⌉），并以查表形式给出，让模型直接读数而不是自己算。旧的固定“6 项中至少 4 项”与紧挨着的 N/A 规则相矛盾：Go HTTP 套件的 S1、S4 永远不适用，Standard 最多只有 4 个适用项，永远过不了线，而 skill 自带的 Go 示例却在 3 个适用项上报了 PASS。所有项都适用时，按比例算出的通过线与旧值一致（4/6、3/4），完整的 Playwright 套件要求没有放松。
+
 ### 4.12 同时服务人类阅读和工具消费的输出合同
 
 `e2e-test` 的输出契约固定要求返回 9 项关键信息；当输出将被 CI 或下游工具消费时，必须追加机器可读 JSON；如果本次生成了代码，还要补充创建或更新的文件，以及脚手架场景下的 skip 条件或 TODO 标记。
@@ -245,6 +249,22 @@ E2E 测试天然容易碰到真实副作用，例如：
 - 对自动化系统，JSON 解决“能不能被流水线、报告系统或治理工具直接消费”
 
 评估报告也清楚说明了这一点：基础模型在内容质量上并不差，但没有稳定的结构化报告和 JSON 摘要，因此很难形成跨任务治理能力。
+
+### 4.13 附带的示例要靠真正执行来验证，而不只是读
+
+会生成代码的 skill 主要靠示例教学：模型照抄 GOOD 代码块的可靠程度远高于它执行一条规则。所以每个 GOOD TypeScript 示例都要过三道检查，各自回答不同的问题：
+
+| 检查 | 回答的问题 | 局限 |
+|------|-----------|------|
+| 对每个 GOOD 示例跑 `lint_e2e_spec.py` | 有没有违反 linter 能判定的评分项？ | 启发式，看不穿辅助函数 |
+| `verify_examples_load.py`（按需运行，真实 Playwright） | 这个文件到底能不能加载？ | 不做类型检查，不启动浏览器 |
+| 真实模型输出评测（按需运行） | 模型照这个 skill 做，答案能否通过？ | 每个用例只跑 1 次，还没有“不用 skill”的对照组 |
+
+第二道检查之所以存在，是因为第一道不够。反例 3 的 GOOD 写法曾把 `test.info()` 放在文件顶层。这在收集测试时就会抛错，整个文件一个测试都不跑，而 linter 判它通过。代码在加载时到底会做什么，光靠读是判断不了的。linter 现在有专门针对这种写法的 L1 检查，但真正能在没人预先知道这种写法时就抓住它的，是加载检查。
+
+哪些代码块算 GOOD，由**标签**决定（代码块上方一行的 `BAD:` / `GOOD:`，代码块内部的 `// WRONG` / `// CORRECT` 分段），而不是在附近的说明文字里搜关键词。旧的筛选逻辑只要在代码块前 200 个字符内看到 BAD 字样就跳过。这个范围总会包含与 GOOD 写法配对的那个 BAD 代码块，所以 SKILL.md 里 7 个反例的 GOOD 写法一次都没被检查过，崩溃的示例就是这样漏掉的。现在由一个函数统一负责 GOOD/BAD 划分，linter 自检和加载检查都用它。
+
+真实模型评测第一次运行时，连续三次测到的都是评测框架本身，而不是 skill。原因依次是：缺少隔离参数；用户级插件钩子把发起评测的会话上下文注入了子进程；提示词没有说明本次运行没有任何工具。因此隔离方式本身就是评测结果的一部分，已经用离线测试固定下来。
 
 ## 5. 这个设计解决了哪些具体问题
 
@@ -314,6 +334,8 @@ Task type、Runner choice、Environment gate、Config status、Executed commands
 - `skills/e2e-test/SKILL.md` 中的 runner 策略、强制门禁、输出契约、质量评分卡 或 CI Strategy 发生变化。
 - `skills/e2e-test/references/checklists.md`、`environment-and-dependency-gates.md`、`agent-browser-workflows.md`、`golden-examples.md` 或 Playwright references 中的关键规则发生变化。
 - `skills/e2e-test/scripts/discover_e2e_needs.sh` 的检测字段、判定逻辑或 verdict 结构发生变化。
+- `skills/e2e-test/scripts/lint_e2e_spec.py` 的检查项、`scripts/verify_examples_load.py` 的 GOOD/BAD 划分或加载规则、`scripts/tests/test_llm_skill_eval.py` 的真实评测隔离方式发生变化。
+- `allowed-tools` 的权限范围发生变化。
 - `evaluate/e2e-test-skill-eval-report.zh-CN.md` 中支撑本文结论的关键结果发生变化。
 - skill 在 runner 适配或输出合同方面有明显重构。
 
@@ -329,4 +351,7 @@ Task type、Runner choice、Environment gate、Config status、Executed commands
 - `skills/e2e-test/references/playwright-patterns.md`
 - `skills/e2e-test/references/playwright-deep-patterns.md`
 - `skills/e2e-test/scripts/discover_e2e_needs.sh`
+- `skills/e2e-test/scripts/lint_e2e_spec.py`
+- `skills/e2e-test/scripts/verify_examples_load.py`
+- `skills/e2e-test/scripts/tests/COVERAGE.md`
 - `evaluate/e2e-test-skill-eval-report.zh-CN.md`

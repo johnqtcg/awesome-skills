@@ -1,5 +1,7 @@
+import math
 import re
 import unittest
+from fractions import Fraction
 from pathlib import Path
 
 
@@ -8,24 +10,28 @@ SKILL_MD = SKILL_DIR / "SKILL.md"
 REFS_DIR = SKILL_DIR / "references"
 
 
-def load_linter(alias: str):
-    """Import scripts/lint_e2e_spec.py by path.
+def load_script(stem: str, alias: str):
+    """Import scripts/<stem>.py by path.
 
-    The module must be registered in sys.modules *before* exec_module: it uses
-    `from __future__ import annotations`, so @dataclass resolves its field types
-    through sys.modules[cls.__module__] and raises AttributeError on None when
-    the module is absent.
+    The module must be registered in sys.modules *before* exec_module: both scripts
+    use `from __future__ import annotations`, so @dataclass resolves its field types
+    through sys.modules[cls.__module__] and raises AttributeError on None when the
+    module is absent.
     """
     import importlib.util
     import sys
 
-    path = SKILL_DIR / "scripts" / "lint_e2e_spec.py"
+    path = SKILL_DIR / "scripts" / f"{stem}.py"
     spec = importlib.util.spec_from_file_location(alias, path)
     assert spec and spec.loader, f"cannot load {path}"
     module = importlib.util.module_from_spec(spec)
     sys.modules[alias] = module
     spec.loader.exec_module(module)
     return module
+
+
+def load_linter(alias: str):
+    return load_script("lint_e2e_spec", alias)
 
 
 def frontmatter(text: str) -> str:
@@ -1064,21 +1070,58 @@ class TestIframeCoverage(unittest.TestCase):
 
 
 class TestAllowedToolsCoversDocumentedCommands(unittest.TestCase):
-    """The skill instructed running `agent-browser` and the discovery script,
-    neither of which the allowed-tools list permitted."""
+    """Every script invocation SKILL.md tells the model to run must be matched by an
+    allowed-tools pattern, and must name the skill's own copy of the script.
+
+    History: first neither the discovery script nor agent-browser was permitted at all;
+    then both were, but as `scripts/…` paths relative to the working directory — which
+    is the TARGET repository when the skill is in use, so the documented commands named
+    files that do not exist there. Claude Code substitutes `${CLAUDE_SKILL_DIR}` in the
+    SKILL.md body and in allowed-tools Bash rules alike, so the test substitutes the
+    same placeholder on both sides before matching."""
+
+    FAKE_DIR = "/home/u/.claude/skills/e2e-test"
+    INVOCATION = re.compile(r"`((?:bash|python3) \$\{CLAUDE_SKILL_DIR\}/scripts/[^`]+)`")
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.fm = frontmatter(SKILL_MD.read_text())
+        text = SKILL_MD.read_text()
+        cls.fm = frontmatter(text)
+        cls.body = text[text.index("\n---\n", 4) + 5:]
+        cls.patterns = re.findall(r"Bash\(([^)]*)\)", cls.fm)
 
-    def test_agent_browser_permitted(self) -> None:
-        self.assertIn("agent-browser", self.fm)
+    def _sub(self, s: str) -> str:
+        return s.replace("${CLAUDE_SKILL_DIR}", self.FAKE_DIR)
 
-    def test_discovery_script_permitted(self) -> None:
-        self.assertIn("bash scripts/", self.fm)
+    def test_every_documented_script_invocation_is_pre_approved(self) -> None:
+        import fnmatch
+        invocations = self.INVOCATION.findall(self.body)
+        self.assertGreaterEqual(len(invocations), 4, "invocation extraction found too few")
+        for cmd in invocations:
+            with self.subTest(cmd=cmd):
+                self.assertTrue(
+                    any(fnmatch.fnmatchcase(self._sub(cmd), self._sub(p)) for p in self.patterns),
+                    f"documented but not pre-approved: {cmd}")
 
-    def test_linter_permitted(self) -> None:
-        self.assertIn("python3 scripts/", self.fm)
+    def test_no_invocation_uses_a_cwd_relative_script_path(self) -> None:
+        relative = re.findall(r"(?:bash|python3)\s+(?:\./)?scripts/\S+|Run `scripts/\S+", self.body)
+        self.assertEqual([], relative,
+                         "from the target repo a bare scripts/ path is that repo's directory, not this skill's")
+
+    def test_no_allowed_tools_pattern_uses_a_cwd_relative_script_path(self) -> None:
+        for pattern in self.patterns:
+            if "scripts/" in pattern:
+                with self.subTest(pattern=pattern):
+                    self.assertIn("${CLAUDE_SKILL_DIR}/scripts/", pattern)
+
+    def test_agent_browser_pre_approval_is_observation_only(self) -> None:
+        browser = [p for p in self.patterns if p.startswith("agent-browser")]
+        self.assertTrue(browser, "the observing agent-browser commands should not prompt")
+        for pattern in browser:
+            with self.subTest(pattern=pattern):
+                sub = pattern.split()[1].rstrip("*") if " " in pattern else ""
+                self.assertIn(sub, {"snapshot", "screenshot", "wait"},
+                              f"`{pattern}` pre-approves a state-changing browser action")
 
 
 class TestGoldenExamplesLabelledSynthetic(unittest.TestCase):
@@ -1366,6 +1409,44 @@ test('user signs in with the seeded account', async ({ page }) => {
 });
 """
         self.assertNotIn("C4", self.rules(source))
+
+    def test_presence_tests_in_a_config_are_not_uses(self) -> None:
+        """The skill's own config baseline: a negated check that throws, and a ternary
+        wrapped across lines. Both decide what happens when the value is missing, so
+        neither is an unguarded use. Surfaced once the label-based GOOD selector
+        started linting this example — the old one skipped it because its comment says
+        "wrong for CI"."""
+        source = """
+if (process.env.CI && !process.env.E2E_BASE_URL) {
+  throw new Error('E2E_BASE_URL must be set in CI');
+}
+export default defineConfig({
+  webServer: process.env.E2E_BASE_URL
+    ? undefined
+    : { command: 'npm run dev' },
+});
+"""
+        self.assertNotIn("C4", self.rules(source))
+
+    def test_a_real_use_next_to_a_presence_test_is_still_reported(self) -> None:
+        """Anti-vacuity for the rule above: the presence test exempts only itself."""
+        source = """
+if (!process.env.E2E_PASS) console.warn('no password');
+test('user signs in with the seeded account', async ({ page }) => {
+  await page.getByLabel('Password').fill(process.env.E2E_PASS!);
+  await expect(page.getByText('Welcome')).toBeVisible();
+});
+"""
+        self.assertIn("C4", self.rules(source))
+
+    def test_optional_chaining_is_not_a_presence_test(self) -> None:
+        source = """
+test('user signs in with the seeded account', async ({ page }) => {
+  await page.getByLabel('Password').fill(process.env.E2E_PASS?.trim() as string);
+  await expect(page.getByText('Welcome')).toBeVisible();
+});
+"""
+        self.assertIn("C4", self.rules(source))
 
     def test_detects_network_wait_armed_after_trigger(self) -> None:
         """An inline-awaited waitForResponse hangs when the response is fast."""
@@ -1673,21 +1754,14 @@ class TestSkillOwnExamplesPassTheGrader(unittest.TestCase):
 
     @staticmethod
     def _good_blocks() -> list:
-        """Yield (source_file, line, code) for every ts block NOT marked as a
-        counter-example. A block counts as BAD if a marker appears in the text
-        just before it or on any line inside it."""
-        blocks = []
-        bad_marker = re.compile(r"\bBAD\b|WRONG|AVOID|DO NOT|Do NOT|never found", re.I)
-        for path in [SKILL_MD] + sorted(REFS_DIR.glob("*.md")):
-            text = path.read_text()
-            for m in re.finditer(r"```ts\n(.*?)```", text, re.DOTALL):
-                preceding = text[max(0, m.start() - 200) : m.start()]
-                body = m.group(1)
-                if bad_marker.search(preceding) or bad_marker.search(body):
-                    continue
-                line = text.count("\n", 0, m.start()) + 1
-                blocks.append((path.name, line, body))
-        return blocks
+        """(source_file, line, code) for every GOOD example, from the same selector the
+        real-Playwright load check uses — one GOOD/BAD split, not two that can drift.
+
+        The previous selector skipped any block with a BAD marker in the 200 characters
+        before it, which is every GOOD block that follows a BAD one: SKILL.md's seven
+        anti-example fixes were never linted, and one of them crashed at load."""
+        examples = load_script("verify_examples_load", "verify_examples_load_selfcheck")
+        return [(Path(e.source).name, e.line, e.body) for e in examples.good_examples()]
 
     def test_good_examples_have_no_critical_findings(self) -> None:
         blocks = self._good_blocks()
@@ -1702,6 +1776,87 @@ class TestSkillOwnExamplesPassTheGrader(unittest.TestCase):
             failures,
             "GOOD examples failing the skill's own grader:\n" + "\n".join(failures),
         )
+
+
+class TestL1LoadTimeTestInfo(unittest.TestCase):
+    """L1: `test.info()` reached while the file loads throws, and the file runs nothing.
+
+    Each case below was first run on real Playwright 1.62.0 (`--list` plus a run), so
+    the expected verdicts are measured behaviour, not a reading of the docs:
+    file scope and a describe callback throw; a test body, a hook, and a helper that
+    a test calls all work.
+    """
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.lint = load_linter("lint_e2e_spec_l1")
+
+    def l1(self, source: str) -> list:
+        return [f for f in self.lint.lint_source(source) if f.rule == "L1"]
+
+    def test_file_scope_call_is_critical(self) -> None:
+        """The exact shape SKILL.md used to ship as a GOOD example."""
+        found = self.l1("""
+const email = `e2e-${test.info().parallelIndex}-${Date.now()}@example.com`;
+test('profile update', async ({ page }) => { await page.goto('/'); });
+""")
+        self.assertEqual(1, len(found))
+        self.assertEqual("CRITICAL", found[0].severity)
+        self.assertEqual(2, found[0].line)
+
+    def test_describe_callback_runs_at_load_time(self) -> None:
+        for variant in ("test.describe", "test.describe.serial", "test.describe.parallel"):
+            with self.subTest(variant=variant):
+                self.assertTrue(self.l1(f"""
+{variant}('group', () => {{
+  const idx = test.info().parallelIndex;
+  test('t', async () => {{ expect(idx).toBe(0); }});
+}});
+"""))
+
+    def test_runtime_contexts_are_clean(self) -> None:
+        cases = {
+            "test body": """
+test('profile update', async ({ page }) => {
+  const email = `e2e-${test.info().parallelIndex}@example.com`;
+});""",
+            "test body inside describe": """
+test.describe('group', () => {
+  test('t', async () => { const i = test.info().workerIndex; });
+});""",
+            "hook": """
+test.beforeEach(async ({ page }) => { test.info().annotations.push({ type: 'x' }); });""",
+            "helper arrow with expression body": """
+const id = () => `u-${test.info().workerIndex}`;
+test('t', async () => { expect(id()).toContain('u-'); });""",
+            "helper function declaration": """
+function id() { return test.info().workerIndex; }
+test('t', async () => { id(); });""",
+            "fixture method shorthand": """
+export const test = base.extend({
+  async account({}, use) { await use(test.info().workerIndex); },
+});""",
+            "fixture arrow": """
+export const test = base.extend({
+  account: async ({}, use) => { await use(test.info().workerIndex); },
+});""",
+            "title string that mentions it": """
+test('reads test.info() at runtime', async () => { expect(1).toBe(1); });""",
+            "comment that mentions it": """
+// const i = test.info().parallelIndex;  <- would crash at file scope
+test('t', async () => { expect(1).toBe(1); });""",
+        }
+        for name, source in cases.items():
+            with self.subTest(case=name):
+                self.assertEqual([], self.l1(source))
+
+    def test_skill_md_teaches_the_runtime_form(self) -> None:
+        """The anti-example that shipped the crash must keep the call inside the test."""
+        section = md_section(SKILL_MD.read_text(), "3) Shared mutable data across tests")
+        good = re.search(r"GOOD:\n```ts\n(.*?)\n```", section, re.S)
+        self.assertIsNotNone(good, "GOOD block missing from anti-example 3")
+        self.assertIn("test.info()", good.group(1))
+        self.assertEqual([], self.l1(good.group(1)))
 
 
 class TestLinterScopeIsHonest(unittest.TestCase):
@@ -1733,6 +1888,12 @@ class TestLinterScopeIsHonest(unittest.TestCase):
     def test_w1_marked_as_beyond_the_scorecard(self) -> None:
         self.assertIn("W1", self.doc)
         self.assertIn("not a scorecard", self.doc.lower())
+
+    def test_l1_marked_as_beyond_the_scorecard_but_blocking(self) -> None:
+        line = next(ln for ln in self.doc.split("\n") if "L1 (" in ln)
+        rest = self.doc[self.doc.index(line):]
+        self.assertIn("CRITICAL", rest[:300])
+        self.assertIn("L1", SKILL_MD.read_text(), "SKILL.md must name L1 where it lists the linter's checks")
 
     def test_skill_md_states_the_same_subset(self) -> None:
         skill = SKILL_MD.read_text()
@@ -1944,11 +2105,48 @@ class TestScorecardThresholdsPinned(unittest.TestCase):
         cls.skill = SKILL_MD.read_text()
         cls.scorecard = md_section(cls.skill, "Quality Scorecard")
 
+    TIER_RATIOS = {"Standard": Fraction(2, 3), "Hygiene": Fraction(3, 4)}
+
     def test_tier_headings_state_their_bars(self) -> None:
         for heading in ("### Critical (any FAIL → overall FAIL)",
-                        "### Standard (≥ 4/6 PASS)",
-                        "### Hygiene (≥ 3/4 PASS)"):
+                        "### Standard (≥ ⅔ of applicable items PASS)",
+                        "### Hygiene (≥ ¾ of applicable items PASS)"):
             self.assertIn(heading, self.scorecard, f"tier bar changed or removed: {heading}")
+
+    def _bar_table(self) -> dict[str, dict[int, str]]:
+        # md_rows drops header rows, and the count row IS this table's header.
+        header = re.search(r"(?m)^\|\s*Applicable items\s*\|(.+)\|\s*$", self.scorecard)
+        self.assertIsNotNone(header, "bar table missing from §Quality Scorecard")
+        counts = [int(c.strip()) for c in header.group(1).split("|")]
+        rows = md_rows(self.scorecard)
+        table = {}
+        for tier in self.TIER_RATIOS:
+            row = next(r for r in rows if r[0].startswith(f"{tier} needs"))
+            table[tier] = dict(zip(counts, row[1:]))
+        return table
+
+    def test_bar_table_equals_ceil_of_ratio(self) -> None:
+        """Each cell is the rounded-up ratio, a 0-applicable tier passes, and a count larger
+        than the tier's own row total is marked impossible rather than given a number."""
+        table = self._bar_table()
+        sizes = {"Standard": 6, "Hygiene": 4}
+        for tier, ratio in self.TIER_RATIOS.items():
+            for n, cell in table[tier].items():
+                with self.subTest(tier=tier, applicable=n):
+                    if n > sizes[tier]:
+                        self.assertEqual("—", cell)
+                    elif n == 0:
+                        self.assertTrue(cell.startswith("n/a"), cell)
+                    else:
+                        self.assertEqual(str(math.ceil(ratio * n)), cell)
+        self.assertEqual(set(range(7)), set(table["Standard"]),
+                         "the table must cover every applicable count from 0 to 6")
+
+    def test_full_applicability_reproduces_the_original_bars(self) -> None:
+        """Moving to ratios must not loosen a fully applicable Playwright suite."""
+        table = self._bar_table()
+        self.assertEqual("4", table["Standard"][6])
+        self.assertEqual("3", table["Hygiene"][4])
 
     def test_tier_bars_match_their_own_table_sizes(self) -> None:
         """A `/6` that describes a 5-row table is a bar nobody can compute. Derive the
@@ -1960,8 +2158,6 @@ class TestScorecardThresholdsPinned(unittest.TestCase):
             ids = [r[0] for r in md_rows(body) if re.fullmatch(prefix + r"\d+", r[0])]
             with self.subTest(tier=tier):
                 self.assertEqual(want, len(set(ids)), f"{tier} rows: {sorted(set(ids))}")
-        self.assertIn("≥ 4/6 PASS", self.scorecard)
-        self.assertIn("≥ 3/4 PASS", self.scorecard)
 
     def test_item_level_thresholds_are_pinned(self) -> None:
         rows = {r[0]: " | ".join(r[1:]) for r in md_rows(self.scorecard)}
@@ -2058,7 +2254,8 @@ class TestCoverageTotalsDerived(unittest.TestCase):
         modules = sorted(f.name for f in here.glob("test_*.py"))
         self.assertEqual(
             ["test_discover_script.py", "test_golden_scenarios.py",
-             "test_llm_skill_eval.py", "test_skill_contract.py"],
+             "test_llm_skill_eval.py", "test_skill_contract.py",
+             "test_verify_examples_load.py"],
             modules,
             "a test module was added or removed; COVERAGE.md's table must account for it")
         total = 0
@@ -2088,6 +2285,9 @@ class TestToolSurfaceIsNotOverbroad(unittest.TestCase):
         "python3 scripts/*": "relative wildcard — any script in the CWD's scripts/",
         "sh*": "arbitrary shell",
         "*": "everything",
+        "agent-browser*": "click/fill/evaluate act on a live environment — the Side-Effect Gate's surface",
+        "npm ci*": "runs the target repo's dependency lifecycle scripts",
+        "npm install*": "runs the target repo's dependency lifecycle scripts",
     }
 
     def test_no_overbroad_bash_pattern(self) -> None:
@@ -2104,7 +2304,8 @@ class TestToolSurfaceIsNotOverbroad(unittest.TestCase):
         skill's own documented commands need."""
         fm = frontmatter(SKILL_MD.read_text())
         patterns = re.findall(r"Bash\(([^)]*)\)", fm)
-        for needed in ("python3 scripts/lint_e2e_spec.py*", "bash scripts/discover_e2e_needs.sh*"):
+        for needed in ("python3 ${CLAUDE_SKILL_DIR}/scripts/lint_e2e_spec.py*",
+                       "bash ${CLAUDE_SKILL_DIR}/scripts/discover_e2e_needs.sh*"):
             self.assertIn(needed, patterns,
                           f"the skill documents a command that nothing pre-approves: {needed}")
 

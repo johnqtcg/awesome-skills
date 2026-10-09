@@ -22,6 +22,18 @@
 > good/bad exemplars). The suite is now 312 tests. §6 of this report lists
 > "no LLM-in-the-loop evaluation" as a gap; that gap is now partially closed — the
 > live arm is opt-in via `E2E_LLM_EVAL=1`.
+>
+> **Third staleness note (2026-10-09).** A review found that one of SKILL.md's GOOD
+> anti-example fixes put `test.info()` at file scope. That throws during collection,
+> so the file runs no tests, and the linter passed it. It went unnoticed because the
+> GOOD-example selector skipped every GOOD block that follows a BAD one. Since then:
+> the example is fixed; the linter has an L1 check for the shape; GOOD/BAD is chosen
+> by label; and `scripts/verify_examples_load.py` loads all 73 GOOD examples in real
+> Playwright (71 load, 2 skipped as sibling-file dependents). The scorecard bars are
+> now ratios of applicable items, and script paths use `${CLAUDE_SKILL_DIR}`.
+> Agent Browser pre-approval is limited to observing commands. The live eval ran for
+> the first time after three harness fixes: 3/3 fixtures pass, one sample each, with
+> no without-skill arm. The suite is 346 tests. The scores below were not re-run.
 
 ---
 
